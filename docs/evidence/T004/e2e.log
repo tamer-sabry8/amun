@@ -25,7 +25,7 @@ Running 1 test using 1 worker
   ✘  1 tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests (120ms)
 
 
-  1) tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests 
+  1) tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests
 
     Error: electron.launch: Process failed to launch!
     Call log:
@@ -62,4 +62,4 @@ Running 1 test using 1 worker
     Error Context: test-results/shell-shell-launches-with--3e88b-nd-denies-external-requests/error-context.md
 
   1 failed
-    tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests 
+    tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests

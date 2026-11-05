@@ -49,4 +49,3 @@ AssertionError: expected [ '' ] to include 'default-src \'none\''
       Tests  2 failed | 12 passed (14)
    Start at  10:09:35
    Duration  365ms (import 55%, transform 29%, tests 10%, worker 5%)
-
