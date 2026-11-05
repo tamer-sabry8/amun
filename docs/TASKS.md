@@ -2,7 +2,7 @@
 
 Only **M0** is active. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
 
-The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. Native-stack substitutions must be recorded in an ADR; product scope and task IDs remain traceable.
+The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. The user confirmed Electron/TypeScript; see ADR-001-desktop-stack.md. Product scope and task IDs remain traceable.
 
 ## Working agreement
 
@@ -14,106 +14,113 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - PRs explain user benefit, security boundaries, performance impact, tests and outstanding gates.
 - Never log secrets, disable TLS, auto-approve writes, or represent unknown outcomes as success.
 
+## Current progress
+
+- T001: pinned workspace, lint/format/typecheck/unit tools and macOS CI authored. Local checks pass; hosted macOS CI is unverified, so task remains open.
+- T002: health RPC request/response validation only; 12 unit tests pass. Remaining entity contracts are pending.
+- T003: ADR and evidence templates present; dependency T001 remains open.
+- T004: minimal isolated Electron shell compiles; 2 security policy unit tests pass. Launch/isolation E2E and macOS evidence remain pending. No full product UI is implemented.
+- T005–T012: pending. M0 is not complete.
+
 ## Current blockers
 
-- Stack decision: native SwiftUI/AppKit requested; source plan specifies Electron/TypeScript. Awaiting clarification.
-- This machine is Linux: macOS UI, Keychain, signing, notarization and packaged-app performance need a Mac runner.
+- Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
+- This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
 - M0 live integration needs authorised Tahaluf test access, provider sign-in and Herdr/worker runtimes. Do not request credentials in chat.
 - GitHub API currently returns Forbidden; PR creation is not yet verified.
-
 
 ## M0 — Prove the foundations — ACTIVE
 
 - [ ] **T001 — Monorepo and tooling** · P0 · Lang TS · Dep —
-  Build: pnpm workspace per section 11; TS strict; ESLint/Prettier; Vitest; Playwright; GitHub Actions (macOS) running lint, typecheck, unit.
-  Tests: sample unit test; CI green.
-  DoD: `pnpm i && pnpm test` passes on a clean clone; CI badge green.
+      Build: pnpm workspace per section 11; TS strict; ESLint/Prettier; Vitest; Playwright; GitHub Actions (macOS) running lint, typecheck, unit.
+      Tests: sample unit test; CI green.
+      DoD: `pnpm i && pnpm test` passes on a clean clone; CI badge green.
 - [ ] **T002 — Contracts package** · P0 · TS · Dep T001
-  Build: zod schemas for RPC methods, attention item, notification, status activity, action, approval, run; generated TS types.
-  Tests: schema round-trip and rejection tests.
-  DoD: UI, service and bridge import only from `packages/contracts` for cross-process types.
+      Build: zod schemas for RPC methods, attention item, notification, status activity, action, approval, run; generated TS types.
+      Tests: schema round-trip and rejection tests.
+      DoD: UI, service and bridge import only from `packages/contracts` for cross-process types.
 - [ ] **T003 — ADR and evidence templates** · P0 · Markdown · Dep T001
-  DoD: `docs/decisions/ADR-000-template.md`, `docs/evidence/README.md`.
+      DoD: `docs/decisions/ADR-000-template.md`, `docs/evidence/README.md`.
 - [ ] **T004 — Electron shell + secure renderer** · P0 · TS · Dep T001
-  Build: Electron Forge + Vite; main, preload (minimal), renderer with contextIsolation/sandbox/CSP.
-  Tests: Playwright launches app; test asserts `window.require` undefined and CSP present.
-  DoD: app opens a window with the empty shell.
+      Build: Electron Forge + Vite; main, preload (minimal), renderer with contextIsolation/sandbox/CSP.
+      Tests: Playwright launches app; test asserts `window.require` undefined and CSP present.
+      DoD: app opens a window with the empty shell.
 - [ ] **T005 — Service process + MessagePort RPC** · P0 · TS · Dep T002, T004
-  Build: `utilityProcess` service; typed request/response + event stream over MessagePort; health method; restart on crash with backoff.
-  Tests: RPC round-trip; service crash → UI shows "Reconnecting" → recovers.
-  DoD: kill service PID during E2E; UI recovers in < 5 s.
+      Build: `utilityProcess` service; typed request/response + event stream over MessagePort; health method; restart on crash with backoff.
+      Tests: RPC round-trip; service crash → UI shows "Reconnecting" → recovers.
+      DoD: kill service PID during E2E; UI recovers in < 5 s.
 - [ ] **T006 — Bundled Pi in RPC mode** · P0 · TS · Dep T005
-  Build: `runtime/pi` pinned package + lockfile; spawn via Electron-as-Node (`ELECTRON_RUN_AS_NODE`) or bundled Node (decide by spike; record ADR); env `PI_CODING_AGENT_DIR`, `PI_SKIP_VERSION_CHECK=1`; JSONL client splitting on LF only (do not use Node `readline`); request ids; event stream; `extension_ui_request` → Amun request.
-  Tests: replay fixtures for `get_state`, `get_available_models`, prompt streaming, extension UI select/confirm; live: `pi auth check --json` per provider.
-  DoD: packaged app, no global Pi on PATH, lists Copilot and OpenRouter models after Amun-scoped sign-in.
+      Build: `runtime/pi` pinned package + lockfile; spawn via Electron-as-Node (`ELECTRON_RUN_AS_NODE`) or bundled Node (decide by spike; record ADR); env `PI_CODING_AGENT_DIR`, `PI_SKIP_VERSION_CHECK=1`; JSONL client splitting on LF only (do not use Node `readline`); request ids; event stream; `extension_ui_request` → Amun request.
+      Tests: replay fixtures for `get_state`, `get_available_models`, prompt streaming, extension UI select/confirm; live: `pi auth check --json` per provider.
+      DoD: packaged app, no global Pi on PATH, lists Copilot and OpenRouter models after Amun-scoped sign-in.
 - [ ] **T007 — Firstmate home management** · P0 · TS + Bash (existing) · Dep T006
-  Build: `runtime/firstmate` pinned snapshot; create Amun-managed home under `~/Library/Application Support/Amun/firstmate/<home>`; import overlay from an existing home (backend, crew-dispatch.json, claude-permission-mode forced to `auto`, secondmate-harness, skills); project trust for its `.pi/extensions`; never write into the user's personal home.
-  Tests: overlay merge unit tests; live: Firstmate starts in the managed home; watcher extension loads; personal home untouched (hash before/after).
-  DoD: ADR documents which Firstmate behaviours work under RPC and which need fallback (interactive TUI in a backend pane).
+      Build: `runtime/firstmate` pinned snapshot; create Amun-managed home under `~/Library/Application Support/Amun/firstmate/<home>`; import overlay from an existing home (backend, crew-dispatch.json, claude-permission-mode forced to `auto`, secondmate-harness, skills); project trust for its `.pi/extensions`; never write into the user's personal home.
+      Tests: overlay merge unit tests; live: Firstmate starts in the managed home; watcher extension loads; personal home untouched (hash before/after).
+      DoD: ADR documents which Firstmate behaviours work under RPC and which need fallback (interactive TUI in a backend pane).
 - [ ] **T008 — Crew observation and reattach** · P0 · TS · Dep T007
-  Build: adapter reading Firstmate task records and Herdr state (discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
-  Tests: fixtures of recorded Firstmate/Herdr state; live: dispatch Codex + Claude workers, restart service, reattach.
-  DoD: zero duplicate workers across 10 restart trials; unknown state shown when unverifiable.
+      Build: adapter reading Firstmate task records and Herdr state (discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
+      Tests: fixtures of recorded Firstmate/Herdr state; live: dispatch Codex + Claude workers, restart service, reattach.
+      DoD: zero duplicate workers across 10 restart trials; unknown state shown when unverifiable.
 - [ ] **T009 — Azure DevOps proof** · P0 · TS · Dep T005
-  Build: client on azure-devops-node-api with explicit `api-version=7.0`; PAT from Keychain; `NODE_EXTRA_CA_CERTS` support; read projects/teams/process/work items; create story + task; update with JSON Patch `test /rev`; read iterations; read Azure Repos PRs.
-  Tests: MSW fixtures; live `@live` against the Tahaluf test project.
-  DoD: evidence of created IDs; stale-revision update returns conflict and is handled; supported-endpoint matrix recorded.
+      Build: client on azure-devops-node-api with explicit `api-version=7.0`; PAT from Keychain; `NODE_EXTRA_CA_CERTS` support; read projects/teams/process/work items; create story + task; update with JSON Patch `test /rev`; read iterations; read Azure Repos PRs.
+      Tests: MSW fixtures; live `@live` against the Tahaluf test project.
+      DoD: evidence of created IDs; stale-revision update returns conflict and is handled; supported-endpoint matrix recorded.
 - [ ] **T010 — Browser view proof** · P1 · TS · Dep T004
-  Build: WebContentsView in the inspector slot; per-product partitions; navigation controls; permission handler; popup handling; SSO redirect test.
-  Tests: page script cannot access `ipcRenderer`, Node or Amun ports; Playwright.
-  DoD: authenticated site + local prototype both render; security test green.
+      Build: WebContentsView in the inspector slot; per-product partitions; navigation controls; permission handler; popup handling; SSO redirect test.
+      Tests: page script cannot access `ipcRenderer`, Node or Amun ports; Playwright.
+      DoD: authenticated site + local prototype both render; security test green.
 - [ ] **T011 — Terminal dock proof** · P1 · TS · Dep T005
-  Build: node-pty in service (rebuilt for Electron ABI), xterm.js in renderer, resize, scrollback; "attach to backend pane" mode (read-only default, explicit take-control).
-  Tests: echo/resize tests; packaged-app test.
-  DoD: works from Finder launch without inheriting an interactive shell environment.
+      Build: node-pty in service (rebuilt for Electron ABI), xterm.js in renderer, resize, scrollback; "attach to backend pane" mode (read-only default, explicit take-control).
+      Tests: echo/resize tests; packaged-app test.
+      DoD: works from Finder launch without inheriting an interactive shell environment.
 - [ ] **T012 — Packaging and performance baseline** · P1 · TS · Dep T004–T011
-  Build: Forge signing + notarization; DMG; include pinned Pi and Firstmate snapshot; native modules signed.
-  Tests: install on clean macOS account; measure cold start, total RAM, editor latency.
-  DoD: notarized DMG; budgets recorded in ADR.
-  **M0 exit gate:** every item in the M0 DoD has evidence; failures become product-owner decisions before M1.
+      Build: Forge signing + notarization; DMG; include pinned Pi and Firstmate snapshot; native modules signed.
+      Tests: install on clean macOS account; measure cold start, total RAM, editor latency.
+      DoD: notarized DMG; budgets recorded in ADR.
+      **M0 exit gate:** every item in the M0 DoD has evidence; failures become product-owner decisions before M1.
 
 ## M1 — Durable core and shell — LOCKED
 
 - [ ] **T013 — Database and migrations** · P0 · TS · Dep T002
-  Build: Drizzle schema for section 8.6; migrations; FTS5 for search.
-  Tests: migrate up from every prior version with seed data.
-  DoD: data survives app upgrade test.
+      Build: Drizzle schema for section 8.6; migrations; FTS5 for search.
+      Tests: migrate up from every prior version with seed data.
+      DoD: data survives app upgrade test.
 - [ ] **T014 — Governance engine** · P0 · TS · Dep T013
-  Build: action and approval state machines (8.4); payload hash (canonical JSON); target-revision binding; invalidation triggers; separate approval kinds (publish, commit, merge, notion_publish, file_destructive, skill_install, model_outside_allowlist).
-  Tests: exhaustive state-transition tests; property tests for hash stability.
-  DoD: ≥ 90% coverage; mutating a payload after approval always invalidates.
+      Build: action and approval state machines (8.4); payload hash (canonical JSON); target-revision binding; invalidation triggers; separate approval kinds (publish, commit, merge, notion_publish, file_destructive, skill_install, model_outside_allowlist).
+      Tests: exhaustive state-transition tests; property tests for hash stability.
+      DoD: ≥ 90% coverage; mutating a payload after approval always invalidates.
 - [ ] **T015 — Outbox and reconciliation framework** · P0 · TS · Dep T014
-  Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
-  Tests: crash between write and ack; duplicate-suppression tests.
-  DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
+      Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
+      Tests: crash between write and ack; duplicate-suppression tests.
+      DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
 - [ ] **T016 — Auth broker** · P0 · TS · Dep T006, T013
-  Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
-  Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
-  DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
+      Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
+      Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
+      DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
 - [ ] **T017 — Audit and redaction** · P0 · TS · Dep T013
-  Build: audit_log writer; pino redaction; export redaction.
-  Tests: canary-secret test across logs, exports, memory, updates.
-  DoD: canary never found.
+      Build: audit_log writer; pino redaction; export redaction.
+      Tests: canary-secret test across logs, exports, memory, updates.
+      DoD: canary never found.
 - [ ] **T018 — Backup and restore** · P1 · TS · Dep T013
-  DoD: encrypted export/import of a workspace; secrets excluded; restore test passes.
+      DoD: encrypted export/import of a workspace; secrets excluded; restore test passes.
 - [ ] **T019 — Design tokens and themes** · P0 · TS/JSON · Dep T001
-  Build: DTCG tokens for Tamer Sabry default, Navy Gold, Navy Cyan (values from the brand table in Appendix A); Style Dictionary → `--amun-*` CSS variables; locked safety tokens; contrast validator.
-  Tests: contrast unit tests (≥ 4.5:1 text, ≥ 3:1 UI); theme switch persists.
-  DoD: all component states render in three themes.
+      Build: DTCG tokens for Tamer Sabry default, Navy Gold, Navy Cyan (values from the brand table in Appendix A); Style Dictionary → `--amun-*` CSS variables; locked safety tokens; contrast validator.
+      Tests: contrast unit tests (≥ 4.5:1 text, ≥ 3:1 UI); theme switch persists.
+      DoD: all component states render in three themes.
 - [ ] **T020 — App shell layout** · P0 · TS/React · Dep T005, T019
-  Build: sidebar (switcher, ⌘K, 6 fixed tiles, nav, pinned tabs, artifacts), top bar with mode tabs, Focus and the status pill slot, workspace router, right edge in fixed order (status rail, drawer layer, single-slot inspector with Issue/Web tabs), composer, terminal dock, Focus mode with exact restore.
-  Tests: Playwright layout + keyboard navigation; axe.
-  DoD: no auto-reordering of tiles; inspector and drawers never open without user action; drawers overlay without layout shift.
+      Build: sidebar (switcher, ⌘K, 6 fixed tiles, nav, pinned tabs, artifacts), top bar with mode tabs, Focus and the status pill slot, workspace router, right edge in fixed order (status rail, drawer layer, single-slot inspector with Issue/Web tabs), composer, terminal dock, Focus mode with exact restore.
+      Tests: Playwright layout + keyboard navigation; axe.
+      DoD: no auto-reordering of tiles; inspector and drawers never open without user action; drawers overlay without layout shift.
 - [ ] **T021a — Firstmate Island (action queue)** · P0 · TS/React · Dep T002, T013, T020
-  Build: attention-item store and contract (5.3); item types; origin labels (Firstmate / Secondmate / Crewmate / Amun); ordering; Rail, Pill, Card, Expanded sizes; "+N more"; snooze; navigate vs inline modes; governed items always navigate; removal only on resolution or snooze; live region; ⌘⇧J; reduced motion; empty state.
-  Tests: unit for ordering, resolution and snooze rules; test that a governed item can never resolve from the Island; visual baselines for every type × size × theme; a11y.
-  DoD: gallery page in the dev build shows all combinations; clicking an item and navigating away leaves it open.
+      Build: attention-item store and contract (5.3); item types; origin labels (Firstmate / Secondmate / Crewmate / Amun); ordering; Rail, Pill, Card, Expanded sizes; "+N more"; snooze; navigate vs inline modes; governed items always navigate; removal only on resolution or snooze; live region; ⌘⇧J; reduced motion; empty state.
+      Tests: unit for ordering, resolution and snooze rules; test that a governed item can never resolve from the Island; visual baselines for every type × size × theme; a11y.
+      DoD: gallery page in the dev build shows all combinations; clicking an item and navigating away leaves it open.
 - [ ] **T021b — Status pill, status rail and drawers** · P0 · TS/React · Dep T002, T020
-  Build: top-bar status pill (counts, colour states, click pins Activity); right rail with Notifications, Activity, Artifacts, Downloads, Skills and extensions; drawer layer with 150 ms hover intent, 250 ms close grace, click to pin, ⌥⌘1–5, Esc, focus management; one drawer at a time; overlay without layout shift; tap = pin.
-  Tests: Playwright hover-intent and pin tests; keyboard-only test; one-drawer rule; a11y; visual baselines per drawer × theme.
-  DoD: run and publication progress appear only in the pill and Activity drawer, never in the Island.
+      Build: top-bar status pill (counts, colour states, click pins Activity); right rail with Notifications, Activity, Artifacts, Downloads, Skills and extensions; drawer layer with 150 ms hover intent, 250 ms close grace, click to pin, ⌥⌘1–5, Esc, focus management; one drawer at a time; overlay without layout shift; tap = pin.
+      Tests: Playwright hover-intent and pin tests; keyboard-only test; one-drawer rule; a11y; visual baselines per drawer × theme.
+      DoD: run and publication progress appear only in the pill and Activity drawer, never in the Island.
 - [ ] **T022 — Requests and command palette** · P1 · TS · Dep T020
-  DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
+      DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
 
 ## M2 — Product context and PRD — LOCKED
 
@@ -124,7 +131,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T027 — PRD editor** · P0 · TS/React · Dep T020 — Build: Tiptap schema, Markdown mode via remark, autosave, history, stale-edit detection, import/export. Tests: round-trip corpus (headings, lists, tables, checklists, links, inline marks); unsupported formatting warns. DoD: round-trip suite green.
 - [ ] **T028 — PRD generation, modes, review and approval** · P0 · TS · Dep T014, T026, T027 — Build: draft from objective; Write/Research/Review modes; selection HUD; inline proposal diffs; approval bound to version; invalidation explains affected work. DoD: live PRD approved; edit after approval invalidates.
 - [ ] **T029 — RICE prioritisation** · P1 · TS · Dep T023 — Tests: formula, units, empty/zero/negative handling. DoD: "Priorities" tile shows ordered table.
-  **M2 exit:** Live demo: objective → approved PRD v1 with sources in a real product.
+      **M2 exit:** Live demo: objective → approved PRD v1 with sources in a real product.
 
 ## M3 — Backlog and sprint on Azure DevOps — LOCKED
 
@@ -135,7 +142,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T034 — Board and detail editing** · P1 · TS · Dep T030 — DoD: edits/moves respect board mapping and revisions; failures preserve edits.
 - [ ] **T035 — Sprint planning and commitment** · P0 · TS · Dep T033 — Build: iteration selection; manual assignees; separate commitment approval; post-execution verification. DoD: publishing cannot commit implicitly; final server state matches approval.
 - [ ] **T036 — Story blockers in Decisions tile** · P1 · TS · Dep T032 — DoD: reason, owner, age, next action listed.
-  **M3 exit:** live publication + commitment on the Tahaluf test project with chaos test evidence.
+      **M3 exit:** live publication + commitment on the Tahaluf test project with chaos test evidence.
 
 ## M4 — Firstmate, crew, PRs, acceptance — LOCKED
 
@@ -149,7 +156,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T044 — PR workspace** · P0 · TS · Dep T009, T016 — Build: Azure Repos (node-api) and GitHub/GHE (Octokit) adapters; cross-repo list; summary; Monaco diff; checks; reviews; threads; review actions with provider semantics. DoD: required workflow executed on each pilot provider; unsupported actions hidden, not faked.
 - [ ] **T045 — Merge approval and execution** · P0 · TS · Dep T014, T044 — Build: approval bound to repo, PR, head SHA, merge method; execution re-checks SHA, policy, checks, permission; GitHub `expectedHeadOid`/`sha`; ADO completion with last merge source commit. Tests: change head after approval → refused. Live: worker identity cannot merge or force-push (server rejects). DoD: evidence for both.
 - [ ] **T046 — Acceptance** · P0 · TS · Dep T045 — DoD: checklist + recorded Accepted/Rejected/Blocked; acceptance separate from merge.
-  **M4 exit:** golden path (section 6) passes live, including restart-reattach and changed-head refusal.
+      **M4 exit:** golden path (section 6) passes live, including restart-reattach and changed-head refusal.
 
 ## M5 — Memory, Notion, skills, portfolio, reminders — LOCKED
 

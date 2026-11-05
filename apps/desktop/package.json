@@ -1,0 +1,18 @@
+{
+  "name": "@amun/desktop",
+  "productName": "Amun",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "vite build",
+    "start": "pnpm build && electron-forge start",
+    "package": "pnpm build && electron-forge package"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "@electron-forge/cli": "8.0.1",
+    "vite": "8.3.6"
+  }
+}
