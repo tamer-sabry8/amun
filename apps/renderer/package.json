@@ -1,0 +1,9 @@
+{
+  "name": "@amun/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@amun/contracts": "workspace:*"
+  }
+}

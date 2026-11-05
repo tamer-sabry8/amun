@@ -8,7 +8,7 @@ Use Node **24.22.1** and pnpm **11.25.0**. Install with `pnpm install --frozen-l
 
 On a Mac, run `pnpm --filter @amun/desktop start` for the foundation window and `pnpm test:e2e` for the launch/isolation smoke test. `pnpm --filter @amun/desktop package` creates an unsigned development package; release signing/notarization remain T012. Electron's binary installer requires network access and checksum verification remains enabled.
 
-This is an M0 foundation, not a working product. No runtime connections or approval actions are available. The static shell intentionally has no preload or network capabilities; the service MessagePort bridge is T005.
+This is an M0 foundation, not a working product. No runtime connections or approval actions are available. The shell has a minimal sandboxed preload that transfers a service MessagePort. Its only RPC method is health; the renderer has no direct network capabilities. Service failure shows Reconnecting and restarts with bounded backoff.
 
 ## Delivery
 

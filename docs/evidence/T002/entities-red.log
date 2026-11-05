@@ -1,0 +1,113 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/contracts/tests/entities.test.ts (21 tests | 14 failed) 21ms
+   ❯ shared entity boundaries (21)
+     × rejects undeclared fields and malformed identifiers 0 7ms
+     × rejects undeclared fields and malformed identifiers 1 1ms
+     × rejects undeclared fields and malformed identifiers 2 1ms
+     × rejects undeclared fields and malformed identifiers 3 1ms
+     × rejects undeclared fields and malformed identifiers 4 1ms
+     × rejects undeclared fields and malformed identifiers 5 1ms
+     × refuses unsafe or inconsistent attention payloads 0 1ms
+     × refuses unsafe or inconsistent attention payloads 1 0ms
+     × refuses unsafe or inconsistent attention payloads 2 0ms
+     × refuses unsafe or inconsistent attention payloads 3 1ms
+     × refuses unsafe or inconsistent attention payloads 4 0ms
+     × refuses unsafe or inconsistent attention payloads 5 0ms
+     × does not silently promote uncertain action or run states to success 0ms
+     × rejects broken approval bindings and non-JSON payloads 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 0
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 1
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 2
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 3
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 4
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects undeclared fields and malformed identifiers 5
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/entities.test.ts:21:70
+     19|   });
+     20|   it.each(fixtures)('rejects undeclared fields and malformed identifie…
+     21|     expect(schema.safeParse({ ...value, secret: 'canary' }).success).t…
+       |                                                                      ^
+     22|     expect(schema.safeParse({ ...value, id: '' }).success).toBe(false);
+     23|     expect(schema.safeParse(null).success).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 0
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 1
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 2
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 3
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 4
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > refuses unsafe or inconsistent attention payloads 5
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/entities.test.ts:33:52
+     31|     { ...attention, primaryAction: { ...attention.primaryAction, mode:…
+     32|   ])('refuses unsafe or inconsistent attention payloads %#', value => {
+     33|     expect(attentionItem.safeParse(value).success).toBe(false);
+       |                                                    ^
+     34|   });
+     35|   it('accepts governed navigation and a timestamped snooze', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > does not silently promote uncertain action or run states to success
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/entities.test.ts:40:71
+     38|   it('does not silently promote uncertain action or run states to succ…
+     39|     expect(action.parse(operation).state).toBe('unknown');
+     40|     expect(action.safeParse({ ...operation, state: 'done' }).success).…
+       |                                                                       ^
+     41|     expect(run.safeParse({ ...fixtures[5][1], state: 'accepted' }).suc…
+     42|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  packages/contracts/tests/entities.test.ts > shared entity boundaries > rejects broken approval bindings and non-JSON payloads
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/entities.test.ts:44:78
+     42|   });
+     43|   it('rejects broken approval bindings and non-JSON payloads', () => {
+     44|     expect(action.safeParse({ ...operation, payloadHash: 'short' }).su…
+       |                                                                              ^
+     45|     expect(action.safeParse({ ...operation, payload: { execute: () => …
+     46|     expect(approval.safeParse({ ...fixtures[4][1], subject: { kind: 'a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed | 7 passed (21)
+   Start at  10:44:19
+   Duration  382ms (import 55%, transform 29%, tests 12%, worker 3%)

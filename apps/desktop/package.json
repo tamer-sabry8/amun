@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && vite build --config vite.renderer.config.ts",
     "start": "pnpm build && electron-forge start",
     "package": "pnpm build && electron-forge package"
   },

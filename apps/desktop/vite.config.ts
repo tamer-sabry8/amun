@@ -1,8 +1,18 @@
 import { defineConfig } from "vite";
 export default defineConfig({
   build: {
-    lib: { entry: "src/main.ts", formats: ["cjs"], fileName: () => "main.cjs" },
+    lib: {
+      entry: {
+        main: "src/main.ts",
+        preload: "src/preload.ts",
+        service: "src/service.ts",
+      },
+      formats: ["cjs"],
+      fileName: (_format, name) => `${name}.cjs`,
+    },
     outDir: "dist",
-    rolldownOptions: { external: ["electron", "node:path"] },
+    rolldownOptions: {
+      external: ["electron", "node:path"],
+    },
   },
 });

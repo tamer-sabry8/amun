@@ -14,3 +14,4 @@ export const healthResponse = z.strictObject({
 });
 export type HealthRequest = z.infer<typeof healthRequest>;
 export type HealthResponse = z.infer<typeof healthResponse>;
+export * from "./entities.js";

@@ -16,22 +16,21 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 ## Current progress
 
-- T001: pinned workspace, lint/format/typecheck/unit tools and macOS CI authored. Local checks pass; hosted macOS CI is unverified, so task remains open.
-- T002: health RPC request/response validation only; 12 unit tests pass. Remaining entity contracts are pending.
-- T003: ADR and evidence templates present; dependency T001 remains open.
-- T004: minimal isolated Electron shell compiles; 2 security policy unit tests pass. Launch/isolation E2E and macOS evidence remain pending. No full product UI is implemented.
-- T005–T012: pending. M0 is not complete.
+- T001/T003/T004: complete. macOS CI run 42012823971 passed the clean install, checks and live shell launch/isolation test. See evidence links.
+- T002: six entity contracts plus health RPC implemented with schema rejection/round-trip tests. Consumer adoption exists in renderer/service; Pi bridge remains T037.
+- T005: service health RPC, port replacement and bounded crash restart implemented; macOS crash-recovery E2E pending.
+- T006–T012: pending. M0 is not complete.
 
 ## Current blockers
 
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
 - This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
 - M0 live integration needs authorised Tahaluf test access, provider sign-in and Herdr/worker runtimes. Do not request credentials in chat.
-- GitHub API currently returns Forbidden; PR creation is not yet verified.
+- GitHub API access restored. Work is tracked in draft PR #1.
 
 ## M0 — Prove the foundations — ACTIVE
 
-- [ ] **T001 — Monorepo and tooling** · P0 · Lang TS · Dep —
+- [x] **T001 — Monorepo and tooling** · P0 · Lang TS · Dep —
       Build: pnpm workspace per section 11; TS strict; ESLint/Prettier; Vitest; Playwright; GitHub Actions (macOS) running lint, typecheck, unit.
       Tests: sample unit test; CI green.
       DoD: `pnpm i && pnpm test` passes on a clean clone; CI badge green.
@@ -39,9 +38,9 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: zod schemas for RPC methods, attention item, notification, status activity, action, approval, run; generated TS types.
       Tests: schema round-trip and rejection tests.
       DoD: UI, service and bridge import only from `packages/contracts` for cross-process types.
-- [ ] **T003 — ADR and evidence templates** · P0 · Markdown · Dep T001
+- [x] **T003 — ADR and evidence templates** · P0 · Markdown · Dep T001
       DoD: `docs/decisions/ADR-000-template.md`, `docs/evidence/README.md`.
-- [ ] **T004 — Electron shell + secure renderer** · P0 · TS · Dep T001
+- [x] **T004 — Electron shell + secure renderer** · P0 · TS · Dep T001
       Build: Electron Forge + Vite; main, preload (minimal), renderer with contextIsolation/sandbox/CSP.
       Tests: Playwright launches app; test asserts `window.require` undefined and CSP present.
       DoD: app opens a window with the empty shell.

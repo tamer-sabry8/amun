@@ -42,6 +42,18 @@ importers:
         specifier: 8.3.6
         version: 8.3.6(@types/node@26.6.6)(jiti@2.7.0)
 
+  apps/renderer:
+    dependencies:
+      '@amun/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
+  apps/service:
+    dependencies:
+      '@amun/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
   packages/contracts:
     dependencies:
       zod:
