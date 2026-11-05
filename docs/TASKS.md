@@ -18,8 +18,9 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T001/T003/T004: complete. macOS CI run 42012823971 passed the clean install, checks and live shell launch/isolation test. See evidence links.
 - T002: six entity contracts plus health RPC implemented with schema rejection/round-trip tests. Consumer adoption exists in renderer/service; Pi bridge remains T037.
-- T005: service health RPC, port replacement and bounded crash restart implemented; macOS crash-recovery E2E pending.
-- T006–T012: pending. M0 is not complete.
+- T005: complete. macOS CI run 42013744485 passed both launch/isolation and real service crash-recovery tests (<5 s recovery).
+- T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged runtime, streaming/extension UI and authenticated provider proofs remain open.
+- T007–T012: pending. M0 is not complete.
 
 ## Current blockers
 
@@ -34,7 +35,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: pnpm workspace per section 11; TS strict; ESLint/Prettier; Vitest; Playwright; GitHub Actions (macOS) running lint, typecheck, unit.
       Tests: sample unit test; CI green.
       DoD: `pnpm i && pnpm test` passes on a clean clone; CI badge green.
-- [ ] **T002 — Contracts package** · P0 · TS · Dep T001
+- [x] **T002 — Contracts package** · P0 · TS · Dep T001
       Build: zod schemas for RPC methods, attention item, notification, status activity, action, approval, run; generated TS types.
       Tests: schema round-trip and rejection tests.
       DoD: UI, service and bridge import only from `packages/contracts` for cross-process types.
@@ -44,7 +45,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: Electron Forge + Vite; main, preload (minimal), renderer with contextIsolation/sandbox/CSP.
       Tests: Playwright launches app; test asserts `window.require` undefined and CSP present.
       DoD: app opens a window with the empty shell.
-- [ ] **T005 — Service process + MessagePort RPC** · P0 · TS · Dep T002, T004
+- [x] **T005 — Service process + MessagePort RPC** · P0 · TS · Dep T002, T004
       Build: `utilityProcess` service; typed request/response + event stream over MessagePort; health method; restart on crash with backoff.
       Tests: RPC round-trip; service crash → UI shows "Reconnecting" → recovers.
       DoD: kill service PID during E2E; UI recovers in < 5 s.

@@ -1,0 +1,129 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/jsonl.test.ts (6 tests | 6 failed) 17ms
+   ❯ Pi JSONL framing (6)
+     × buffers partial frames and delivers multiple frames in order 9ms
+     × does not split on Unicode line separators in model content 2ms
+     × ignores blank lines and accepts CRLF 1ms
+     × rejects malformed JSON and clears poisoned input 2ms
+     × bounds unterminated frames and completed frames 1ms
+     × does not mistake an incomplete final frame for a response 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > buffers partial frames and delivers multiple frames in order
+AssertionError: expected [] to deeply equal [ { id: 'a' }, { id: 'b' } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "id": "a",
+-   },
+-   {
+-     "id": "b",
+-   },
+- ]
++ []
+
+ ❯ packages/crew/tests/jsonl.test.ts:8:48
+      6|     const decoder = new JsonLineDecoder();
+      7|     expect(decoder.push('{"id":')).toEqual([]);
+      8|     expect(decoder.push('"a"}\n{"id":"b"}\n')).toEqual([{ id: 'a' }, {…
+       |                                                ^
+      9|   });
+     10|   it('does not split on Unicode line separators in model content', () …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > does not split on Unicode line separators in model content
+AssertionError: expected [] to deeply equal [ { text: 'a\u2028b\u2029c' } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "text": "a
+b
+c",
+-   },
+- ]
++ []
+
+ ❯ packages/crew/tests/jsonl.test.ts:12:58
+     10|   it('does not split on Unicode line separators in model content', () …
+     11|     const decoder = new JsonLineDecoder();
+     12|     expect(decoder.push('{"text":"a\u2028b\u2029c"}\n')).toEqual([{ te…
+       |                                                          ^
+     13|   });
+     14|   it('ignores blank lines and accepts CRLF', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > ignores blank lines and accepts CRLF
+AssertionError: expected [] to deeply equal [ { ok: true } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "ok": true,
+-   },
+- ]
++ []
+
+ ❯ packages/crew/tests/jsonl.test.ts:15:61
+     13|   });
+     14|   it('ignores blank lines and accepts CRLF', () => {
+     15|     expect(new JsonLineDecoder().push('\n{"ok":true}\r\n')).toEqual([{…
+       |                                                             ^
+     16|   });
+     17|   it('rejects malformed JSON and clears poisoned input', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > rejects malformed JSON and clears poisoned input
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/jsonl.test.ts:19:45
+     17|   it('rejects malformed JSON and clears poisoned input', () => {
+     18|     const decoder = new JsonLineDecoder();
+     19|     expect(() => decoder.push('invalid\n')).toThrow();
+       |                                             ^
+     20|     expect(decoder.push('{"ok":true}\n')).toEqual([{ ok: true }]);
+     21|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > bounds unterminated frames and completed frames
+AssertionError: expected function to throw an error, but it didn't
+ ❯ packages/crew/tests/jsonl.test.ts:23:60
+     21|   });
+     22|   it('bounds unterminated frames and completed frames', () => {
+     23|     expect(() => new JsonLineDecoder(8).push('123456789')).toThrow(Ran…
+       |                                                            ^
+     24|     expect(() => new JsonLineDecoder(8).push('123456789\n')).toThrow(R…
+     25|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  packages/crew/tests/jsonl.test.ts > Pi JSONL framing > does not mistake an incomplete final frame for a response
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/jsonl.test.ts:29:36
+     27|     const decoder = new JsonLineDecoder();
+     28|     decoder.push('{"partial":');
+     29|     expect(() => decoder.finish()).toThrow();
+       |                                    ^
+     30|     expect(new JsonLineDecoder().finish()).toBeUndefined();
+     31|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  10:49:23
+   Duration  235ms (transform 48%, tests 27%, import 18%, worker 7%)

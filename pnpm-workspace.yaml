@@ -4,6 +4,8 @@ packages:
   - runtime/*
 allowBuilds:
   electron: true
+  "@google/genai": true
+  protobufjs: true
 minimumReleaseAgeExclude:
   - electron@45.2.3
   - vite@8.3.6

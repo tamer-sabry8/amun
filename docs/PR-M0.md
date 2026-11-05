@@ -1,25 +1,26 @@
-# M0: bootstrap Electron workspace and tested desktop boundaries
+# M0: establish Electron contracts, service recovery and Pi runtime proof
 
-Amun needs a macOS desktop foundation before product features. This change follows the user's confirmed Electron/TypeScript stack, establishes a pinned workspace, and adds a minimal isolated shell plus validated health RPC contracts.
+Amun now has a macOS foundation window that connects to an isolated service and recovers after that service crashes. Shared contracts reject malformed events and unsafe inline approvals. The pinned Pi runtime has an isolated live RPC probe.
 
-## Scope and user benefit
+## Scope
 
-M0 only. M1–M6 remain locked. The shell is explicitly a foundation preview with no connected services or approval actions. A strict CSP, sandbox and disabled Node integration keep the initial renderer unprivileged; the service bridge remains T005.
+M0 only; M1–M6 remain locked. No product workflows or external write capabilities are presented as working.
 
 ## Changes
 
-- pnpm workspace, strict TypeScript, lint/format, Vitest, Playwright and pinned macOS CI actions.
-- Versioned health contract rejects malformed/unknown requests and preserves reconnecting state.
-- Electron/Forge/Vite shell with denied permissions, popup/navigation blocking and no preload.
-- Preserved product plan, 59-task tracker, architecture decision and evidence templates.
+- Pinned Electron/TypeScript workspace, macOS CI and evidence-backed milestone tracker.
+- Six shared entity schemas plus health RPC, with strict rejection and round-trip tests.
+- Sandboxed preload transfers MessagePorts; service validates health requests; UI validates correlated replies and displays Reconnecting on crash.
+- Bounded restart delays; app shutdown cancels retries and stops the child.
+- Pi 1.4.0 pinned, bounded JSONL parser and live isolated state/model-discovery probe.
 
 ## Validation
 
-- 14 unit tests pass; health tests recorded 10 expected red failures and policy tests recorded 2 expected red failures before implementation.
-- Lint, strict typecheck, formatting and Vite build pass locally on Linux.
-- Electron launch E2E is not yet verified. macOS CI, packaged launch, signing, live integrations and performance are unverified.
-- No milestone or full T002/T004 acceptance gate is claimed complete.
+- 51 local unit tests pass, with recorded failing tests before implementation.
+- macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
+- Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
+- Latest CI also runs the runtime probe; its result is tracked on this PR.
 
-## Remaining work
+## Remaining M0 gates
 
-Complete entity contracts, MessagePort service and runtime/live proofs in M0. GitHub API access is denied, so PR creation and CI status cannot be verified from this environment. Test credentials and signing materials must use secure settings, never repository files or chat.
+Packaged Pi and provider sign-in, managed Firstmate homes, worker reattachment, live Azure DevOps, browser/terminal proofs, release signing and performance budgets. M0 remains incomplete. Test credentials must use secure settings, never chat or repository files.
