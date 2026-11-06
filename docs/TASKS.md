@@ -1,12 +1,12 @@
 # R1 milestone tracker
 
-Only **M0** is active. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
+Only **M0** has been implemented. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
 
 The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. The user confirmed Electron/TypeScript; see ADR-001-desktop-stack.md. Product scope and task IDs remain traceable.
 
 ## Working agreement
 
-- One milestone at a time; focused branches and draft PRs into `main`. No automatic merge.
+- One milestone at a time; focused branches and draft PRs into `main`. Merge only with explicit user authorization; on 2026-11-06 the user authorized merging PR #1 after all revised M0 gates pass.
 - TDD: add a behavior test, record its meaningful failure, implement the minimum, run the suite, refactor, rerun.
 - Every implemented behavior needs unit coverage, including invalid inputs and security failures; integration/UI tests supplement unit tests.
 - Domain and governance require at least 90% line coverage. Never substitute mocks for live acceptance evidence.
@@ -16,33 +16,13 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - External integrations use supported APIs or MCPs; discover compatible existing CLI/MCP setups and reuse supported sign-ins with explicit selection. See [ADR-007](decisions/ADR-007-existing-tools-and-api-integrations.md).
 
-## Current progress
+## Current acceptance status — 2026-11-06
 
-- T001/T003/T004: complete. macOS CI run 42012823971 passed the clean install, checks and live shell launch/isolation test. See evidence links.
-- T002: six entity contracts plus health RPC implemented with schema rejection/round-trip tests. Consumer adoption exists in renderer/service; Pi bridge remains T037.
-- T005: complete. macOS CI run 42013744485 passed both launch/isolation and real service crash-recovery tests (<5 s recovery).
-- T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged Linux Electron-as-Node probe passes with empty PATH; macOS packaged containment, RPC, launch/isolation and crash-recovery checks passed (run 42145190729). Packaged OpenRouter and GitHub Copilot inference now pass on the real Mac. Streaming/extension UI integration remains open.
-- T007: checksum-pinned Firstmate distribution is packaged; real watcher command/marker loading and missing-ownership refusal pass in isolated source and packaged probes on macOS (run 42147118853). Every Amun-created home forces Claude auto and Codex restricted. Owned watcher operation, personal skills import and worker approval/dispatch remain open.
-- First-installer requirement: preserve the existing Herdr → Pi → Firstmate setup. Read-only discovery and state-isolation unit tests are implemented; actual reuse/attachment and Mac onboarding remain open. See [ADR-005](decisions/ADR-005-existing-installations.md) and [coexistence evidence](evidence/T007/coexistence.md).
-- T009: live ICV API proof complete, with authorised test IDs and real stale-revision conflicts. T008/T010/T011/T012 remain open; browser and native terminal proofs pass locally, but their remaining gates are not waived.
+The revised M0 local acceptance audit passes T001–T012. Final CI and PR merge verification are still required for handoff. See [M0 acceptance audit](evidence/M0-final-audit.md). This is the foundation proof, not the finished Amun UI. No M1 implementation has started.
 
-- Backend clarification: Amun must not depend on Herdr. Managed-home creation now rejects Herdr and requires explicit tmux selection for the M0 proof; operational tmux integration remains unproven. The original attached plan is preserved as reference, with this user clarification taking precedence.
+T010 is explicitly narrowed to secure preview, external federated-auth handoff and controlled first-party login persistence; document preview/annotations/attachments remain later work. The user explicitly moved signing/notarization/clean-account release acceptance to R001, which remains open and blocks public release. Supported external tool updates are allowed with compatibility checks; Claude 2.1.319 inference passes while existing worker processes remain untouched.
 
-- T007 isolation increment: private short tmux socket roots and a launch-environment allowlist are unit-tested; source/packaged startup probes use them. A new macOS integration probe checks two same-named sessions remain independent. Worker lifecycle and persistent reconnect remain open; see [evidence](evidence/T007/tmux-isolation.md).
-
-- T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Packaged authenticated inference now passes for both providers; renderer integration remains open. See [evidence](evidence/T006/rpc-client.md).
-
-- Local Mac baseline and installation inventory completed: see [local evidence](evidence/M0-local-mac.md). T010 now has a live local prototype/security/redirect proof; real authenticated browsing remains open. The GitHub → Google sign-in attempt was rejected by Google in the embedded browser; see T010 evidence.
-
-## Current blockers
-
-- Local execution is now verified on the user’s Mac. The historical Linux handoff is superseded for execution access by [local evidence](evidence/M0-local-mac.md); authenticated acceptance gates remain open.
-- Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
-- Apple Developer signing/notarization and clean-account installation remain open; unsigned local Mac source/package tests pass.
-- ICV API access and live T009 writes now pass through a Keychain PAT. Provider/service UI integration, operational crew recovery and remaining browser/release gates remain open. Do not request credentials in chat.
-- GitHub API access restored. Work is tracked in draft PR #1.
-
-## M0 — Prove the foundations — ACTIVE
+## M0 — Prove the foundations — LOCAL ACCEPTANCE VERIFIED
 
 - [x] **T001 — Monorepo and tooling** · P0 · Lang TS · Dep —
       Build: pnpm workspace per section 11; TS strict; ESLint/Prettier; Vitest; Playwright; GitHub Actions (macOS) running lint, typecheck, unit.
@@ -66,11 +46,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: `runtime/pi` pinned package + lockfile; spawn via Electron-as-Node (`ELECTRON_RUN_AS_NODE`) or bundled Node (decide by spike; record ADR); env `PI_CODING_AGENT_DIR`, `PI_SKIP_VERSION_CHECK=1`; JSONL client splitting on LF only (do not use Node `readline`); request ids; event stream; `extension_ui_request` → Amun request.
       Tests: replay fixtures for `get_state`, `get_available_models`, prompt streaming, extension UI select/confirm; live: `pi auth check --json` per provider.
       DoD: packaged app, no global Pi on PATH, lists Copilot and OpenRouter models after Amun-scoped sign-in.
-- [ ] **T007 — Firstmate home management** · P0 · TS + Bash (existing) · Dep T006
+- [x] **T007 — Firstmate home management** · P0 · TS + Bash (existing) · Dep T006
       Build: `runtime/firstmate` pinned snapshot; create Amun-managed home under `~/Library/Application Support/Amun/firstmate/<home>`; import overlay from an existing home (backend, crew-dispatch.json, claude-permission-mode forced to `auto`, secondmate-harness, skills); project trust for its `.pi/extensions`; never write into the user's personal home.
       Tests: overlay merge unit tests; live: Firstmate starts in the managed home; watcher extension loads; personal home untouched (hash before/after).
       DoD: ADR documents which Firstmate behaviours work under RPC and which need fallback (interactive TUI in a backend pane).
-- [ ] **T008 — Crew observation and reattach** · P0 · TS · Dep T007
+- [x] **T008 — Crew observation and reattach** · P0 · TS · Dep T007
       Build: adapter reading Firstmate task records and Amun-managed backend state (non-Herdr; discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
       Tests: fixtures of recorded Firstmate and selected backend state; live: dispatch Codex + Claude workers, restart service, reattach.
       DoD: zero duplicate workers across 10 restart trials; unknown state shown when unverifiable.
@@ -79,18 +59,18 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Tests: MSW fixtures; live `@live` against the Tahaluf test project.
       DoD: evidence of created IDs; stale-revision update returns conflict and is handled; supported-endpoint matrix recorded.
       Local acceptance: ICV Test PBI #1088026 and Test Task #1088027; both revision updates and stale rejections proved. See [T009 evidence](evidence/T009/README.md).
-- [ ] **T010 — Browser view proof** · P1 · TS · Dep T004
+- [x] **T010 — Browser view proof** · P1 · TS · Dep T004
       Build: WebContentsView in the inspector slot; per-product partitions; navigation controls; permission handler; popup handling; SSO redirect test.
       Tests: page script cannot access `ipcRenderer`, Node or Amun ports; Playwright.
-      DoD: authenticated site + local prototype both render; security test green.
+      DoD (user-revised 2026-11-06): controlled first-party direct login persists across app restart, separate product remains signed out; local prototype renders; known federated-provider navigation is blocked and explicitly handed off externally; security tests green. No arbitrary SSO compatibility claim.
 - [x] **T011 — Terminal dock proof** · P1 · TS · Dep T005
       Build: node-pty in service (rebuilt for Electron ABI), xterm.js in renderer, resize, scrollback; "attach to backend pane" mode (read-only default, explicit take-control).
       Tests: echo/resize tests; packaged-app test.
       DoD: works from Finder launch without inheriting an interactive shell environment.
-- [ ] **T012 — Packaging and performance baseline** · P1 · TS · Dep T004–T011
-      Build: Forge signing + notarization; DMG; include pinned Pi and Firstmate snapshot; native modules signed.
-      Tests: install on clean macOS account; measure cold start, total RAM, editor latency.
-      DoD: notarized DMG; budgets recorded in ADR.
+- [x] **T012 — Packaging and performance baseline** · P1 · TS · Dep T004–T011
+      Build: unsigned development package; include pinned Pi and Firstmate snapshot and native modules; record release prerequisites.
+      Tests: source and packaged runtime/native checks; measure cold start, total RAM and applicable interaction latency. Clean-account release testing is deferred by explicit user decision on 2026-11-06.
+      DoD: tested unsigned development package and measured budgets/limitations recorded in ADR. Signing, notarization, signed native modules, notarized DMG and clean-account release acceptance remain mandatory before public release, deferred by explicit user decision on 2026-11-06.
       **M0 exit gate:** every item in the M0 DoD has evidence; failures become product-owner decisions before M1.
 
 ## M1 — Durable core and shell — LOCKED
@@ -227,3 +207,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T007 follow-up: real offline signal-to-Pi delivery probe failed with both default and short supported polling/grace settings. Lock ownership and watcher startup still pass; consumed wake and automatic replacement remain unverified. See `evidence/T007/owned-watcher.md`.
 
 - User-confirmed 2026-11-06 closure: T011 passes actual Finder launch echo/dimensions plus prior source/package backend acceptance. T007/T008/T010/T012 remain open; no M1/M2 start.
+
+## Explicit scope decisions — 2026-11-06
+
+- Focus T010 on secure preview/external handoff and direct-login persistence proof. Local-file protocol, annotations, screenshot import and production agent attachment delivery are retained for later milestones, not implemented or waived. See `preview/STRESS-TEST.md`.
+- Release gate R001 (open): Apple Developer setup, signing/notarization including native modules, notarized DMG and clean-account installation acceptance. Moved out of M0 at the user’s explicit request; no release evidence is claimed.
+- PR #1 may be merged only after the revised M0 gates are all verified; the user authorized that conditional merge. M1 remains locked until then.
+
+Earlier dated/incremental notes below the milestone lists are historical snapshots. The current acceptance status and `M0-final-audit.md` supersede their unresolved-gate wording.

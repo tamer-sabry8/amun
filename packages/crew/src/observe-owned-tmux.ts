@@ -1,3 +1,5 @@
+import { observedRun } from "./observed-run.ts";
+import type { Run } from "../../contracts/src/entities.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { lstat, realpath } from "node:fs/promises";
@@ -16,7 +18,8 @@ export async function observeOwnedTmux(
   receiptRoot: string,
   taskId: string,
   tmuxBinary: string,
-): Promise<{ endpoint: "verified" | "unknown"; worker: "unknown" }> {
+  productId?: string,
+): Promise<{ endpoint: "verified" | "unknown"; worker: "unknown"; run?: Run }> {
   const unknown = { endpoint: "unknown", worker: "unknown" } as const;
   try {
     if (!tmuxBinary.startsWith("/")) return unknown;
@@ -60,9 +63,36 @@ export async function observeOwnedTmux(
           })
         ).stdout,
     );
+    const endpoint = matchOwnedEndpoint(receipt.identity, record, live);
+    if (endpoint !== "verified" || !productId)
+      return { endpoint, worker: "unknown" };
+    const git = async (args: string[]) =>
+      (
+        await promisify(execFile)(
+          "/usr/bin/git",
+          ["-C", record.worktree, ...args],
+          {
+            env: {
+              PATH: "/usr/bin:/bin",
+              GIT_CONFIG_NOSYSTEM: "1",
+              GIT_CONFIG_GLOBAL: "/dev/null",
+              GIT_OPTIONAL_LOCKS: "0",
+            },
+            timeout: 3000,
+            maxBuffer: 8192,
+          },
+        )
+      ).stdout.trim();
+    if (
+      (await realpath(record.worktree)) !== record.worktree ||
+      (await git(["rev-parse", "--show-toplevel"])) !== record.worktree
+    )
+      return unknown;
+    const branch = await git(["symbolic-ref", "--short", "HEAD"]);
     return {
-      endpoint: matchOwnedEndpoint(receipt.identity, record, live),
+      endpoint,
       worker: "unknown",
+      run: observedRun(productId, record, branch),
     };
   } catch {
     return unknown;

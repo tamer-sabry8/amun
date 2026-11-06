@@ -35,6 +35,12 @@ window.addEventListener("message", (event) => {
       const label = document.getElementById("crew-observation");
       if (label)
         label.textContent = `${crewMessage.data.taskId}: endpoint ${crewMessage.data.endpoint}; worker ${crewMessage.data.worker}`;
+      const runLabel = document.getElementById("crew-run");
+      const run = crewMessage.data.run;
+      if (runLabel)
+        runLabel.textContent = run
+          ? `${run.harness} | ${run.branch} | ${run.worktree} | model ${run.model} | ${run.state}`
+          : "unknown";
       return;
     }
     const piMessage = piEvent.safeParse(message.data);
@@ -265,4 +271,40 @@ document.getElementById("attach-backend")?.addEventListener("click", () => {
     action: "attach-backend",
     taskId,
   });
+});
+
+let handoffId: string | undefined;
+const handoffPanel = document.getElementById("browser-handoff");
+window.addEventListener("message", (event) => {
+  if (event.source !== window || event.data?.kind !== "amun-browser-handoff")
+    return;
+  const data = event.data.handoff;
+  handoffId =
+    data &&
+    typeof data.id === "string" &&
+    data.id.length <= 128 &&
+    typeof data.host === "string" &&
+    data.host.length <= 300
+      ? data.id
+      : undefined;
+  if (handoffPanel) handoffPanel.hidden = !handoffId;
+  const host = document.getElementById("handoff-host");
+  if (host) host.textContent = handoffId ? data.host : "";
+});
+for (const target of ["chrome", "default"])
+  document
+    .getElementById("handoff-" + target)
+    ?.addEventListener("click", () => {
+      if (handoffId)
+        window.postMessage(
+          {
+            kind: "amun-browser-command",
+            command: { action: "handoff", id: handoffId, target },
+          },
+          "*",
+        );
+    });
+document.getElementById("handoff-dismiss")?.addEventListener("click", () => {
+  handoffId = undefined;
+  if (handoffPanel) handoffPanel.hidden = true;
 });

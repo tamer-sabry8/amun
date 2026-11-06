@@ -5,6 +5,7 @@ it("revokes terminal input, clears pending dialogs and marks dependent views una
   const dialog = { replaceChildren: vi.fn(), textContent: "old" };
   const labels = {
     "crew-observation": { textContent: "endpoint verified" },
+    "crew-run": { textContent: "codex | running" },
     "pi-status": { textContent: "running" },
     "terminal-status": { textContent: "control" },
     "pi-dialog": dialog,
@@ -12,6 +13,7 @@ it("revokes terminal input, clears pending dialogs and marks dependent views una
   resetServiceUI((id) => labels[id as keyof typeof labels] ?? null, terminal);
   expect(terminal.options.disableStdin).toBe(true);
   expect(labels["crew-observation"].textContent).toBe("unknown");
+  expect(labels["crew-run"].textContent).toBe("unknown");
   expect(dialog.replaceChildren).toHaveBeenCalledOnce();
   expect(labels["pi-status"].textContent).toBe("unavailable");
   expect(labels["terminal-status"].textContent).toBe("unavailable");

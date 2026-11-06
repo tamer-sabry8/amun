@@ -1,0 +1,20 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/wake-ack.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/wake-ack.test.ts [ packages/crew/tests/wake-ack.test.ts ]
+Error: Cannot find module '../src/wake-ack.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/wake-ack.test.ts
+ ❯ packages/crew/tests/wake-ack.test.ts:2:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  15:32:06
+   Duration  95ms (worker 98%, environment 2%)
+

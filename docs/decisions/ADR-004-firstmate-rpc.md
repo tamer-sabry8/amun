@@ -1,6 +1,6 @@
 # ADR-004: Pinned Firstmate loading through Pi RPC
 
-Status: accepted for startup proof; operational supervision and worker approval gates remain open
+Status: accepted for M0 operational proof; see current acceptance addendum below
 Milestone: M0, T007
 
 ## Distribution and trust
@@ -34,3 +34,9 @@ Pi's installed RPC extension-UI documentation states that custom() returns undef
 ## Next live gates
 
 Acquire a real Firstmate ownership lock using its supported lifecycle, prove watcher wake/recovery, provide an operator approval flow for restricted workers, and dispatch/reconnect one Codex and one Claude Code worker through a verified non-Herdr backend. The user clarified that Amun must not depend on Herdr; the proof now explicitly configures tmux, but does not dispatch workers or prove tmux operational. These require runtime and sign-in prerequisites still absent here. T007 and T008 remain open.
+
+## Current acceptance addendum — 2026-11-06
+
+Historical startup-only observations above are superseded by the current real Git-worktree proofs. Use the public Pi CLI entry with --mode rpc to preserve Firstmate owner-process identity. Real owner lock, watcher heartbeat, automatic replacement after watcher SIGKILL, actual wake delivery, successful authenticated no-tool completion, and Firstmate drain/ack pass in source and packaged execution under Application Support. The previous offline probe had no model and could not establish Pi consumption, although diagnostics showed durable wake publication and successor startup.
+
+Real Codex restricted and Claude auto secondmates were seeded/dispatched with pinned Firstmate scripts and separate Amun sign-ins. Existing worker TUIs provide the supported interactive trust/CLI setup surface; Amun's verified read-only terminal attachment and explicit take-control are the tested fallback. Rich Firstmate custom UI beyond supported select/confirm remains outside this proof. No general headless compatibility for every extension widget is claimed. Ten source and ten packaged service restarts preserve actual worker identity; see the final M0 audit.

@@ -1,3 +1,4 @@
+import { run } from "./entities.ts";
 import { z } from "zod";
 const path = z
   .string()
@@ -46,4 +47,5 @@ export const crewObservation = z.strictObject({
   taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
   endpoint: z.enum(["verified", "unknown"]),
   worker: z.literal("unknown"),
+  run: run.optional(),
 });

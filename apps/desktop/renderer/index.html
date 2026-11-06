@@ -27,6 +27,12 @@
       <button type="button" data-browser="reload">Reload</button>
       <button type="button" data-browser="close">Close browser</button>
     </form>
+    <div id="browser-handoff" hidden>
+      <span id="handoff-host"></span> — Restart sign-in externally. This will
+      not sign the panel in. <button id="handoff-chrome">Open in Chrome</button
+      ><button id="handoff-default">Open in default browser</button
+      ><button id="handoff-dismiss">Dismiss</button>
+    </div>
     <p id="browser-status" aria-live="polite">Browser closed</p>
     <section aria-label="M0 terminal proof">
       <button type="button" data-terminal="open">Open terminal</button>
@@ -72,6 +78,7 @@
       /></label>
       <button id="observe-crew">Observe worker endpoint</button>
       <button id="attach-backend">Attach terminal read-only</button>
+      <p id="crew-run">unknown</p>
       <p id="crew-observation">unknown</p>
     </section>
     <script src="./renderer.js"></script>

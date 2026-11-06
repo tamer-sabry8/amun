@@ -17,3 +17,7 @@ ipcRenderer.on("amun-browser-status", (_event, message: unknown) => {
   if (typeof message === "string")
     window.postMessage({ kind: "amun-browser-status", message }, "*");
 });
+
+ipcRenderer.on("amun-browser-handoff", (_event, handoff: unknown) => {
+  window.postMessage({ kind: "amun-browser-handoff", handoff }, "*");
+});

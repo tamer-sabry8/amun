@@ -146,7 +146,14 @@ try {
       `${id}: endpoint ${expected}; worker unknown`,
       { timeout: 10000 },
     );
+    if (expected === "verified") {
+      await expect(page.locator("#crew-run")).toContainText("amun/");
+      await expect(page.locator("#crew-run")).toContainText(
+        "model unknown | unknown",
+      );
+    } else await expect(page.locator("#crew-run")).toHaveText("unknown");
   };
+  // The existing observation-only adapter now also projects a validated Run.
   for (let trial = 1; trial <= 10; trial++) {
     for (const id of ["proof-codex", "proof-claude"])
       await observe(id, "verified");

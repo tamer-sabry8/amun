@@ -45,3 +45,42 @@ it("reports unknown on failure and suppresses results after disconnect", async (
   await observer.handle({ version: 1, kind: "crew-observe", taskId: "proof" });
   expect(send).toHaveBeenCalledTimes(1);
 });
+
+it("publishes only a matching validated unknown-state Run", async () => {
+  const value = {
+    id: "run",
+    productId: "m0",
+    storyId: null,
+    agentRole: "unknown",
+    harness: "codex",
+    model: "unknown",
+    firstmateTaskId: "proof",
+    backend: "tmux",
+    paneRef: "firstmate:proof",
+    worktree: "/owned/work",
+    branch: "main",
+    state: "unknown",
+    startedAt: null,
+  };
+  for (const candidate of [
+    value,
+    { ...value, secret: "canary" },
+    { ...value, firstmateTaskId: "another" },
+    { ...value, state: "completed" },
+  ]) {
+    const send = vi.fn();
+    const observer = new CrewObserver(
+      async () => ({ endpoint: "verified", run: candidate }),
+      send,
+    );
+    await observer.handle({
+      version: 1,
+      kind: "crew-observe",
+      taskId: "proof",
+    });
+    expect(send.mock.calls[0]![0].run).toEqual(
+      candidate === value ? value : undefined,
+    );
+    expect(JSON.stringify(send.mock.calls)).not.toContain("canary");
+  }
+});

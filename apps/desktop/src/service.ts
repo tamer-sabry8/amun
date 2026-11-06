@@ -52,7 +52,7 @@ process.parentPort?.on("message", (event) => {
       const root = process.env.AMUN_CREW_RECEIPTS;
       const binary = process.env.AMUN_TMUX_BINARY;
       if (!root || !binary) return { endpoint: "unknown", worker: "unknown" };
-      return observeOwnedTmux(root, id, binary);
+      return observeOwnedTmux(root, id, binary, "m0");
     },
     (event) => port.postMessage(event),
   );

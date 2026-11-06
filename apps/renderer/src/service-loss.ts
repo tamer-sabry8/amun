@@ -9,6 +9,8 @@ export function resetServiceUI(
   terminal.options.disableStdin = true;
   const observation = find("crew-observation");
   if (observation) observation.textContent = "unknown";
+  const run = find("crew-run");
+  if (run) run.textContent = "unknown";
   find("pi-dialog")?.replaceChildren?.();
   for (const id of ["pi-status", "terminal-status"]) {
     const label = find(id);

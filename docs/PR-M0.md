@@ -1,33 +1,13 @@
-# M0: isolated desktop and live Mac foundation proofs
+# M0: isolated desktop foundations with real Mac acceptance
 
-Adds the sandboxed Electron shell, recoverable service process, pinned Pi/Firstmate runtimes, and isolated browser and terminal proofs. Existing personal sessions and installations remain separate. This is the M0 foundation shell, not the finished Amun UI.
+Adds Amun's Electron/TypeScript foundation shell, recoverable service and typed IPC, bundled pinned Pi/Firstmate runtimes, real worker observation/reattachment, API integration proof, isolated preview and native terminal. This is the tested M0 foundation, not the finished product UI.
 
-## Implemented and verified
+Pi streams and extension dialogs cross validated service boundaries; packaged inference passes for OpenRouter and GitHub Copilot through Pi. Firstmate runs in real Amun-owned Git worktrees, including Application Support paths. Authenticated wake consumption, durable acknowledgement and actual watcher-crash recovery pass. Real Codex/Claude workers retain the same process and endpoint identities across ten source and ten packaged service restarts, with zero duplicate workers; verified task/Git data maps to Runs while semantic status remains unknown.
 
-- Typed service RPC, bounded Pi JSONL/request handling and validated dialog replies; packaged OpenRouter and GitHub Copilot inference through Pi with empty PATH and isolated state. Personal credential file remained unchanged.
-- Checksum-pinned Firstmate distribution, restrictive managed-home settings and private tmux scope. Real source/packaged Pi lock ownership and fresh watcher heartbeat and explicit stop/rearm recovery pass using the documented CLI RPC entry.
-- Sandboxed WebContentsView with strict URL/navigation and permission policy. Real local prototype/redirect/security E2E proves no Node, IPC or Amun port access.
-- Service-owned node-pty and renderer xterm: explicit control, read-only default, bounded input/output and resize. Native runtime is rebuilt for Electron and contained in the unsigned package.
-- API-only Azure DevOps proof using Keychain PAT: ICV Test PBI #1088026 and Test Task #1088027, revision-checked updates, and real HTTP 412 stale-revision rejection. No Azure browser integration.
+The preview preserves sandboxing, no preload/Node/ports, per-product sessions, HTTPS/loopback URL restrictions and denied permissions. Known identity-provider navigation is blocked. Explicit user handoff restarts authentication from the original app page in Chrome/default browser, avoiding false OAuth-session portability. Real first-party login persistence/product isolation and native Chrome handoff pass. Terminal read-only/control/resize/backend detach pass, including user-confirmed Finder launch.
 
-## Validation
+Validation: 191 unit tests, lint/typecheck/format; eight source and eight packaged Electron tests; live Pi provider tests, Firstmate supervision, worker reattachment, actual Azure DevOps ICV reads/writes and stale-revision conflicts. New pure policies/Run/ack modules have 100% line/branch coverage; preview adapter has 90.43% line coverage, with scoped CI thresholds. Current packaged baseline: 330–365 ms process startup, 485 MiB summed working set, 13–19 ms terminal echo; limitations are recorded.
 
-179 unit/integration tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
+The user explicitly narrowed T010 to the browser foundation and moved signing/notarization/clean-account release acceptance to open release gate R001. These are deferred, not passed: no notarized DMG or public-release readiness claim. File previews, annotation/attachments, full onboarding/governance/product UI and M1/M2 remain unimplemented. External tool updates are allowed with compatibility checks; Claude 2.1.319 inference passes without restarting existing workers.
 
-Three process-cold launches with warm caches measured 713/502/324 ms to Connected, summed Electron working set 481/481/480 MiB and proof-terminal echo 16/22/13 ms. These are a local baseline, not clean-account or release acceptance; see ADR-008.
-
-## Open exit gates
-
-M0 remains incomplete. T006 M0 acceptance now passes for service/UI projection, models, dialogs, both providers and packaged isolated operation. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 is complete: source/package backend attachment passes and the user confirmed FINDER_OK and 24 80 from the real Finder-launched package. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
-
-## Service and ownership continuation
-
-Bounded Pi text/dialog projection now reaches the renderer; real offline select/confirm round-trips pass source and packaged tests. A checksum-guarded bundled-only Firstmate patch fixes Codex restricted-mode inheritance, with actual source/package propagation evidence. Private endpoint receipts and read-only tmux observation refuse identity mismatches; worker liveness remains unknown until real dispatch/restart acceptance. T010 is explicitly blocked at the user's request; other M0 work continues.
-
-Real Git worktree provisioning now replaces copied operational homes. Official Codex and Claude sign-ins and no-tool inference pass in separate Amun profiles. A bounded login helper opens the official authorization URL in Chrome; it does not copy cookies or expose credentials. Real worker reattachment remains open.
-
-Latest live evidence: source and packaged service each survive ten restarts while the same real Codex/Claude worker process IDs and start times remain unchanged, with zero duplicate workers. Native read-only backend terminal attachment, explicit control, resize and ownership-loss refusal pass in both builds. T007 actionable wake handling and T008 production dispatch/Run integration remain open. An unintended Claude background update was disclosed; update guards are now tested and restoration of the shared launcher awaits the user's decision.
-
-The subsequent real offline wake-delivery probe remains red under both default and short supported polling/grace settings; T007 is explicitly open. Startup/explicit re-arm evidence is not substituted for automatic wake handling.
-
-The user approved Claude 2.1.319 and supported external-tool updates. Amun no longer suppresses those updaters; isolated authenticated inference passed on 2.1.319. Existing worker sessions were preserved; their earlier dispatch/reconnect evidence is not relabelled as 2.1.319 evidence.
+See docs/evidence/M0-final-audit.md, docs/preview/STRESS-TEST.md and ADR-009. The user authorized merging PR #1 only after the revised M0 audit and final-head CI pass. No approval bypass or automatic follow-on M1 work.
