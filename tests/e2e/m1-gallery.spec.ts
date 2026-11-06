@@ -12,6 +12,7 @@ test("development gallery renders every attention type, size and theme accessibl
       "apps/desktop",
       "--amun-gallery",
       "--force-device-scale-factor=1",
+      "--force-color-profile=srgb",
       "--hide-scrollbars",
       "--user-data-dir=" + root,
     ],

@@ -55,6 +55,7 @@ test("shared request queue persists navigation, supports search, Focus restore a
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--force-device-scale-factor=1",
+      "--force-color-profile=srgb",
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
