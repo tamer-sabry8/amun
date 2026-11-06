@@ -13,3 +13,7 @@ The source E2E now checks the actual xterm screen dimensions and rendered PTY_OK
 A separate Finder launch reached the packaged app and terminal control, but full native UI echo verification could not finish: computer-use inspection returned ScreenCaptureKit/noWindowsAvailable and later cgWindowNotFound errors, with long tool timeouts. This attempt is NOT a Finder terminal acceptance pass. No personal session was stopped. Finder and backend-attachment gates remain open.
 
 Final local validation for this increment: 159 unit tests, lint, typecheck and formatting; six source and six packaged Electron tests. The first final-package local-browser fixture timed out before navigation; the test now waits for renderer/service Connected readiness before interacting, and the full packaged suite passes. No authenticated browser retry was performed.
+
+## Acceptance closure — 2026-11-06
+
+The earlier open-gate statements above are superseded by `backend-attachment.md`: real Firstmate worker attachment passed in source and package, and the user has now confirmed the actual Finder-launched terminal produced FINDER_OK and 24 80. Together with native ABI, read-only/control, resize, rendered output, bounded scrollback and service-loss checks, T011 M0 acceptance is complete. This does not mark the final terminal product UX complete.

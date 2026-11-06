@@ -1,0 +1,33 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/worker-environment.test.ts (2 tests | 1 failed) 5ms
+   × allows supported tool updates and keeps Claude profile separate while retaining macOS Keychain discovery 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/worker-environment.test.ts > allows supported tool updates and keeps Claude profile separate while retaining macOS Keychain discovery
+AssertionError: expected { HOME: '/Users/test', …(5) } to not have property "DISABLE_UPDATES"
+
+- Expected:
+undefined
+
++ Received:
+"1"
+
+ ❯ packages/crew/tests/worker-environment.test.ts:15:19
+     13|   });
+     14|   expect(env).not.toHaveProperty("ANTHROPIC_API_KEY");
+     15|   expect(env).not.toHaveProperty("DISABLE_UPDATES");
+       |                   ^
+     16|   expect(env).not.toHaveProperty("DISABLE_AUTOUPDATER");
+     17| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  15:16:02
+   Duration  263ms (transform 42%, import 24%, worker 23%, tests 11%)
+

@@ -18,7 +18,7 @@ Three process-cold launches with warm caches measured 713/502/324 ms to Connecte
 
 ## Open exit gates
 
-M0 remains incomplete. T006 M0 acceptance now passes for service/UI projection, models, dialogs, both providers and packaged isolated operation. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 backend attachment passes source/package; Finder confirmation remains pending. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
+M0 remains incomplete. T006 M0 acceptance now passes for service/UI projection, models, dialogs, both providers and packaged isolated operation. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 is complete: source/package backend attachment passes and the user confirmed FINDER_OK and 24 80 from the real Finder-launched package. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
 
 ## Service and ownership continuation
 
@@ -29,3 +29,5 @@ Real Git worktree provisioning now replaces copied operational homes. Official C
 Latest live evidence: source and packaged service each survive ten restarts while the same real Codex/Claude worker process IDs and start times remain unchanged, with zero duplicate workers. Native read-only backend terminal attachment, explicit control, resize and ownership-loss refusal pass in both builds. T007 actionable wake handling and T008 production dispatch/Run integration remain open. An unintended Claude background update was disclosed; update guards are now tested and restoration of the shared launcher awaits the user's decision.
 
 The subsequent real offline wake-delivery probe remains red under both default and short supported polling/grace settings; T007 is explicitly open. Startup/explicit re-arm evidence is not substituted for automatic wake handling.
+
+The user approved Claude 2.1.319 and supported external-tool updates. Amun no longer suppresses those updaters; isolated authenticated inference passed on 2.1.319. Existing worker sessions were preserved; their earlier dispatch/reconnect evidence is not relabelled as 2.1.319 evidence.

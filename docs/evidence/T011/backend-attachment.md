@@ -6,4 +6,4 @@ Live red evidence: tmux 3.8 `refresh-client -f !read-only` returned success but 
 
 Both source and unsigned packaged app tests attached to the actual Codex worker, displayed its previous completed reply, blocked a read-only input canary, enabled a draft canary after explicit control, erased that draft without Enter, resized to 100x30, returned to read-only and detached while preserving worker panes. No new model request was submitted. A second attachment refused control and closed its client after deliberate ownership mismatch; the original owner token was restored.
 
-The package also passes six Electron E2E tests. A real Finder launch was opened for manual confirmation; its result remains pending, so T011 remains open. This proof is not the final terminal product UX.
+The package also passes six Electron E2E tests. The user confirmed on 2026-11-06 that the packaged app opened through Finder, and its terminal displayed FINDER_OK and 24 80 after explicit take-control. This is user-observed live Finder evidence, additional to the automated source/package tests, and closes T011. This proof is not the final terminal product UX.

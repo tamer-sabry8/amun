@@ -83,7 +83,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: WebContentsView in the inspector slot; per-product partitions; navigation controls; permission handler; popup handling; SSO redirect test.
       Tests: page script cannot access `ipcRenderer`, Node or Amun ports; Playwright.
       DoD: authenticated site + local prototype both render; security test green.
-- [ ] **T011 — Terminal dock proof** · P1 · TS · Dep T005
+- [x] **T011 — Terminal dock proof** · P1 · TS · Dep T005
       Build: node-pty in service (rebuilt for Electron ABI), xterm.js in renderer, resize, scrollback; "attach to backend pane" mode (read-only default, explicit take-control).
       Tests: echo/resize tests; packaged-app test.
       DoD: works from Finder launch without inheriting an interactive shell environment.
@@ -219,9 +219,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T006 complete for M0: bounded service/UI model, stream and select/confirm handling; real source/packaged OpenRouter and GitHub Copilot inference with empty PATH; explicit selected Pi credential reuse and crash cleanup. See T006/authenticated-ui.md. General auth/onboarding remains later scope.
 - T007: real Git worktree ownership and explicit watcher stop/rearm pass source/package. Existing configuration import and 63 tracked skill files + one internal link are verified without changing personal files. Actionable wakes and automatic recovery remain open.
 - T008: real Codex + Claude dispatch and ten real service restarts each in source/package pass with stable worker PIDs/start times and zero duplicates. Production dispatch/receipt publication and Run mapping remain open; worker semantic state remains unknown.
-- T011: actual worker attachment, native read-only default, explicit control, resize, ownership-loss refusal and client-only detach pass source/package. Finder manual result pending.
+- T011: actual worker attachment, native read-only default, explicit control, resize, ownership-loss refusal and client-only detach pass source/package. Finder manual result confirmed by the user: FINDER_OK and 24 80; T011 complete.
 - T012: current process-cold/warm-cache launches 322/317/330 ms, summed Electron working set 481 MiB, echo 13/13/12 ms. Clean-account installation and signing/notarization remain open.
-- Personal CLI version issue: Claude's updater changed its shared launcher from 2.1.311 to 2.1.319 during the first worker run. Amun update guards are now tested; the user's decision on restoring the launcher is pending.
+- Personal CLI version issue: Claude's updater changed its shared launcher from 2.1.311 to 2.1.319 during the first worker run. The user approved retaining 2.1.319 and supported external-tool updates; updater overrides were removed and fresh isolated 2.1.319 inference passed. No active worker was restarted.
 - T010 remains blocked. No M1/M2 work or merge.
 
 - T007 follow-up: real offline signal-to-Pi delivery probe failed with both default and short supported polling/grace settings. Lock ownership and watcher startup still pass; consumed wake and automatic replacement remain unverified. See `evidence/T007/owned-watcher.md`.
+
+- User-confirmed 2026-11-06 closure: T011 passes actual Finder launch echo/dimensions plus prior source/package backend acceptance. T007/T008/T010/T012 remain open; no M1/M2 start.

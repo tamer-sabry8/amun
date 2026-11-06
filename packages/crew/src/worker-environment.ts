@@ -12,8 +12,6 @@ export function workerEnvironment(
   return {
     HOME: tool === "claude" ? normalHome : join(profile, "home"),
     PATH: dirname(nodeBinary) + ":/usr/bin:/bin",
-    DISABLE_UPDATES: "1",
-    DISABLE_AUTOUPDATER: "1",
     ENABLE_CLAUDEAI_MCP_SERVERS: "false",
     [tool === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"]: join(
       profile,
