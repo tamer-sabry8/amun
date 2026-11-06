@@ -8,6 +8,8 @@ The first installer already uses Herdr to start Pi, which automatically loads Fi
 
 ## Decision
 
+Clarification: Herdr is the user’s existing launcher, not an Amun dependency. The original plan’s Herdr default is superseded by the user’s clarification. Amun must preserve that external setup without attaching to or controlling its sessions.
+
 Inventory is read-only. Resolve user-selected candidate executable links and inspect bounded package metadata without executing binaries or shell/profile scripts. Recognise the tested official Pi package identity; unknown installations remain unresolved. A matching version is not proof of RPC compatibility. The inventory currently accepts candidate paths from its caller; automatic Mac path selection and onboarding UI remain pending.
 
 Keep Amun state separate from existing Pi code/configuration and Firstmate code/home. Check both nesting directions after resolving symlinks, and repeat validation immediately before eventual creation/launch. These checks are not a defence against concurrent malicious filesystem changes. No existing files are upgraded, downgraded, deleted or migrated by inventory.
@@ -27,7 +29,7 @@ Personal Pi authentication is excluded from inventory. Configuration/skills impo
 - [ ] Mac onboarding detects common paths and supports browsing; shows installed versus bundled choices.
 - [ ] Probe selected Pi RPC and Firstmate extension compatibility in isolated state before launch.
 - [ ] Implement explicit configuration/skills and authentication choices.
-- [ ] Prove Herdr observation/reattachment with a supported endpoint and ownership checks (T008).
+- [ ] Prove observation/reconnection of Amun-managed workers through a verified non-Herdr backend (T008). Existing Herdr sessions are outside that control path.
 - [ ] On the first installer's Mac, compare personal configuration and locks before/after onboarding, app exit and upgrade; verify their existing Herdr session continues working.
 
 ## Evidence and limits

@@ -24,11 +24,13 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - First-installer requirement: preserve the existing Herdr → Pi → Firstmate setup. Read-only discovery and state-isolation unit tests are implemented; actual reuse/attachment and Mac onboarding remain open. See [ADR-005](decisions/ADR-005-existing-installations.md) and [coexistence evidence](evidence/T007/coexistence.md).
 - T008–T012: pending. Unsigned packaging proof is implemented; signing and performance gates remain open. M0 is not complete.
 
+- Backend clarification: Amun must not depend on Herdr. Managed-home creation now rejects Herdr and requires explicit tmux selection for the M0 proof; operational tmux integration remains unproven. The original attached plan is preserved as reference, with this user clarification taking precedence.
+
 ## Current blockers
 
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
 - This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
-- M0 live integration needs authorised Tahaluf test access, provider sign-in and Herdr/worker runtimes. Do not request credentials in chat.
+- M0 live integration needs authorised Tahaluf test access, provider sign-in and a verified non-Herdr worker runtime. Do not request credentials in chat.
 - GitHub API access restored. Work is tracked in draft PR #1.
 
 ## M0 — Prove the foundations — ACTIVE
@@ -60,8 +62,8 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Tests: overlay merge unit tests; live: Firstmate starts in the managed home; watcher extension loads; personal home untouched (hash before/after).
       DoD: ADR documents which Firstmate behaviours work under RPC and which need fallback (interactive TUI in a backend pane).
 - [ ] **T008 — Crew observation and reattach** · P0 · TS · Dep T007
-      Build: adapter reading Firstmate task records and Herdr state (discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
-      Tests: fixtures of recorded Firstmate/Herdr state; live: dispatch Codex + Claude workers, restart service, reattach.
+      Build: adapter reading Firstmate task records and Amun-managed backend state (non-Herdr; discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
+      Tests: fixtures of recorded Firstmate and selected backend state; live: dispatch Codex + Claude workers, restart service, reattach.
       DoD: zero duplicate workers across 10 restart trials; unknown state shown when unverifiable.
 - [ ] **T009 — Azure DevOps proof** · P0 · TS · Dep T005
       Build: client on azure-devops-node-api with explicit `api-version=7.0`; PAT from Keychain; `NODE_EXTRA_CA_CERTS` support; read projects/teams/process/work items; create story + task; update with JSON Patch `test /rev`; read iterations; read Azure Repos PRs.
@@ -151,7 +153,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T037 — amun-bridge Pi extension** · P0 · TS · Dep T006, T014 — Build: Unix-socket client with token; `tool_call` hook: classify tool by Amun's own registry; governed/unknown → create action, return block with action id; handler errors block; Amun tools (`amun_get_context`, `amun_propose_backlog_publication`, `amun_propose_sprint_commitment`, `amun_request_merge`, `amun_raise_decision`, `amun_report_blocker`); event forwarding. Tests: direct and codemode-nested MCP write attempts are blocked; a tool claiming `readOnlyHint` but registered as governed is blocked; extension that replaces `/mcp` detected and reported. DoD: test matrix green on live Pi.
 - [ ] **T038 — Firstmate conversation and composer** · P0 · TS · Dep T006, T037 — DoD: composer sends with selected-item context; streaming; steer/follow-up; never approves anything.
 - [ ] **T039 — Model routing matrix** · P1 · TS · Dep T016, T038 — Build: per-product allowlist; task/difficulty matrix; actual model recorded per run; switching outside allowlist requires approval. DoD: Copilot and OpenRouter routes exercised live.
-- [ ] **T040 — Crew view** · P0 · TS/React · Dep T008 — Build: hierarchy and list; status counts; selected agent panel (current task, needs decision, up next, recent work, access scope, history). DoD: matches Firstmate/Herdr state live.
+- [ ] **T040 — Crew view** · P0 · TS/React · Dep T008 — Build: hierarchy and list; status counts; selected agent panel (current task, needs decision, up next, recent work, access scope, history). DoD: matches Firstmate and Amun-managed backend state live.
 - [ ] **T041 — Delegation and run tracker** · P0 · TS · Dep T037, T040 — Build: "Ask Firstmate to implement" with scope approval; run tracker activity; blocked → decision → resume. DoD: live run from story to PR link.
 - [ ] **T042 — Prototype path** · P1 · TS · Dep T010, T041 — Build: bounded prototype run; preview in browser; feedback bar → PRD change proposals. DoD: feedback becomes accepted PRD change.
 - [ ] **T043 — Terminal attach** · P2 · TS · Dep T011, T040 — DoD: read-only attach to a worker pane; take-control logged as user activity.
@@ -175,5 +177,5 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T054 — Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path.
 - [ ] **T055 — Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens.
 - [ ] **T056 — Performance** · P1 — budgets from T012 met.
-- [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for Herdr/tmux, Claude Code, Codex.
+- [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex.
 - [ ] **T058 — R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off.

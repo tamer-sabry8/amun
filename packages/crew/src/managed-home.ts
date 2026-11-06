@@ -21,14 +21,17 @@ export function mergeOverlay(
       throw new Error("Unsupported overlay");
   }
   const merged = {
-    backend: "herdr",
+    backend: overlay.backend?.trim() ?? "",
     "secondmate-harness": "codex",
     ...overlay,
     "claude-permission-mode": "auto",
     "codex-permission-mode": "restricted",
   };
-  if (!["herdr", "tmux"].includes(merged.backend.trim()))
-    throw new Error("Unsupported backend");
+  if (merged.backend.trim() !== "tmux")
+    throw new Error(
+      "Choose the tmux backend explicitly; Herdr is not supported by Amun",
+    );
+  merged.backend = "tmux";
   if (overlay["crew-dispatch.json"] !== undefined) {
     const dispatch: unknown = JSON.parse(overlay["crew-dispatch.json"]);
     if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch))

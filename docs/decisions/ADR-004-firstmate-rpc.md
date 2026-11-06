@@ -33,4 +33,4 @@ Pi's installed RPC extension-UI documentation states that custom() returns undef
 
 ## Next live gates
 
-Acquire a real Firstmate ownership lock using its supported lifecycle, prove watcher wake/recovery, provide an operator approval flow for restricted workers, and dispatch/reconnect one Codex and one Claude Code worker via Herdr. These require runtime and sign-in prerequisites still absent here. T007 and T008 remain open.
+Acquire a real Firstmate ownership lock using its supported lifecycle, prove watcher wake/recovery, provide an operator approval flow for restricted workers, and dispatch/reconnect one Codex and one Claude Code worker through a verified non-Herdr backend. The user clarified that Amun must not depend on Herdr; the proof now explicitly configures tmux, but does not dispatch workers or prove tmux operational. These require runtime and sign-in prerequisites still absent here. T007 and T008 remain open.

@@ -26,6 +26,21 @@ async function temporary() {
 }
 
 describe("Firstmate managed home", () => {
+  it("requires an explicit supported backend before creating any home", async () => {
+    const root = await temporary();
+    await expect(createManagedHome(root, "missing", {})).rejects.toThrow(
+      "Choose the tmux backend explicitly",
+    );
+    await expect(stat(join(root, "missing"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      createManagedHome(root, "personal", { backend: "herdr" }),
+    ).rejects.toThrow();
+    await expect(stat(join(root, "personal"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
   it("forces auto permissions without changing the imported values", () => {
     const overlay = {
       backend: "tmux",
@@ -44,15 +59,17 @@ describe("Firstmate managed home", () => {
   });
   it.each([
     { backend: "unsupported" },
-    { "../auth.json": "secret" },
-    { "crew-dispatch.json": "broken" },
-    { "crew-dispatch.json": "[]" },
+    { backend: "herdr" },
+    {},
+    { backend: "tmux", "../auth.json": "secret" },
+    { backend: "tmux", "crew-dispatch.json": "broken" },
+    { backend: "tmux", "crew-dispatch.json": "[]" },
   ])("rejects unsupported imports %#", (overlay) => {
     expect(() => mergeOverlay(overlay)).toThrow();
   });
   it("creates private operational directories and refuses to overwrite an existing home", async () => {
     const root = await temporary();
-    const home = await createManagedHome(root, "primary", {});
+    const home = await createManagedHome(root, "primary", { backend: "tmux" });
     expect(
       await readFile(join(home, "config/claude-permission-mode"), "utf8"),
     ).toBe("auto\n");
@@ -64,7 +81,9 @@ describe("Firstmate managed home", () => {
     for (const directory of ["state", "data", "projects"])
       expect((await stat(join(home, directory))).isDirectory()).toBe(true);
     await writeFile(join(home, "data/user-note"), "preserve me");
-    await expect(createManagedHome(root, "primary", {})).rejects.toThrow();
+    await expect(
+      createManagedHome(root, "primary", { backend: "tmux" }),
+    ).rejects.toThrow();
     expect(await readFile(join(home, "data/user-note"), "utf8")).toBe(
       "preserve me",
     );
@@ -73,7 +92,7 @@ describe("Firstmate managed home", () => {
     "rejects unsafe home name %j",
     async (name) => {
       await expect(
-        createManagedHome(await temporary(), name, {}),
+        createManagedHome(await temporary(), name, { backend: "tmux" }),
       ).rejects.toThrow();
     },
   );
@@ -82,7 +101,7 @@ describe("Firstmate managed home", () => {
     await mkdir(join(root, "personal"));
     await symlink(join(root, "personal"), join(root, "redirect"));
     await expect(
-      createManagedHome(join(root, "redirect"), "primary", {}),
+      createManagedHome(join(root, "redirect"), "primary", { backend: "tmux" }),
     ).rejects.toThrow();
   });
 });

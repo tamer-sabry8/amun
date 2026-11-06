@@ -26,7 +26,9 @@ const sentinel = '{"test-sentinel":"must-remain-untouched"}';
 await writeFile(join(personalConfig, "settings.json"), sentinel, {
   mode: 0o600,
 });
-const operational = await createManagedHome(root, "managed", {});
+const operational = await createManagedHome(root, "managed", {
+  backend: "tmux",
+});
 const config = join(root, "pi-config");
 await mkdir(config, { mode: 0o700 });
 const env: NodeJS.ProcessEnv = {
