@@ -4,12 +4,19 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: [
+        "packages/domain/src/**/*.ts",
+        "packages/data/src/database.ts",
+        "packages/data/src/workspace.ts",
+        "packages/data/src/outbox.ts",
         "apps/desktop/src/preview-navigation.ts",
         "apps/desktop/src/browser.ts",
         "packages/crew/src/observed-run.ts",
         "packages/crew/src/wake-ack.ts",
       ],
       thresholds: {
+        "packages/domain/src/**/*.ts": { lines: 90 },
+        "packages/data/src/database.ts": { lines: 90 },
+        "packages/data/src/outbox.ts": { lines: 90 },
         "apps/desktop/src/browser.ts": { lines: 80 },
         "apps/desktop/src/preview-navigation.ts": { lines: 95, branches: 90 },
         "packages/crew/src/observed-run.ts": { lines: 95, branches: 90 },

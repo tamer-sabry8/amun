@@ -4,7 +4,7 @@ import {
   removeDeploymentSelfLink,
 } from "../packages/crew/src/runtime-links.ts";
 const runtime = process.argv[2] ?? "pi";
-if (!["pi", "terminal"].includes(runtime))
+if (!["pi", "terminal", "database"].includes(runtime))
   throw new Error("Unsupported runtime");
 const staged = resolve(`apps/desktop/.runtime/${runtime}`);
 await removeDeploymentSelfLink(

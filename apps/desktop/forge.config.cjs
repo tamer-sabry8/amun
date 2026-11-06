@@ -10,7 +10,12 @@ module.exports = {
       /^\/src(?:\/|$)/,
       /^\/tests(?:\/|$)/,
     ],
-    extraResource: [".runtime/pi", ".runtime/firstmate", ".runtime/terminal"],
+    extraResource: [
+      ".runtime/pi",
+      ".runtime/firstmate",
+      ".runtime/terminal",
+      ".runtime/database",
+    ],
     afterCopyExtraResources: [
       async ({ buildPath, platform }) => {
         const { join } = require("node:path");
@@ -20,6 +25,10 @@ module.exports = {
           platform === "darwin"
             ? join(buildPath, "Amun.app/Contents/Resources")
             : join(buildPath, "resources");
+        await repairRuntimeLinks(
+          join(__dirname, ".runtime/database"),
+          join(resources, "database"),
+        );
         await repairRuntimeLinks(
           join(__dirname, ".runtime/pi"),
           join(resources, "pi"),

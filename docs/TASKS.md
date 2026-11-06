@@ -75,15 +75,17 @@ T010 is explicitly narrowed to secure preview, external federated-auth handoff a
 
 ## M1 — Durable core and shell — ACTIVE
 
-- [ ] **T013 — Database and migrations** · P0 · TS · Dep T002
+Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-durable-core.md).
+
+- [x] **T013 — Database and migrations** · P0 · TS · Dep T002
       Build: Drizzle schema for section 8.6; migrations; FTS5 for search.
       Tests: migrate up from every prior version with seed data.
       DoD: data survives app upgrade test.
-- [ ] **T014 — Governance engine** · P0 · TS · Dep T013
+- [x] **T014 — Governance engine** · P0 · TS · Dep T013
       Build: action and approval state machines (8.4); payload hash (canonical JSON); target-revision binding; invalidation triggers; separate approval kinds (publish, commit, merge, notion_publish, file_destructive, skill_install, model_outside_allowlist).
       Tests: exhaustive state-transition tests; property tests for hash stability.
       DoD: ≥ 90% coverage; mutating a payload after approval always invalidates.
-- [ ] **T015 — Outbox and reconciliation framework** · P0 · TS · Dep T014
+- [x] **T015 — Outbox and reconciliation framework** · P0 · TS · Dep T014
       Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
       Tests: crash between write and ack; duplicate-suppression tests.
       DoD: chaos test "kill after remote write, before local ack" produces no duplicate.

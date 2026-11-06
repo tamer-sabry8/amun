@@ -1,3 +1,6 @@
+import { ActionStore } from "../../../packages/data/src/outbox.ts";
+import type Database from "better-sqlite3";
+import { openWorkspace } from "../../../packages/data/src/workspace.ts";
 import { CrewObserver } from "../../service/src/crew-observer.ts";
 import { observeOwnedTmux } from "../../../packages/crew/src/observe-owned-tmux.ts";
 import { openBackendTerminal } from "../../service/src/backend-terminal.ts";
@@ -12,6 +15,16 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const requireNative = createRequire(join(process.cwd(), "amun-native.cjs"));
+const databaseModule = process.env.AMUN_DATABASE_MODULE;
+const workspaceRoot = process.env.AMUN_WORKSPACE_ROOT;
+if (!databaseModule || !workspaceRoot)
+  throw new Error("Workspace runtime unavailable");
+const workspace = openWorkspace(
+  workspaceRoot,
+  requireNative(databaseModule) as typeof Database,
+);
+const actions = new ActionStore(workspace);
+actions.recover();
 const sessions = new Set<TerminalSession>();
 process.parentPort?.on("message", (event) => {
   const port = event.ports[0];
@@ -167,5 +180,6 @@ process.parentPort?.on("message", (event) => {
   port.start();
 });
 process.on("exit", () => {
+  workspace.close();
   for (const terminal of sessions) terminal.close();
 });

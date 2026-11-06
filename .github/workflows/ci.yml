@@ -2,7 +2,7 @@ name: Foundation checks
 on:
   pull_request:
   push:
-    branches: [main, "feat/m0-*"]
+    branches: [main, "feat/m0-*", "feat/m1-*"]
 permissions:
   contents: read
 jobs:
@@ -19,6 +19,7 @@ jobs:
       - run: pnpm exec vitest run --coverage
       - run: pnpm --filter @amun/desktop exec install-electron
       - run: pnpm exec electron-rebuild -m runtime/terminal -v 45.2.3 -w node-pty -f
+      - run: pnpm database:stage
       - run: pnpm test:e2e
       - run: pnpm test:runtime
       - run: pnpm package

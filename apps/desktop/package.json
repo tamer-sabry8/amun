@@ -13,6 +13,7 @@
   "devDependencies": {
     "electron": "45.2.3",
     "@electron-forge/cli": "8.0.1",
-    "vite": "8.3.6"
+    "vite": "8.3.6",
+    "@types/better-sqlite3": "9.6.0"
   }
 }

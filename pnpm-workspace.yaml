@@ -3,6 +3,7 @@ packages:
   - packages/*
   - runtime/*
 allowBuilds:
+  better-sqlite3: true
   node-pty: true
   electron: true
   "@google/genai": true

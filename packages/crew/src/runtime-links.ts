@@ -49,7 +49,11 @@ export async function removeDeploymentSelfLink(
   project: string,
   packageName = "pi-runtime",
 ): Promise<void> {
-  if (!["pi-runtime", "terminal-runtime"].includes(packageName))
+  if (
+    !["pi-runtime", "terminal-runtime", "database-runtime"].includes(
+      packageName,
+    )
+  )
     throw new Error("Unsupported deployment package");
   const link = join(
     staged,

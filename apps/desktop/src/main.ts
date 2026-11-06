@@ -33,6 +33,13 @@ function startService(): void {
       serviceName: "Amun Service",
       env: {
         ...process.env,
+        AMUN_WORKSPACE_ROOT: join(app.getPath("userData"), "workspace"),
+        AMUN_DATABASE_MODULE: app.isPackaged
+          ? join(process.resourcesPath, "database/node_modules/better-sqlite3")
+          : join(
+              app.getAppPath(),
+              ".runtime/database/node_modules/better-sqlite3",
+            ),
         AMUN_CREW_RECEIPTS: join(app.getPath("userData"), "crew", "receipts"),
         AMUN_TMUX_BINARY:
           process.platform === "darwin"
