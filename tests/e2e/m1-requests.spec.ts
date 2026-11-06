@@ -54,6 +54,7 @@ test("shared request queue persists navigation, supports search, Focus restore a
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--force-device-scale-factor=1",
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

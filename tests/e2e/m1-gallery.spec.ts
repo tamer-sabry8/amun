@@ -8,7 +8,12 @@ test("development gallery renders every attention type, size and theme accessibl
   test.setTimeout(90000);
   const root = await mkdtemp(join(tmpdir(), "amun-gallery-"));
   const app = await electron.launch({
-    args: ["apps/desktop", "--amun-gallery", "--user-data-dir=" + root],
+    args: [
+      "apps/desktop",
+      "--amun-gallery",
+      "--force-device-scale-factor=1",
+      "--user-data-dir=" + root,
+    ],
   });
   try {
     const page = await app.firstWindow();

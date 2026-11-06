@@ -47,6 +47,7 @@ body,
 body {
   font-family: Inter, sans-serif;
   font-size: 13px;
+  line-height: 1.4;
   color: var(--amun-color-text);
   background: var(--amun-color-canvas);
 }
