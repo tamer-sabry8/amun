@@ -1,9 +1,37 @@
+import { pathToFileURL } from "node:url";
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 test("native Pi commands create an owned SDK session and update its real name", async () => {
-  const root = await mkdtemp(join(tmpdir(), "amun-native-ui-"));
+  const root = await realpath(await mkdtemp(join(tmpdir(), "amun-native-ui-")));
+  const cwd = join(root, "pi-workspace"),
+    sessions = join(cwd, "sessions");
+  await mkdir(sessions, { recursive: true, mode: 0o700 });
+  const sdk = (await import(
+    pathToFileURL(
+      resolve(
+        "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+      ),
+    ).href
+  )) as {
+    SessionManager: {
+      create(
+        cwd: string,
+        dir: string,
+      ): {
+        appendSessionInfo(name: string): void;
+        appendMessage(message: unknown): void;
+      };
+    };
+  };
+  const saved = sdk.SessionManager.create(cwd, sessions);
+  saved.appendSessionInfo("Saved session acceptance");
+  saved.appendMessage({
+    role: "user",
+    content: [{ type: "text", text: "Saved session fixture" }],
+    timestamp: Date.now(),
+  });
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
@@ -34,12 +62,82 @@ test("native Pi commands create an owned SDK session and update its real name", 
       "Native session acceptance",
       { timeout: 20000 },
     );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("new");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Session change completed",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("name");
     await page.getByLabel("Command argument", { exact: true }).fill("");
     await page
       .getByRole("button", { name: "Run command", exact: true })
       .click();
     await expect(page.getByTestId("native-pi-result")).toContainText(
-      "Native session acceptance",
+      "Unnamed session",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("resume");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByTestId("native-pi-result")
+      .getByRole("button", { name: "Saved session acceptance", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Session change completed",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("name");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Saved session acceptance",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("clone");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Session change completed",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("tree");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByTestId("native-pi-result")
+      .getByRole("button", { name: /^message · / })
+      .first()
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Session change completed",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("fork");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByTestId("native-pi-result")
+      .getByRole("button", { name: "User message 1", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Session change completed",
     );
   } finally {
     await app.close();

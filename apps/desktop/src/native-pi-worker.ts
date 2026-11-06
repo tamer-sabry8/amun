@@ -1,3 +1,7 @@
+import {
+  NativePiSessions,
+  type NativeSessionRuntime,
+} from "../../../packages/crew/src/native-pi-sessions.ts";
 import { pathToFileURL } from "node:url";
 import { mkdir, lstat, realpath } from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -14,8 +18,12 @@ import { JsonLineDecoder } from "../../../packages/crew/src/jsonl.ts";
 const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
-let session: (NativePiSession & { dispose(): void }) | undefined;
-let actions: NativePiActions | undefined;
+type Runtime = NativeSessionRuntime & {
+  session: NativePiSession;
+  dispose(): Promise<void>;
+};
+let runtime: Runtime | undefined;
+let sessionActions: NativePiSessions | undefined;
 let busy = false;
 async function privateDirectory(path: string) {
   await mkdir(path, { mode: 0o700, recursive: true });
@@ -37,13 +45,26 @@ async function initialize() {
   await privateDirectory(sessions);
   const sdk = (await import(pathToFileURL(entry!).href)) as {
     ModelRuntime: { create(options: unknown): Promise<unknown> };
-    DefaultResourceLoader: new (options: unknown) => {
-      reload(): Promise<void>;
+    SessionManager: {
+      create(cwd: string, dir: string): unknown;
+      list(
+        cwd: string,
+        dir: string,
+      ): Promise<{ id: string; name?: string; path: string; cwd: string }[]>;
     };
-    SessionManager: { create(cwd: string, dir: string): unknown };
-    createAgentSession(
+    createAgentSessionServices(
       options: unknown,
-    ): Promise<{ session: NativePiSession & { dispose(): void } }>;
+    ): Promise<{ diagnostics: unknown[] }>;
+    createAgentSessionFromServices(options: unknown): Promise<unknown>;
+    createAgentSessionRuntime(
+      factory: (options: {
+        cwd: string;
+        agentDir: string;
+        sessionManager: unknown;
+        sessionStartEvent?: unknown;
+      }) => Promise<unknown>,
+      options: unknown,
+    ): Promise<Runtime>;
   };
   const modelRuntime = await sdk.ModelRuntime.create({
     authPath,
@@ -52,26 +73,44 @@ async function initialize() {
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
-  const resourceLoader = new sdk.DefaultResourceLoader({
-    cwd,
-    agentDir: root,
-    noExtensions: true,
-    disabledBuiltinExtensions: ["mcp"],
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
-  });
-  await resourceLoader.reload();
-  ({ session } = await sdk.createAgentSession({
-    cwd,
-    agentDir: root,
-    modelRuntime,
-    resourceLoader,
-    noTools: "all",
-    sessionManager: sdk.SessionManager.create(cwd, sessions),
-  }));
-  actions = new NativePiActions(session);
+  runtime = await sdk.createAgentSessionRuntime(
+    async (options) => {
+      if (options.cwd !== cwd || options.agentDir !== root)
+        throw Error("Foreign session context");
+      const services = await sdk.createAgentSessionServices({
+        cwd,
+        agentDir: root,
+        modelRuntime,
+        resourceLoaderOptions: {
+          noExtensions: true,
+          disabledBuiltinExtensions: ["mcp"],
+          noSkills: true,
+          noPromptTemplates: true,
+          noThemes: true,
+          noContextFiles: true,
+        },
+      });
+      const created = await sdk.createAgentSessionFromServices({
+        services,
+        sessionManager: options.sessionManager,
+        sessionStartEvent: options.sessionStartEvent,
+        noTools: "all",
+      });
+      return {
+        ...(created as object),
+        services,
+        diagnostics: services.diagnostics,
+      };
+    },
+    {
+      cwd,
+      agentDir: root,
+      sessionManager: sdk.SessionManager.create(cwd, sessions),
+    },
+  );
+  sessionActions = new NativePiSessions(runtime, cwd, sessions, () =>
+    sdk.SessionManager.list(cwd, sessions),
+  );
 }
 const decoder = new JsonLineDecoder(65536);
 const send = (id: string, result: unknown) =>
@@ -81,8 +120,7 @@ const send = (id: string, result: unknown) =>
     ) + "\n",
   );
 function stop() {
-  session?.dispose();
-  process.exit(0);
+  void (runtime?.dispose() ?? Promise.resolve()).finally(() => process.exit(0));
 }
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk: string) => {
@@ -102,8 +140,16 @@ process.stdin.on("data", (chunk: string) => {
       }
       busy = true;
       void (async () => {
-        if (!actions) await initialize();
-        send(command.id, await actions!.run(command.command, command.argument));
+        if (!runtime) await initialize();
+        const result = ["new", "resume", "fork", "clone", "tree"].includes(
+          command.command,
+        )
+          ? await sessionActions!.run(command.command, command.argument)
+          : await new NativePiActions(runtime!.session).run(
+              command.command,
+              command.argument,
+            );
+        send(command.id, result);
       })()
         .catch(() =>
           send(command.id, {

@@ -27,10 +27,10 @@ for (const path of [root, join(root, "state"), join(root, "work")]) {
     throw new Error("Unsafe worker profile");
 }
 const bridge = new WorkerLoginBrowser(tool, (url) => {
-  execFile("/usr/bin/open", ["-a", "Google Chrome", url], (error) => {
+  execFile("/usr/bin/open", ["-a", "Microsoft Edge", url], (error) => {
     if (error)
       process.stderr.write(
-        "Chrome could not be opened. Use the official login URL shown above.\n",
+        "Microsoft Edge could not be opened. Use the official login URL shown above.\n",
       );
   });
 });

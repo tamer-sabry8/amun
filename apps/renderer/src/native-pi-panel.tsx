@@ -58,7 +58,8 @@ export function NativePiPanel() {
     <section aria-label="Pi commands">
       <h3>Pi session commands</h3>
       <p className="muted">
-        This session belongs to Amun. Personal Pi sessions are separate.
+        This session belongs to Amun. Personal Pi sessions are separate. Empty
+        sessions are saved after their first message.
       </p>
       <label>
         Native Pi command
@@ -74,6 +75,11 @@ export function NativePiPanel() {
         >
           {[
             "session",
+            "new",
+            "resume",
+            "fork",
+            "clone",
+            "tree",
             "model",
             "thinking",
             "name",
