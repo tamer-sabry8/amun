@@ -1,0 +1,2 @@
+{"id":"state","command":"get_state","success":true}
+{"id":"models","command":"get_available_models","success":true}

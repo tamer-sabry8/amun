@@ -11,5 +11,20 @@ module.exports = {
       /^\/tests(?:\/|$)/,
     ],
     extraResource: [".runtime/pi"],
+    afterCopyExtraResources: [
+      async ({ buildPath, platform }) => {
+        const { join } = require("node:path");
+        const { repairRuntimeLinks } =
+          await import("../../packages/crew/src/runtime-links.ts");
+        const resources =
+          platform === "darwin"
+            ? join(buildPath, "Amun.app/Contents/Resources")
+            : join(buildPath, "resources");
+        await repairRuntimeLinks(
+          join(__dirname, ".runtime/pi"),
+          join(resources, "pi"),
+        );
+      },
+    ],
   },
 };

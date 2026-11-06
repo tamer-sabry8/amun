@@ -13,12 +13,12 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 - Sandboxed preload transfers MessagePorts; service validates health requests; UI validates correlated replies and displays Reconnecting on crash.
 - Bounded restart delays; app shutdown cancels retries and stops the child.
 - Pi 1.4.0 pinned, bounded JSONL parser and live isolated state/model-discovery probe.
-- Unsigned Forge packaging includes deployed production Pi; packaged Electron-as-Node proof uses an empty PATH.
+- Unsigned Forge packaging includes deployed production Pi; packaged Electron-as-Node proof uses an empty PATH and rejects links escaping the artifact. Regression tests verify the copied runtime remains usable after its build source is removed.
 - Managed Firstmate home helper forces auto permissions and refuses unsafe imports or overwrites; live Firstmate integration remains open.
 
 ## Validation
 
-- 63 local unit tests pass, with recorded failing tests before implementation.
+- 66 local unit tests pass, with recorded failing tests before implementation.
 - macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
 - Latest CI also builds the unsigned Mac package, probes bundled Pi and repeats both Electron tests against the packaged executable.

@@ -1,3 +1,4 @@
+import { assertRuntimeContained } from "../packages/crew/src/runtime-links.ts";
 import { resolve, join } from "node:path";
 import { access } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -19,6 +20,7 @@ const entry = join(
 );
 await access(binary);
 await access(entry);
+await assertRuntimeContained(join(resources, "pi"));
 // The probe harness uses developer Node; the Pi child uses only the packaged Electron binary.
 const runtime = spawnSync(
   process.execPath,
