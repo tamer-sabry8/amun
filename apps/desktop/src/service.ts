@@ -1,3 +1,23 @@
+import { WorkspaceService } from "../../../packages/data/src/workspace-service.ts";
+import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
+import {
+  AuthBroker,
+  connectionId,
+  type Connection,
+} from "../../../packages/auth/src/broker.ts";
+import {
+  macKeyring,
+  type EntryLike,
+} from "../../../packages/auth/src/keyring.ts";
+import { probeConnection } from "../../../packages/auth/src/probe.ts";
+import { AuthSession } from "../../../packages/auth/src/session.ts";
+import { connectionSchema } from "../../../packages/contracts/src/auth.ts";
+import { startPiLogin } from "../../service/src/auth-process.ts";
+import { SafeOutputs } from "../../../packages/data/src/audit.ts";
+import {
+  Redactor,
+  createSafeLogger,
+} from "../../../packages/security/src/redaction.ts";
 import { ActionStore } from "../../../packages/data/src/outbox.ts";
 import type Database from "better-sqlite3";
 import { openWorkspace } from "../../../packages/data/src/workspace.ts";
@@ -23,12 +43,88 @@ const workspace = openWorkspace(
   workspaceRoot,
   requireNative(databaseModule) as typeof Database,
 );
+const redactor = new Redactor();
+const logger = createSafeLogger(redactor, process.stdout);
+const outputs = new SafeOutputs(workspace, redactor, logger);
+outputs.audit("system", "service.started", "workspace", {});
+const workspaceService = new WorkspaceService(workspace);
 const actions = new ActionStore(workspace);
 actions.recover();
+const authKeyring = () => {
+  const modulePath = process.env.AMUN_AUTH_MODULE;
+  if (!modulePath) throw Error("Auth runtime unavailable");
+  const native = requireNative(modulePath) as {
+    Entry: new (service: string, account: string) => EntryLike;
+  };
+  return macKeyring(native.Entry);
+};
+const authBroker = new AuthBroker(
+  workspaceIdentity(workspace),
+  {
+    get: (account) => authKeyring().get(account),
+    set: (account, value) => authKeyring().set(account, value),
+    delete: (account) => authKeyring().delete(account),
+  },
+  redactor,
+  probeConnection,
+);
+const authMetadata = {
+  list: (): Connection[] => {
+    const row = workspace
+      .prepare(
+        "SELECT value_json FROM workspace_settings WHERE id='connections'",
+      )
+      .get() as { value_json: string } | undefined;
+    const parsed: unknown = row ? JSON.parse(row.value_json) : [];
+    if (!Array.isArray(parsed) || parsed.length > 100)
+      throw Error("Invalid connections");
+    return parsed.map((value) => connectionSchema.parse(value));
+  },
+  save: (connection: Connection) => {
+    const values = authMetadata
+      .list()
+      .filter((value) => connectionId(value) !== connectionId(connection));
+    values.push(connection);
+    workspace
+      .prepare(
+        "INSERT INTO workspace_settings(id,value_json) VALUES ('connections',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+      )
+      .run(JSON.stringify(values));
+  },
+  remove: (connection: Connection) => {
+    const values = authMetadata
+      .list()
+      .filter((value) => connectionId(value) !== connectionId(connection));
+    workspace
+      .prepare(
+        "UPDATE workspace_settings SET value_json=? WHERE id='connections'",
+      )
+      .run(JSON.stringify(values));
+  },
+};
+const authSessions = new Set<AuthSession>();
 const sessions = new Set<TerminalSession>();
 process.parentPort?.on("message", (event) => {
   const port = event.ports[0];
   if (!port) return;
+  const auth = new AuthSession(
+    authBroker,
+    authMetadata,
+    (event) => port.postMessage(event),
+    startPiLogin(
+      process.env.AMUN_PI_BINARY!,
+      process.env.AMUN_AUTH_WORKER!,
+      process.env.AMUN_PI_ENTRY!,
+      process.env.AMUN_AUTH_ROOT!,
+      (provider, url) =>
+        process.parentPort?.postMessage({
+          kind: "auth-browser",
+          provider,
+          url,
+        }),
+    ),
+  );
+  authSessions.add(auth);
   let home: string | undefined;
   let pi: PiSession | undefined;
   let opening = false;
@@ -72,7 +168,10 @@ process.parentPort?.on("message", (event) => {
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
-    else if (backendTerminalOpen.safeParse(message.data).success) {
+    else if (message.data?.kind === "workspace") {
+      const reply = workspaceService.handle(message.data);
+      if (reply) port.postMessage(reply);
+    } else if (backendTerminalOpen.safeParse(message.data).success) {
       if (backendOpening) return;
       const request = backendTerminalOpen.parse(message.data);
       backendOpening = true;
@@ -156,6 +255,7 @@ process.parentPort?.on("message", (event) => {
           opening = false;
         });
     } else {
+      void auth.handle(message.data);
       void crew.handle(message.data);
       if (
         backendOpening &&
@@ -171,6 +271,8 @@ process.parentPort?.on("message", (event) => {
   });
   port.on("close", () => {
     closed = true;
+    auth.close();
+    authSessions.delete(auth);
     crew.close();
     pi?.close();
     terminal.close();
@@ -180,6 +282,7 @@ process.parentPort?.on("message", (event) => {
   port.start();
 });
 process.on("exit", () => {
+  for (const auth of authSessions) auth.close();
   workspace.close();
   for (const terminal of sessions) terminal.close();
 });

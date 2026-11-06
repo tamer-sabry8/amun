@@ -23,6 +23,7 @@ await access(entry);
 await assertRuntimeContained(join(resources, "pi"));
 await assertRuntimeContained(join(resources, "terminal"));
 await assertRuntimeContained(join(resources, "database"));
+await assertRuntimeContained(join(resources, "auth"));
 // The probe harness uses developer Node; the Pi child uses only the packaged Electron binary.
 const runtime = spawnSync(
   process.execPath,

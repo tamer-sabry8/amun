@@ -13,17 +13,19 @@
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm format:check",
-    "build": "pnpm --filter @amun/desktop build",
+    "build": "pnpm tokens:build && pnpm --filter @amun/desktop build",
     "test:e2e": "pnpm build && playwright test",
     "test:runtime": "node scripts/pi-proof.ts",
     "runtime:stage": "pnpm --filter @amun/pi-runtime deploy --legacy --prod --force apps/desktop/.runtime/pi && node scripts/prepare-runtime.ts && pnpm install --frozen-lockfile --prod=false",
-    "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm terminal:stage && pnpm database:stage && pnpm --filter @amun/desktop package",
+    "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm terminal:stage && pnpm database:stage && pnpm auth:stage && pnpm --filter @amun/desktop package",
     "test:packaged": "node scripts/packaged-proof.ts",
     "firstmate:stage": "node scripts/stage-firstmate.ts",
     "test:firstmate": "node scripts/firstmate-proof.ts",
     "test:tmux": "node scripts/tmux-proof.ts",
     "terminal:stage": "pnpm --filter @amun/terminal-runtime deploy --legacy --prod --force apps/desktop/.runtime/terminal && node scripts/prepare-runtime.ts terminal && pnpm exec electron-rebuild -m apps/desktop/.runtime/terminal -v 45.2.3 -w node-pty -f && pnpm install --frozen-lockfile --prod=false",
-    "database:stage": "pnpm --filter @amun/database-runtime deploy --legacy --prod --force apps/desktop/.runtime/database && node scripts/prepare-runtime.ts database && pnpm exec electron-rebuild -m apps/desktop/.runtime/database -v 45.2.3 -w better-sqlite3 -f && pnpm install --frozen-lockfile --prod=false"
+    "database:stage": "pnpm --filter @amun/database-runtime deploy --legacy --prod --force apps/desktop/.runtime/database && node scripts/prepare-runtime.ts database && pnpm exec electron-rebuild -m apps/desktop/.runtime/database -v 45.2.3 -w better-sqlite3 -f && pnpm install --frozen-lockfile --prod=false",
+    "auth:stage": "pnpm --filter @amun/auth-runtime deploy --legacy --prod --force apps/desktop/.runtime/auth && node scripts/prepare-runtime.ts auth && pnpm install --frozen-lockfile --prod=false",
+    "tokens:build": "node scripts/build-tokens.ts"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.1",
@@ -34,6 +36,8 @@
     "prettier": "3.9.10",
     "typescript": "6.0.2",
     "typescript-eslint": "8.72.1",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "style-dictionary": "5.8.0",
+    "@axe-core/playwright": "4.14.0"
   }
 }

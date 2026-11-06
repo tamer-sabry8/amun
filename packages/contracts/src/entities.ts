@@ -91,6 +91,7 @@ export const statusActivity = z.strictObject({
     "sync",
     "reconciliation",
     "runtime_health",
+    "action",
   ]),
   state: z.enum(["working", "waiting", "failed", "completed"]),
   ref: id,

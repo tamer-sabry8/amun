@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { authBrowserUrl } from "../../../packages/auth/src/pi-auth.ts";
 import { installBrowser } from "./browser.js";
 import {
   app,
@@ -33,6 +35,14 @@ function startService(): void {
       serviceName: "Amun Service",
       env: {
         ...process.env,
+        AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
+        AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
+        AMUN_AUTH_MODULE: app.isPackaged
+          ? join(process.resourcesPath, "auth/node_modules/@napi-rs/keyring")
+          : join(
+              app.getAppPath(),
+              "../../runtime/auth/node_modules/@napi-rs/keyring",
+            ),
         AMUN_WORKSPACE_ROOT: join(app.getPath("userData"), "workspace"),
         AMUN_DATABASE_MODULE: app.isPackaged
           ? join(process.resourcesPath, "database/node_modules/better-sqlite3")
@@ -65,6 +75,30 @@ function startService(): void {
     },
   );
   service = child;
+  child.on("message", (message: unknown) => {
+    if (
+      !message ||
+      typeof message !== "object" ||
+      !("kind" in message) ||
+      message.kind !== "auth-browser" ||
+      !("provider" in message) ||
+      typeof message.provider !== "string" ||
+      !("url" in message) ||
+      typeof message.url !== "string"
+    )
+      return;
+    try {
+      const url = authBrowserUrl(message.provider, message.url);
+      execFile(
+        "/usr/bin/open",
+        ["-a", "Google Chrome", url],
+        { timeout: 10000 },
+        () => {},
+      );
+    } catch {
+      /* Refuse unsupported destinations. */
+    }
+  });
   child.on("spawn", () => {
     for (const window of loadedWindows) attach(window);
     stableTimer = setTimeout(() => {

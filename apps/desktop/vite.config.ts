@@ -6,6 +6,7 @@ export default defineConfig({
         main: "src/main.ts",
         preload: "src/preload.ts",
         service: "src/service.ts",
+        "auth-worker": "src/auth-worker.ts",
       },
       formats: ["cjs"],
       fileName: (_format, name) => `${name}.cjs`,

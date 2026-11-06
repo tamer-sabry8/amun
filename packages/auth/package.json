@@ -1,0 +1,13 @@
+{
+  "name": "@amun/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/broker.ts",
+  "dependencies": {
+    "proper-lockfile": "4.1.2"
+  },
+  "devDependencies": {
+    "@types/proper-lockfile": "4.1.4"
+  }
+}
