@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { JsonLineDecoder } from "../packages/crew/src/jsonl.ts";
+import { PiRpcClient } from "../packages/crew/src/pi-rpc.ts";
 
 const root = await mkdtemp(join(tmpdir(), "amun-pi-proof-"));
 const config = join(root, "config");
@@ -37,66 +37,44 @@ const child = spawn(
   ],
   { cwd: root, env, stdio: ["pipe", "pipe", "pipe"] },
 );
-const decoder = new JsonLineDecoder();
+const client = new PiRpcClient((line) => {
+  child.stdin.write(line);
+});
 child.stdout.setEncoding("utf8");
+child.stdout.on("data", (chunk: string) => client.receive(chunk));
+child.stdout.on("end", () => client.close());
+child.stdin.on("error", () => client.close());
+child.once("error", () => client.close());
+child.once("exit", () => client.close());
 // Do not print runtime stderr: it can contain provider or local configuration details.
 child.stderr.resume();
 try {
-  await new Promise<void>((resolveProof, reject) => {
-    const pending = new Set(["state", "models"]);
-    const timer = setTimeout(
-      () => reject(new Error("Pi RPC proof timed out")),
-      15000,
-    );
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      if (pending.size)
-        reject(new Error(`Pi exited before responses (${code})`));
-    });
-    child.stdout.on("data", (chunk: string) => {
-      try {
-        for (const frame of decoder.push(chunk)) {
-          if (!frame || typeof frame !== "object") continue;
-          const record = frame as Record<string, unknown>;
-          if (
-            record.type !== "response" ||
-            typeof record.id !== "string" ||
-            !pending.has(record.id)
-          )
-            continue;
-          if (record.success !== true)
-            throw new Error(`Pi ${record.id} command failed`);
-          pending.delete(record.id);
-          console.log(
-            JSON.stringify({
-              id: record.id,
-              command: record.command,
-              success: true,
-            }),
-          );
-        }
-        if (!pending.size) {
-          clearTimeout(timer);
-          resolveProof();
-        }
-      } catch (error) {
-        clearTimeout(timer);
-        reject(error);
-      }
-    });
-    child.stdin.write(
-      '{"id":"state","type":"get_state"}\n{"id":"models","type":"get_available_models"}\n',
-    );
-  });
+  await Promise.all(
+    ["get_state", "get_available_models"].map(async (command) => {
+      const data = await client.request(command);
+      if (!data || typeof data !== "object")
+        throw new Error("Invalid Pi discovery response");
+      if (
+        command === "get_available_models" &&
+        !("models" in data && Array.isArray(data.models))
+      )
+        throw new Error("Invalid Pi model discovery response");
+      console.log(JSON.stringify({ command, success: true }));
+    }),
+  );
 } finally {
+  client.close();
   child.kill();
+  const force = setTimeout(() => child.kill("SIGKILL"), 3000);
   await new Promise<void>((resolveExit) => {
-    if (child.exitCode !== null || child.signalCode !== null) resolveExit();
+    if (
+      child.exitCode !== null ||
+      child.signalCode !== null ||
+      child.pid === undefined
+    )
+      resolveExit();
     else child.once("exit", () => resolveExit());
   });
+  clearTimeout(force);
   await rm(root, { recursive: true, force: true });
 }

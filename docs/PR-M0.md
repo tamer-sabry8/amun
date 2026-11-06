@@ -23,9 +23,11 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 
 - Private tmux socket scope and explicit launch-environment allowlist; live macOS probe for same-named session isolation using the pinned Firstmate adapter. Worker dispatch/recovery remains disabled.
 
+- Pi transport now correlates concurrent commands, delivers streaming events, bounds pending work, and validates explicit select/confirm responses. Live source and packaged discovery probes use the client; renderer dialog and authenticated-provider integration remain open.
+
 ## Validation
 
-- 90 local unit tests pass, with recorded failing tests before implementation.
+- 102 local unit tests pass, with recorded failing tests before implementation.
 - macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
 - macOS run 42147118853 passed all 72 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, source and packaged Firstmate startup/refusal proofs, and both packaged launch/isolation and crash-recovery tests.

@@ -28,8 +28,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T007 isolation increment: private short tmux socket roots and a launch-environment allowlist are unit-tested; source/packaged startup probes use them. A new macOS integration probe checks two same-named sessions remain independent. Worker lifecycle and persistent reconnect remain open; see [evidence](evidence/T007/tmux-isolation.md).
 
+- T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Authenticated inference and renderer integration remain open. See [evidence](evidence/T006/rpc-client.md).
+
 ## Current blockers
 
+- Credentialed M0 acceptance location needs the user’s answer; see [required setup](evidence/M0-acceptance-prerequisites.md). No configured secrets are available in this cloud environment.
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
 - This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
 - M0 live integration needs authorised Tahaluf test access, provider sign-in and a verified non-Herdr worker runtime. Do not request credentials in chat.
