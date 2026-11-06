@@ -1,0 +1,28 @@
+$ vitest run apps/service/tests/pi-session.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/pi-session.test.ts (6 tests | 1 failed) 6ms
+   × closes and reports unavailable when a prompt transport fails, without raw error details 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/pi-session.test.ts > closes and reports unavailable when a prompt transport fails, without raw error details
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ apps/service/tests/pi-session.test.ts:163:15
+    161|  const session=new PiSession(()=>{throw new Error("secret-canary");},s…
+    162|  await session.handle({version:1,kind:"pi",action:"prompt",message:"He…
+    163|  expect(stop).toHaveBeenCalledTimes(1);
+       |               ^
+    164|  expect(send).toHaveBeenLastCalledWith({version:1,kind:"pi-state",stat…
+    165|  expect(JSON.stringify(send.mock.calls)).not.toContain("secret-canary"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  11:59:13
+   Duration  164ms (import 68%, transform 23%, tests 6%, worker 2%)
+
+[ELIFECYCLE] Test failed. See above for more details.

@@ -17,3 +17,5 @@ export type HealthResponse = z.infer<typeof healthResponse>;
 export * from "./entities.js";
 
 export * from "./terminal.js";
+
+export * from "./pi.js";

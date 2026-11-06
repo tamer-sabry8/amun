@@ -1,0 +1,26 @@
+$ vitest run apps/service/tests/pi-session.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/pi-session.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/pi-session.test.ts [ apps/service/tests/pi-session.test.ts ]
+Error: Cannot find module '../src/pi-session.ts' imported from /Users/tamersabry/Projects/amun/apps/service/tests/pi-session.test.ts
+ ❯ apps/service/tests/pi-session.test.ts:2:1
+      1| import { it, expect, vi } from "vitest";
+      2| import { PiSession } from "../src/pi-session.ts";
+       | ^
+      3| function setup() {
+      4|   const write = vi.fn(); const send = vi.fn(); const stop = vi.fn();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  11:53:39
+   Duration  230ms (worker 99%, environment 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.

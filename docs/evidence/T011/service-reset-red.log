@@ -1,0 +1,37 @@
+
+Running 1 test using 1 worker
+
+(node:74366) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/pi.spec.ts:34:1 › service loss clears Pi dialogs and terminal control instead of replaying them (7.5s)
+
+
+  1) tests/e2e/pi.spec.ts:34:1 › service loss clears Pi dialogs and terminal control instead of replaying them 
+
+    Error: expect(locator).toBeEmpty() failed
+
+    Locator:  locator('#pi-dialog')
+    Expected: empty
+    Received: notEmpty
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeEmpty" locator('#pi-dialog') with timeout 5000ms
+      - waiting for locator('#pi-dialog')
+        14 × locator resolved to <div id="pi-dialog" aria-live="polite">…</div>
+           - unexpected value "notEmpty"
+
+
+      45 |  await expect(page.locator("#pi-dialog")).toContainText("Select proof option");
+      46 |  await app.evaluate(({app})=>{const service=app.getAppMetrics().find(p=>p.name==="Amun Service");if(!service)throw new Error("Missing service");process.kill(service.pid,"SIGKILL");});
+    > 47 |  await expect(page.locator("#pi-dialog")).toBeEmpty();
+         |                                           ^
+      48 |  await expect(page.locator("#terminal-status")).toHaveText("unavailable");
+      49 |  await expect(page.locator("#pi-status")).toHaveText("unavailable");
+      50 |  await expect(page.getByRole("status")).toHaveText("Connected");
+        at /Users/tamersabry/Projects/amun/tests/e2e/pi.spec.ts:47:43
+
+    Error Context: test-results/pi-service-loss-clears-Pi--2b291-l-instead-of-replaying-them/error-context.md
+
+  1 failed
+    tests/e2e/pi.spec.ts:34:1 › service loss clears Pi dialogs and terminal control instead of replaying them 

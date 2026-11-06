@@ -33,6 +33,10 @@ test("service PTY is read-only until control, echoes and resizes with a minimal 
     await page.keyboard.type("printf 'PTY_%s\\n' OK; stty size");
     await page.keyboard.press("Enter");
     await expect(page.locator("#terminal-output")).toContainText("PTY_OK");
+    const screen = await page.locator(".xterm-screen").boundingBox();
+    expect(screen?.width).toBeGreaterThan(100);
+    expect(screen?.height).toBeGreaterThan(100);
+    await expect(page.locator(".xterm-rows")).toContainText("PTY_OK");
     await expect(page.locator("#terminal-output")).toContainText("24 80");
     await page.getByRole("button", { name: "Resize 100 × 30" }).click();
     await page.locator(".xterm-helper-textarea").focus();

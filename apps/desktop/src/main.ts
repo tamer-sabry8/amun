@@ -33,6 +33,16 @@ function startService(): void {
       serviceName: "Amun Service",
       env: {
         ...process.env,
+        AMUN_PI_BINARY: process.execPath,
+        AMUN_PI_ENTRY: app.isPackaged
+          ? join(
+              process.resourcesPath,
+              "pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js",
+            )
+          : join(
+              app.getAppPath(),
+              "../../runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js",
+            ),
         AMUN_TERMINAL_MODULE: app.isPackaged
           ? join(process.resourcesPath, "terminal/node_modules/node-pty")
           : join(

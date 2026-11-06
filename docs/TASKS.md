@@ -197,3 +197,10 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T010: local prototype/redirect/security tests pass in source and packaged apps. Azure DevOps is prohibited as its browser test target; real authenticated browsing remains open. The GitHub → Google sign-in attempt was rejected by Google in the embedded browser; see T010 evidence.
 - T011: native service PTY + xterm echo/resize/read-only tests pass source and packaged. Verified worker attachment and real Finder launch remain open.
 - T012: measured provisional process-start, working-set and terminal-echo baseline; signing/notarization and clean-account installation remain open.
+
+## Further local M0 continuation
+
+- T006: strict service-to-renderer text/dialog projection and real offline Pi select/confirm round-trip now pass source and packaged Electron tests. Authenticated in-app provider selection remains open; see evidence/T006/service-boundary.md.
+- T007: checksum-guarded Amun-only bundled patch fixes actual home-to-home Codex restricted-mode propagation, verified in source and package. Personal Firstmate remains untouched; actual worker approval behavior remains open.
+- T008: private endpoint receipts and read-only tmux identity observation implemented and unit-tested. Ten fresh observer processes preserve one synthetic pane; worker status deliberately remains unknown. Real Codex/Claude dispatch and ten service-restart trials are still required.
+- T010: explicitly blocked at the user's request. GitHub uses Google sign-in only; no more browser acceptance attempts are pending. Continue other M0 work.

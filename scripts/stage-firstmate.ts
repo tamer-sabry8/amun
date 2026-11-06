@@ -1,5 +1,13 @@
+import { patchFirstmatePermissions } from "../packages/crew/src/firstmate-policy-patch.ts";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, rename } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  rename,
+  writeFile,
+} from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { verifyDistributionArchive } from "../packages/crew/src/distribution.ts";
 import { assertRuntimeContained } from "../packages/crew/src/runtime-links.ts";
@@ -45,12 +53,20 @@ try {
   ]);
   await assertRuntimeContained(distribution);
   await readFile(join(distribution, ".pi/extensions/fm-primary-pi-watch.ts"));
+  const policy = join(distribution, "bin/fm-config-inherit-lib.sh");
+  await writeFile(
+    policy,
+    patchFirstmatePermissions(
+      await readFile(policy, "utf8"),
+      "e76b7896b018ee6e31e564f3660e5698b7a135dabbe28b730c62690dc3fc0f0a",
+    ),
+  );
   // This fixed, ignored path contains generated distribution files only, never user homes.
   const destination = join(parent, "firstmate");
   await rm(destination, { recursive: true, force: true });
   await rename(distribution, destination);
   console.log(
-    `Firstmate ${manifest.commit}: archive checksum and extracted link containment verified`,
+    `Firstmate ${manifest.commit}: archive checksum, extracted link containment and Amun permission patch verified`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

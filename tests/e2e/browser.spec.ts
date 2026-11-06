@@ -27,6 +27,7 @@ test("browser isolates a local prototype, redirects, popups, permissions and ser
   });
   try {
     const shell = await app.firstWindow();
+    await expect(shell.getByRole("status")).toHaveText("Connected");
     await shell.getByLabel("M0 browser proof").fill(url, { timeout: 3000 });
     await shell.getByRole("button", { name: "Open browser" }).click();
     await expect

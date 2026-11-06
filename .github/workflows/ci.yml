@@ -24,4 +24,7 @@ jobs:
       - run: command -v tmux || brew install tmux
       - run: pnpm test:tmux
       - run: pnpm test:firstmate
+      - run: node scripts/firstmate-permissions-proof.ts
+      - run: node scripts/firstmate-permissions-proof.ts --packaged
+      - run: node scripts/tmux-observe-proof.ts
       - run: pnpm test:packaged

@@ -1,0 +1,26 @@
+$ vitest run apps/renderer/tests/service-loss.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/renderer/tests/service-loss.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/renderer/tests/service-loss.test.ts [ apps/renderer/tests/service-loss.test.ts ]
+Error: Cannot find module '../src/service-loss.ts' imported from /Users/tamersabry/Projects/amun/apps/renderer/tests/service-loss.test.ts
+ ❯ apps/renderer/tests/service-loss.test.ts:2:1
+      1| import { it,expect,vi } from "vitest";
+      2| import { resetServiceUI } from "../src/service-loss.ts";
+       | ^
+      3| it("revokes terminal input, clears pending dialogs and marks dependent…
+      4|  const terminal={options:{disableStdin:false}};
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  12:33:10
+   Duration  220ms (worker 99%, environment 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.

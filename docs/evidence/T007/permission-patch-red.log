@@ -1,0 +1,27 @@
+$ vitest run packages/crew/tests/firstmate-policy-patch.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/firstmate-policy-patch.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/firstmate-policy-patch.test.ts [ packages/crew/tests/firstmate-policy-patch.test.ts ]
+Error: Cannot find module '../src/firstmate-policy-patch.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/firstmate-policy-patch.test.ts
+ ❯ packages/crew/tests/firstmate-policy-patch.test.ts:3:1
+      1| import { it,expect } from "vitest";
+      2| import { createHash } from "node:crypto";
+      3| import { patchFirstmatePermissions } from "../src/firstmate-policy-pat…
+       | ^
+      4| const source='FM_INHERITABLE_CONFIG="${FM_INHERITABLE_CONFIG:-backend …
+      5| const hash=(s:string)=>createHash("sha256").update(s).digest("hex");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  11:57:44
+   Duration  101ms (worker 98%, environment 2%)
+
+[ELIFECYCLE] Test failed. See above for more details.

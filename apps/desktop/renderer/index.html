@@ -39,6 +39,25 @@
       <div id="terminal-dock" hidden></div>
       <pre id="terminal-output" hidden></pre>
     </section>
+    <section aria-label="M0 Pi protocol proof">
+      <p>
+        Offline Pi extension protocol proof. Provider inference is a separate
+        acceptance probe.
+      </p>
+      <button type="button" id="pi-open">Open Pi protocol proof</button>
+      <button type="button" id="pi-close">Close Pi</button>
+      <span id="pi-status">closed</span>
+      <form id="pi-form">
+        <label for="pi-prompt">Pi prompt</label
+        ><input
+          id="pi-prompt"
+          maxlength="16384"
+          value="/amun-dialog-proof"
+        /><button>Send to Pi</button>
+      </form>
+      <pre id="pi-output"></pre>
+      <div id="pi-dialog" aria-live="polite"></div>
+    </section>
     <script src="./renderer.js"></script>
   </body>
 </html>
