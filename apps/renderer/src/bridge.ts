@@ -3,6 +3,7 @@ import {
   healthResponse,
   workspaceEvent,
   authEvent,
+  nativePiEvent,
   terminalEvent,
   piEvent,
   crewObservation,
@@ -119,6 +120,11 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const native = nativePiEvent.safeParse(message.data);
+      if (native.success) {
+        for (const listener of eventListeners) listener(native.data);
         return;
       }
       const validated = terminalEvent.safeParse(message.data);

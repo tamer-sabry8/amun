@@ -1,3 +1,4 @@
+import { NativePiPanel } from "./native-pi-panel.tsx";
 import { canSubmitAuthPrompt } from "./auth-prompt.ts";
 import { createRoot } from "react-dom/client";
 import {
@@ -399,6 +400,7 @@ function Settings({
       {tab === "models" && (
         <section>
           <h2>Model access through Pi</h2>
+          <NativePiPanel />
           <p className="muted">
             Provider credentials stay in Amun’s private Pi configuration. Worker
             sign-ins remain separate.

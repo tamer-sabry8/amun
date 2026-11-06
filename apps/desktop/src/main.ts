@@ -44,6 +44,10 @@ function startService(): void {
         ...process.env,
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
+        AMUN_NATIVE_PI_WORKER: join(
+          app.getAppPath(),
+          "dist/native-pi-worker.cjs",
+        ),
         AMUN_AUTH_MODULE: app.isPackaged
           ? join(process.resourcesPath, "auth/node_modules/@napi-rs/keyring")
           : join(

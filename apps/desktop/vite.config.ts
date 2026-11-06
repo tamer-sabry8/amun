@@ -7,6 +7,7 @@ export default defineConfig({
         preload: "src/preload.ts",
         service: "src/service.ts",
         "auth-worker": "src/auth-worker.ts",
+        "native-pi-worker": "src/native-pi-worker.ts",
       },
       formats: ["cjs"],
       fileName: (_format, name) => `${name}.cjs`,

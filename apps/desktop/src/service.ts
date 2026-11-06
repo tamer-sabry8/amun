@@ -1,3 +1,4 @@
+import { NativePiProcess } from "../../service/src/native-pi-process.ts";
 import {
   exportWorkspace,
   restoreWorkspace,
@@ -170,6 +171,15 @@ process.parentPort?.on("message", (event) => {
 
   const port = event.ports[0];
   if (!port) return;
+  const nativePi = new NativePiProcess(
+    {
+      binary: process.env.AMUN_PI_BINARY!,
+      worker: process.env.AMUN_NATIVE_PI_WORKER!,
+      entry: process.env.AMUN_PI_ENTRY!,
+      root: process.env.AMUN_AUTH_ROOT!,
+    },
+    (event) => port.postMessage(event),
+  );
   const auth = new AuthSession(
     authBroker,
     authMetadata,
@@ -326,6 +336,7 @@ process.parentPort?.on("message", (event) => {
           opening = false;
         });
     } else {
+      nativePi.handle(message.data);
       void auth.handle(message.data);
       void crew.handle(message.data);
       if (
@@ -342,6 +353,7 @@ process.parentPort?.on("message", (event) => {
   });
   port.on("close", () => {
     closed = true;
+    nativePi.close();
     auth.close();
     authSessions.delete(auth);
     crew.close();
