@@ -19,6 +19,26 @@ export class Redactor {
     for (const secret of [...this.secrets].sort((a, b) => b.length - a.length))
       result = result.split(secret).join("[REDACTED]");
     return result
+      .replace(
+        /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+        "[REDACTED PRIVATE KEY]",
+      )
+      .replace(
+        /\b(?:gh[opusr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|(?:secret_|ntn_)[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\b/g,
+        "[REDACTED]",
+      )
+      .replace(
+        /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+        "[REDACTED]",
+      )
+      .replace(
+        /\b(?:set-cookie|cookie|authorization|proxy-authorization)\s*:\s*[^\r\n]+/gi,
+        "[REDACTED HEADER]",
+      )
+      .replace(
+        /(\b[A-Za-z0-9_-]*(?:password|passwd|secret|token|api[_-]?key)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+        "$1[REDACTED]",
+      )
       .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[REDACTED]@")
       .replace(/\bBearer\s+[^\s,;"']+/gi, "Bearer [REDACTED]")
       .replace(

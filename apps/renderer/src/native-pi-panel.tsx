@@ -130,6 +130,16 @@ export function NativePiPanel() {
         This session belongs to Amun. Personal Pi sessions are separate. Empty
         sessions are saved after their first message.
       </p>
+      <div className="button-row">
+        <button disabled={busy} onClick={() => run("", "share-notion")}>
+          Share to Notion
+        </button>
+      </div>
+      <p className="muted">
+        Notion is Amun’s sharing destination. Publication requires a connection,
+        your chosen parent section, secret removal, and exact-content review.
+        Pi’s gist/Radius sharing is disabled.
+      </p>
       <h4>CLI subscriptions</h4>
       <p className="muted">
         These checks use your separate Amun CLI profiles. Pi model-provider
@@ -177,6 +187,7 @@ export function NativePiPanel() {
             "name",
             "copy",
             "export",
+            "share",
             "compact",
             "reload",
             "trust",
@@ -186,6 +197,7 @@ export function NativePiPanel() {
           ].map((name) => (
             <option key={name} value={name}>
               /{name}
+              {name === "share" ? " — disabled; use Notion" : ""}
             </option>
           ))}
         </select>
@@ -242,6 +254,30 @@ export function NativePiPanel() {
               </div>
             ))}
           </dl>
+        ) : result?.kind === "notion-preview" ? (
+          <>
+            <h4>Review Share to Notion</h4>
+            <p>
+              Known credentials and detectable secret patterns have been
+              removed. Review for confidential information before publishing.
+            </p>
+            <p>
+              {result.omittedItems} internal or non-text items omitted. This is
+              the selected session’s current branch.
+            </p>
+            <h5>{result.title}</h5>
+            <textarea
+              aria-label="Redacted Notion conversation preview"
+              value={result.text}
+              readOnly
+              rows={12}
+            />
+            <button disabled>Publish new Notion page</button>
+            <p>
+              Publishing is blocked until an Amun Notion connection and parent
+              section are configured. No content has been uploaded.
+            </p>
+          </>
         ) : result?.kind === "document" ? (
           <>
             <h4>{result.title}</h4>

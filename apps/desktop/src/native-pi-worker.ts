@@ -1,3 +1,9 @@
+import { Redactor } from "../../../packages/security/src/redaction.ts";
+import {
+  conversationSharePreview,
+  registerCredentialSecrets,
+} from "../../../packages/security/src/conversation-share.ts";
+import { sharingGate } from "../../../packages/domain/src/sharing-policy.ts";
 import { nativeDocumentPage } from "../../../packages/crew/src/native-pi-docs.ts";
 import { ScopedOperation } from "../../../packages/crew/src/scoped-operation.ts";
 import {
@@ -42,13 +48,18 @@ type Runtime = NativeSessionRuntime & {
   session: NativePiSession &
     PreferenceSession &
     ExportSession &
-    SettingsSession;
+    SettingsSession & {
+      modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
+      sessionManager: { getBranch(): unknown[] };
+    };
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
 let sessionActions: NativePiSessions | undefined;
 let trustActions: NativePiTrust | undefined;
 let changelogPath: string | undefined;
+let readCredential: ((provider: string, path: string) => unknown) | undefined;
+let privateAuthPath: string | undefined;
 let busy = false;
 let stopping = false;
 const workerOperation = new ScopedOperation();
@@ -66,6 +77,7 @@ async function privateDirectory(path: string) {
 }
 async function initialize() {
   const authPath = await preparePiAuth(root!);
+  privateAuthPath = authPath;
   const cwd = join(dirname(root!), "pi-workspace");
   await privateDirectory(cwd);
   const sessions = join(cwd, "sessions");
@@ -73,6 +85,7 @@ async function initialize() {
   const sdk = (await import(pathToFileURL(entry!).href)) as {
     ModelRuntime: { create(options: unknown): Promise<unknown> };
     getPackageDir(): string;
+    readStoredCredential(provider: string, path: string): unknown;
     ProjectTrustStore: new (root: string) => TrustStore;
     SessionManager: {
       create(cwd: string, dir: string): unknown;
@@ -138,6 +151,7 @@ async function initialize() {
     },
   );
   changelogPath = join(sdk.getPackageDir(), "CHANGELOG.md");
+  readCredential = sdk.readStoredCredential;
   trustActions = new NativePiTrust(new sdk.ProjectTrustStore(root!), cwd);
   sessionActions = new NativePiSessions(runtime, cwd, sessions, () =>
     sdk.SessionManager.list(cwd, sessions),
@@ -196,7 +210,40 @@ process.stdin.on("data", (chunk: string) => {
           if (!stopping) send(command.id, { kind: "message", text });
           return;
         }
+        if (command.command === "share") {
+          send(command.id, {
+            kind: "message",
+            text: sharingGate({
+              destination: "pi",
+              connected: false,
+              parentSelected: false,
+              contentHash: "",
+            }).reason,
+          });
+          return;
+        }
         if (!runtime) await initialize();
+        if (command.command === "share-notion") {
+          const redactor = new Redactor();
+          const credentials =
+            await runtime!.session.modelRuntime.listCredentials();
+          if (credentials.length > 100)
+            throw Error("Credential catalog too large");
+          for (const info of credentials)
+            registerCredentialSecrets(
+              redactor,
+              readCredential!(info.providerId, privateAuthPath!),
+            );
+          send(
+            command.id,
+            conversationSharePreview(
+              runtime!.session.sessionName ?? "Amun conversation",
+              runtime!.session.sessionManager.getBranch(),
+              redactor,
+            ),
+          );
+          return;
+        }
         if (command.command === "changelog") {
           const info = await lstat(changelogPath!);
           if (!info.isFile() || info.size > 2097152)

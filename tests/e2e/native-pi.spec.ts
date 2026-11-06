@@ -29,7 +29,9 @@ test("native Pi commands create an owned SDK session and update its real name", 
   saved.appendSessionInfo("Saved session acceptance");
   saved.appendMessage({
     role: "user",
-    content: [{ type: "text", text: "Saved session fixture" }],
+    content: [
+      { type: "text", text: "Saved session fixture password=AMUN_TEST_SECRET" },
+    ],
     timestamp: Date.now(),
   });
   saved.appendMessage({
@@ -196,6 +198,30 @@ test("native Pi commands create an owned SDK session and update its real name", 
         }),
       ).toBeVisible();
     }
+    await page
+      .getByRole("button", { name: "Share to Notion", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Redacted Notion conversation preview", { exact: true }),
+    ).toHaveValue(/\[REDACTED\]/);
+    await expect(
+      page.getByLabel("Redacted Notion conversation preview", { exact: true }),
+    ).not.toHaveValue(/AMUN_TEST_SECRET/);
+    await expect(
+      page.getByRole("button", {
+        name: "Publish new Notion page",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("share");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "no gist or Radius fallback",
+    );
     await page
       .getByLabel("Native Pi command", { exact: true })
       .selectOption("clone");

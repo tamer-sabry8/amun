@@ -87,3 +87,18 @@ it("redacts common credential key variants and Basic-encoded PATs", () => {
   expect(output).not.toContain("unregistered-sensitive");
   expect(output).not.toContain(Buffer.from(":" + secret).toString("base64"));
 });
+it("removes labelled secrets, private keys and common token shapes from conversation text", () => {
+  const redactor = new Redactor();
+  const text =
+    'password="CANARY password"\napi_key=CANARY_API\nCookie: CANARY_COOKIE\n-----BEGIN PRIVATE KEY-----\nCANARY_PEM\n-----END PRIVATE KEY-----\nghp_' +
+    "a".repeat(36);
+  const output = redactor.text(text);
+  for (const secret of [
+    "CANARY password",
+    "CANARY_API",
+    "CANARY_COOKIE",
+    "CANARY_PEM",
+    "ghp_" + "a".repeat(36),
+  ])
+    expect(output).not.toContain(secret);
+});

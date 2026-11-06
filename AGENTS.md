@@ -15,3 +15,7 @@ The user revised this policy on 2026-11-06: keep Claude 2.1.319 and allow suppor
 Treat installed versions as discoverable capabilities, not fixed assumptions. Record versions before and after acceptance; test the changed integration with the installed release and report incompatibility explicitly. Existing worker processes may still run an older executable; launcher updates do not prove those processes changed version. A version string or successful sign-in alone is not authenticated inference evidence.
 
 Bundled Pi/Firstmate/native dependencies remain reproducibly pinned and checksum-verified. Update those through reviewed dependency changes and relevant source/packaged acceptance; do not silently replace packaged resources. Permission to support updates does not expand M0 or authorize unrelated bulk upgrades.
+
+## Sharing destinations
+
+The user selected Notion as Amun's R1 default for sharing conversations, PRDs, decisions and stakeholder updates (ADR-010). Disable Pi's native `/share`; never fall back to GitHub gist or Radius. Share to Notion requires an Amun connection, a user-chosen parent section, secret removal and exact-content review before a new page is published. Keep publishing blocked when prerequisites are missing. Transfrm.ai (GitHub/Cloudflare-hosted HTML/PDF) is R2 reference only.

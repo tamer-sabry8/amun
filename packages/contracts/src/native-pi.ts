@@ -13,6 +13,13 @@ export const nativePiCommand = z.discriminatedUnion("action", [
 ]);
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("notion-preview"),
+    title: z.string().max(256),
+    text: z.string().max(262144),
+    omittedItems: z.number().int().min(0).max(10000),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+  z.strictObject({
     kind: z.literal("document"),
     title: z.string().max(256),
     text: z.string().max(60000),

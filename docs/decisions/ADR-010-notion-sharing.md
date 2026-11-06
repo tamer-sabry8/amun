@@ -1,0 +1,11 @@
+# ADR-010: Notion is the R1 sharing destination
+
+Status: Accepted by the user, 2026-11-06. Supersedes the proposal to expose Pi's native share destinations.
+
+Pi's native `/share` is disabled in Amun. There is no GitHub gist or Radius fallback, even if those providers are configured. Amun provides a separate **Share to Notion** action for the selected conversation. It creates a new page under a Notion parent section chosen by the user only after secret removal and review of the exact final content. Changing the content or destination invalidates approval. Without a working Amun Notion connection, publishing remains blocked; a plugin's sign-in is not automatically portable to Amun.
+
+Notion is the R1 default for conversations, PRDs, decisions and stakeholder updates. Only the current M1 conversation-sharing boundary is added now; this does not start M2 or pull later content workflows forward. Review/redaction and publication must use Amun's governance/outbox rules, including no automatic retry of an uncertain write. Redaction must handle known secrets and detectable secret patterns, and review must remain explicit; do not claim automatic detection can identify every arbitrary confidential string.
+
+For R2, the user owns Transfrm.ai and plans to publish HTML/PDF documents unsuitable for Notion through GitHub and Cloudflare. This is a future direction, not an M1 implementation task or permission to publish.
+
+Current implementation: native Pi share requests are refused server-side, the native Notion action previews redacted current-branch conversation text and reports blocked prerequisites. The gate requires a connected Notion destination, chosen parent, and matching exact-content review digest. Source and packaged redacted preview pass. A bounded single-attempt API adapter has unit coverage; it is not yet connected to the durable publication outbox or UI. Parent selection, approval/execution wiring and live publication remain open; no content has been uploaded. The M1 acceptance profile has no Notion connection saved. Literal rich text preserves conversation content without interpreting pasted Markdown as remote embeds; later document publication can use the native Markdown API under its own acceptance.
