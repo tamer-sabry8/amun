@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { authEvent, type AuthEvent } from "../../contracts/src/auth.ts";
 import type { Redactor } from "../../security/src/redaction.ts";
-import { preparePiAuth, validateLogin, authBrowserUrl } from "./pi-auth.ts";
+import {
+  preparePiAuth,
+  validateLogin,
+  authBrowserUrl,
+  copilotHost,
+} from "./pi-auth.ts";
 import { withRefreshLock } from "./broker.ts";
 export interface Prompt {
   type: "text" | "secret" | "manual_code" | "select";
@@ -34,7 +39,7 @@ export class PiLogin {
   private readonly root: string;
   private readonly redactor: Redactor;
   private readonly send: (event: AuthEvent) => void;
-  private readonly browser: (url: string) => void;
+  private readonly browser: (url: string, selectedHost?: string) => void;
   private controller: AbortController | undefined;
   private pending:
     | {
@@ -48,7 +53,7 @@ export class PiLogin {
     root: string,
     redactor: Redactor,
     send: (event: AuthEvent) => void,
-    browser: (url: string) => void,
+    browser: (url: string, selectedHost?: string) => void,
   ) {
     this.root = root;
     this.redactor = redactor;
@@ -84,6 +89,7 @@ export class PiLogin {
   ): Promise<void> {
     validateLogin(provider, type);
     if (this.controller) throw Error("Login already in progress");
+    let selectedHost = "github.com";
     const controller = new AbortController();
     this.controller = controller;
     const timer = setTimeout(() => this.cancel(), 300000);
@@ -141,7 +147,18 @@ export class PiLogin {
                   prompt,
                   resolve: (value) => {
                     cleanup();
-                    resolve(value);
+                    try {
+                      if (
+                        provider === "github-copilot" &&
+                        prompt.type === "text" &&
+                        prompt.message ===
+                          "GitHub Enterprise URL/domain (blank for github.com)"
+                      )
+                        selectedHost = copilotHost(value);
+                      resolve(value);
+                    } catch {
+                      reject(Error("unsupported_copilot_host"));
+                    }
                   },
                   reject: (error) => {
                     cleanup();
@@ -172,7 +189,10 @@ export class PiLogin {
               }),
             notify: (event) => {
               if (event.type === "auth_url" && event.url)
-                this.browser(authBrowserUrl(provider, event.url));
+                this.browser(
+                  authBrowserUrl(provider, event.url, selectedHost),
+                  provider === "github-copilot" ? selectedHost : undefined,
+                );
               else if (
                 event.type === "device_code" &&
                 event.verificationUri &&
@@ -180,7 +200,10 @@ export class PiLogin {
               ) {
                 if (!/^[A-Za-z0-9-]{1,64}$/.test(event.userCode))
                   throw Error("Invalid device code");
-                this.browser(authBrowserUrl(provider, event.verificationUri));
+                this.browser(
+                  authBrowserUrl(provider, event.verificationUri, selectedHost),
+                  provider === "github-copilot" ? selectedHost : undefined,
+                );
                 this.send({
                   version: 1,
                   kind: "auth-notice",
@@ -209,7 +232,17 @@ export class PiLogin {
         id: provider,
         status: "configured",
       });
-    } catch {
+    } catch (error) {
+      if (!controller.signal.aborted)
+        this.send({
+          version: 1,
+          kind: "auth-notice",
+          message:
+            error instanceof Error &&
+            error.message === "unsupported_copilot_host"
+              ? "Copilot sign-in requires github.com or your company’s tenant.ghe.com host. A GitHub Enterprise Server repository URL is not the Copilot cloud sign-in host. No browser was opened."
+              : "Pi could not complete sign-in. Check the provider host and network access, then retry. No credentials or server response details are shown.",
+        });
       this.send({
         version: 1,
         kind: "auth-status",

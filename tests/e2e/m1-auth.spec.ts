@@ -52,3 +52,37 @@ test("built Pi login prompts in the UI and stores an API-key canary only in priv
     await rm(root, { recursive: true, force: true });
   }
 });
+test("Copilot enterprise text prompt permits github.com default without inventing a company URL", async () => {
+  const root = await mkdtemp(join(tmpdir(), "amun-copilot-prompt-"));
+  const app = await electron.launch({
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--user-data-dir=" + root,
+    ],
+    ...(process.env.AMUN_PACKAGED_PATH
+      ? { executablePath: process.env.AMUN_PACKAGED_PATH }
+      : {}),
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(page.getByRole("status")).toHaveText("Connected");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Models", exact: true }).click();
+    await page.getByRole("button", { name: "Sign in with Pi" }).click();
+    const prompt = page.getByRole("dialog", { name: "Complete sign-in" });
+    await expect(prompt).toBeVisible({ timeout: 20000 });
+    await expect(prompt.locator("input")).toHaveValue("");
+    await expect(
+      prompt.getByRole("button", { name: "Continue", exact: true }),
+    ).toBeEnabled();
+    await prompt.locator("input").fill("https://ghes.tahaluf.ae/");
+    await prompt.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "No browser was opened.",
+    );
+    await expect(prompt).not.toBeVisible();
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

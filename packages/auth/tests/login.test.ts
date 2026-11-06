@@ -99,3 +99,55 @@ it("cancels pending sign-in and refuses unsupported or unsafe runtime interactio
     rmSync(root, { recursive: true, force: true });
   }
 });
+it("uses the explicitly answered Copilot cloud tenant and rejects server URLs before device flow", async () => {
+  for (const selected of [
+    "https://tahaluf.ghe.com/",
+    "https://ghes.tahaluf.ae/",
+  ]) {
+    const root = mkdtempSync(join(tmpdir(), "amun-host-login-"));
+    const events: unknown[] = [];
+    const urls: unknown[] = [];
+    let reachedDevice = false;
+    let flow: PiLogin;
+    try {
+      flow = new PiLogin(
+        root,
+        new Redactor(),
+        (event) => {
+          events.push(event);
+          if (event.kind === "auth-prompt") flow.answer(event.id, selected);
+        },
+        (url, host) => urls.push({ url, host }),
+      );
+      await flow.run("github-copilot", "oauth", async () => ({
+        login: async (_p, _t, interaction) => {
+          await interaction.prompt({
+            type: "text",
+            message: "GitHub Enterprise URL/domain (blank for github.com)",
+          });
+          reachedDevice = true;
+          interaction.notify({
+            type: "device_code",
+            verificationUri: "https://tahaluf.ghe.com/login/device",
+            userCode: "TEST-CODE",
+          });
+        },
+      }));
+      if (selected.includes("tahaluf.ghe.com")) {
+        expect(reachedDevice).toBe(true);
+        expect(urls).toEqual([
+          {
+            url: "https://tahaluf.ghe.com/login/device",
+            host: "tahaluf.ghe.com",
+          },
+        ]);
+      } else {
+        expect(reachedDevice).toBe(false);
+        expect(urls).toEqual([]);
+        expect(JSON.stringify(events)).toContain("No browser was opened.");
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});

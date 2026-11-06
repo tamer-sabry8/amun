@@ -83,3 +83,24 @@ it("readiness uses the pinned CLI result and cannot leak credentials or imply su
     ),
   ).toBe("error");
 });
+it("binds Copilot browser handoff to the selected supported GHE.com tenant", async () => {
+  const { copilotHost } = await import("../src/pi-auth.ts");
+  expect(copilotHost("https://tahaluf.ghe.com/")).toBe("tahaluf.ghe.com");
+  expect(copilotHost("")).toBe("github.com");
+  expect(() => copilotHost("https://ghes.tahaluf.ae/")).toThrow();
+  expect(
+    authBrowserUrl(
+      "github-copilot",
+      "https://tahaluf.ghe.com/login/device",
+      "tahaluf.ghe.com",
+    ),
+  ).toContain("tahaluf.ghe.com");
+  for (const url of [
+    "https://other.ghe.com/login/device",
+    "https://github.com/login/device",
+    "https://tahaluf.ghe.com.evil.test/login/device",
+  ])
+    expect(() =>
+      authBrowserUrl("github-copilot", url, "tahaluf.ghe.com"),
+    ).toThrow();
+});

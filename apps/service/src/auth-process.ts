@@ -9,7 +9,7 @@ export function startPiLogin(
   worker: string,
   entry: string,
   root: string,
-  browser: (provider: string, url: string) => void,
+  browser: (provider: string, url: string, selectedHost?: string) => void,
 ): StartLogin {
   return (command, send, done) => {
     const child = spawn(binary, [worker], {
@@ -54,7 +54,17 @@ export function startPiLogin(
           ) {
             browser(
               command.provider,
-              authBrowserUrl(command.provider, frame.url),
+              authBrowserUrl(
+                command.provider,
+                frame.url,
+                "selectedHost" in frame &&
+                  typeof frame.selectedHost === "string"
+                  ? frame.selectedHost
+                  : undefined,
+              ),
+              "selectedHost" in frame && typeof frame.selectedHost === "string"
+                ? frame.selectedHost
+                : undefined,
             );
             continue;
           }

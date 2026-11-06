@@ -10,11 +10,34 @@ export function validateLogin(provider: string, type: string): void {
   )
     throw Error("Unsupported provider login");
 }
-export function authBrowserUrl(provider: string, value: string): string {
+export function copilotHost(value: string): string {
+  if (!value.trim()) return "github.com";
+  const url = new URL(value.includes("://") ? value : "https://" + value);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/" ||
+    !(
+      url.hostname === "github.com" ||
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.ghe\.com$/.test(url.hostname)
+    )
+  )
+    throw Error("unsupported_copilot_host");
+  return url.hostname;
+}
+export function authBrowserUrl(
+  provider: string,
+  value: string,
+  selectedHost?: string,
+): string {
   if (value.length > 8192) throw Error("Invalid auth URL");
   const url = new URL(value);
   const hosts: Record<string, readonly string[]> = {
-    "github-copilot": ["github.com"],
+    "github-copilot": [copilotHost(selectedHost ?? "")],
     openrouter: ["openrouter.ai"],
     "openai-codex": ["auth.openai.com"],
   };

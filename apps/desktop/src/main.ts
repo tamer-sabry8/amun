@@ -114,7 +114,13 @@ function startService(): void {
     )
       return;
     try {
-      const url = authBrowserUrl(message.provider, message.url);
+      const url = authBrowserUrl(
+        message.provider,
+        message.url,
+        "selectedHost" in message && typeof message.selectedHost === "string"
+          ? message.selectedHost
+          : undefined,
+      );
       execFile(
         "/usr/bin/open",
         ["-a", "Google Chrome", url],

@@ -1,3 +1,4 @@
+import { canSubmitAuthPrompt } from "./auth-prompt.ts";
 import { createRoot } from "react-dom/client";
 import {
   useEffect,
@@ -152,7 +153,10 @@ function AuthPrompt() {
             Enter credentials only here or in the provider’s browser page.
           </p>
           <div className="button-row">
-            <button className="primary" disabled={!value}>
+            <button
+              className="primary"
+              disabled={!canSubmitAuthPrompt(prompt, value)}
+            >
               Continue
             </button>
             <button type="button" onClick={cancel}>

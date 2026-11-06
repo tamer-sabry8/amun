@@ -179,9 +179,10 @@ process.parentPort?.on("message", (event) => {
       process.env.AMUN_AUTH_WORKER!,
       process.env.AMUN_PI_ENTRY!,
       process.env.AMUN_AUTH_ROOT!,
-      (provider, url) =>
+      (provider, url, selectedHost) =>
         process.parentPort?.postMessage({
           kind: "auth-browser",
+          selectedHost,
           provider,
           url,
         }),

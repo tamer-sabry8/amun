@@ -12,8 +12,8 @@ const root = process.env.AMUN_AUTH_ROOT,
 if (!root || !sdk) throw Error("Auth worker configuration unavailable");
 const send = (value: unknown) =>
   process.stdout.write(JSON.stringify(value) + "\n");
-const flow = new PiLogin(root, new Redactor(), send, (url) =>
-  send({ kind: "auth-browser", url }),
+const flow = new PiLogin(root, new Redactor(), send, (url, selectedHost) =>
+  send({ kind: "auth-browser", url, selectedHost }),
 );
 const decoder = new JsonLineDecoder(131072);
 let running = false;
