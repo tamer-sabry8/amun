@@ -12,7 +12,7 @@ Adds the sandboxed Electron shell, recoverable service process, pinned Pi/Firstm
 
 ## Validation
 
-166 unit tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
+171 unit/integration tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
 
 Three process-cold launches with warm caches measured 713/502/324 ms to Connected, summed Electron working set 481/481/480 MiB and proof-terminal echo 16/22/13 ms. These are a local baseline, not clean-account or release acceptance; see ADR-008.
 
@@ -23,3 +23,5 @@ M0 remains incomplete. T006 service/UI stream, model list, dialogs and both prov
 ## Service and ownership continuation
 
 Bounded Pi text/dialog projection now reaches the renderer; real offline select/confirm round-trips pass source and packaged tests. A checksum-guarded bundled-only Firstmate patch fixes Codex restricted-mode inheritance, with actual source/package propagation evidence. Private endpoint receipts and read-only tmux observation refuse identity mismatches; worker liveness remains unknown until real dispatch/restart acceptance. T010 is explicitly blocked at the user's request; other M0 work continues.
+
+Real Git worktree provisioning now replaces copied operational homes. Official Codex and Claude sign-ins and no-tool inference pass in separate Amun profiles. A bounded login helper opens the official authorization URL in Chrome; it does not copy cookies or expose credentials. Real worker reattachment remains open.

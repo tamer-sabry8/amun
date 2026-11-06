@@ -210,3 +210,6 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T006: source and packaged service/renderer inference now pass for OpenRouter and GitHub Copilot with empty PATH, model projection and personal credential file unchanged. Real service crash removes the temporary Pi credential directory. See [evidence](evidence/T006/authenticated-ui.md). Final task audit remains open.
 - T008: official Codex sign-in succeeded in a separate persistent Amun profile; a real read-only ephemeral inference completed with the exact expected reply. This does not prove Firstmate dispatch or reattachment. Claude's separate official sign-in is still pending.
 - T010 remains blocked at the user's request; no further embedded sign-in attempt is required to continue other M0 work.
+
+- T007: actual copied-home dispatch failure exposed the Git worktree requirement. Amun-owned snapshot Git store + genuine worktree provisioning is now tested, and real Firstmate Codex spawn succeeds; see [worktree evidence](evidence/T007/git-worktree-homes.md).
+- T008: official isolated Codex and Claude sign-ins and real no-tool inference now pass. Firstmate worker completion and ten service-restart reattachment trials remain open.
