@@ -1,0 +1,22 @@
+$ vitest run packages/crew/tests/tmux-observer.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/tmux-observer.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/tmux-observer.test.ts [ packages/crew/tests/tmux-observer.test.ts ]
+Error: Cannot find module '../src/tmux-observer.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/tmux-observer.test.ts
+ ❯ packages/crew/tests/tmux-observer.test.ts:2:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  12:01:23
+   Duration  101ms (worker 97%, environment 3%)
+
+[ELIFECYCLE] Test failed. See above for more details.

@@ -1,0 +1,16 @@
+
+Running 1 test using 1 worker
+
+(node:21169) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/pi.spec.ts:2:1 › Pi extension dialogs cross the service boundary with explicit answers (30.0s)
+
+
+  1) tests/e2e/pi.spec.ts:2:1 › Pi extension dialogs cross the service boundary with explicit answers 
+
+    Test timeout of 30000ms exceeded.
+
+    Error Context: test-results/pi-Pi-extension-dialogs-cr-34cf6-ndary-with-explicit-answers/error-context.md
+
+  1 failed
+    tests/e2e/pi.spec.ts:2:1 › Pi extension dialogs cross the service boundary with explicit answers 

@@ -1,0 +1,38 @@
+$ pnpm build && playwright test
+$ pnpm --filter @amun/desktop build
+$ vite build && vite build --config vite.renderer.config.ts
+vite v8.3.6 building client environment for production...
+transforming...
+✓ 123 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/preload.cjs           0.63 kB │ gzip:  0.28 kB
+dist/main.cjs              7.12 kB │ gzip:  3.04 kB
+dist/service.cjs          20.36 kB │ gzip:  7.28 kB
+dist/health-Bzize0-s.cjs  98.87 kB │ gzip: 28.18 kB
+
+✓ built in 38ms
+vite v8.3.6 building client environment for production...
+transforming...
+✓ 105 modules transformed.
+rendering chunks...
+computing gzip size...
+renderer/renderer.css    3.95 kB │ gzip:   1.02 kB
+renderer/renderer.js   435.44 kB │ gzip: 112.55 kB
+
+✓ built in 91ms
+
+Running 8 tests using 1 worker
+
+(node:5080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/e2e/browser.spec.ts:4:1 › browser isolates a local prototype, redirects, popups, permissions and service ports (1.7s)
+  ✓  2 tests/e2e/pi.spec.ts:6:1 › Pi extension dialogs cross the service boundary with explicit answers (3.5s)
+  ✓  3 tests/e2e/pi.spec.ts:38:1 › service loss clears Pi dialogs and terminal control instead of replaying them (3.2s)
+  ✓  4 tests/e2e/preview-handoff.spec.ts:3:1 › known IdP redirect is blocked, then user restarts auth externally from original page (1.3s)
+  ✓  5 tests/e2e/preview-login.spec.ts:7:1 › direct first-party login survives full app restart in the isolated partition (1.5s)
+  ✓  6 tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests (1.3s)
+  ✓  7 tests/e2e/shell.spec.ts:35:1 › service crash reconnects over a fresh port within five seconds (1.3s)
+  ✓  8 tests/e2e/terminal.spec.ts:2:1 › service PTY is read-only until control, echoes and resizes with a minimal environment (1.3s)
+
+  8 passed (15.5s)

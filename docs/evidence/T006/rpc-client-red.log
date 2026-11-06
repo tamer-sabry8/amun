@@ -1,0 +1,208 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/pi-rpc.test.ts (9 tests | 8 failed) 27ms
+   × correlates out-of-order state/model replies without treating stream events as replies 5ms
+   × rejects mismatched reply commands 6ms
+   × times out without retrying a possibly executed prompt 4ms
+   × rejects pending work on disconnect and refuses later commands 1ms
+   × does not include runtime failure text or malformed JSON in errors 1ms
+   × sends only explicit valid select/confirm answers, once 3ms
+   × cancels unanswered extension dialogs on timeout 5ms
+   × handles transport write failures without leaking their text 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > correlates out-of-order state/model replies without treating stream events as replies
+Error: not implemented
+ ❯ PiRpcClient.request packages/crew/src/pi-rpc.ts:3:129
+      1| export class PiRpcClient {
+      2|   constructor(_write: (line: string) => void, _event = (_frame: Record…
+      3|   request(_command: string, _payload: Record<string, unknown> = {}, _t…
+       |                                                                                                                                 ^
+      4|   receive(_chunk: string): void {}
+      5|   close(): void {}
+ ❯ packages/crew/tests/pi-rpc.test.ts:14:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > rejects mismatched reply commands
+AssertionError: expected [Function] to throw error including 'protocol' but got 'not implemented'
+
+Expected: "protocol"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:25:54
+     23| it('rejects mismatched reply commands', async () => {
+     24|   const {client,writes,send} = fixture();
+     25|   const pending = expect(client.request('get_state')).rejects.toThrow(…
+       |                                                      ^
+     26|   send({type:'response',id:writes[0]?.id,command:'abort',success:true}…
+     27|   await pending;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > times out without retrying a possibly executed prompt
+AssertionError: expected [Function] to throw error including 'timed out' but got 'not implemented'
+
+Expected: "timed out"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:32:72
+     30|   vi.useFakeTimers();
+     31|   const {client,writes} = fixture();
+     32|   const pending = expect(client.request('prompt',{message:'hello'},20)…
+       |                                                                        ^
+     33|   await vi.advanceTimersByTimeAsync(20);
+     34|   await pending;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > rejects pending work on disconnect and refuses later commands
+AssertionError: expected [Function] to throw error including 'closed' but got 'not implemented'
+
+Expected: "closed"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:40:54
+     38| it('rejects pending work on disconnect and refuses later commands', as…
+     39|   const {client} = fixture();
+     40|   const pending = expect(client.request('get_state')).rejects.toThrow(…
+       |                                                      ^
+     41|   client.close(); await pending;
+     42|   await expect(client.request('get_state')).rejects.toThrow('closed');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > does not include runtime failure text or malformed JSON in errors
+AssertionError: expected [Function] to throw error including 'Pi command failed' but got 'not implemented'
+
+Expected: "Pi command failed"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:46:54
+     44| it('does not include runtime failure text or malformed JSON in errors'…
+     45|   const {client,writes,send} = fixture();
+     46|   const pending = expect(client.request('get_state')).rejects.toThrow(…
+       |                                                      ^
+     47|   send({type:'response',id:writes[0]?.id,command:'get_state',success:f…
+     48|   await pending;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > sends only explicit valid select/confirm answers, once
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:57:18
+     55|   send({type:'extension_ui_request',id:'confirm',method:'confirm',titl…
+     56|   expect(writes).toEqual([]);
+     57|   expect(events).toHaveLength(2);
+       |                  ^
+     58|   expect(() => client.answer('choice','C')).toThrow();
+     59|   expect(() => client.answer('confirm','yes')).toThrow();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > cancels unanswered extension dialogs on timeout
+AssertionError: expected [] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "cancelled": true,
+-     "id": "expiry",
+-     "type": "extension_ui_response",
+-   },
+- ]
++ []
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:70:18
+     68|   send({type:'extension_ui_request',id:'expiry',method:'confirm',title…
+     69|   await vi.advanceTimersByTimeAsync(10);
+     70|   expect(writes).toEqual([{type:'extension_ui_response',id:'expiry',ca…
+       |                  ^
+     71|   expect(() => client.answer('expiry',true)).toThrow();
+     72|   client.close();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  packages/crew/tests/pi-rpc.test.ts > handles transport write failures without leaking their text
+AssertionError: expected [Function] to throw error including 'Pi transport failure' but got 'not implemented'
+
+Expected: "Pi transport failure"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-rpc.test.ts:82:44
+     80| it('handles transport write failures without leaking their text', asyn…
+     81|   const client = new PiRpcClient(() => { throw new Error('SECRET-CANAR…
+     82|   await expect(client.request('get_state')).rejects.toThrow('Pi transp…
+       |                                            ^
+     83|   client.close();
+     84| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: not implemented
+ ❯ PiRpcClient.request packages/crew/src/pi-rpc.ts:3:129
+      1| export class PiRpcClient {
+      2|   constructor(_write: (line: string) => void, _event = (_frame: Record…
+      3|   request(_command: string, _payload: Record<string, unknown> = {}, _t…
+       |                                                                                                                                 ^
+      4|   receive(_chunk: string): void {}
+      5|   close(): void {}
+ ❯ packages/crew/tests/pi-rpc.test.ts:13:24
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:1632:35
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2801:26
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3338:20
+ ❯ runWithCancel node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3333:10
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3318:20
+ ❯ runWithTimeout node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3276:10
+
+This error originated in "packages/crew/tests/pi-rpc.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "times out without retrying a possibly executed prompt". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: expected [Function] to throw error including 'timed out' but got 'not implemented'
+ ❯ _Assertion.__VITEST_REJECTS__ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/index.CZzC1gGg.js:2178:33
+ ❯ _Assertion.propertyGetter node_modules/.pnpm/chai@6.3.0/node_modules/chai/index.js:1607:27
+ ❯ Object.proxyGetter [as get] node_modules/.pnpm/chai@6.3.0/node_modules/chai/index.js:1696:22
+ ❯ packages/crew/tests/pi-rpc.test.ts:32:72
+     30|   vi.useFakeTimers();
+     31|   const {client,writes} = fixture();
+     32|   const pending = expect(client.request('prompt',{message:'hello'},20)…
+       |                                                                        ^
+     33|   await vi.advanceTimersByTimeAsync(20);
+     34|   await pending;
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:1632:35
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2801:26
+ ❯ node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3338:20
+ ❯ runWithCancel node_modules/.pnpm/vitest@5.1.0_@types+node@26.6.6_vite@8.3.6_@types+node@26.6.6_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3333:10
+
+This error originated in "packages/crew/tests/pi-rpc.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "times out without retrying a possibly executed prompt". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 1 passed (9)
+     Errors  2 errors
+   Start at  02:39:32
+   Duration  250ms (transform 46%, tests 34%, import 15%, worker 5%)

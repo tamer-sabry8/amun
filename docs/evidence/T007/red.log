@@ -1,0 +1,69 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/managed-home.test.ts (12 tests | 6 failed) 27ms
+   ❯ Firstmate managed home (12)
+     × forces auto permissions without changing the imported values 10ms
+     × rejects unsupported imports 0 3ms
+     × rejects unsupported imports 1 1ms
+     × rejects unsupported imports 2 0ms
+     × rejects unsupported imports 3 1ms
+     × creates private operational directories and refuses to overwrite an existing home 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > forces auto permissions without changing the imported values
+AssertionError: expected { backend: 'tmux', …(3) } to deeply equal { backend: 'tmux', …(3) }
+
+- Expected
++ Received
+
+  {
+    "backend": "tmux",
+-   "claude-permission-mode": "auto",
++   "claude-permission-mode": "bypass",
+    "crew-dispatch.json": "{\"default\":{\"harness\":\"codex\"}}",
+    "secondmate-harness": "codex",
+  }
+
+ ❯ packages/crew/tests/managed-home.test.ts:14:35
+     12|   it('forces auto permissions without changing the imported values', (…
+     13|     const overlay = { backend: 'tmux', 'claude-permission-mode': 'bypa…
+     14|     expect(mergeOverlay(overlay)).toEqual({ ...overlay, 'claude-permis…
+       |                                   ^
+     15|     expect(overlay['claude-permission-mode']).toBe('bypass');
+     16|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > rejects unsupported imports 0
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > rejects unsupported imports 1
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > rejects unsupported imports 2
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > rejects unsupported imports 3
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/managed-home.test.ts:18:41
+     16|   });
+     17|   it.each([{ backend: 'unsupported' }, { '../auth.json': 'secret' }, {…
+     18|     expect(() => mergeOverlay(overlay)).toThrow();
+       |                                         ^
+     19|   });
+     20|   it('creates private operational directories and refuses to overwrite…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > creates private operational directories and refuses to overwrite an existing home
+Error: Not implemented
+ ❯ createManagedHome packages/crew/src/managed-home.ts:2:130
+      1| export function mergeOverlay(overlay: Record<string, string>): Record<…
+      2| export async function createManagedHome(_root: string, _name: string, …
+       |                                                                                                                                  ^
+      3|
+ ❯ packages/crew/tests/managed-home.test.ts:22:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 6 passed (12)
+   Start at  01:29:11
+   Duration  249ms (transform 42%, tests 34%, import 18%, worker 6%)

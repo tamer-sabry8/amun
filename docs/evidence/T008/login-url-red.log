@@ -1,0 +1,24 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/worker-login-url.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/worker-login-url.test.ts [ packages/crew/tests/worker-login-url.test.ts ]
+Error: Cannot find module '../src/worker-login-url.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/worker-login-url.test.ts
+ ❯ packages/crew/tests/worker-login-url.test.ts:2:1
+      1| import {it,expect} from 'vitest';
+      2| import {officialWorkerLoginUrl} from '../src/worker-login-url.ts';
+       | ^
+      3| it('recognizes the actual Claude authorization host from bounded CLI o…
+      4|  expect(officialWorkerLoginUrl('claude','Open https://claude.com/cai/o…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  13:25:14
+   Duration  112ms (worker 97%, environment 3%)
+

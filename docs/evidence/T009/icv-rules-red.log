@@ -1,0 +1,71 @@
+$ vitest run packages/connectors-ado/tests/client.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/connectors-ado/tests/client.test.ts (8 tests | 2 failed) 8ms
+   × allows only scoped proof writes and binds updates to revisions 3ms
+   × does not treat object prototype names as endpoints 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/connectors-ado/tests/client.test.ts > allows only scoped proof writes and binds updates to revisions
+AssertionError: expected [ { op: 'add', …(2) }, …(1) ] to deeply equal [ { op: 'add', …(2) }, …(4) ]
+
+- Expected
++ Received
+
+@@ -4,25 +4,10 @@
+      "path": "/fields/System.Title",
+      "value": "Test Task",
+    },
+    {
+      "op": "add",
+-     "path": "/fields/Microsoft.VSTS.Common.Activity",
+-     "value": "Testing",
+-   },
+-   {
+-     "op": "add",
+-     "path": "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate",
+-     "value": 0,
+-   },
+-   {
+-     "op": "add",
+-     "path": "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
+-     "value": 0,
+-   },
+-   {
+-     "op": "add",
+      "path": "/relations/-",
+      "value": {
+        "rel": "System.LinkTypes.Hierarchy-Reverse",
+        "url": "https://devops.example.test/Collection/_apis/wit/workItems/11",
+      },
+
+ ❯ packages/connectors-ado/tests/client.test.ts:23:40
+     21|   await client.create("Task", "Test Task", 11);
+     22|   expect(transport.mock.calls[0]?.[0]).toBe("POST");
+     23|   expect(transport.mock.calls[0]?.[2]).toEqual([
+       |                                        ^
+     24|     { op: "add", path: "/fields/System.Title", value: "Test Task" },
+     25|     { op: "add", path: "/fields/Microsoft.VSTS.Common.Activity", value…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/connectors-ado/tests/client.test.ts > does not treat object prototype names as endpoints
+AssertionError: expected [Function] to throw error including 'Unsupported proof endpoint' but got 'read_failed'
+
+Expected: "Unsupported proof endpoint"
+Received: "read_failed"
+
+ ❯ packages/connectors-ado/tests/client.test.ts:91:162
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+   Start at  10:28:32
+   Duration  108ms (transform 40%, import 27%, tests 25%, worker 7%)
+
+[ELIFECYCLE] Test failed. See above for more details.

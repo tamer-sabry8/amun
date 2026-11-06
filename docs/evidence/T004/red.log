@@ -1,0 +1,51 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ apps/desktop/tests/security.test.ts (2 tests | 2 failed) 24ms
+   ❯ desktop isolation policy (2)
+     × sandboxes unprivileged content without Node or preload capabilities 11ms
+     × forbids network, objects, inline execution and framing in the app shell 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desktop/tests/security.test.ts > desktop isolation policy > sandboxes unprivileged content without Node or preload capabilities
+AssertionError: expected {} to match object { sandbox: true, …(3) }
+
+- Expected
++ Received
+
+- {
+-   "contextIsolation": true,
+-   "nodeIntegration": false,
+-   "sandbox": true,
+-   "webSecurity": true,
+- }
++ {}
+
+ ❯ apps/desktop/tests/security.test.ts:6:31
+      4| describe('desktop isolation policy', () => {
+      5|   it('sandboxes unprivileged content without Node or preload capabilit…
+      6|     expect(windowPreferences).toMatchObject({ sandbox: true, contextIs…
+       |                               ^
+      7|     expect(windowPreferences).not.toHaveProperty('preload');
+      8|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/desktop/tests/security.test.ts > desktop isolation policy > forbids network, objects, inline execution and framing in the app shell
+AssertionError: expected [ '' ] to include 'default-src \'none\''
+ ❯ apps/desktop/tests/security.test.ts:11:67
+      9|   it('forbids network, objects, inline execution and framing in the ap…
+     10|     for (const directive of ["default-src 'none'", "script-src 'self'"…
+     11|       expect(contentSecurityPolicy.split(';').map(x => x.trim())).toCo…
+       |                                                                   ^
+     12|     }
+     13|     expect(contentSecurityPolicy).not.toContain('unsafe-inline');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 12 passed (14)
+   Start at  10:09:35
+   Duration  365ms (import 55%, transform 29%, tests 10%, worker 5%)

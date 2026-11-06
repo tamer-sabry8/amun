@@ -1,0 +1,39 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/existing-setup.test.ts (9 tests | 1 failed) 64ms
+   × finds an installed Pi through executable symlinks without running it 12ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > finds an installed Pi through executable symlinks without running it
+AssertionError: expected [] to deeply equal [ { …(3) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "executable": "/tmp/amun-existing-BSp21a/pi",
+-     "packageDirectory": "/tmp/amun-existing-BSp21a/installed-pi",
+-     "version": "1.4.0",
+-   },
+- ]
++ []
+
+ ❯ packages/crew/tests/existing-setup.test.ts:155:18
+    153|   await symlink(entry, alias);
+    154|   const result = await discoverPiInstallations([alias, entry, join(roo…
+    155|   expect(result).toEqual([{ executable: alias, packageDirectory: input…
+       |                  ^
+    156| });
+    157| it('leaves a shell-wrapper installation unresolved instead of executin…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  02:07:12
+   Duration  262ms (tests 48%, transform 36%, import 12%, worker 4%)
+

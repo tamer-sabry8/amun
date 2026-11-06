@@ -1,0 +1,13 @@
+# M0: isolated desktop foundations with real Mac acceptance
+
+Adds Amun's Electron/TypeScript foundation shell, recoverable service and typed IPC, bundled pinned Pi/Firstmate runtimes, real worker observation/reattachment, API integration proof, isolated preview and native terminal. This is the tested M0 foundation, not the finished product UI.
+
+Pi streams and extension dialogs cross validated service boundaries; packaged inference passes for OpenRouter and GitHub Copilot through Pi. Firstmate runs in real Amun-owned Git worktrees, including Application Support paths. Authenticated wake consumption, durable acknowledgement and actual watcher-crash recovery pass. Real Codex/Claude workers retain the same process and endpoint identities across ten source and ten packaged service restarts, with zero duplicate workers; verified task/Git data maps to Runs while semantic status remains unknown.
+
+The preview preserves sandboxing, no preload/Node/ports, per-product sessions, HTTPS/loopback URL restrictions and denied permissions. Known identity-provider navigation is blocked. Explicit user handoff restarts authentication from the original app page in Chrome/default browser, avoiding false OAuth-session portability. Real first-party login persistence/product isolation and native Chrome handoff pass. Terminal read-only/control/resize/backend detach pass, including user-confirmed Finder launch.
+
+Validation: 191 unit tests, lint/typecheck/format; eight source and eight packaged Electron tests; live Pi provider tests, Firstmate supervision, worker reattachment, actual Azure DevOps ICV reads/writes and stale-revision conflicts. New pure policies/Run/ack modules have 100% line/branch coverage; preview adapter has 90.43% line coverage, with scoped CI thresholds. Current packaged baseline: 330–365 ms process startup, 485 MiB summed working set, 13–19 ms terminal echo; limitations are recorded. A separate consistent RSS sample including owned idle workers totals 701 MiB (482 MiB app + 219 MiB crew); the 500 MiB shell budget does not include workers.
+
+The user explicitly narrowed T010 to the browser foundation and moved signing/notarization/clean-account release acceptance to open release gate R001. These are deferred, not passed: no notarized DMG or public-release readiness claim. File previews, annotation/attachments, full onboarding/governance/product UI and M1/M2 remain unimplemented. External tool updates are allowed with compatibility checks; Claude 2.1.319 inference passes without restarting existing workers.
+
+See docs/evidence/M0-final-audit.md, docs/preview/STRESS-TEST.md and ADR-009. The user authorized merging PR #1 only after the revised M0 audit and final-head CI pass. No approval bypass or automatic follow-on M1 work.

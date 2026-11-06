@@ -1,0 +1,9 @@
+{
+  "before": "2.1.319 (Claude Code)",
+  "after": "2.1.319 (Claude Code)",
+  "isolatedProfile": true,
+  "updatersAllowed": true,
+  "successfulCompletedInference": true,
+  "noTools": true,
+  "activeWorkersRestarted": false
+}

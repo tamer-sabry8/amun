@@ -1,0 +1,24 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/worker-environment.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/worker-environment.test.ts [ packages/crew/tests/worker-environment.test.ts ]
+Error: Cannot find module '../src/worker-environment.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/worker-environment.test.ts
+ ❯ packages/crew/tests/worker-environment.test.ts:2:1
+      1| import {it,expect} from 'vitest';
+      2| import {workerEnvironment} from '../src/worker-environment.ts';
+       | ^
+      3| it('disables updates and keeps Claude profile separate while retaining…
+      4|  const env=workerEnvironment('claude','/Users/test','/Users/test/Amun/…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  13:41:55
+   Duration  86ms (worker 98%, environment 2%)
+

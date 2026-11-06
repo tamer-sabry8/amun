@@ -1,0 +1,80 @@
+$ vitest run packages/crew/tests/pi-inference.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/pi-inference.test.ts (7 tests | 7 failed) 6ms
+   × selects one supported credential without copying a credential store 2ms
+   × refuses mismatches without leaking source secret-canary 2ms
+   × refuses mismatches without leaking source {"status":"ready","provider":"wrong","credentials":"secret-canary"} 0ms
+   × refuses mismatches without leaking source {"status":"not_ready","provider":"openrouter"} 0ms
+   × refuses mismatches without leaking source {"status":"ready","provider":"openrouter","credentials":""} 0ms
+   × waits for successful assistant message and settled event, not prompt acknowledgement 1ms
+   × refuses aborted, failed, tool-bearing, and oversized runs 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > selects one supported credential without copying a credential store
+Error: not implemented
+ ❯ selectedCredential packages/crew/src/pi-inference.ts:1:103
+      1| export function selectedCredential(_provider:string,_output:string):{n…
+       |                                                                                                       ^
+      2| export class InferenceEvidence {
+      3|  text=""; complete=false; failed=false; deltas=0;
+ ❯ packages/crew/tests/pi-inference.test.ts:4:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses mismatches without leaking source secret-canary
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses mismatches without leaking source {"status":"ready","provider":"wrong","credentials":"secret-canary"}
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses mismatches without leaking source {"status":"not_ready","provider":"openrouter"}
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses mismatches without leaking source {"status":"ready","provider":"openrouter","credentials":""}
+AssertionError: expected [Function] to throw error including 'Provider credential unavailable' but got 'not implemented'
+
+Expected: "Provider credential unavailable"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/pi-inference.test.ts:8:54
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > waits for successful assistant message and settled event, not prompt acknowledgement
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/crew/tests/pi-inference.test.ts:15:72
+     13|  run.accept({type:"message_end",message:{role:"assistant",stopReason:"…
+     14|  run.accept({type:"agent_end"});expect(run.complete).toBe(false);
+     15|  run.accept({type:"agent_settled",aborted:false});expect(run.complete)…
+       |                                                                        ^
+     16| });
+     17| it("refuses aborted, failed, tool-bearing, and oversized runs",()=>{
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses aborted, failed, tool-bearing, and oversized runs
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/crew/tests/pi-inference.test.ts:19:74
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  10:19:58
+   Duration  228ms (transform 39%, import 26%, worker 19%, tests 16%)
+
+[ELIFECYCLE] Test failed. See above for more details.

@@ -1,0 +1,28 @@
+
+Running 1 test using 1 worker
+
+(node:95453) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/browser.spec.ts:4:1 › browser isolates a local prototype, redirects, popups, permissions and service ports (3.8s)
+
+
+  1) tests/e2e/browser.spec.ts:4:1 › browser isolates a local prototype, redirects, popups, permissions and service ports 
+
+    TimeoutError: locator.fill: Timeout 3000ms exceeded.
+    Call log:
+      - waiting for getByLabel('M0 browser proof')
+
+
+      15 |   try {
+      16 |     const shell = await app.firstWindow();
+    > 17 |     await shell.getByLabel("M0 browser proof").fill(url,{timeout:3000});
+         |                                                ^
+      18 |     await shell.getByRole("button",{name:"Open browser"}).click();
+      19 |     await expect.poll(() => app.evaluate(({webContents}) => webContents.getAllWebContents().some(w=>w.getURL().endsWith("/prototype")))).toBe(true);
+      20 |     const result = await app.evaluate(async ({webContents,session}) => {
+        at /Users/tamersabry/Projects/amun/tests/e2e/browser.spec.ts:17:48
+
+    Error Context: test-results/browser-browser-isolates-a-a0073-rmissions-and-service-ports/error-context.md
+
+  1 failed
+    tests/e2e/browser.spec.ts:4:1 › browser isolates a local prototype, redirects, popups, permissions and service ports 

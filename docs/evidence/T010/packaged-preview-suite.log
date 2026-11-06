@@ -1,0 +1,19 @@
+$ node scripts/packaged-proof.ts
+{"command":"get_state","success":true}
+{"command":"get_available_models","success":true}
+{"watcherCommandRegistered":true,"missingOwnershipRefusedOverRPC":true,"watcherMarkerMatchesProcess":true,"managedPermissionMode":"auto","codexPermissionMode":"restricted","personalFixtureUnchanged":true,"modelCalls":0,"workerDispatches":0}
+
+Running 8 tests using 1 worker
+
+(node:6959) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 tests/e2e/browser.spec.ts:4:1 › browser isolates a local prototype, redirects, popups, permissions and service ports (1.4s)
+  ✓  2 tests/e2e/pi.spec.ts:6:1 › Pi extension dialogs cross the service boundary with explicit answers (3.3s)
+  ✓  3 tests/e2e/pi.spec.ts:38:1 › service loss clears Pi dialogs and terminal control instead of replaying them (1.3s)
+  ✓  4 tests/e2e/preview-handoff.spec.ts:3:1 › known IdP redirect is blocked, then user restarts auth externally from original page (1.3s)
+  ✓  5 tests/e2e/preview-login.spec.ts:7:1 › direct first-party login survives full app restart in the isolated partition (1.4s)
+  ✓  6 tests/e2e/shell.spec.ts:3:1 › shell launches with no privileged renderer APIs and denies external requests (1.3s)
+  ✓  7 tests/e2e/shell.spec.ts:35:1 › service crash reconnects over a fresh port within five seconds (1.3s)
+  ✓  8 tests/e2e/terminal.spec.ts:2:1 › service PTY is read-only until control, echoes and resizes with a minimal environment (1.3s)
+
+  8 passed (12.8s)

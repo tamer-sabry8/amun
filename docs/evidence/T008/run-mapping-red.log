@@ -1,0 +1,24 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/observed-run.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/observed-run.test.ts [ packages/crew/tests/observed-run.test.ts ]
+Error: Cannot find module '../src/observed-run.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/observed-run.test.ts
+ ❯ packages/crew/tests/observed-run.test.ts:2:1
+      1| import { it, expect } from 'vitest';
+      2| import { observedRun } from '../src/observed-run.ts';
+       | ^
+      3| it('maps verified task identity into a stable Run without inventing mo…
+      4|  const record={backend:'tmux',taskId:'task-1',window:'firstmate:task-1…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  15:33:28
+   Duration  93ms (worker 98%, environment 2%)
+

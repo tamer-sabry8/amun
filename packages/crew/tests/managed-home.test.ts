@@ -1,0 +1,107 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  realpath,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createManagedHome, mergeOverlay } from "../src/managed-home.js";
+
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+async function temporary() {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "amun-home-test-")));
+  roots.push(root);
+  return root;
+}
+
+describe("Firstmate managed home", () => {
+  it("requires an explicit supported backend before creating any home", async () => {
+    const root = await temporary();
+    await expect(createManagedHome(root, "missing", {})).rejects.toThrow(
+      "Choose the tmux backend explicitly",
+    );
+    await expect(stat(join(root, "missing"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      createManagedHome(root, "personal", { backend: "herdr" }),
+    ).rejects.toThrow();
+    await expect(stat(join(root, "personal"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+  it("forces auto permissions without changing the imported values", () => {
+    const overlay = {
+      backend: "tmux",
+      "claude-permission-mode": "bypass",
+      "codex-permission-mode": "bypass",
+      "secondmate-harness": "codex",
+      "crew-dispatch.json": '{"default":{"harness":"codex"}}',
+    };
+    expect(mergeOverlay(overlay)).toEqual({
+      ...overlay,
+      "claude-permission-mode": "auto",
+      "codex-permission-mode": "restricted",
+    });
+    expect(overlay["claude-permission-mode"]).toBe("bypass");
+    expect(overlay["codex-permission-mode"]).toBe("bypass");
+  });
+  it.each([
+    { backend: "unsupported" },
+    { backend: "herdr" },
+    {},
+    { backend: "tmux", "../auth.json": "secret" },
+    { backend: "tmux", "crew-dispatch.json": "broken" },
+    { backend: "tmux", "crew-dispatch.json": "[]" },
+  ])("rejects unsupported imports %#", (overlay) => {
+    expect(() => mergeOverlay(overlay)).toThrow();
+  });
+  it("creates private operational directories and refuses to overwrite an existing home", async () => {
+    const root = await temporary();
+    const home = await createManagedHome(root, "primary", { backend: "tmux" });
+    expect(
+      await readFile(join(home, "config/claude-permission-mode"), "utf8"),
+    ).toBe("auto\n");
+    expect(
+      await readFile(join(home, "config/codex-permission-mode"), "utf8"),
+    ).toBe("restricted\n");
+    expect((await stat(home)).mode & 0o777).toBe(0o700);
+    expect((await stat(join(home, "config/backend"))).mode & 0o777).toBe(0o600);
+    for (const directory of ["state", "data", "projects"])
+      expect((await stat(join(home, directory))).isDirectory()).toBe(true);
+    await writeFile(join(home, "data/user-note"), "preserve me");
+    await expect(
+      createManagedHome(root, "primary", { backend: "tmux" }),
+    ).rejects.toThrow();
+    expect(await readFile(join(home, "data/user-note"), "utf8")).toBe(
+      "preserve me",
+    );
+  });
+  it.each(["../personal", "/personal", ".", "a/b", ""])(
+    "rejects unsafe home name %j",
+    async (name) => {
+      await expect(
+        createManagedHome(await temporary(), name, { backend: "tmux" }),
+      ).rejects.toThrow();
+    },
+  );
+  it("refuses a symlinked app-support root", async () => {
+    const root = await temporary();
+    await mkdir(join(root, "personal"));
+    await symlink(join(root, "personal"), join(root, "redirect"));
+    await expect(
+      createManagedHome(join(root, "redirect"), "primary", { backend: "tmux" }),
+    ).rejects.toThrow();
+  });
+});

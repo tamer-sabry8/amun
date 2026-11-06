@@ -1,0 +1,16 @@
+$ pnpm lint && pnpm typecheck && pnpm test && pnpm format:check
+$ eslint .
+$ tsc --noEmit
+$ vitest run
+
+ RUN  v5.1.0 /workspace/amun
+
+
+ Test Files  2 passed (2)
+      Tests  14 passed (14)
+   Start at  10:15:03
+   Duration  229ms (import 63%, transform 15%, tests 14%, worker 8%)
+
+$ prettier --check .
+Checking formatting...
+All matched files use Prettier code style!

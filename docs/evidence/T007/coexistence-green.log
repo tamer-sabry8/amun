@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  02:05:55
+   Duration  260ms (tests 45%, transform 36%, import 15%, worker 4%)
+

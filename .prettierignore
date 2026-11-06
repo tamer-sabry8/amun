@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+docs/plans/product-and-r1-plan.md
+docs/evidence/**/*.log
+apps/desktop/.runtime/
+apps/desktop/out/
+
+.remember/

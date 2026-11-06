@@ -1,0 +1,45 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/desktop/tests/browser-adapter.test.ts (4 tests | 1 failed) 7ms
+   × opens Chrome with exact argv and ignores a late failure after navigation 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desktop/tests/browser-adapter.test.ts > opens Chrome with exact argv and ignores a late failure after navigation
+AssertionError: expected [ …(2) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   [
++     "amun-browser-handoff",
++     {
++       "host": "accounts.google.com",
++       "id": "94d6bae7-e3ba-4fa0-aae0-b598498ed01c",
++     },
++   ],
++   [
++     "amun-browser-status",
++     "Chrome could not be opened. Try the default browser.",
++   ],
++ ]
+
+ ❯ apps/desktop/tests/browser-adapter.test.ts:154:21
+    152|  const callback=state.launch.mock.calls[0]![2] as (error:Error)=>void;
+    153|  send({action:"navigate",url:"https://example.com/new"});state.sent=[]…
+    154|  expect(state.sent).toEqual([]);
+       |                     ^
+    155| });
+    156|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  15:36:42
+   Duration  136ms (transform 51%, import 35%, tests 10%, worker 3%)
+

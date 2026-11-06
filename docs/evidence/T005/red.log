@@ -1,0 +1,81 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ apps/service/tests/health.test.ts (10 tests | 6 failed) 14ms
+   ❯ service boundary (10)
+     × responds with the request correlation ID 7ms
+     × backs off repeated crashes with a bounded delay 3ms
+     × rejects an invalid restart attempt -1 1ms
+     × rejects an invalid restart attempt 0.5 0ms
+     × rejects an invalid restart attempt null 0ms
+     × rejects an invalid restart attempt null 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/health.test.ts > service boundary > responds with the request correlation ID
+AssertionError: expected null to deeply equal { version: 1, id: 'req-1', …(1) }
+
+- Expected:
+{
+  "id": "req-1",
+  "status": "ready",
+  "version": 1,
+}
+
++ Received:
+null
+
+ ❯ apps/service/tests/health.test.ts:6:92
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  apps/service/tests/health.test.ts > service boundary > backs off repeated crashes with a bounded delay
+AssertionError: expected [ +0, +0, +0, +0, +0 ] to deeply equal [ 100, 200, 400, 800, 2000 ]
+
+- Expected
++ Received
+
+  [
+-   100,
+-   200,
+-   400,
+-   800,
+-   2000,
++   0,
++   0,
++   0,
++   0,
++   0,
+  ]
+
+ ❯ apps/service/tests/health.test.ts:12:48
+     10|   });
+     11|   it('backs off repeated crashes with a bounded delay', () => {
+     12|     expect([0, 1, 2, 3, 20].map(restartDelay)).toEqual([100, 200, 400,…
+       |                                                ^
+     13|   });
+     14|   it.each([-1, 0.5, NaN, Infinity])('rejects an invalid restart attemp…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  apps/service/tests/health.test.ts > service boundary > rejects an invalid restart attempt -1
+ FAIL  apps/service/tests/health.test.ts > service boundary > rejects an invalid restart attempt 0.5
+ FAIL  apps/service/tests/health.test.ts > service boundary > rejects an invalid restart attempt null
+ FAIL  apps/service/tests/health.test.ts > service boundary > rejects an invalid restart attempt null
+AssertionError: expected function to throw an error, but it didn't
+ ❯ apps/service/tests/health.test.ts:15:39
+     13|   });
+     14|   it.each([-1, 0.5, NaN, Infinity])('rejects an invalid restart attemp…
+     15|     expect(() => restartDelay(input)).toThrow(RangeError);
+       |                                       ^
+     16|   });
+     17| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 4 passed (10)
+   Start at  10:45:18
+   Duration  213ms (transform 52%, tests 22%, import 21%, worker 6%)

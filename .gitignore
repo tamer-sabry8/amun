@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+.DS_Store
+apps/desktop/renderer/renderer.js
+apps/desktop/.runtime/
+apps/desktop/out/
+
+apps/desktop/renderer/renderer.css

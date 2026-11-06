@@ -1,0 +1,72 @@
+$ vitest run
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/contracts/tests/health.test.ts (12 tests | 10 failed) 18ms
+   ❯ versioned health RPC boundary (12)
+     × rejects unsupported or injected requests: {"version":2,"id":"request-1","method":"health","params":{}} 8ms
+     × rejects unsupported or injected requests: {"version":1,"id":"","method":"health","params":{}} 1ms
+     × rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"execute","params":{}} 1ms
+     × rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"health","params":{"command":"rm"}} 0ms
+     × rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"health","params":{},"token":"must-not-cross-boundary"} 1ms
+     × rejects unsupported or injected requests: null 1ms
+     × rejects unrecognised status "unknown-success" 1ms
+     × rejects unrecognised status "" 1ms
+     × rejects unrecognised status null 0ms
+     × rejects unrecognised status 1 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: {"version":2,"id":"request-1","method":"health","params":{}}
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: {"version":1,"id":"","method":"health","params":{}}
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"execute","params":{}}
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"health","params":{"command":"rm"}}
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: {"version":1,"id":"request-1","method":"health","params":{},"token":"must-not-cross-boundary"}
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unsupported or injected requests: null
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/health.test.ts:17:52
+     15|     null,
+     16|   ])('rejects unsupported or injected requests: %j', (input) => {
+     17|     expect(healthRequest.safeParse(input).success).toBe(false);
+       |                                                    ^
+     18|   });
+     19|   it('preserves reconnecting instead of claiming readiness', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unrecognised status "unknown-success"
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unrecognised status ""
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unrecognised status null
+ FAIL  packages/contracts/tests/health.test.ts > versioned health RPC boundary > rejects unrecognised status 1
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/contracts/tests/health.test.ts:24:87
+     22|   });
+     23|   it.each(['unknown-success', '', null, 1])('rejects unrecognised stat…
+     24|     expect(healthResponse.safeParse({ version: 1, id: 'request-1', sta…
+       |                                                                                       ^
+     25|   });
+     26| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 2 passed (12)
+   Start at  10:07:54
+   Duration  320ms (import 60%, transform 23%, tests 12%, worker 4%)
+
+[ELIFECYCLE] Test failed. See above for more details.

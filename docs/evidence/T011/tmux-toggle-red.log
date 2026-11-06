@@ -1,0 +1,27 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/tmux-terminal.test.ts (2 tests | 1 failed) 3ms
+   × toggles only the uniquely identified PTY client when its current state differs 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/tmux-terminal.test.ts > toggles only the uniquely identified PTY client when its current state differs
+Error: Unverified terminal client
+ ❯ clientControlArguments packages/crew/src/tmux-terminal.ts:19:11
+     17|     !/^\/dev\/(ttys[0-9]+|pts\/[0-9]+)$/.test(rows[0]![1]!)
+     18|   )
+     19|     throw Error("Unverified terminal client");
+       |           ^
+     20|   return [
+     21|     "refresh-client",
+ ❯ packages/crew/tests/tmux-terminal.test.ts:4:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  13:53:49
+   Duration  87ms (transform 45%, import 33%, tests 12%, worker 10%)
+

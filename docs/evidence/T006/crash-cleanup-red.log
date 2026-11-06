@@ -1,0 +1,31 @@
+
+Running 1 test using 1 worker
+
+(node:46147) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/pi.spec.ts:38:1 › service loss clears Pi dialogs and terminal control instead of replaying them (11.4s)
+
+
+  1) tests/e2e/pi.spec.ts:38:1 › service loss clears Pi dialogs and terminal control instead of replaying them 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      85 |     await expect(page.locator("#pi-status")).toHaveText("unavailable");
+      86 |     await expect(page.getByRole("status")).toHaveText("Connected");
+    > 87 |     await expect.poll(async()=>{try{await access(canary);return true;}catch{return false;}},{timeout:10000}).toBe(false);
+         |                                                                                                              ^
+      88 |   } finally {
+      89 |     await app.close();
+      90 |   }
+        at /Users/tamersabry/Projects/amun/tests/e2e/pi.spec.ts:87:110
+
+    Error Context: test-results/pi-service-loss-clears-Pi--2b291-l-instead-of-replaying-them/error-context.md
+
+  1 failed
+    tests/e2e/pi.spec.ts:38:1 › service loss clears Pi dialogs and terminal control instead of replaying them 

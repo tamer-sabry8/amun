@@ -1,0 +1,32 @@
+$ vitest run packages/crew/tests/runtime-links.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/runtime-links.test.ts (4 tests | 1 failed) 29ms
+   × removes only the verified terminal deployment self-reference 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/runtime-links.test.ts > removes only the verified terminal deployment self-reference
+AssertionError: promise rejected "Error: Runtime dependency escapes package…" instead of resolving
+ ❯ packages/crew/tests/runtime-links.test.ts:69:47
+     67|   const link=join(staged,"node_modules/.pnpm/node_modules/@amun/termin…
+     68|   await removeDeploymentSelfLink(staged,project,"terminal-runtime");
+     69|   await expect(assertRuntimeContained(staged)).resolves.toBeUndefined(…
+       |                                               ^
+     70|   await expect(removeDeploymentSelfLink(staged,project,"../../outside"…
+     71| });
+
+Caused by: Error: Runtime dependency escapes packaged tree
+ ❯ assertRuntimeContained packages/crew/src/runtime-links.ts:21:13
+ ❯ packages/crew/tests/runtime-links.test.ts:69:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  10:33:25
+   Duration  114ms (tests 58%, transform 23%, import 15%, worker 4%)
+
+[ELIFECYCLE] Test failed. See above for more details.

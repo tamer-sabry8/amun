@@ -1,0 +1,38 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/terminal.test.ts (5 tests | 1 failed) 6ms
+   × waits for backend control authorization and never re-enables after a later release 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/terminal.test.ts > waits for backend control authorization and never re-enables after a later release
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "blocked",
+    ]
+
+
+Number of calls: 1
+
+ ❯ apps/service/tests/terminal.test.ts:90:146
+     88|  const pty={write:vi.fn(),resize:vi.fn(),kill:vi.fn(),onData:vi.fn(),o…
+     89|  const send=vi.fn(),session=new TerminalSession(()=>pty,send);
+     90|  session.handle(command('open'));session.handle(command('take-control'…
+       |                                                                                                                                                  ^
+     91|  session.handle(command('release-control'));grant();await Promise.reso…
+     92|  session.handle(command('input',{data:'still blocked'}));expect(pty.wr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  13:48:10
+   Duration  163ms (import 67%, transform 24%, tests 7%, worker 2%)
+

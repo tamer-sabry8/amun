@@ -1,0 +1,45 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/distribution.test.ts (6 tests | 5 failed) 14ms
+   ❯ pinned executable distribution integrity (6)
+     × refuses changed or empty content 0 6ms
+     × refuses changed or empty content 1 1ms
+     × rejects invalid hash metadata "" 1ms
+     × rejects invalid hash metadata "latest" 1ms
+     × rejects invalid hash metadata "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/distribution.test.ts > pinned executable distribution integrity > refuses changed or empty content 0
+ FAIL  packages/crew/tests/distribution.test.ts > pinned executable distribution integrity > refuses changed or empty content 1
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/distribution.test.ts:10:60
+      8|   });
+      9|   it.each([Buffer.from('abd'), Buffer.alloc(0)])('refuses changed or e…
+     10|     expect(() => verifyDistributionArchive(bytes, digest)).toThrow();
+       |                                                            ^
+     11|   });
+     12|   it.each(['', 'latest', 'a'.repeat(63)])('rejects invalid hash metada…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  packages/crew/tests/distribution.test.ts > pinned executable distribution integrity > rejects invalid hash metadata ""
+ FAIL  packages/crew/tests/distribution.test.ts > pinned executable distribution integrity > rejects invalid hash metadata "latest"
+ FAIL  packages/crew/tests/distribution.test.ts > pinned executable distribution integrity > rejects invalid hash metadata "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/distribution.test.ts:13:73
+     11|   });
+     12|   it.each(['', 'latest', 'a'.repeat(63)])('rejects invalid hash metada…
+     13|     expect(() => verifyDistributionArchive(Buffer.from('abc'), digest)…
+       |                                                                         ^
+     14|   });
+     15| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  01:49:28
+   Duration  278ms (transform 47%, import 23%, tests 22%, worker 8%)

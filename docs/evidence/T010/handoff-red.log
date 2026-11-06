@@ -1,0 +1,35 @@
+
+Running 1 test using 1 worker
+
+(node:27719) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/preview-handoff.spec.ts:3:1 › known IdP redirect is blocked, then user restarts auth externally from original page (6.4s)
+
+
+  1) tests/e2e/preview-handoff.spec.ts:3:1 › known IdP redirect is blocked, then user restarts auth externally from original page 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('#browser-handoff')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('#browser-handoff') with timeout 5000ms
+      - waiting for locator('#browser-handoff')
+
+
+      15 |  await expect.poll(()=>app.evaluate(({webContents},url)=>webContents.getAllWebContents().some(w=>w.getURL()===url),url)).toBe(true);
+      16 |  await app.evaluate(({webContents},url)=>webContents.getAllWebContents().find(w=>w.getURL()===url)!.executeJavaScript("document.querySelector('a').click()"),url);
+    > 17 |  await expect(page.locator('#browser-handoff')).toBeVisible();
+         |                                                 ^
+      18 |  await expect(page.locator('#browser-handoff')).not.toContainText('state=');
+      19 |  expect(await app.evaluate(()=> (globalThis as unknown as {opened:string[]}).opened)).toEqual([]);
+      20 |  await page.getByRole('button',{name:'Open in default browser',exact:true}).click();
+        at /Users/tamersabry/Projects/amun/tests/e2e/preview-handoff.spec.ts:17:49
+
+    Error Context: test-results/preview-handoff-known-IdP--5a224-ternally-from-original-page/error-context.md
+
+  1 failed
+    tests/e2e/preview-handoff.spec.ts:3:1 › known IdP redirect is blocked, then user restarts auth externally from original page 

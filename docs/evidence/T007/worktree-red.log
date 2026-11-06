@@ -1,0 +1,25 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/firstmate-worktree.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/firstmate-worktree.test.ts [ packages/crew/tests/firstmate-worktree.test.ts ]
+Error: Cannot find module '../src/firstmate-worktree.ts' imported from /Users/tamersabry/Projects/amun/packages/crew/tests/firstmate-worktree.test.ts
+ ❯ packages/crew/tests/firstmate-worktree.test.ts:6:1
+      4| import {tmpdir} from 'node:os';
+      5| import {execFileSync} from 'node:child_process';
+      6| import {createFirstmateWorktrees} from '../src/firstmate-worktree.ts';
+       | ^
+      7| it('provisions genuine separate worktrees from a snapshot without adop…
+      8|  const root=await realpath(await mkdtemp(join(tmpdir(),'amun-worktree-…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  13:27:48
+   Duration  102ms (worker 98%, environment 2%)
+

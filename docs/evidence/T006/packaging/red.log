@@ -1,0 +1,56 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/runtime-links.test.ts (2 tests | 2 failed) 23ms
+   × repairs copied links and remains usable after the build source is removed 19ms
+   × refuses an upstream dependency that escapes the staged runtime 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/runtime-links.test.ts > repairs copied links and remains usable after the build source is removed
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ packages/crew/tests/runtime-links.test.ts:15:47
+     13|   await symlink('store/runtime.js', join(source, 'entry.js'));
+     14|   await cp(source, target, { recursive: true });
+     15|   await expect(assertRuntimeContained(target)).rejects.toThrow();
+       |                                               ^
+     16|   await repairRuntimeLinks(source, target);
+     17|   await rm(source, { recursive: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/crew/tests/runtime-links.test.ts > refuses an upstream dependency that escapes the staged runtime
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ packages/crew/tests/runtime-links.test.ts:26:79
+     24|   await writeFile(join(root, 'outside'), 'private');
+     25|   await symlink('../outside', join(root, 'source/entry'));
+     26|   await expect(repairRuntimeLinks(join(root, 'source'), join(root, 'ta…
+       |                                                                               ^
+     27| });
+     28|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  01:35:30
+   Duration  231ms (transform 41%, tests 33%, import 19%, worker 7%)
