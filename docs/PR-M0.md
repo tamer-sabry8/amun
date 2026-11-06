@@ -12,16 +12,18 @@ Adds the sandboxed Electron shell, recoverable service process, pinned Pi/Firstm
 
 ## Validation
 
-171 unit/integration tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
+179 unit/integration tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
 
 Three process-cold launches with warm caches measured 713/502/324 ms to Connected, summed Electron working set 481/481/480 MiB and proof-terminal echo 16/22/13 ms. These are a local baseline, not clean-account or release acceptance; see ADR-008.
 
 ## Open exit gates
 
-M0 remains incomplete. T006 service/UI stream, model list, dialogs and both provider inference proofs now pass; final acceptance audit remains open. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
+M0 remains incomplete. T006 M0 acceptance now passes for service/UI projection, models, dialogs, both providers and packaged isolated operation. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 backend attachment passes source/package; Finder confirmation remains pending. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
 
 ## Service and ownership continuation
 
 Bounded Pi text/dialog projection now reaches the renderer; real offline select/confirm round-trips pass source and packaged tests. A checksum-guarded bundled-only Firstmate patch fixes Codex restricted-mode inheritance, with actual source/package propagation evidence. Private endpoint receipts and read-only tmux observation refuse identity mismatches; worker liveness remains unknown until real dispatch/restart acceptance. T010 is explicitly blocked at the user's request; other M0 work continues.
 
 Real Git worktree provisioning now replaces copied operational homes. Official Codex and Claude sign-ins and no-tool inference pass in separate Amun profiles. A bounded login helper opens the official authorization URL in Chrome; it does not copy cookies or expose credentials. Real worker reattachment remains open.
+
+Latest live evidence: source and packaged service each survive ten restarts while the same real Codex/Claude worker process IDs and start times remain unchanged, with zero duplicate workers. Native read-only backend terminal attachment, explicit control, resize and ownership-loss refusal pass in both builds. T007 actionable wake handling and T008 production dispatch/Run integration remain open. An unintended Claude background update was disclosed; update guards are now tested and restoration of the shared launcher awaits the user's decision.

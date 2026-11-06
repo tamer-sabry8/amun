@@ -1,3 +1,7 @@
+import { CrewObserver } from "../../service/src/crew-observer.ts";
+import { observeOwnedTmux } from "../../../packages/crew/src/observe-owned-tmux.ts";
+import { openBackendTerminal } from "../../service/src/backend-terminal.ts";
+import { backendTerminalOpen } from "../../../packages/contracts/src/terminal.ts";
 import { piOpen } from "../../../packages/contracts/src/index.ts";
 import { openPiProtocol } from "../../service/src/pi-runtime.ts";
 import { type PiSession } from "../../service/src/pi-session.ts";
@@ -16,7 +20,9 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
-  const terminal = new TerminalSession(
+  let backendOpening = false;
+  let backendEpoch = 0;
+  let terminal = new TerminalSession(
     () => {
       const modulePath = process.env.AMUN_TERMINAL_MODULE;
       if (!modulePath) throw new Error("Terminal runtime unavailable");
@@ -41,10 +47,69 @@ process.parentPort?.on("message", (event) => {
     (message) => port.postMessage(message),
   );
   sessions.add(terminal);
+  const crew = new CrewObserver(
+    async (id) => {
+      const root = process.env.AMUN_CREW_RECEIPTS;
+      const binary = process.env.AMUN_TMUX_BINARY;
+      if (!root || !binary) return { endpoint: "unknown", worker: "unknown" };
+      return observeOwnedTmux(root, id, binary);
+    },
+    (event) => port.postMessage(event),
+  );
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
-    else if (piOpen.safeParse(message.data).success) {
+    else if (backendTerminalOpen.safeParse(message.data).success) {
+      if (backendOpening) return;
+      const request = backendTerminalOpen.parse(message.data);
+      backendOpening = true;
+      const epoch = ++backendEpoch;
+      terminal.close();
+      sessions.delete(terminal);
+      const root = process.env.AMUN_CREW_RECEIPTS,
+        binary = process.env.AMUN_TMUX_BINARY,
+        modulePath = process.env.AMUN_TERMINAL_MODULE;
+      if (!root || !binary || !modulePath) {
+        backendOpening = false;
+        return;
+      }
+      const native = requireNative(modulePath) as {
+        spawn: (
+          file: string,
+          args: string[],
+          options: unknown,
+        ) => Pty & { pid: number };
+      };
+      void openBackendTerminal(
+        root,
+        request.taskId,
+        binary,
+        (file, args, options) => native.spawn(file, args, options),
+      )
+        .then((pty) => {
+          if (closed || epoch !== backendEpoch) {
+            pty.kill();
+            return;
+          }
+          terminal = new TerminalSession(
+            () => pty,
+            (event) => port.postMessage(event),
+          );
+          sessions.add(terminal);
+          terminal.handle({ version: 1, kind: "terminal", action: "open" });
+        })
+        .catch(() => {
+          if (!closed)
+            port.postMessage({
+              version: 1,
+              kind: "terminal-state",
+              state: "unavailable",
+            });
+        })
+        .finally(() => {
+          backendOpening = false;
+        });
+    } else if (piOpen.safeParse(message.data).success) {
       if (opening || pi) return;
       opening = true;
       const binary = process.env.AMUN_PI_BINARY;
@@ -78,7 +143,14 @@ process.parentPort?.on("message", (event) => {
           opening = false;
         });
     } else {
-      terminal.handle(message.data);
+      void crew.handle(message.data);
+      if (
+        backendOpening &&
+        message.data?.kind === "terminal" &&
+        message.data?.action === "close"
+      )
+        backendEpoch++;
+      if (!backendOpening) terminal.handle(message.data);
       void pi?.handle(message.data);
       if (message.data?.kind === "pi" && message.data?.action === "close")
         pi = undefined;
@@ -86,6 +158,7 @@ process.parentPort?.on("message", (event) => {
   });
   port.on("close", () => {
     closed = true;
+    crew.close();
     pi?.close();
     terminal.close();
     sessions.delete(terminal);

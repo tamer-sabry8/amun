@@ -34,3 +34,16 @@ export const endpointReceipt = z
       /^tmux-[0-9]+\/default$/.test(value.socket.slice(value.scope.length + 1)),
   );
 export type EndpointReceipt = z.infer<typeof endpointReceipt>;
+
+export const crewObserve = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-observe"),
+  taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+});
+export const crewObservation = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-observation"),
+  taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+  endpoint: z.enum(["verified", "unknown"]),
+  worker: z.literal("unknown"),
+});

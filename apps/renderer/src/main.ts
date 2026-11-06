@@ -1,7 +1,7 @@
 import { resetServiceUI } from "./service-loss.js";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { piEvent, terminalEvent } from "@amun/contracts";
+import { piEvent, terminalEvent, crewObservation } from "@amun/contracts";
 import { healthRequest, healthResponse } from "@amun/contracts";
 
 let currentPort: MessagePort | undefined;
@@ -30,6 +30,13 @@ window.addEventListener("message", (event) => {
   const id = crypto.randomUUID();
   port.onmessage = (message) => {
     if (port !== currentPort) return;
+    const crewMessage = crewObservation.safeParse(message.data);
+    if (crewMessage.success) {
+      const label = document.getElementById("crew-observation");
+      if (label)
+        label.textContent = `${crewMessage.data.taskId}: endpoint ${crewMessage.data.endpoint}; worker ${crewMessage.data.worker}`;
+      return;
+    }
     const piMessage = piEvent.safeParse(message.data);
     if (piMessage.success) {
       const event = piMessage.data;
@@ -234,3 +241,28 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
       provider: button.dataset.piProvider,
     });
   });
+
+document.getElementById("observe-crew")?.addEventListener("click", () => {
+  const taskId = (document.getElementById("crew-task") as HTMLInputElement)
+    ?.value;
+  currentPort?.postMessage({ version: 1, kind: "crew-observe", taskId });
+});
+
+document.getElementById("attach-backend")?.addEventListener("click", () => {
+  const taskId = (document.getElementById("crew-task") as HTMLInputElement)
+    ?.value;
+  window.postMessage(
+    { kind: "amun-browser-command", command: { action: "close" } },
+    "*",
+  );
+  if (dock) dock.hidden = false;
+  terminal.clear();
+  const output = document.getElementById("terminal-output");
+  if (output) output.textContent = "";
+  currentPort?.postMessage({
+    version: 1,
+    kind: "terminal",
+    action: "attach-backend",
+    taskId,
+  });
+});

@@ -62,7 +62,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: `utilityProcess` service; typed request/response + event stream over MessagePort; health method; restart on crash with backoff.
       Tests: RPC round-trip; service crash → UI shows "Reconnecting" → recovers.
       DoD: kill service PID during E2E; UI recovers in < 5 s.
-- [ ] **T006 — Bundled Pi in RPC mode** · P0 · TS · Dep T005
+- [x] **T006 — Bundled Pi in RPC mode** · P0 · TS · Dep T005
       Build: `runtime/pi` pinned package + lockfile; spawn via Electron-as-Node (`ELECTRON_RUN_AS_NODE`) or bundled Node (decide by spike; record ADR); env `PI_CODING_AGENT_DIR`, `PI_SKIP_VERSION_CHECK=1`; JSONL client splitting on LF only (do not use Node `readline`); request ids; event stream; `extension_ui_request` → Amun request.
       Tests: replay fixtures for `get_state`, `get_available_models`, prompt streaming, extension UI select/confirm; live: `pi auth check --json` per provider.
       DoD: packaged app, no global Pi on PATH, lists Copilot and OpenRouter models after Amun-scoped sign-in.
@@ -213,3 +213,13 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T007: actual copied-home dispatch failure exposed the Git worktree requirement. Amun-owned snapshot Git store + genuine worktree provisioning is now tested, and real Firstmate Codex spawn succeeds; see [worktree evidence](evidence/T007/git-worktree-homes.md).
 - T008: official isolated Codex and Claude sign-ins and real no-tool inference now pass. Firstmate worker completion and ten service-restart reattachment trials remain open.
+
+## Current acceptance checkpoint (2026-11-06)
+
+- T006 complete for M0: bounded service/UI model, stream and select/confirm handling; real source/packaged OpenRouter and GitHub Copilot inference with empty PATH; explicit selected Pi credential reuse and crash cleanup. See T006/authenticated-ui.md. General auth/onboarding remains later scope.
+- T007: real Git worktree ownership and explicit watcher stop/rearm pass source/package. Existing configuration import and 63 tracked skill files + one internal link are verified without changing personal files. Actionable wakes and automatic recovery remain open.
+- T008: real Codex + Claude dispatch and ten real service restarts each in source/package pass with stable worker PIDs/start times and zero duplicates. Production dispatch/receipt publication and Run mapping remain open; worker semantic state remains unknown.
+- T011: actual worker attachment, native read-only default, explicit control, resize, ownership-loss refusal and client-only detach pass source/package. Finder manual result pending.
+- T012: current process-cold/warm-cache launches 322/317/330 ms, summed Electron working set 481 MiB, echo 13/13/12 ms. Clean-account installation and signing/notarization remain open.
+- Personal CLI version issue: Claude's updater changed its shared launcher from 2.1.311 to 2.1.319 during the first worker run. Amun update guards are now tested; the user's decision on restoring the launcher is pending.
+- T010 remains blocked. No M1/M2 work or merge.

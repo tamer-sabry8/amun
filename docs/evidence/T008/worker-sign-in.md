@@ -15,3 +15,9 @@ The user completed Claude login after restoring normal HOME while retaining the 
 The separate profile now reports loggedIn=true. A real Claude print-mode inference with safe-mode, strict MCP configuration, no tools, auto permissions and no session persistence returned AMUN_CLAUDE_OK with a successful result and exit 0.
 
 The earlier login helper omitted the actual claude.com authorization host, so it failed to open the emitted URL. The committed visible-Terminal helper `node scripts/worker-login.ts claude` recognizes the exact official authorization host/path and opens Chrome with argument-array execution. Tests reject lookalikes, credential-bearing URLs, alternate ports/paths and excessive input; split output waits for a complete URL and opens only once. Official codes remain local Terminal input. The helper's URL-opening callback is unit-tested; a fresh live OAuth round-trip has not been repeated after the already successful login.
+
+## Unintended CLI update and correction
+
+The first real Claude worker was launched without disabling its updater. During acceptance the shared ~/.local/bin/claude symlink changed from retained 2.1.311 to 2.1.319. This violated the intended version-preservation boundary and was disclosed to the user. Restoration of that shared launcher was requested explicitly and remains pending; no automatic rollback was performed. Existing worker processes remain on their originally launched executable.
+
+Amun's own worker environment and separate Claude profile now set DISABLE_UPDATES=1 and DISABLE_AUTOUPDATER=1; tests require these flags. The canonical AGENTS.md records that launchers must disable updates before execution and verify installed versions. The documented flags are at https://code.claude.com/docs/en/env-vars. Amun-owned profiles also disable account-linked Claude MCP servers for this bounded proof.

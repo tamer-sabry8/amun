@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { createManagedHome } from "../packages/crew/src/managed-home.ts";
+import { createFirstmateWorktrees } from "../packages/crew/src/firstmate-worktree.ts";
 import {
   createTmuxScope,
   tmuxEnvironment,
@@ -40,7 +40,20 @@ try {
         `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/MacOS/Amun`,
       )
     : process.execPath;
-  const home = await createManagedHome(root, "managed", { backend: "tmux" });
+  const worktrees = await createFirstmateWorktrees(
+    distribution,
+    join(root, "git"),
+    ["managed"],
+  );
+  const home = worktrees.homes.managed!;
+  for (const directory of ["config", "state", "data", "projects"])
+    await mkdir(join(home, directory), { recursive: true, mode: 0o700 });
+  for (const [name, value] of Object.entries({
+    backend: "tmux",
+    "claude-permission-mode": "auto",
+    "codex-permission-mode": "restricted",
+  }))
+    await writeFile(join(home, "config", name), value + "\n", { mode: 0o600 });
   const config = join(root, "pi-config");
   await mkdir(config, { mode: 0o700 });
   const extension = join(root, "owner-proof.ts");
@@ -53,7 +66,7 @@ try {
     HOME: root,
     PATH: "/usr/bin:/bin:/opt/homebrew/bin",
     FM_HOME: home,
-    FM_ROOT_OVERRIDE: distribution,
+    FM_ROOT_OVERRIDE: home,
     PI_CODING_AGENT_DIR: config,
     PI_SKIP_VERSION_CHECK: "1",
     PI_OFFLINE: "1",
@@ -71,7 +84,7 @@ try {
       "--extension",
       extension,
     ],
-    { cwd: distribution, env, stdio: ["pipe", "pipe", "pipe"] },
+    { cwd: home, env, stdio: ["pipe", "pipe", "pipe"] },
   );
   let outcome = "unobserved";
   let modelTurns = 0;
@@ -164,8 +177,8 @@ try {
       ).trim();
       await promisify(execFile)(
         "/bin/bash",
-        [join(distribution, "bin/fm-watch-arm.sh"), "--stop"],
-        { cwd: distribution, env, timeout: 15000 },
+        [join(home, "bin/fm-watch-arm.sh"), "--stop"],
+        { cwd: home, env, timeout: 15000 },
       );
       await client.request("prompt", { message: "/fm-watch-arm-pi" });
       for (let attempt = 0; attempt < 40; attempt++) {
@@ -199,6 +212,7 @@ try {
         packaged,
         outcome,
         lockMatchesPiProcess: lockMatches,
+        realGitWorktree: true,
         watcherLive,
         recovered,
         workerDispatches: 0,
@@ -223,8 +237,8 @@ try {
     clearTimeout(force);
     await promisify(execFile)(
       "/bin/bash",
-      [join(distribution, "bin/fm-watch-arm.sh"), "--stop"],
-      { cwd: distribution, env, timeout: 15000 },
+      [join(home, "bin/fm-watch-arm.sh"), "--stop"],
+      { cwd: home, env, timeout: 15000 },
     ).catch(() => {
       process.exitCode = 1;
     });

@@ -15,3 +15,9 @@ The `--watch --recover` probe first failed with `recovered:false` (adjacent red 
 ## Worker permission blocker
 
 Read-only inspection of pinned `bin/fm-config-inherit-lib.sh` line 96 shows that the inherited item set includes `claude-permission-mode` and `codex-approval-mode`, but omits `codex-permission-mode`. The documented environment override is test-only. Setting restricted mode only on the primary is therefore insufficient evidence for secondmate workers. Worker dispatch remains gated pending an Amun compatibility implementation and live propagation proof. No personal installation was patched or upgraded.
+
+## Git worktree and import continuation
+
+The owned-watcher script now provisions an actual Git worktree from the pinned snapshot. Source and packaged runs still prove exact Pi lock ownership, live watcher/heartbeat and explicit stop/rearm recovery. Actionable wake consumption and automatic crash recovery remain unproven.
+
+Read-only inspection of the existing Mac Firstmate checkout found no additional untracked skill files. A disposable real Amun worktree imported crew-dispatch.json and secondmate-harness literally, kept the user's explicit tmux choice instead of importing Herdr, and forced auto/restricted permissions. All four selected personal config hashes were unchanged. The bundle matched 63 tracked skill files plus one verified internal skill link; no duplicate skill installation was needed. No imported configuration was executed and no credential file was read by this import proof.

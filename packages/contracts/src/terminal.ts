@@ -30,3 +30,9 @@ export const terminalEvent = z.discriminatedUnion("kind", [
   }),
 ]);
 export type TerminalEvent = z.infer<typeof terminalEvent>;
+
+export const backendTerminalOpen = z.strictObject({
+  ...base,
+  action: z.literal("attach-backend"),
+  taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+});

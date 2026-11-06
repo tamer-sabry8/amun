@@ -1,0 +1,9 @@
+# Real backend terminal attachment — 2026-11-06
+
+The service attaches node-pty to a verified existing private tmux endpoint using `-N` (never start a server) and `attach-session -r`. The renderer uses xterm. Input is blocked by Amun and by tmux's own read-only flag. Explicit take-control revalidates the persisted receipt and ownership, identifies only its own PTY client by PID/TTY, and changes that client's flags. The state is verified again before control is reported. Delayed grants cannot re-enable input after release/disconnect. Closing kills the attaching PTY client only, not the worker/server.
+
+Live red evidence: tmux 3.8 `refresh-client -f !read-only` returned success but left read-only enabled. Its installed manual specifies `switch-client -r` for the transition. The corrected adapter reads the current state, toggles only when necessary with `-E` to avoid environment updates, and requires the resulting state to match. Tests cover ambiguous/missing client IDs, invalid TTYs and invalid states.
+
+Both source and unsigned packaged app tests attached to the actual Codex worker, displayed its previous completed reply, blocked a read-only input canary, enabled a draft canary after explicit control, erased that draft without Enter, resized to 100x30, returned to read-only and detached while preserving worker panes. No new model request was submitted. A second attachment refused control and closed its client after deliberate ownership mismatch; the original owner token was restored.
+
+The package also passes six Electron E2E tests. A real Finder launch was opened for manual confirmation; its result remains pending, so T011 remains open. This proof is not the final terminal product UX.

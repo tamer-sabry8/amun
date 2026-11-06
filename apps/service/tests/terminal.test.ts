@@ -82,3 +82,33 @@ it("bounds terminal output instead of queueing an unlimited flood", () => {
     state: "unavailable",
   });
 });
+
+it("waits for backend control authorization and never re-enables after a later release", async () => {
+  let grant: () => void = () => {};
+  const pty = {
+    write: vi.fn(),
+    resize: vi.fn(),
+    kill: vi.fn(),
+    onData: vi.fn(),
+    onExit: vi.fn(),
+    setControl: vi.fn((enabled: boolean) =>
+      enabled
+        ? new Promise<void>((resolve) => {
+            grant = resolve;
+          })
+        : Promise.resolve(),
+    ),
+  };
+  const send = vi.fn(),
+    session = new TerminalSession(() => pty, send);
+  session.handle(command("open"));
+  session.handle(command("take-control"));
+  session.handle(command("input", { data: "blocked" }));
+  expect(pty.write).not.toHaveBeenCalled();
+  session.handle(command("release-control"));
+  grant();
+  await Promise.resolve();
+  await Promise.resolve();
+  session.handle(command("input", { data: "still blocked" }));
+  expect(pty.write).not.toHaveBeenCalled();
+});

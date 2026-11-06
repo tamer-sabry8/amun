@@ -1,5 +1,6 @@
 import { terminalCommand, type TerminalEvent } from "@amun/contracts";
 export interface Pty {
+  setControl?(enabled: boolean): Promise<void>;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   kill(): void;
@@ -9,6 +10,7 @@ export interface Pty {
 export class TerminalSession {
   private pty: Pty | undefined;
   private control = false;
+  private controlEpoch = 0;
   private outputSize = 0;
   private spawn: () => Pty;
   private send: (event: TerminalEvent) => void;
@@ -61,10 +63,37 @@ export class TerminalSession {
       }
       if (!this.pty) return;
       if (command.action === "take-control") {
-        this.control = true;
-        this.state("control");
+        const pty = this.pty;
+        const epoch = ++this.controlEpoch;
+        this.control = false;
+        const grant = () => {
+          if (this.pty === pty && this.controlEpoch === epoch) {
+            this.control = true;
+            this.state("control");
+          }
+        };
+        if (pty.setControl)
+          void pty
+            .setControl(true)
+            .then(grant)
+            .catch(() => {
+              if (this.pty === pty) {
+                this.close();
+                this.state("unavailable");
+              }
+            });
+        else grant();
       } else if (command.action === "release-control") {
         this.control = false;
+        this.controlEpoch++;
+        const pty = this.pty;
+        if (pty.setControl)
+          void pty.setControl(false).catch(() => {
+            if (this.pty === pty) {
+              this.close();
+              this.state("unavailable");
+            }
+          });
         this.state("readonly");
       } else if (command.action === "input" && this.control)
         this.pty.write(command.data);
@@ -78,6 +107,7 @@ export class TerminalSession {
   close(): void {
     const pty = this.pty;
     this.pty = undefined;
+    this.controlEpoch++;
     this.control = false;
     try {
       pty?.kill();

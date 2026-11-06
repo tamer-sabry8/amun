@@ -1,0 +1,24 @@
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/crew-observer.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/crew-observer.test.ts [ apps/service/tests/crew-observer.test.ts ]
+Error: Cannot find module '../src/crew-observer.ts' imported from /Users/tamersabry/Projects/amun/apps/service/tests/crew-observer.test.ts
+ ❯ apps/service/tests/crew-observer.test.ts:2:1
+      1| import {it,expect,vi} from 'vitest';
+      2| import {CrewObserver} from '../src/crew-observer.ts';
+       | ^
+      3| it('observes only validated task identifiers and projects no raw backe…
+      4|  const read=vi.fn(async()=>({endpoint:'verified',worker:'unknown',secr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  13:37:04
+   Duration  96ms (worker 98%, environment 2%)
+

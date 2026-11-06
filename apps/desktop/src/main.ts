@@ -33,6 +33,11 @@ function startService(): void {
       serviceName: "Amun Service",
       env: {
         ...process.env,
+        AMUN_CREW_RECEIPTS: join(app.getPath("userData"), "crew", "receipts"),
+        AMUN_TMUX_BINARY:
+          process.platform === "darwin"
+            ? "/opt/homebrew/bin/tmux"
+            : "/usr/bin/tmux",
         AMUN_PI_BINARY: process.execPath,
         AMUN_PI_ENTRY: app.isPackaged
           ? join(

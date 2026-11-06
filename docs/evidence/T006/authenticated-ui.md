@@ -10,4 +10,4 @@ TDD: model readiness/projection and stored-credential tests failed before implem
 
 Validation for the commit containing this evidence: 166 unit tests, lint, typecheck and formatting; six source and six packaged Electron E2E tests; final packaged live UI inference for both providers. Adjacent logs contain sanitized results. A local browser fixture intermittently failed in earlier runs; diagnostic-only state capture was added, and final source/package runs passed without retries. Its cause is not established. T010 authentication remains blocked separately.
 
-The M0 Pi proof is implemented, but T006 stays open pending a final acceptance audit against the complete fixture and credential-lifecycle requirements. No broader onboarding/auth broker or finished product UI is claimed.
+The acceptance audit confirms T006 complete for M0: protocol fixtures and live dialogs, bounded service/UI streaming and model projection, real inference for both selected providers, packaged empty-PATH operation, selected credential reuse and service-crash cleanup are covered. No broader onboarding/auth broker or finished product UI is claimed.

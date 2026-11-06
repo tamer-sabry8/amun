@@ -1,0 +1,11 @@
+# Real Firstmate workers and service recovery — 2026-11-06
+
+The pinned Firstmate seed/spawn commands dispatched a real Codex secondmate and Claude secondmate in separate Amun-owned Git worktrees on one private tmux server. The Codex task record reports restricted permissions; Claude reports auto. Their real interactive sessions completed AMUN_CODEX_OK and AMUN_CLAUDE_OK respectively, after only the new worktrees' CLI setup/trust prompts were handled. These are additional to the earlier no-tool CLI inference tests.
+
+The service now reads private persisted endpoint receipts and actual Firstmate task records. Its read-only observer validates socket ownership, owner token, server/pane identity, worktree and spawn generation. Only bounded typed observations cross the renderer boundary. It has no spawn capability. Service loss clears the visible observation to unknown; delayed disconnected results are suppressed.
+
+Source and packaged acceptance each killed the real Amun service ten times. Every trial re-read the same two receipts and task records and reconnected observation over the new service port. Pane/server identity, actual Codex/Claude process IDs and process start times remained unchanged, with zero duplicate workers. A deliberate owner-token mismatch returned unknown. The actual Codex process tree includes its CLI and profile-scoped app-server process; both were included in the stable-process comparison. Runtime UI deliberately reports worker=unknown because a verified endpoint is not a semantic worker-state guarantee.
+
+An early live trial correctly rejected the Claude task record's 0644 mode. The acceptance launcher had omitted the private umask. That acceptance-owned file was tightened to 0600 before the successful trials; future dispatch must establish umask 077 before Firstmate writes records. This was not a relaxed security check. Another early UI failure exposed listener registration before its DOM element; the proof controls now precede the renderer script.
+
+Remaining T008 work: integrate receipt publication with the production managed-dispatch lifecycle and complete the Run mapping. The live restart acceptance is now real evidence, not the earlier synthetic sleep-pane test. M0 remains incomplete.

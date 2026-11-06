@@ -1,3 +1,4 @@
+import { workerEnvironment } from "../packages/crew/src/worker-environment.ts";
 /** Run in a visible local Terminal. Never redirect login output into evidence/chat. */
 import { spawn, execFile } from "node:child_process";
 import { homedir, userInfo } from "node:os";
@@ -34,13 +35,12 @@ const bridge = new WorkerLoginBrowser(tool, (url) => {
   });
 });
 const env = {
+  ...workerEnvironment(tool, homedir(), root, process.execPath),
   USER: userInfo().username,
   LOGNAME: userInfo().username,
-  HOME: tool === "claude" ? homedir() : join(root, "home"),
-  PATH: join(process.execPath, "..") + ":/usr/bin:/bin",
   TMPDIR: process.env.TMPDIR ?? "/tmp",
-  [tool === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"]: join(root, "state"),
 };
+
 const child = spawn(
   join(homedir(), ".local/bin", tool),
   tool === "claude" ? ["auth", "login", "--claudeai"] : ["login"],
