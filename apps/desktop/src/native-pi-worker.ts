@@ -1,4 +1,10 @@
 import {
+  NativePiPreferences,
+  type PreferenceSession,
+} from "../../../packages/crew/src/native-pi-preferences.ts";
+import { userInfo } from "node:os";
+import { SubscriptionWorker } from "../../../packages/crew/src/subscription-worker.ts";
+import {
   NativePiSessions,
   type NativeSessionRuntime,
 } from "../../../packages/crew/src/native-pi-sessions.ts";
@@ -19,7 +25,7 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: NativePiSession;
+  session: NativePiSession & PreferenceSession;
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
@@ -140,7 +146,41 @@ process.stdin.on("data", (chunk: string) => {
       }
       busy = true;
       void (async () => {
+        if (["worker-status", "worker-inference"].includes(command.command)) {
+          if (command.argument !== "codex" && command.argument !== "claude")
+            throw Error("Unsupported worker");
+          const worker = new SubscriptionWorker({
+            home: userInfo().homedir,
+            binary: process.execPath,
+            tool: command.argument,
+          });
+          const text =
+            command.command === "worker-status"
+              ? await worker.status()
+              : await worker.infer();
+          send(command.id, { kind: "message", text });
+          return;
+        }
         if (!runtime) await initialize();
+        if (command.command === "cycle-model") {
+          send(
+            command.id,
+            await new NativePiPreferences(runtime!.session).cycle(
+              command.argument,
+            ),
+          );
+          return;
+        }
+        if (command.command === "scoped-models") {
+          send(
+            command.id,
+            await new NativePiPreferences(runtime!.session).run(
+              command.command,
+              command.argument,
+            ),
+          );
+          return;
+        }
         const result = ["new", "resume", "fork", "clone", "tree"].includes(
           command.command,
         )

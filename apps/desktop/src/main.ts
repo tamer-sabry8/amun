@@ -1,3 +1,4 @@
+import { installPiClipboard } from "./pi-clipboard.ts";
 import { randomBytes } from "node:crypto";
 import { installBackup } from "./backup-ui.ts";
 import { execFile } from "node:child_process";
@@ -165,6 +166,7 @@ function openWindow(): void {
     },
   });
   installBrowser(window, "m0");
+  installPiClipboard(window);
   installBackup(
     window,
     (job) =>

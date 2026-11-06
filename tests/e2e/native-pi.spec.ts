@@ -32,6 +32,23 @@ test("native Pi commands create an owned SDK session and update its real name", 
     content: [{ type: "text", text: "Saved session fixture" }],
     timestamp: Date.now(),
   });
+  saved.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "Native clipboard acceptance" }],
+    api: "openai-responses",
+    provider: "openai",
+    model: "fixture",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  });
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
@@ -105,6 +122,34 @@ test("native Pi commands create an owned SDK session and update its real name", 
     );
     await page
       .getByLabel("Native Pi command", { exact: true })
+      .selectOption("copy");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Native clipboard acceptance",
+    );
+    const clipboardBefore = await app.evaluate(({ clipboard }) =>
+      clipboard.readText(),
+    );
+    try {
+      await page
+        .getByRole("button", { name: "Copy reply to clipboard", exact: true })
+        .click();
+      await expect(page.getByTestId("native-pi-result")).toContainText(
+        "Copied to clipboard",
+      );
+      expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(
+        "Native clipboard acceptance",
+      );
+    } finally {
+      await app.evaluate(
+        ({ clipboard }, value) => clipboard.writeText(value),
+        clipboardBefore,
+      );
+    }
+    await page
+      .getByLabel("Native Pi command", { exact: true })
       .selectOption("clone");
     await page
       .getByRole("button", { name: "Run command", exact: true })
@@ -139,6 +184,18 @@ test("native Pi commands create an owned SDK session and update its real name", 
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Session change completed",
     );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("quit");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Open Pi commands", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Connected" }),
+    ).toBeVisible();
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

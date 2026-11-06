@@ -98,10 +98,13 @@ export class NativePiProcess {
       child.once("exit", finished);
     }
     this.pending = command.id;
-    this.timer = setTimeout(() => {
-      this.failure();
-      this.close();
-    }, 60000);
+    this.timer = setTimeout(
+      () => {
+        this.failure();
+        this.close();
+      },
+      command.command === "worker-inference" ? 120000 : 60000,
+    );
     this.timer.unref();
     this.child.stdin.write(JSON.stringify(command) + "\n");
   }

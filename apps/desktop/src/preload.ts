@@ -34,3 +34,14 @@ ipcRenderer.on("amun-backup-status", (_event, message: unknown) => {
 ipcRenderer.on("amun-shell-shortcut", (_event, input: unknown) =>
   window.postMessage({ kind: "amun-shell-shortcut", input }, "*"),
 );
+
+window.addEventListener("message", (event) => {
+  if (
+    event.source === window &&
+    event.data?.kind === "amun-pi-clipboard-command"
+  )
+    ipcRenderer.send("amun-pi-clipboard", event.data.command);
+});
+ipcRenderer.on("amun-pi-clipboard-status", (_event, result: unknown) => {
+  window.postMessage({ kind: "amun-pi-clipboard-status", result }, "*");
+});
