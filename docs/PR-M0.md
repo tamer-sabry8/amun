@@ -21,7 +21,7 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 - 66 local unit tests pass, with recorded failing tests before implementation.
 - macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
-- Latest CI also builds the unsigned Mac package, probes bundled Pi and repeats both Electron tests against the packaged executable.
+- macOS run 42145190729 passed all 66 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, and both packaged launch/isolation and crash-recovery tests.
 
 ## Remaining M0 gates
 
