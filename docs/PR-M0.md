@@ -18,4 +18,4 @@ Three process-cold launches with warm caches measured 713/502/324 ms to Connecte
 
 ## Open exit gates
 
-M0 remains incomplete. T006 needs service/UI stream and dialog integration. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 needs an allowed authenticated site. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
+M0 remains incomplete. T006 needs service/UI stream and dialog integration. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.

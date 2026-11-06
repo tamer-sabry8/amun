@@ -32,7 +32,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Packaged authenticated inference now passes for both providers; renderer integration remains open. See [evidence](evidence/T006/rpc-client.md).
 
-- Local Mac baseline and installation inventory completed: see [local evidence](evidence/M0-local-mac.md). T010 now has a live local prototype/security/redirect proof; real authenticated browsing remains open.
+- Local Mac baseline and installation inventory completed: see [local evidence](evidence/M0-local-mac.md). T010 now has a live local prototype/security/redirect proof; real authenticated browsing remains open. The GitHub → Google sign-in attempt was rejected by Google in the embedded browser; see T010 evidence.
 
 ## Current blockers
 
@@ -194,6 +194,6 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T006: packaged OpenRouter inference passed; provider-specific GitHub Copilot OAuth proof is tracked separately. Renderer streaming/dialog integration remains open.
 - T007: actual Pi-owned lock and fresh real watcher pass in source and packaged CLI-entry execution; wake/recovery and policy propagation remain open.
-- T010: local prototype/redirect/security tests pass in source and packaged apps. Azure DevOps is prohibited as its browser test target; real authenticated browsing remains open.
+- T010: local prototype/redirect/security tests pass in source and packaged apps. Azure DevOps is prohibited as its browser test target; real authenticated browsing remains open. The GitHub → Google sign-in attempt was rejected by Google in the embedded browser; see T010 evidence.
 - T011: native service PTY + xterm echo/resize/read-only tests pass source and packaged. Verified worker attachment and real Finder launch remain open.
 - T012: measured provisional process-start, working-set and terminal-echo baseline; signing/notarization and clean-account installation remain open.
