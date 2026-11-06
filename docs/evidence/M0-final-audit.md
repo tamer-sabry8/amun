@@ -17,6 +17,8 @@ Local acceptance is complete for the user-revised M0. Final head CI and merge ve
 | T011 | `T011/backend-attachment.md`: real backend read-only/control/resize/detach, native ABI, source/package output; user confirmed actual Finder launch FINDER_OK and 24 80                                                                                                                      | Pass                              |
 | T012 | `T012/m0-final-performance.json`, ADR-008/009: unsigned package includes pinned runtimes/native dependencies; 330–365 ms process startup, 485 MiB working set, 13–19 ms terminal echo                                                                                                       | Pass under explicit revised scope |
 
+Supplemental owned-process measurement: one consistent `ps` RSS sample measured 482 MiB across five app processes plus 219 MiB across eleven private tmux/worker descendants, 701 MiB combined. This excludes unrelated personal sessions, includes shared-page double counting, and describes idle Codex/Claude workers without active Pi inference. The 500 MiB foundation-shell budget is not a whole-crew budget. See `T012/owned-crew-memory.json`.
+
 Final local checks: 191 unit tests; lint, typecheck and formatting; eight source and eight packaged Electron tests; current packaged runtime containment/startup probes; live source/package reattachment and supervision; native Chrome handoff. Pure preview/Run/ack modules: 100% lines and branches; browser adapter: 90.43% lines. Coverage is enforced in CI for these modules. The existing source/package Firstmate permission and private tmux isolation gates remain in CI.
 
 ## Explicit boundaries, not passed release/product claims

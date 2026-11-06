@@ -1,0 +1,16 @@
+{
+  "packaged": true,
+  "measurement": "ps resident-set sum; shared pages may be double counted",
+  "appProcessCount": 5,
+  "appRssMiB": 482,
+  "ownedCrewProcessCount": 11,
+  "ownedCrewRssMiB": 219,
+  "combinedRssMiB": 701,
+  "topology": "foundation shell plus existing idle Codex and Claude workers on private tmux; no active Pi inference",
+  "limitations": [
+    "Different sampling/API from Electron working-set baseline; do not subtract the figures",
+    "Not peak inference, clean-account or full-product memory",
+    "No unrelated personal processes included"
+  ],
+  "crewBudget": "observed baseline only; the 500 MiB foundation-shell budget does not cover external workers"
+}
