@@ -1,19 +1,54 @@
+import { cleanupExtension } from "./pi-cleanup.ts";
+import { pathToFileURL } from "node:url";
+import { selectedPiStoredCredential } from "../../../packages/crew/src/pi-inference.ts";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { tmpdir, homedir } from "node:os";
+import { join, dirname } from "node:path";
 import { type PiEvent } from "@amun/contracts";
 import { PiSession } from "./pi-session.ts";
-/** Offline protocol proof. No personal config, provider keys, skills or MCPs are loaded. */
+/** Isolated runtime with explicitly selected credential reuse; no personal config, skills or MCPs. */
 export async function openPiProtocol(
   binary: string,
   entry: string,
   send: (event: PiEvent) => void,
+  provider: "protocol" | "openrouter" | "github-copilot" = "protocol",
 ): Promise<PiSession> {
   const root = await mkdtemp(join(tmpdir(), "amun-pi-service-"));
   try {
     const config = join(root, "config");
     await mkdir(config, { mode: 0o700 });
+    const model =
+      provider === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-5.4-nano";
+    if (provider !== "protocol") {
+      const sdk = (await import(
+        pathToFileURL(join(dirname(dirname(entry)), "index.js")).href
+      )) as {
+        readStoredCredential: (provider: string, path: string) => unknown;
+      };
+      const credential = selectedPiStoredCredential(
+        provider,
+        sdk.readStoredCredential(
+          provider,
+          join(homedir(), ".pi/agent/auth.json"),
+        ),
+      );
+      await writeFile(
+        join(config, "auth.json"),
+        JSON.stringify({ [provider]: credential }),
+        { mode: 0o600, flag: "wx" },
+      );
+    }
+    await writeFile(
+      join(config, "settings.json"),
+      JSON.stringify({ retry: { enabled: false } }),
+      { mode: 0o600, flag: "wx" },
+    );
+    const cleanupPath = join(root, "cleanup.ts");
+    await writeFile(cleanupPath, cleanupExtension(root), {
+      mode: 0o600,
+      flag: "wx",
+    });
     const extension = join(root, "dialog-proof.ts");
     await writeFile(
       extension,
@@ -26,7 +61,9 @@ export async function openPiProtocol(
         entry,
         "--mode",
         "rpc",
-        "--offline",
+        ...(provider === "protocol"
+          ? ["--offline"]
+          : ["--provider", provider, "--model", model]),
         "--no-session",
         "--no-tools",
         "--no-extensions",
@@ -36,6 +73,8 @@ export async function openPiProtocol(
         "--no-context-files",
         "--extension",
         extension,
+        "--extension",
+        cleanupPath,
       ],
       {
         cwd: root,
@@ -44,7 +83,7 @@ export async function openPiProtocol(
           PATH: "",
           PI_CODING_AGENT_DIR: config,
           PI_SKIP_VERSION_CHECK: "1",
-          PI_OFFLINE: "1",
+          ...(provider === "protocol" ? { PI_OFFLINE: "1" } : {}),
           ELECTRON_RUN_AS_NODE: "1",
         },
         stdio: ["pipe", "pipe", "pipe"],
@@ -76,7 +115,14 @@ export async function openPiProtocol(
     child.once("error", cleanup);
     child.stdin.on("error", () => session.close());
     const timer = setTimeout(() => session.close(), 300000);
-    send({ version: 1, kind: "pi-state", state: "ready" });
+    try {
+      await session.ready(
+        provider === "protocol" ? undefined : { provider, model },
+      );
+    } catch {
+      session.close();
+      throw new Error("Pi readiness unavailable");
+    }
     return session;
   } catch {
     await rm(root, { recursive: true, force: true });

@@ -30,15 +30,30 @@ test("browser isolates a local prototype, redirects, popups, permissions and ser
     await expect(shell.getByRole("status")).toHaveText("Connected");
     await shell.getByLabel("M0 browser proof").fill(url, { timeout: 3000 });
     await shell.getByRole("button", { name: "Open browser" }).click();
-    await expect
-      .poll(() =>
-        app.evaluate(({ webContents }) =>
-          webContents
-            .getAllWebContents()
-            .some((w) => w.getURL().endsWith("/prototype")),
+    try {
+      await expect
+        .poll(() =>
+          app.evaluate(({ webContents }) =>
+            webContents
+              .getAllWebContents()
+              .some((w) => w.getURL().endsWith("/prototype")),
+          ),
+        )
+        .toBe(true);
+    } catch (error) {
+      console.log(
+        "Local browser fixture state",
+        await shell.locator("#browser-status").textContent(),
+        await app.evaluate(({ webContents }) =>
+          webContents.getAllWebContents().map((w) => ({
+            type: w.getType(),
+            url: w.getURL(),
+            loading: w.isLoading(),
+          })),
         ),
-      )
-      .toBe(true);
+      );
+      throw error;
+    }
     const result = await app.evaluate(async ({ webContents, session }) => {
       const web = webContents
         .getAllWebContents()

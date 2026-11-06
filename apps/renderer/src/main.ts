@@ -38,6 +38,15 @@ window.addEventListener("message", (event) => {
         if (label) label.textContent = event.state;
         if (event.state === "closed" || event.state === "unavailable")
           document.getElementById("pi-dialog")?.replaceChildren();
+      } else if (event.kind === "pi-models") {
+        const label = document.getElementById("pi-models");
+        if (label)
+          label.textContent =
+            `${event.models.length} available models: ` +
+            event.models
+              .map((model) => model.provider + "/" + model.id)
+              .join(", ")
+              .slice(0, 4096);
       } else if (event.kind === "pi-text") {
         const output = document.getElementById("pi-output");
         if (output)
@@ -211,3 +220,17 @@ document.getElementById("pi-form")?.addEventListener("submit", (event) => {
     message: input.value,
   });
 });
+
+for (const button of document.querySelectorAll<HTMLButtonElement>(
+  "[data-pi-provider]",
+))
+  button.addEventListener("click", () => {
+    const output = document.getElementById("pi-output");
+    if (output) output.textContent = "";
+    currentPort?.postMessage({
+      version: 1,
+      kind: "pi",
+      action: "open-provider",
+      provider: button.dataset.piProvider,
+    });
+  });

@@ -1,3 +1,7 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { writeFile, access } from "node:fs/promises";
+import { join } from "node:path";
 import { test, expect, _electron as electron } from "@playwright/test";
 test("Pi extension dialogs cross the service boundary with explicit answers", async () => {
   const app = await electron.launch({
@@ -57,6 +61,42 @@ test("service loss clears Pi dialogs and terminal control instead of replaying t
     await expect(page.locator("#pi-dialog")).toContainText(
       "Select proof option",
     );
+    const servicePid = await app.evaluate(
+      ({ app }) =>
+        app.getAppMetrics().find((p) => p.name === "Amun Service")?.pid,
+    );
+    if (!servicePid) throw new Error("Missing service");
+    const childPids = (
+      await promisify(execFile)("/usr/bin/pgrep", ["-P", String(servicePid)])
+    ).stdout
+      .trim()
+      .split("\n");
+    let privateRoot: string | undefined;
+    for (const pid of childPids) {
+      const listing = (
+        await promisify(execFile)("/usr/sbin/lsof", [
+          "-a",
+          "-p",
+          pid,
+          "-d",
+          "cwd",
+          "-Fn",
+        ])
+      ).stdout;
+      const candidate = listing
+        .split("\n")
+        .find(
+          (line) =>
+            line.startsWith("n/") && /\/amun-pi-service-[^/]+$/.test(line),
+        );
+      if (candidate) privateRoot = candidate.slice(1);
+    }
+    if (!privateRoot) throw new Error("No isolated Pi runtime found");
+    const canary = join(privateRoot, "config/acceptance-canary.json");
+    await writeFile(canary, JSON.stringify({ testOnly: "not-a-credential" }), {
+      mode: 0o600,
+      flag: "wx",
+    });
     await app.evaluate(({ app }) => {
       const service = app
         .getAppMetrics()
@@ -68,6 +108,19 @@ test("service loss clears Pi dialogs and terminal control instead of replaying t
     await expect(page.locator("#terminal-status")).toHaveText("unavailable");
     await expect(page.locator("#pi-status")).toHaveText("unavailable");
     await expect(page.getByRole("status")).toHaveText("Connected");
+    await expect
+      .poll(
+        async () => {
+          try {
+            await access(canary);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 10000 },
+      )
+      .toBe(false);
   } finally {
     await app.close();
   }

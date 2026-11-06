@@ -53,9 +53,15 @@ process.parentPort?.on("message", (event) => {
         opening = false;
         return;
       }
-      void openPiProtocol(binary, entry, (event) => {
-        if (!closed) port.postMessage(event);
-      })
+      const request = piOpen.parse(message.data);
+      void openPiProtocol(
+        binary,
+        entry,
+        (event) => {
+          if (!closed) port.postMessage(event);
+        },
+        request.action === "open-provider" ? request.provider : "protocol",
+      )
         .then((session) => {
           if (closed) session.close();
           else pi = session;

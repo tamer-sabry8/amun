@@ -98,3 +98,58 @@ it("validates only selected Copilot OAuth fields without losing provider metadat
       "Selected Copilot OAuth unavailable",
     );
 });
+
+it("selects a stored OpenRouter API key without accepting other credential kinds or fields", async () => {
+  const { selectedPiStoredCredential } = await import("../src/pi-inference.ts");
+  expect(
+    selectedPiStoredCredential("openrouter", {
+      type: "api_key",
+      key: "canary",
+      env: { SECRET: "not-copied" },
+    }),
+  ).toEqual({ type: "api_key", key: "canary" });
+  expect(() =>
+    selectedPiStoredCredential("openrouter", { type: "oauth", key: "canary" }),
+  ).toThrow();
+  expect(() =>
+    selectedPiStoredCredential("openrouter", { type: "api_key", key: "" }),
+  ).toThrow();
+});
+
+it("refuses executable or indirect API-key configuration in selected stored credentials", async () => {
+  const { selectedPiStoredCredential } = await import("../src/pi-inference.ts");
+  for (const key of [
+    "!echo secret",
+    "$(command)",
+    "`command`",
+    "env:SECRET",
+    "key\nother",
+  ])
+    expect(() =>
+      selectedPiStoredCredential("openrouter", { type: "api_key", key }),
+    ).toThrow();
+});
+
+it("preserves Pi's documented non-expiring OpenRouter OAuth API-key shape only", async () => {
+  const { selectedPiStoredCredential } = await import("../src/pi-inference.ts");
+  const credential = {
+    type: "oauth",
+    access: "sk-or-canary",
+    refresh: "",
+    expires: Number.MAX_SAFE_INTEGER,
+  };
+  expect(
+    selectedPiStoredCredential("openrouter", {
+      ...credential,
+      extra: "not-copied",
+    }),
+  ).toEqual(credential);
+  for (const change of [
+    { refresh: "unexpected" },
+    { expires: 1 },
+    { access: "!command" },
+  ])
+    expect(() =>
+      selectedPiStoredCredential("openrouter", { ...credential, ...change }),
+    ).toThrow();
+});

@@ -41,11 +41,18 @@
     </section>
     <section aria-label="M0 Pi protocol proof">
       <p>
-        Offline Pi extension protocol proof. Provider inference is a separate
-        acceptance probe.
+        Select the offline protocol proof or reuse one existing Pi provider
+        sign-in in isolated Amun state.
       </p>
       <button type="button" id="pi-open">Open Pi protocol proof</button>
+      <button type="button" data-pi-provider="openrouter">
+        Use Pi OpenRouter
+      </button>
+      <button type="button" data-pi-provider="github-copilot">
+        Use Pi GitHub Copilot
+      </button>
       <button type="button" id="pi-close">Close Pi</button>
+      <p id="pi-models"></p>
       <span id="pi-status">closed</span>
       <form id="pi-form">
         <label for="pi-prompt">Pi prompt</label

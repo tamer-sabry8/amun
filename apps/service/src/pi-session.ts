@@ -18,6 +18,34 @@ export class PiSession {
     this.stop = stop;
     this.client = new PiRpcClient(write, (frame) => this.project(frame));
   }
+  async ready(expected?: { provider: string; model: string }): Promise<void> {
+    const response = (await this.client.request("get_available_models")) as {
+      models?: unknown;
+    };
+    if (
+      !response ||
+      !Array.isArray(response.models) ||
+      response.models.length > 2048
+    )
+      throw new Error("Invalid model response");
+    const models = response.models.map((item: unknown) => {
+      if (!item || typeof item !== "object") throw new Error("Invalid model");
+      const model = item as Record<string, unknown>;
+      return { provider: model.provider, id: model.id };
+    });
+    const projected = piEvent.parse({ version: 1, kind: "pi-models", models });
+    if (
+      expected &&
+      !models.some(
+        (model) =>
+          model.provider === expected.provider && model.id === expected.model,
+      )
+    )
+      throw new Error("Selected model unavailable");
+    if (this.closed) throw new Error("Pi closed");
+    this.send(projected);
+    this.state("ready");
+  }
   receive(chunk: string): void {
     if (!this.closed) this.client.receive(chunk);
   }

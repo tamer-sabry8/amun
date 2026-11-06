@@ -1,11 +1,14 @@
 import { z } from "zod";
 const id = z.string().min(1).max(256);
 const base = { version: z.literal(1), kind: z.literal("pi") };
-export const piOpen = z.strictObject({
-  version: z.literal(1),
-  kind: z.literal("pi"),
-  action: z.literal("open-protocol"),
-});
+export const piOpen = z.discriminatedUnion("action", [
+  z.strictObject({ ...base, action: z.literal("open-protocol") }),
+  z.strictObject({
+    ...base,
+    action: z.literal("open-provider"),
+    provider: z.enum(["openrouter", "github-copilot"]),
+  }),
+]);
 export const piCommand = z.discriminatedUnion("action", [
   z.strictObject({
     ...base,
@@ -21,6 +24,18 @@ export const piCommand = z.discriminatedUnion("action", [
   z.strictObject({ ...base, action: z.enum(["abort", "close"]) }),
 ]);
 export const piEvent = z.discriminatedUnion("kind", [
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("pi-models"),
+    models: z
+      .array(
+        z.strictObject({
+          provider: z.string().min(1).max(128),
+          id: z.string().min(1).max(256),
+        }),
+      )
+      .max(2048),
+  }),
   z.strictObject({
     version: z.literal(1),
     kind: z.literal("pi-text"),

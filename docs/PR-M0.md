@@ -12,13 +12,13 @@ Adds the sandboxed Electron shell, recoverable service process, pinned Pi/Firstm
 
 ## Validation
 
-159 unit tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
+166 unit tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Six source and six packaged Electron E2E tests pass, including real Pi dialogs, service-loss input revocation and visible terminal echo. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
 
 Three process-cold launches with warm caches measured 713/502/324 ms to Connected, summed Electron working set 481/481/480 MiB and proof-terminal echo 16/22/13 ms. These are a local baseline, not clean-account or release acceptance; see ADR-008.
 
 ## Open exit gates
 
-M0 remains incomplete. T006 needs service/UI stream and dialog integration. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
+M0 remains incomplete. T006 service/UI stream, model list, dialogs and both provider inference proofs now pass; final acceptance audit remains open. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 remains open: the live GitHub → Google sign-in flow was rejected by Google inside the embedded browser. A supported alternative sign-in/site is needed. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.
 
 ## Service and ownership continuation
 

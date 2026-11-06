@@ -180,3 +180,36 @@ it("closes and reports unavailable when a prompt transport fails, without raw er
   });
   expect(JSON.stringify(send.mock.calls)).not.toContain("secret-canary");
 });
+
+it("reports readiness only after a bounded projected model response", async () => {
+  const { session, write, send } = setup();
+  const ready = session.ready();
+  expect(send).not.toHaveBeenCalled();
+  const request = JSON.parse(write.mock.calls[0]![0]);
+  session.receive(
+    JSON.stringify({
+      type: "response",
+      id: request.id,
+      command: "get_available_models",
+      success: true,
+      data: {
+        models: [
+          { id: "model", provider: "openrouter", apiKey: "secret-canary" },
+        ],
+      },
+    }) + "\n",
+  );
+  await ready;
+  expect(send).toHaveBeenCalledWith({
+    version: 1,
+    kind: "pi-models",
+    models: [{ id: "model", provider: "openrouter" }],
+  });
+  expect(send).toHaveBeenLastCalledWith({
+    version: 1,
+    kind: "pi-state",
+    state: "ready",
+  });
+  expect(JSON.stringify(send.mock.calls)).not.toContain("secret-canary");
+  session.close();
+});

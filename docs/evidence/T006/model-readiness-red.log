@@ -1,0 +1,28 @@
+$ vitest run apps/service/tests/pi-session.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/pi-session.test.ts (7 tests | 1 failed) 6ms
+   × reports readiness only after a bounded projected model response 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/pi-session.test.ts > reports readiness only after a bounded projected model response
+TypeError: session.ready is not a function
+ ❯ apps/service/tests/pi-session.test.ts:186:22
+    184| it("reports readiness only after a bounded projected model response",a…
+    185|  const {session,write,send}=setup();
+    186|  const ready=session.ready();
+       |                      ^
+    187|  expect(send).not.toHaveBeenCalled();
+    188|  const request=JSON.parse(write.mock.calls[0]![0]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  12:47:23
+   Duration  151ms (import 70%, transform 22%, tests 6%, worker 2%)
+
+[ELIFECYCLE] Test failed. See above for more details.

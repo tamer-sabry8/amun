@@ -1,0 +1,26 @@
+$ vitest run apps/service/tests/pi-cleanup.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/pi-cleanup.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/pi-cleanup.test.ts [ apps/service/tests/pi-cleanup.test.ts ]
+Error: Cannot find module '../src/pi-cleanup.ts' imported from /Users/tamersabry/Projects/amun/apps/service/tests/pi-cleanup.test.ts
+ ❯ apps/service/tests/pi-cleanup.test.ts:2:1
+      1| import { it,expect } from "vitest";
+      2| import { cleanupExtension } from "../src/pi-cleanup.ts";
+       | ^
+      3| it("restricts generated cleanup to a private runtime root and safely e…
+      4|  const source=cleanupExtension("/private/tmp/amun-pi-service-abc123");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  12:56:49
+   Duration  83ms (worker 98%, environment 2%)
+
+[ELIFECYCLE] Test failed. See above for more details.

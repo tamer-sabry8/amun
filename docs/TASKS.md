@@ -204,3 +204,9 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T007: checksum-guarded Amun-only bundled patch fixes actual home-to-home Codex restricted-mode propagation, verified in source and package. Personal Firstmate remains untouched; actual worker approval behavior remains open.
 - T008: private endpoint receipts and read-only tmux identity observation implemented and unit-tested. Ten fresh observer processes preserve one synthetic pane; worker status deliberately remains unknown. Real Codex/Claude dispatch and ten service-restart trials are still required.
 - T010: explicitly blocked at the user's request. GitHub uses Google sign-in only; no more browser acceptance attempts are pending. Continue other M0 work.
+
+## Authenticated UI and worker sign-in continuation (2026-11-06)
+
+- T006: source and packaged service/renderer inference now pass for OpenRouter and GitHub Copilot with empty PATH, model projection and personal credential file unchanged. Real service crash removes the temporary Pi credential directory. See [evidence](evidence/T006/authenticated-ui.md). Final task audit remains open.
+- T008: official Codex sign-in succeeded in a separate persistent Amun profile; a real read-only ephemeral inference completed with the exact expected reply. This does not prove Firstmate dispatch or reattachment. Claude's separate official sign-in is still pending.
+- T010 remains blocked at the user's request; no further embedded sign-in attempt is required to continue other M0 work.

@@ -131,3 +131,38 @@ export function selectedCopilotCredential(
   }
   return result;
 }
+
+/** Select only the requested provider's supported stored credential shape. */
+export function selectedPiStoredCredential(
+  provider: "openrouter" | "github-copilot",
+  input: unknown,
+): Record<string, unknown> {
+  if (provider === "github-copilot") return selectedCopilotCredential(input);
+  const fail = () => {
+    throw new Error("Provider credential unavailable");
+  };
+  if (provider !== "openrouter" || !input || typeof input !== "object")
+    return fail();
+  const data = input as Record<string, unknown>;
+  const literal = (value: unknown): value is string =>
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 16384 &&
+    /^[-A-Za-z0-9_]+$/.test(value);
+  if (data.type === "api_key" && literal(data.key))
+    return { type: "api_key", key: data.key };
+  // Pinned pi-ai auth/oauth/openrouter.js: OAuth returns a non-expiring API key.
+  if (
+    data.type === "oauth" &&
+    literal(data.access) &&
+    data.refresh === "" &&
+    data.expires === Number.MAX_SAFE_INTEGER
+  )
+    return {
+      type: "oauth",
+      access: data.access,
+      refresh: "",
+      expires: data.expires,
+    };
+  return fail();
+}

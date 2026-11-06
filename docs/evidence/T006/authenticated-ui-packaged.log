@@ -1,0 +1,3 @@
+{"provider":"openrouter","packaged":true,"throughServiceAndRenderer":true,"modelListObserved":true,"successfulStopAndSettled":true,"expectedRenderedReply":true,"emptyPath":true}
+{"provider":"github-copilot","packaged":true,"throughServiceAndRenderer":true,"modelListObserved":true,"successfulStopAndSettled":true,"expectedRenderedReply":true,"emptyPath":true}
+{"personalCredentialFileUnchanged":true}

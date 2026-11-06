@@ -1,0 +1,42 @@
+$ vitest run packages/crew/tests/pi-inference.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/pi-inference.test.ts (11 tests | 2 failed) 5ms
+   × refuses executable or indirect API-key configuration in selected stored credentials 2ms
+   × preserves Pi's documented non-expiring OpenRouter OAuth API-key shape only 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > refuses executable or indirect API-key configuration in selected stored credentials
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/pi-inference.test.ts:121:161
+    119| it("refuses executable or indirect API-key configuration in selected s…
+    120|  const {selectedPiStoredCredential}=await import("../src/pi-inference.…
+    121|  for(const key of ["!echo secret","$(command)","`command`","env:SECRET…
+       |                                                                                                                                                                 ^
+    122| });
+    123|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > preserves Pi's documented non-expiring OpenRouter OAuth API-key shape only
+Error: Provider credential unavailable
+ ❯ selectedPiStoredCredential packages/crew/src/pi-inference.ts:149:11
+    147|     !("key" in input)
+    148|   )
+    149|     throw new Error("Provider credential unavailable");
+       |           ^
+    150|   const selected = selectedCredential(
+    151|     provider,
+ ❯ packages/crew/tests/pi-inference.test.ts:127:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  12:51:19
+   Duration  92ms (transform 47%, import 30%, tests 16%, worker 6%)
+
+[ELIFECYCLE] Test failed. See above for more details.
