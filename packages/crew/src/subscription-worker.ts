@@ -25,7 +25,12 @@ export class SubscriptionWorker {
   private root: string;
   private label: string;
   constructor(
-    private config: { home: string; binary: string; tool: "codex" | "claude" },
+    private config: {
+      home: string;
+      binary: string;
+      tool: "codex" | "claude";
+      signal?: AbortSignal;
+    },
     private run: typeof runClosedInput = runClosedInput,
     private validate: typeof validateProfile = validateProfile,
   ) {
@@ -53,6 +58,7 @@ export class SubscriptionWorker {
           LOGNAME: userInfo().username,
           TMPDIR: process.env.TMPDIR ?? "/tmp",
         },
+        ...(this.config.signal ? { signal: this.config.signal } : {}),
         timeout: 90000,
         maxBuffer: 524288,
       },

@@ -45,3 +45,11 @@ window.addEventListener("message", (event) => {
 ipcRenderer.on("amun-pi-clipboard-status", (_event, result: unknown) => {
   window.postMessage({ kind: "amun-pi-clipboard-status", result }, "*");
 });
+
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data?.kind === "amun-pi-export-command")
+    ipcRenderer.send("amun-pi-export", event.data.command);
+});
+ipcRenderer.on("amun-pi-export-status", (_event, result: unknown) => {
+  window.postMessage({ kind: "amun-pi-export-status", result }, "*");
+});

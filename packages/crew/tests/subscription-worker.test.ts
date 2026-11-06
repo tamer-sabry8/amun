@@ -96,3 +96,22 @@ it("refuses missing owned profiles before invoking a CLI", async () => {
   await expect(worker.status()).rejects.toThrow();
   expect(run).not.toHaveBeenCalled();
 });
+it("passes cancellation to the one-shot transport", async () => {
+  const run = vi.fn<typeof runClosedInput>(async () => ({
+    stdout: "",
+    stderr: "Logged in using ChatGPT",
+  }));
+  const controller = new AbortController();
+  const worker = new SubscriptionWorker(
+    {
+      home: "/Users/test",
+      binary: "/app/Amun",
+      tool: "codex",
+      signal: controller.signal,
+    },
+    run,
+    async () => {},
+  );
+  await worker.status();
+  expect(run.mock.calls[0]![2].signal).toBe(controller.signal);
+});

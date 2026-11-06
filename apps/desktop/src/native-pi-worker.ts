@@ -1,3 +1,17 @@
+import { nativeDocumentPage } from "../../../packages/crew/src/native-pi-docs.ts";
+import { ScopedOperation } from "../../../packages/crew/src/scoped-operation.ts";
+import {
+  NativePiTrust,
+  type TrustStore,
+} from "../../../packages/crew/src/native-pi-trust.ts";
+import {
+  NativePiSettings,
+  type SettingsSession,
+} from "../../../packages/crew/src/native-pi-settings.ts";
+import {
+  NativePiExport,
+  type ExportSession,
+} from "../../../packages/crew/src/native-pi-export.ts";
 import {
   NativePiPreferences,
   type PreferenceSession,
@@ -9,7 +23,7 @@ import {
   type NativeSessionRuntime,
 } from "../../../packages/crew/src/native-pi-sessions.ts";
 import { pathToFileURL } from "node:url";
-import { mkdir, lstat, realpath } from "node:fs/promises";
+import { mkdir, lstat, realpath, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import {
   nativePiCommand,
@@ -25,12 +39,19 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: NativePiSession & PreferenceSession;
+  session: NativePiSession &
+    PreferenceSession &
+    ExportSession &
+    SettingsSession;
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
 let sessionActions: NativePiSessions | undefined;
+let trustActions: NativePiTrust | undefined;
+let changelogPath: string | undefined;
 let busy = false;
+let stopping = false;
+const workerOperation = new ScopedOperation();
 async function privateDirectory(path: string) {
   await mkdir(path, { mode: 0o700, recursive: true });
   const stat = await lstat(path);
@@ -51,6 +72,8 @@ async function initialize() {
   await privateDirectory(sessions);
   const sdk = (await import(pathToFileURL(entry!).href)) as {
     ModelRuntime: { create(options: unknown): Promise<unknown> };
+    getPackageDir(): string;
+    ProjectTrustStore: new (root: string) => TrustStore;
     SessionManager: {
       create(cwd: string, dir: string): unknown;
       list(
@@ -114,6 +137,8 @@ async function initialize() {
       sessionManager: sdk.SessionManager.create(cwd, sessions),
     },
   );
+  changelogPath = join(sdk.getPackageDir(), "CHANGELOG.md");
+  trustActions = new NativePiTrust(new sdk.ProjectTrustStore(root!), cwd);
   sessionActions = new NativePiSessions(runtime, cwd, sessions, () =>
     sdk.SessionManager.list(cwd, sessions),
   );
@@ -126,10 +151,17 @@ const send = (id: string, result: unknown) =>
     ) + "\n",
   );
 function stop() {
-  void (runtime?.dispose() ?? Promise.resolve()).finally(() => process.exit(0));
+  if (stopping) return;
+  stopping = true;
+  process.stdin.pause();
+  void Promise.allSettled([
+    workerOperation.close(),
+    runtime?.dispose() ?? Promise.resolve(),
+  ]).finally(() => process.exit(0));
 }
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk: string) => {
+  if (stopping) return;
   try {
     for (const frame of decoder.push(chunk)) {
       const command = nativePiCommand.parse(frame);
@@ -149,19 +181,79 @@ process.stdin.on("data", (chunk: string) => {
         if (["worker-status", "worker-inference"].includes(command.command)) {
           if (command.argument !== "codex" && command.argument !== "claude")
             throw Error("Unsupported worker");
-          const worker = new SubscriptionWorker({
-            home: userInfo().homedir,
-            binary: process.execPath,
-            tool: command.argument,
+          const tool = command.argument;
+          const text = await workerOperation.run(async (signal) => {
+            const worker = new SubscriptionWorker({
+              home: userInfo().homedir,
+              binary: process.execPath,
+              tool,
+              signal,
+            });
+            return command.command === "worker-status"
+              ? worker.status()
+              : worker.infer();
           });
-          const text =
-            command.command === "worker-status"
-              ? await worker.status()
-              : await worker.infer();
-          send(command.id, { kind: "message", text });
+          if (!stopping) send(command.id, { kind: "message", text });
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "changelog") {
+          const info = await lstat(changelogPath!);
+          if (!info.isFile() || info.size > 2097152)
+            throw Error("Changelog unavailable");
+          send(
+            command.id,
+            nativeDocumentPage(
+              await readFile(changelogPath!, "utf8"),
+              command.argument,
+            ),
+          );
+          return;
+        }
+        if (command.command === "hotkeys") {
+          send(
+            command.id,
+            nativeDocumentPage(
+              "Native Pi controls currently available:\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter / Space — activate the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
+              command.argument,
+              "Amun native Pi shortcuts",
+            ),
+          );
+          return;
+        }
+        if (command.command === "trust") {
+          if (runtime!.session.isStreaming)
+            throw Error("Wait for the current turn");
+          send(command.id, trustActions!.run(command.argument));
+          return;
+        }
+        if (command.command === "settings") {
+          send(
+            command.id,
+            await new NativePiSettings(runtime!.session).run(command.argument),
+          );
+          return;
+        }
+        if (command.command === "export") {
+          if (!command.argument) {
+            send(command.id, {
+              kind: "choices",
+              title: "Choose export format for review",
+              choices: [
+                { id: "jsonl", label: "JSONL" },
+                { id: "html", label: "HTML" },
+              ],
+            });
+            return;
+          }
+          send(
+            command.id,
+            await new NativePiExport(runtime!.session, root!).run(
+              command.argument,
+            ),
+          );
+          return;
+        }
         if (command.command === "cycle-model") {
           send(
             command.id,
@@ -191,11 +283,13 @@ process.stdin.on("data", (chunk: string) => {
             );
         send(command.id, result);
       })()
-        .catch(() =>
-          send(command.id, {
-            kind: "message",
-            text: "This native action could not be completed. Check session state and the supported argument.",
-          }),
+        .catch(
+          () =>
+            !stopping &&
+            send(command.id, {
+              kind: "message",
+              text: "This native action could not be completed. Check session state and the supported argument.",
+            }),
         )
         .finally(() => {
           busy = false;

@@ -1,3 +1,4 @@
+import { installPiExport } from "./pi-export.ts";
 import { installPiClipboard } from "./pi-clipboard.ts";
 import { randomBytes } from "node:crypto";
 import { installBackup } from "./backup-ui.ts";
@@ -167,6 +168,7 @@ function openWindow(): void {
   });
   installBrowser(window, "m0");
   installPiClipboard(window);
+  installPiExport(window);
   installBackup(
     window,
     (job) =>

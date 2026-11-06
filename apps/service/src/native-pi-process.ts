@@ -67,7 +67,7 @@ export class NativePiProcess {
         stdio: ["pipe", "pipe", "pipe"],
       });
       this.child = child;
-      const decoder = new JsonLineDecoder(1048576);
+      const decoder = new JsonLineDecoder(8388608);
       child.stdout.setEncoding("utf8");
       child.stderr.resume();
       child.stdin.on("error", () => {});

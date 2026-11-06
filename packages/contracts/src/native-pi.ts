@@ -13,6 +13,32 @@ export const nativePiCommand = z.discriminatedUnion("action", [
 ]);
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("document"),
+    title: z.string().max(256),
+    text: z.string().max(60000),
+    page: z.number().int().min(0).max(128),
+    totalPages: z.number().int().min(1).max(128),
+  }),
+  z.strictObject({
+    kind: z.literal("preferences"),
+    fields: z
+      .array(
+        z.strictObject({
+          id: z.string().max(64),
+          label: z.string().max(128),
+          value: z.string().max(128),
+          options: z.array(z.string().max(128)).max(32),
+        }),
+      )
+      .max(32),
+  }),
+  z.strictObject({
+    kind: z.literal("export"),
+    format: z.enum(["html", "jsonl"]),
+    text: z.string().max(524288),
+    review: z.string().max(524288),
+  }),
+  z.strictObject({
     kind: z.literal("choices"),
     title: z.string().max(256),
     choices: z

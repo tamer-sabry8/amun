@@ -9,6 +9,29 @@ export function NativePiPanel() {
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
   const pending = useRef<string | null>(null);
   const copyPending = useRef<string | null>(null);
+  const exportPending = useRef<string | null>(null);
+  const [exportStatus, setExportStatus] = useState("");
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (
+        event.source !== window ||
+        event.data?.kind !== "amun-pi-export-status" ||
+        !exportPending.current ||
+        event.data.result?.id !== exportPending.current
+      )
+        return;
+      exportPending.current = null;
+      setExportStatus(
+        event.data.result.status === "saved"
+          ? "Export saved"
+          : event.data.result.status === "cancelled"
+            ? "Export cancelled"
+            : "Export not saved. Choose a new file name; existing files are not overwritten.",
+      );
+    };
+    window.addEventListener("message", listener);
+    return () => window.removeEventListener("message", listener);
+  }, []);
   const [copyStatus, setCopyStatus] = useState("");
   useEffect(() => {
     const listener = (event: MessageEvent) => {
@@ -69,8 +92,12 @@ export function NativePiPanel() {
     const id = crypto.randomUUID();
     pending.current = id;
     setBusy(true);
-    setResult(null);
+    if (selectedCommand !== "settings" || result?.kind !== "preferences")
+      setResult(null);
     setCopyStatus("");
+    copyPending.current = null;
+    exportPending.current = null;
+    setExportStatus("");
     bridge.send({
       version: 1,
       kind: "native-pi",
@@ -138,6 +165,7 @@ export function NativePiPanel() {
         >
           {[
             "session",
+            "settings",
             "new",
             "resume",
             "fork",
@@ -148,8 +176,12 @@ export function NativePiPanel() {
             "scoped-models",
             "name",
             "copy",
+            "export",
             "compact",
             "reload",
+            "trust",
+            "changelog",
+            "hotkeys",
             "quit",
           ].map((name) => (
             <option key={name} value={name}>
@@ -210,6 +242,93 @@ export function NativePiPanel() {
               </div>
             ))}
           </dl>
+        ) : result?.kind === "document" ? (
+          <>
+            <h4>{result.title}</h4>
+            <pre className="native-pi-document">{result.text}</pre>
+            <p>
+              Page {result.page + 1} of {result.totalPages}
+            </p>
+            <button
+              disabled={busy || result.page === 0}
+              onClick={() => run(String(result.page - 1))}
+            >
+              Previous page
+            </button>
+            <button
+              disabled={busy || result.page + 1 >= result.totalPages}
+              onClick={() => run(String(result.page + 1))}
+            >
+              Next page
+            </button>
+          </>
+        ) : result?.kind === "preferences" ? (
+          <fieldset disabled={busy}>
+            <legend>Pi session settings</legend>
+            <p>
+              Changes apply to Amun’s private Pi configuration. Skill resources
+              still require explicit loading; this switch does not install them.
+            </p>
+            {result.fields.map((field) => (
+              <label key={field.id}>
+                {field.label}
+                <select
+                  aria-label={field.label}
+                  value={field.value}
+                  onChange={(event) =>
+                    run(
+                      JSON.stringify({
+                        id: field.id,
+                        value: event.target.value,
+                      }),
+                      "settings",
+                    )
+                  }
+                >
+                  {field.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "true"
+                        ? "On"
+                        : option === "false"
+                          ? "Off"
+                          : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </fieldset>
+        ) : result?.kind === "export" ? (
+          <>
+            <h4>Review {result.format.toUpperCase()} export</h4>
+            <p>
+              Sessions can contain prompts, file contents and secrets. Review
+              this document before saving or sharing it.
+            </p>
+            <textarea
+              aria-label="Export review document"
+              readOnly
+              value={result.review}
+              rows={12}
+            />
+            <button
+              onClick={() => {
+                const id = crypto.randomUUID();
+                exportPending.current = id;
+                setExportStatus("Choose a save location…");
+                window.postMessage(
+                  {
+                    kind: "amun-pi-export-command",
+                    command: { id, format: result.format, text: result.text },
+                  },
+                  "*",
+                );
+              }}
+            >
+              Save reviewed export…
+            </button>
+            <p role="status">{exportStatus}</p>
+          </>
         ) : result ? (
           <>
             <p>

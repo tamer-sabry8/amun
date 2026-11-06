@@ -150,6 +150,54 @@ test("native Pi commands create an owned SDK session and update its real name", 
     }
     await page
       .getByLabel("Native Pi command", { exact: true })
+      .selectOption("settings");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByLabel("Automatic context compaction", { exact: true })
+      .selectOption("false");
+    await expect(
+      page.getByLabel("Automatic context compaction", { exact: true }),
+    ).toHaveValue("false");
+    await page
+      .getByLabel("Automatic context compaction", { exact: true })
+      .selectOption("true");
+    await expect(
+      page.getByLabel("Automatic context compaction", { exact: true }),
+    ).toHaveValue("true");
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("trust");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Do not trust this workspace", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Trust decision saved",
+    );
+    for (const format of ["jsonl", "html"]) {
+      await page
+        .getByLabel("Native Pi command", { exact: true })
+        .selectOption("export");
+      await page.getByLabel("Command argument", { exact: true }).fill(format);
+      await page
+        .getByRole("button", { name: "Run command", exact: true })
+        .click();
+      await expect(
+        page.getByLabel("Export review document", { exact: true }),
+      ).toHaveValue(/Native clipboard acceptance/);
+      await expect(
+        page.getByRole("button", {
+          name: "Save reviewed export…",
+          exact: true,
+        }),
+      ).toBeVisible();
+    }
+    await page
+      .getByLabel("Native Pi command", { exact: true })
       .selectOption("clone");
     await page
       .getByRole("button", { name: "Run command", exact: true })
@@ -184,6 +232,26 @@ test("native Pi commands create an owned SDK session and update its real name", 
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Session change completed",
     );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("changelog");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Pi changelog", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Next page", exact: true }).click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Page 2 of",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("hotkeys");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText("Ctrl+P");
     await page
       .getByLabel("Native Pi command", { exact: true })
       .selectOption("quit");

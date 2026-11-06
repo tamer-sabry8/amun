@@ -1262,3 +1262,10 @@ body.gallery-mode {
 input[aria-invalid="true"] {
   border-color: var(--amun-safety-error);
 }
+
+.native-pi-document {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
