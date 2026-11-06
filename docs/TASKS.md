@@ -89,9 +89,9 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
       Tests: crash between write and ack; duplicate-suppression tests.
       DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
-      Foundation history: [initial evidence](evidence/M1/2026-11-06-foundations.md). Current T017–T022 acceptance: [source and packaged shell evidence](evidence/M1/2026-11-06-shell-acceptance.md). T016 remains open for real Copilot/OpenRouter OAuth completion; M1 is not complete.
+      Foundation history: [initial evidence](evidence/M1/2026-11-06-foundations.md). Current T017–T022 acceptance: [source and packaged shell evidence](evidence/M1/2026-11-06-shell-acceptance.md). T016 live Copilot/OpenRouter authorization and packaged inference now pass; M1 remains open for T022a and CI verification.
 
-- [ ] **T016 — Auth broker** · P0 · TS · Dep T006, T013
+- [x] **T016 — Auth broker** · P0 · TS · Dep T006, T013
       Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
       Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
       DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
@@ -124,7 +124,7 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
 
 - [ ] **T022a — Pi slash commands in M1** · P0 · TS · Dep T006, T016, T020
-      Explicit user scope addition 2026-11-06. Verify the full built-in command list against pinned Pi 1.4.0 and loaded session resources; provide usable supported command paths for models/settings/auth, sessions/context, export/share, runtime/project, extensions, templates and skills. Document RPC/SDK/interactive-only differences; never fake completion or send unsupported built-ins as model text. Commands operate only on Amun-owned sessions/configuration. Review content before external share/bug-report upload. Tests: per-command routing, invalid inputs, permissions and isolation; source/packaged real-session acceptance. Remains open until the full requested command coverage is verified; does not authorize M2.
+      Explicit user scope addition 2026-11-06: native Amun UI for every command, no terminal fallback. Include the attached user-facing Pi prefixes/shortcuts and Firstmate skill commands; CLI flags and internal toolbelt scripts are implementation references. Verify the full built-in command list against pinned Pi 1.4.0 and loaded session resources; provide usable supported command paths for models/settings/auth, sessions/context, export/share, runtime/project, extensions, templates and skills. Document RPC/SDK/interactive-only differences; never fake completion or send unsupported built-ins as model text. Commands operate only on Amun-owned sessions/configuration. Review content before external share/bug-report upload. Tests: per-command routing, invalid inputs, permissions and isolation; source/packaged real-session acceptance. Remains open until the full requested command coverage is verified; does not authorize M2.
 
 ## M2 — Product context and PRD — LOCKED
 

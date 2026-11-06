@@ -62,6 +62,7 @@ test("shared request queue persists navigation, supports search, Focus restore a
   });
   try {
     const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 778 });
     await expect(page.getByTestId("requests-count")).toHaveText("3");
     await expect(page.getByTestId("island")).toHaveAttribute("data-count", "3");
     await page.keyboard.press("Meta+Shift+j");

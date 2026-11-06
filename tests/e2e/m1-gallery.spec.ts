@@ -12,6 +12,7 @@ test("development gallery renders every attention type, size and theme accessibl
   });
   try {
     const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 778 });
     await expect(
       page.getByRole("heading", { name: "Component gallery", exact: true }),
     ).toBeVisible();
