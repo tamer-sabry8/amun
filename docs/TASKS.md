@@ -95,6 +95,9 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
       Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
       DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
+- [x] **T016a — Reliable provider sign-in feedback** · P0 · TS · Dep T016
+      User-reported 2026-11-06: successful Copilot sign-in shows configured while an old connection-error banner remains. Clear stale errors/device codes on success or a fresh attempt; preserve current failure feedback; prevent duplicate login/readiness while an attempt is active. Force Microsoft Edge for provider authorization; explain Copilot cloud host versus GitHub repository host. Tests: meaningful failing regressions, source and packaged acceptance, real company Copilot sign-in and inference. Status: implementation, unit/source checks and final packaged auth tests pass; see [auth evidence](evidence/M1/2026-11-06-copilot-tenant-fix.md). Copilot authorization and packaged gpt-5.4-nano inference passed in the separate M1 profile.
+
 - [x] **T017 — Audit and redaction** · P0 · TS · Dep T013
       Build: audit_log writer; pino redaction; export redaction.
       Tests: canary-secret test across logs, exports, memory, updates.
@@ -119,6 +122,9 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       DoD: run and publication progress appear only in the pill and Activity drawer, never in the Island.
 - [x] **T022 — Requests and command palette** · P1 · TS · Dep T020
       DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
+
+- [ ] **T022a — Pi slash commands in M1** · P0 · TS · Dep T006, T016, T020
+      Explicit user scope addition 2026-11-06. Verify the full built-in command list against pinned Pi 1.4.0 and loaded session resources; provide usable supported command paths for models/settings/auth, sessions/context, export/share, runtime/project, extensions, templates and skills. Document RPC/SDK/interactive-only differences; never fake completion or send unsupported built-ins as model text. Commands operate only on Amun-owned sessions/configuration. Review content before external share/bug-report upload. Tests: per-command routing, invalid inputs, permissions and isolation; source/packaged real-session acceptance. Remains open until the full requested command coverage is verified; does not authorize M2.
 
 ## M2 — Product context and PRD — LOCKED
 

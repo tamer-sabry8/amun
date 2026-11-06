@@ -72,6 +72,12 @@ test("Copilot enterprise text prompt permits github.com default without inventin
     const prompt = page.getByRole("dialog", { name: "Complete sign-in" });
     await expect(prompt).toBeVisible({ timeout: 20000 });
     await expect(prompt.locator("input")).toHaveValue("");
+    await expect(prompt).toContainText(
+      "Your repository server may use a different address",
+    );
+    await expect(
+      page.getByRole("button", { name: "Sign in with Pi", exact: true }),
+    ).toBeDisabled();
     await expect(
       prompt.getByRole("button", { name: "Continue", exact: true }),
     ).toBeEnabled();

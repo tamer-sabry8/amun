@@ -110,6 +110,11 @@ export function initializeBridge() {
         else
           update({
             modelStatus: { ...state.modelStatus, [event.id]: event.status },
+            ...(["checking", "configured", "ready", "cancelled"].includes(
+              event.status,
+            )
+              ? { notice: "" }
+              : {}),
             ...(["configured", "error", "cancelled"].includes(event.status)
               ? { prompt: null }
               : {}),

@@ -149,9 +149,21 @@ function AuthPrompt() {
               />
             )}
           </label>
-          <p className="muted">
-            Enter credentials only here or in the provider’s browser page.
-          </p>
+          {prompt.method === "text" &&
+          prompt.message ===
+            "GitHub Enterprise URL/domain (blank for github.com)" ? (
+            <p className="muted">
+              Copilot signs in through github.com or your company’s
+              tenant.ghe.com host. Your repository server may use a different
+              address. Enter only the sign-in host, without an /enterprises
+              path. Authorization opens in Microsoft Edge.
+            </p>
+          ) : (
+            <p className="muted">
+              Enter credentials only here or in the provider’s browser page.
+              Browser authorization opens in Microsoft Edge.
+            </p>
+          )}
           <div className="button-row">
             <button
               className="primary"
@@ -236,6 +248,7 @@ function Settings({
   const [baseUrl, setBaseUrl] = useState("https://github.com");
   const [secret, setSecret] = useState("");
   const [model, setModel] = useState("github-copilot:oauth");
+  const modelBusy = Object.values(state.modelStatus).includes("checking");
   const save = (event: FormEvent) => {
     event.preventDefault();
     bridge.send({
@@ -410,6 +423,7 @@ function Settings({
           <div className="button-row">
             <button
               className="primary"
+              disabled={modelBusy}
               onClick={() => {
                 const [provider, type] = model.split(":");
                 bridge.send({
@@ -432,6 +446,7 @@ function Settings({
             </button>
           </div>
           <button
+            disabled={modelBusy}
             onClick={() =>
               bridge.send({
                 version: 1,

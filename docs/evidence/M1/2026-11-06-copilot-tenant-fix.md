@@ -15,3 +15,13 @@ The pinned Pi flow prompts for the host before requesting a device code. Amun no
 - Prior CI run 42229072158 reports failure with its unit job cancelled and no failed-step log returned. It is not counted as passing CI; the new pushed commit needs fresh CI.
 
 No personal sessions or credential stores were changed. M2 and automatic merge remain out of scope.
+
+## Follow-up: successful company authorization and feedback correction
+
+The user completed company Copilot authorization in Microsoft Edge on 2026-11-06. The running packaged UI reported configured. A bounded packaged RPC request using only the new M1 acceptance profile completed successfully with gpt-5.4-nano: exact expected reply, three stream deltas, successful assistant stop and settled agent, with empty PATH and tools disabled. This proves live access; it does not rely on personal Pi credentials. The diagnostic reused the M0 proof harness with the auth directory changed to the persistent M1 profile; its inherited temporary-credential cleanup label is inapplicable (only its disposable working directory was removed).
+
+The full packaged UI also reached the device-code notice in a separate disposable profile. Explicit Chrome selection conflicted with the user's company Edge requirement. Authentication handoff now explicitly selects Microsoft Edge, validated by unit tests and an actual successful Edge launch. The user authorized this browser change.
+
+T016a regressions: duplicate sign-in remained enabled during an attempt (real source UI RED); missing repository/cloud-host explanation (real source UI RED); successful auth retained a stale error (bridge unit RED). Implemented duplicate-operation disabling, explanatory prompt text, and notice clearing on success/new attempt/cancel while retaining current failure feedback. Final package auth tests: 2 passed (14.3s). All unit/lint/type/format checks pass (266 tests). No device codes or credentials are recorded here.
+
+T016 still needs OpenRouter live UI authorization. T022a is the user's explicit new M1 slash-command scope and remains open. CI at f42e29a failed visual baselines due different viewport/control dimensions on the runner; those failures remain to be resolved, not waived.

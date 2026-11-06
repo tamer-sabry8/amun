@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { installBackup } from "./backup-ui.ts";
 import { execFile } from "node:child_process";
-import { authBrowserUrl } from "../../../packages/auth/src/pi-auth.ts";
+import { authBrowserArgs } from "./auth-browser.ts";
 import { installBrowser } from "./browser.js";
 import {
   app,
@@ -114,19 +114,14 @@ function startService(): void {
     )
       return;
     try {
-      const url = authBrowserUrl(
+      const args = authBrowserArgs(
         message.provider,
         message.url,
         "selectedHost" in message && typeof message.selectedHost === "string"
           ? message.selectedHost
           : undefined,
       );
-      execFile(
-        "/usr/bin/open",
-        ["-a", "Google Chrome", url],
-        { timeout: 10000 },
-        () => {},
-      );
+      execFile("/usr/bin/open", args, { timeout: 10000 }, () => {});
     } catch {
       /* Refuse unsupported destinations. */
     }
