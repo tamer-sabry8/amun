@@ -157,12 +157,50 @@ try {
         await new Promise((done) => setTimeout(done, 250));
       }
     }
+    let recovered = false;
+    if (process.argv.includes("--recover") && watcherLive) {
+      const originalPid = (
+        await readFile(join(home, "state/.watch.lock/pid"), "utf8")
+      ).trim();
+      await promisify(execFile)(
+        "/bin/bash",
+        [join(distribution, "bin/fm-watch-arm.sh"), "--stop"],
+        { cwd: distribution, env, timeout: 15000 },
+      );
+      await client.request("prompt", { message: "/fm-watch-arm-pi" });
+      for (let attempt = 0; attempt < 40; attempt++) {
+        try {
+          const nextPid = (
+            await readFile(join(home, "state/.watch.lock/pid"), "utf8")
+          ).trim();
+          const beat = await stat(join(home, "state/.last-watcher-beat"));
+          const owner = (
+            await readFile(join(home, "state/.lock"), "utf8")
+          ).trim();
+          if (
+            nextPid !== originalPid &&
+            Number.isSafeInteger(Number(nextPid)) &&
+            Number(nextPid) > 1 &&
+            owner === String(child.pid) &&
+            Date.now() - beat.mtimeMs < 5000
+          ) {
+            process.kill(Number(nextPid), 0);
+            recovered = true;
+            break;
+          }
+        } catch {
+          /* wait for a verified replacement */
+        }
+        await new Promise((done) => setTimeout(done, 250));
+      }
+    }
     console.log(
       JSON.stringify({
         packaged,
         outcome,
         lockMatchesPiProcess: lockMatches,
         watcherLive,
+        recovered,
         workerDispatches: 0,
         modelTurns,
       }),
@@ -170,6 +208,8 @@ try {
     if (
       outcome !== "AMUN_OWNER_ACQUIRED" ||
       !lockMatches ||
+      modelTurns !== 0 ||
+      (process.argv.includes("--recover") && !recovered) ||
       (process.argv.includes("--watch") && !watcherLive)
     )
       process.exitCode = 1;
