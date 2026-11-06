@@ -9,3 +9,5 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - electron@45.2.3
   - vite@8.3.6
+publicHoistPattern:
+  - electron

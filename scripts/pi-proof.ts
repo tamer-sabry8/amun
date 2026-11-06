@@ -22,12 +22,17 @@ for (const key of [
 }
 env.PI_CODING_AGENT_DIR = config;
 env.PI_SKIP_VERSION_CHECK = "1";
+if (process.argv[3]) {
+  env.ELECTRON_RUN_AS_NODE = "1";
+  env.PATH = "";
+}
 const child = spawn(
-  process.execPath,
+  process.argv[3] ?? process.execPath,
   [
-    resolve(
-      "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/rpc-entry.js",
-    ),
+    process.argv[2] ??
+      resolve(
+        "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/rpc-entry.js",
+      ),
     "--no-session",
   ],
   { cwd: root, env, stdio: ["pipe", "pipe", "pipe"] },

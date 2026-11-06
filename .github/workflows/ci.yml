@@ -19,3 +19,5 @@ jobs:
       - run: pnpm --filter @amun/desktop exec install-electron
       - run: pnpm test:e2e
       - run: pnpm test:runtime
+      - run: pnpm package
+      - run: pnpm test:packaged

@@ -2,7 +2,10 @@ import { test, expect, _electron as electron } from "@playwright/test";
 
 test("shell launches with no privileged renderer APIs and denies external requests", async () => {
   const app = await electron.launch({
-    args: ["apps/desktop"],
+    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    ...(process.env.AMUN_PACKAGED_PATH
+      ? { executablePath: process.env.AMUN_PACKAGED_PATH }
+      : {}),
     chromiumSandbox: true,
   });
   try {
@@ -31,7 +34,10 @@ test("shell launches with no privileged renderer APIs and denies external reques
 
 test("service crash reconnects over a fresh port within five seconds", async () => {
   const app = await electron.launch({
-    args: ["apps/desktop"],
+    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    ...(process.env.AMUN_PACKAGED_PATH
+      ? { executablePath: process.env.AMUN_PACKAGED_PATH }
+      : {}),
     chromiumSandbox: true,
   });
   try {
