@@ -12,7 +12,7 @@ export default defineConfig({
     },
     outDir: "dist",
     rolldownOptions: {
-      external: ["electron", "node:path"],
+      external: ["electron", /^node:/],
     },
   },
 });

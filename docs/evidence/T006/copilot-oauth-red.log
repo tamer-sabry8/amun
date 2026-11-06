@@ -1,0 +1,48 @@
+$ vitest run packages/crew/tests/pi-inference.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ packages/crew/tests/pi-inference.test.ts (8 tests | 2 failed) 5ms
+   × selects one supported credential without copying a credential store 3ms
+   × validates only selected Copilot OAuth fields without losing provider metadata 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > selects one supported credential without copying a credential store
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ packages/crew/tests/pi-inference.test.ts:14:136
+     12|     ),
+     13|   ).toEqual({ name: "OPENROUTER_API_KEY", value: "canary-key" });
+     14|   expect(()=>selectedCredential("github-copilot",JSON.stringify({statu…
+       |                                                                                                                                        ^
+     15| });
+     16| it.each([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/crew/tests/pi-inference.test.ts > validates only selected Copilot OAuth fields without losing provider metadata
+Error: not implemented
+ ❯ selectedCopilotCredential packages/crew/src/pi-inference.ts:85:88
+     83| }
+     84|
+     85| export function selectedCopilotCredential(_input:unknown):Record<strin…
+       |                                                                                        ^
+     86|
+ ❯ packages/crew/tests/pi-inference.test.ts:70:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+   Start at  10:44:21
+   Duration  104ms (transform 46%, import 29%, tests 17%, worker 7%)
+
+[ELIFECYCLE] Test failed. See above for more details.

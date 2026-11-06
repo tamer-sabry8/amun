@@ -10,7 +10,7 @@ module.exports = {
       /^\/src(?:\/|$)/,
       /^\/tests(?:\/|$)/,
     ],
-    extraResource: [".runtime/pi", ".runtime/firstmate"],
+    extraResource: [".runtime/pi", ".runtime/firstmate", ".runtime/terminal"],
     afterCopyExtraResources: [
       async ({ buildPath, platform }) => {
         const { join } = require("node:path");
@@ -23,6 +23,10 @@ module.exports = {
         await repairRuntimeLinks(
           join(__dirname, ".runtime/pi"),
           join(resources, "pi"),
+        );
+        await repairRuntimeLinks(
+          join(__dirname, ".runtime/terminal"),
+          join(resources, "terminal"),
         );
         await repairRuntimeLinks(
           join(__dirname, ".runtime/firstmate"),

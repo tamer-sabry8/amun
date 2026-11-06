@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@amun/contracts": "workspace:*"
+    "@amun/contracts": "workspace:*",
+    "@xterm/xterm": "6.0.0"
   }
 }

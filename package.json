@@ -17,13 +17,15 @@
     "test:e2e": "pnpm build && playwright test",
     "test:runtime": "node scripts/pi-proof.ts",
     "runtime:stage": "pnpm --filter @amun/pi-runtime deploy --legacy --prod --force apps/desktop/.runtime/pi && node scripts/prepare-runtime.ts && pnpm install --frozen-lockfile --prod=false",
-    "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm --filter @amun/desktop package",
+    "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm terminal:stage && pnpm --filter @amun/desktop package",
     "test:packaged": "node scripts/packaged-proof.ts",
     "firstmate:stage": "node scripts/stage-firstmate.ts",
     "test:firstmate": "node scripts/firstmate-proof.ts",
-    "test:tmux": "node scripts/tmux-proof.ts"
+    "test:tmux": "node scripts/tmux-proof.ts",
+    "terminal:stage": "pnpm --filter @amun/terminal-runtime deploy --legacy --prod --force apps/desktop/.runtime/terminal && node scripts/prepare-runtime.ts terminal && pnpm exec electron-rebuild -m apps/desktop/.runtime/terminal -v 45.2.3 -w node-pty -f && pnpm install --frozen-lockfile --prod=false"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.1",
     "@playwright/test": "1.64.1",
     "@types/node": "26.6.6",
     "eslint": "10.14.0",

@@ -1,0 +1,13 @@
+{
+  "name": "@amun/connectors-ado",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@napi-rs/keyring": "2.1.2",
+    "azure-devops-node-api": "17.0.1"
+  },
+  "devDependencies": {
+    "msw": "3.0.4"
+  }
+}

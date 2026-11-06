@@ -47,8 +47,15 @@ export async function repairRuntimeLinks(
 export async function removeDeploymentSelfLink(
   staged: string,
   project: string,
+  packageName = "pi-runtime",
 ): Promise<void> {
-  const link = join(staged, "node_modules/.pnpm/node_modules/@amun/pi-runtime");
+  if (!["pi-runtime", "terminal-runtime"].includes(packageName))
+    throw new Error("Unsupported deployment package");
+  const link = join(
+    staged,
+    "node_modules/.pnpm/node_modules/@amun",
+    packageName,
+  );
   let entry;
   try {
     entry = await lstat(link);

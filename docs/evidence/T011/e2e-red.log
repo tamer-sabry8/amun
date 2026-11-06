@@ -1,0 +1,28 @@
+
+Running 1 test using 1 worker
+
+(node:79681) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 tests/e2e/terminal.spec.ts:2:1 › service PTY is read-only until control, echoes and resizes with a minimal environment (4.7s)
+
+
+  1) tests/e2e/terminal.spec.ts:2:1 › service PTY is read-only until control, echoes and resizes with a minimal environment 
+
+    TimeoutError: locator.click: Timeout 3000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Open terminal', exact: true })
+
+
+       5 |     const page=await app.firstWindow();
+       6 |     await expect(page.getByRole("status")).toHaveText("Connected");
+    >  7 |     await page.getByRole("button",{name:"Open terminal",exact:true}).click({timeout:3000});
+         |                                                                      ^
+       8 |     await expect(page.locator("#terminal-status")).toHaveText("readonly");
+       9 |     await page.locator(".xterm-helper-textarea").focus();
+      10 |     await page.keyboard.type("echo FORBIDDEN");await page.keyboard.press("Enter");
+        at /Users/tamersabry/Projects/amun/tests/e2e/terminal.spec.ts:7:70
+
+    Error Context: test-results/terminal-service-PTY-is-re-e03ee--with-a-minimal-environment/error-context.md
+
+  1 failed
+    tests/e2e/terminal.spec.ts:2:1 › service PTY is read-only until control, echoes and resizes with a minimal environment 

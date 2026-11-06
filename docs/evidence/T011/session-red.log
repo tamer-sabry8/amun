@@ -1,0 +1,57 @@
+$ vitest run apps/service/tests/terminal.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/terminal.test.ts (3 tests | 3 failed) 4ms
+   × opens at most one read-only terminal and requires explicit control for input 2ms
+   × rejects invalid sizes, extra fields and excessive input before PTY operations 1ms
+   × cleans up only its PTY and fails safely on spawn errors 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/terminal.test.ts > opens at most one read-only terminal and requires explicit control for input
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ apps/service/tests/terminal.test.ts:6:119
+      4| const command=(action:string,extra:Record<string,unknown>={})=>({versi…
+      5| it("opens at most one read-only terminal and requires explicit control…
+      6|  const {session,pty,spawn,send}=setup();session.handle(command("open")…
+       |                                                                                                                       ^
+      7|  expect(send).toHaveBeenCalledWith({version:1,kind:"terminal-state",st…
+      8|  session.handle(command("input",{data:"echo unsafe\r"}));expect(pty.wr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/service/tests/terminal.test.ts > rejects invalid sizes, extra fields and excessive input before PTY operations
+AssertionError: expected "vi.fn()" to be called with arguments: [ 100, 30 ]
+
+Number of calls: 0
+
+ ❯ apps/service/tests/terminal.test.ts:14:106
+     12| it("rejects invalid sizes, extra fields and excessive input before PTY…
+     13|  const {session,pty,spawn}=setup();session.handle(command("open",{comm…
+     14|  session.handle(command("open"));session.handle(command("resize",{cols…
+       |                                                                                                          ^
+     15|  for(const cols of [0,-1,501,1.5])session.handle(command("resize",{col…
+     16|  session.handle(command("take-control"));session.handle(command("input…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/service/tests/terminal.test.ts > cleans up only its PTY and fails safely on spawn errors
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ apps/service/tests/terminal.test.ts:19:111
+     17| });
+     18| it("cleans up only its PTY and fails safely on spawn errors",()=>{
+     19|  const {session,pty}=setup();session.handle(command("open"));session.c…
+       |                                                                                                               ^
+     20|  const send=vi.fn();new TerminalSession(()=>{throw new Error("secret-c…
+     21| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  10:23:35
+   Duration  134ms (transform 46%, import 41%, tests 8%, worker 5%)
+
+[ELIFECYCLE] Test failed. See above for more details.

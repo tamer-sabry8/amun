@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amun</title>
+    <link rel="stylesheet" href="./renderer.css" />
   </head>
   <body>
     <main>
@@ -27,6 +28,17 @@
       <button type="button" data-browser="close">Close browser</button>
     </form>
     <p id="browser-status" aria-live="polite">Browser closed</p>
+    <section aria-label="M0 terminal proof">
+      <button type="button" data-terminal="open">Open terminal</button>
+      <button type="button" data-terminal="take-control">Take control</button>
+      <button type="button" data-terminal="release-control">Read only</button>
+      <button type="button" data-terminal="resize">Resize 100 × 30</button>
+      <button type="button" data-terminal="close">Close terminal</button>
+      <span id="terminal-status">closed</span>
+      <p>Isolated proof shell. Worker attachment is not enabled.</p>
+      <div id="terminal-dock" hidden></div>
+      <pre id="terminal-output" hidden></pre>
+    </section>
     <script src="./renderer.js"></script>
   </body>
 </html>

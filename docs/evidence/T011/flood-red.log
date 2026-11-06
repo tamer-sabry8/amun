@@ -1,0 +1,28 @@
+$ vitest run apps/service/tests/terminal.test.ts
+
+ RUN  v5.1.0 /Users/tamersabry/Projects/amun
+
+ ❯ apps/service/tests/terminal.test.ts (4 tests | 1 failed) 9ms
+   × bounds terminal output instead of queueing an unlimited flood 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/service/tests/terminal.test.ts > bounds terminal output instead of queueing an unlimited flood
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ apps/service/tests/terminal.test.ts:75:20
+     73|   const output=pty.onData.mock.calls[0]?.[0] as ((value:string)=>void)…
+     74|   expect(output).toBeTypeOf("function");output!("x".repeat(1048577));
+     75|   expect(pty.kill).toHaveBeenCalledTimes(1);
+       |                    ^
+     76|   expect(send).toHaveBeenLastCalledWith({version:1,kind:"terminal-stat…
+     77| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  10:36:40
+   Duration  603ms (import 85%, transform 11%, tests 2%, worker 2%)
+
+[ELIFECYCLE] Test failed. See above for more details.

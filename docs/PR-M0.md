@@ -1,43 +1,21 @@
-# M0: establish Electron contracts, service recovery and Pi runtime proof
+# M0: isolated desktop and live Mac foundation proofs
 
-Amun now has a macOS foundation window that connects to an isolated service and recovers after that service crashes. Shared contracts reject malformed events and unsafe inline approvals. The pinned Pi runtime has an isolated live RPC probe.
+Adds the sandboxed Electron shell, recoverable service process, pinned Pi/Firstmate runtimes, and isolated browser and terminal proofs. Existing personal sessions and installations remain separate. This is the M0 foundation shell, not the finished Amun UI.
 
-## Scope
+## Implemented and verified
 
-M0 only; M1–M6 remain locked. No product workflows or external write capabilities are presented as working.
-
-## Changes
-
-- Pinned Electron/TypeScript workspace, macOS CI and evidence-backed milestone tracker.
-- Six shared entity schemas plus health RPC, with strict rejection and round-trip tests.
-- Sandboxed preload transfers MessagePorts; service validates health requests; UI validates correlated replies and displays Reconnecting on crash.
-- Bounded restart delays; app shutdown cancels retries and stops the child.
-- Pi 1.4.0 pinned, bounded JSONL parser and live isolated state/model-discovery probe.
-- Unsigned Forge packaging includes deployed production Pi; packaged Electron-as-Node proof uses an empty PATH and rejects links escaping the artifact. Regression tests verify the copied runtime remains usable after its build source is removed.
-- Pinned, checksum-verified Firstmate distribution included in the app. Isolated probes verify watcher loading and missing-ownership refusal over RPC, including in the packaged runtime.
-- Managed homes force Claude auto and Codex restricted, refuse unsafe imports/overwrites, and preserve a synthetic personal-home tree. Operational watcher and worker integration remain open.
-
-- Read-only existing-Pi discovery and state separation protect the first installer’s Herdr → Pi → Firstmate setup. Matching versions still require a protocol probe; runtime reuse and attachment remain pending.
-
-- Removed the implicit Herdr backend. Amun-managed homes reject Herdr and require explicit tmux selection for the startup proof; operational worker integration remains an M0 gate. The user’s existing Herdr session is preserved, not controlled by Amun.
-
-- Private tmux socket scope and explicit launch-environment allowlist; live macOS probe for same-named session isolation using the pinned Firstmate adapter. Worker dispatch/recovery remains disabled.
-
-- Pi transport now correlates concurrent commands, delivers streaming events, bounds pending work, and validates explicit select/confirm responses. Live source and packaged discovery probes use the client; renderer dialog and authenticated-provider integration remain open.
+- Typed service RPC, bounded Pi JSONL/request handling and validated dialog replies; packaged OpenRouter and GitHub Copilot inference through Pi with empty PATH and isolated state. Personal credential file remained unchanged.
+- Checksum-pinned Firstmate distribution, restrictive managed-home settings and private tmux scope. Real source/packaged Pi lock ownership and fresh watcher heartbeat pass using the documented CLI RPC entry.
+- Sandboxed WebContentsView with strict URL/navigation and permission policy. Real local prototype/redirect/security E2E proves no Node, IPC or Amun port access.
+- Service-owned node-pty and renderer xterm: explicit control, read-only default, bounded input/output and resize. Native runtime is rebuilt for Electron and contained in the unsigned package.
+- API-only Azure DevOps proof using Keychain PAT: ICV Test PBI #1088026 and Test Task #1088027, revision-checked updates, and real HTTP 412 stale-revision rejection. No Azure browser integration.
 
 ## Validation
 
-- 102 local unit tests pass, with recorded failing tests before implementation.
-- macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
-- Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
-- macOS run 42147118853 passed all 72 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, source and packaged Firstmate startup/refusal proofs, and both packaged launch/isolation and crash-recovery tests.
+145 unit tests, lint, strict typecheck and formatting pass locally on macOS arm64 with Node 24.22.1 / pnpm 11.25.0. Four source Electron E2E tests pass. Packaged validation and detailed live results are recorded in docs/evidence by task. CI rebuilds the source terminal for Electron before E2E.
 
-- macOS run 42150376823 passed all 90 unit tests, live tmux socket isolation through the pinned adapter, and source/packaged startup and recovery checks.
+Three process-cold launches with warm caches measured 713/502/324 ms to Connected, summed Electron working set 481/481/480 MiB and proof-terminal echo 16/22/13 ms. These are a local baseline, not clean-account or release acceptance; see ADR-008.
 
-## Remaining M0 gates
+## Open exit gates
 
-Packaged Pi and provider sign-in, managed Firstmate homes, worker reattachment, live Azure DevOps, browser/terminal proofs, release signing and performance budgets. M0 remains incomplete. Test credentials must use secure settings, never chat or repository files.
-
-## Local Mac continuation
-
-Verified the first installer’s real Mac setup and ran all existing source/package probes successfully. Added an isolated WebContentsView and narrow navigation controls with 13 policy tests and a real Electron prototype/redirect/security test. `pnpm check` passes 115 tests and source E2E passes three. Real authenticated browsing, provider inference, operational crew supervision, Azure writes, terminal integration and release acceptance remain open. See `docs/evidence/M0-local-mac.md` and `docs/evidence/T010/README.md`.
+M0 remains incomplete. T006 needs service/UI stream and dialog integration. T007/T008 need safe worker permission propagation, wake/recovery and ten real worker reattachment trials. T010 needs an allowed authenticated site. T011 needs backend attachment and Finder acceptance. T012 needs clean-account installation and real Apple signing/notarization credentials/evidence. T009 is complete; other open gates are not waived. No M1/M2 work or automatic merge.

@@ -58,3 +58,24 @@ it("removes only the verified pnpm deployment self-reference", async () => {
   await symlink(root, link);
   await expect(removeDeploymentSelfLink(staged, project)).rejects.toThrow();
 });
+
+it("removes only the verified terminal deployment self-reference", async () => {
+  const { removeDeploymentSelfLink } = await import("../src/runtime-links.js");
+  root = await mkdtemp(join(tmpdir(), "amun-links-"));
+  const staged = join(root, "stage");
+  const project = join(root, "project");
+  await mkdir(join(staged, "node_modules/.pnpm/node_modules/@amun"), {
+    recursive: true,
+  });
+  await mkdir(project);
+  const link = join(
+    staged,
+    "node_modules/.pnpm/node_modules/@amun/terminal-runtime",
+  );
+  await symlink(project, link);
+  await removeDeploymentSelfLink(staged, project, "terminal-runtime");
+  await expect(assertRuntimeContained(staged)).resolves.toBeUndefined();
+  await expect(
+    removeDeploymentSelfLink(staged, project, "../../outside"),
+  ).rejects.toThrow();
+});

@@ -15,3 +15,7 @@ On 2026-11-06 the managed environment reports no configured secrets, runtime var
 The user selected their Mac using existing sign-ins. They supplied Pi and Firstmate installation paths and confirmed Codex/Claude CLIs are installed there. Direct checks show this task still runs on Linux and cannot access those Mac paths. A local execution context is required; see [Mac handoff](../MAC-ACCEPTANCE-HANDOFF.md). The user has no Apple account signed in; unsigned development testing can proceed, while release signing/notarization remains open. Never paste credentials into chat or commit them. Existing personal Herdr sessions must be preserved.
 
 No acceptance gate is waived by this document. Independent implementation can continue, but M0 cannot be marked complete until these tests have evidence.
+
+## Local continuation supersedes historical execution blockers
+
+Local macOS execution and installations are verified. ICV API access, authorised test writes, and revision conflict acceptance pass (T009). Azure DevOps must be accessed by API only from Amun; corporate browser access is Edge-only. An embedded Azure sign-in attempt was stopped and its dedicated window closed. Browser acceptance needs a different permitted site. Source/packaged terminal and initial owned watcher proofs pass; full worker recovery and remaining release gates are still open. See M0-local-mac.md, T009/README.md, T007/owned-watcher.md and T011/README.md.

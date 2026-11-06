@@ -6,6 +6,7 @@ export default defineConfig({
       formats: ["iife"],
       name: "AmunRenderer",
       fileName: () => "renderer.js",
+      cssFileName: "renderer",
     },
     outDir: "renderer",
     emptyOutDir: false,

@@ -21,16 +21,16 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T001/T003/T004: complete. macOS CI run 42012823971 passed the clean install, checks and live shell launch/isolation test. See evidence links.
 - T002: six entity contracts plus health RPC implemented with schema rejection/round-trip tests. Consumer adoption exists in renderer/service; Pi bridge remains T037.
 - T005: complete. macOS CI run 42013744485 passed both launch/isolation and real service crash-recovery tests (<5 s recovery).
-- T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged Linux Electron-as-Node probe passes with empty PATH; macOS packaged containment, RPC, launch/isolation and crash-recovery checks passed (run 42145190729). Streaming/extension UI and authenticated provider proofs remain open.
+- T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged Linux Electron-as-Node probe passes with empty PATH; macOS packaged containment, RPC, launch/isolation and crash-recovery checks passed (run 42145190729). Packaged OpenRouter and GitHub Copilot inference now pass on the real Mac. Streaming/extension UI integration remains open.
 - T007: checksum-pinned Firstmate distribution is packaged; real watcher command/marker loading and missing-ownership refusal pass in isolated source and packaged probes on macOS (run 42147118853). Every Amun-created home forces Claude auto and Codex restricted. Owned watcher operation, personal skills import and worker approval/dispatch remain open.
 - First-installer requirement: preserve the existing Herdr → Pi → Firstmate setup. Read-only discovery and state-isolation unit tests are implemented; actual reuse/attachment and Mac onboarding remain open. See [ADR-005](decisions/ADR-005-existing-installations.md) and [coexistence evidence](evidence/T007/coexistence.md).
-- T008–T012: pending. Unsigned packaging proof is implemented; signing and performance gates remain open. M0 is not complete.
+- T009: live ICV API proof complete, with authorised test IDs and real stale-revision conflicts. T008/T010/T011/T012 remain open; browser and native terminal proofs pass locally, but their remaining gates are not waived.
 
 - Backend clarification: Amun must not depend on Herdr. Managed-home creation now rejects Herdr and requires explicit tmux selection for the M0 proof; operational tmux integration remains unproven. The original attached plan is preserved as reference, with this user clarification taking precedence.
 
 - T007 isolation increment: private short tmux socket roots and a launch-environment allowlist are unit-tested; source/packaged startup probes use them. A new macOS integration probe checks two same-named sessions remain independent. Worker lifecycle and persistent reconnect remain open; see [evidence](evidence/T007/tmux-isolation.md).
 
-- T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Authenticated inference and renderer integration remain open. See [evidence](evidence/T006/rpc-client.md).
+- T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Packaged authenticated inference now passes for both providers; renderer integration remains open. See [evidence](evidence/T006/rpc-client.md).
 
 - Local Mac baseline and installation inventory completed: see [local evidence](evidence/M0-local-mac.md). T010 now has a live local prototype/security/redirect proof; real authenticated browsing remains open.
 
@@ -39,7 +39,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - Local execution is now verified on the user’s Mac. The historical Linux handoff is superseded for execution access by [local evidence](evidence/M0-local-mac.md); authenticated acceptance gates remain open.
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
 - Apple Developer signing/notarization and clean-account installation remain open; unsigned local Mac source/package tests pass.
-- M0 live integration needs authorised Tahaluf test access, provider sign-in and a verified non-Herdr worker runtime. Do not request credentials in chat.
+- ICV API access and live T009 writes now pass through a Keychain PAT. Provider/service UI integration, operational crew recovery and remaining browser/release gates remain open. Do not request credentials in chat.
 - GitHub API access restored. Work is tracked in draft PR #1.
 
 ## M0 — Prove the foundations — ACTIVE
@@ -74,10 +74,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
       Build: adapter reading Firstmate task records and Amun-managed backend state (non-Herdr; discover format first; document it); map to `runs`; detect `unknown` after restart; reattach by recorded backend pane + worktree; never spawn.
       Tests: fixtures of recorded Firstmate and selected backend state; live: dispatch Codex + Claude workers, restart service, reattach.
       DoD: zero duplicate workers across 10 restart trials; unknown state shown when unverifiable.
-- [ ] **T009 — Azure DevOps proof** · P0 · TS · Dep T005
+- [x] **T009 — Azure DevOps proof** · P0 · TS · Dep T005
       Build: client on azure-devops-node-api with explicit `api-version=7.0`; PAT from Keychain; `NODE_EXTRA_CA_CERTS` support; read projects/teams/process/work items; create story + task; update with JSON Patch `test /rev`; read iterations; read Azure Repos PRs.
       Tests: MSW fixtures; live `@live` against the Tahaluf test project.
       DoD: evidence of created IDs; stale-revision update returns conflict and is handled; supported-endpoint matrix recorded.
+      Local acceptance: ICV Test PBI #1088026 and Test Task #1088027; both revision updates and stale rejections proved. See [T009 evidence](evidence/T009/README.md).
 - [ ] **T010 — Browser view proof** · P1 · TS · Dep T004
       Build: WebContentsView in the inspector slot; per-product partitions; navigation controls; permission handler; popup handling; SSO redirect test.
       Tests: page script cannot access `ipcRenderer`, Node or Amun ports; Playwright.
@@ -188,3 +189,11 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - [ ] **T056 — Performance** · P1 — budgets from T012 met.
 - [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex.
 - [ ] **T058 — R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off.
+
+## Local acceptance continuation
+
+- T006: packaged OpenRouter inference passed; provider-specific GitHub Copilot OAuth proof is tracked separately. Renderer streaming/dialog integration remains open.
+- T007: actual Pi-owned lock and fresh real watcher pass in source and packaged CLI-entry execution; wake/recovery and policy propagation remain open.
+- T010: local prototype/redirect/security tests pass in source and packaged apps. Azure DevOps is prohibited as its browser test target; real authenticated browsing remains open.
+- T011: native service PTY + xterm echo/resize/read-only tests pass source and packaged. Verified worker attachment and real Finder launch remain open.
+- T012: measured provisional process-start, working-set and terminal-echo baseline; signing/notarization and clean-account installation remain open.

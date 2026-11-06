@@ -29,7 +29,18 @@ function startService(): void {
   const child = utilityProcess.fork(
     join(app.getAppPath(), "dist/service.cjs"),
     [],
-    { serviceName: "Amun Service" },
+    {
+      serviceName: "Amun Service",
+      env: {
+        ...process.env,
+        AMUN_TERMINAL_MODULE: app.isPackaged
+          ? join(process.resourcesPath, "terminal/node_modules/node-pty")
+          : join(
+              app.getAppPath(),
+              "../../runtime/terminal/node_modules/node-pty",
+            ),
+      },
+    },
   );
   service = child;
   child.on("spawn", () => {

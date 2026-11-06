@@ -10,3 +10,5 @@ test-results/
 apps/desktop/renderer/renderer.js
 apps/desktop/.runtime/
 apps/desktop/out/
+
+apps/desktop/renderer/renderer.css
