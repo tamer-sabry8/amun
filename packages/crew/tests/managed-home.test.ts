@@ -30,14 +30,17 @@ describe("Firstmate managed home", () => {
     const overlay = {
       backend: "tmux",
       "claude-permission-mode": "bypass",
+      "codex-permission-mode": "bypass",
       "secondmate-harness": "codex",
       "crew-dispatch.json": '{"default":{"harness":"codex"}}',
     };
     expect(mergeOverlay(overlay)).toEqual({
       ...overlay,
       "claude-permission-mode": "auto",
+      "codex-permission-mode": "restricted",
     });
     expect(overlay["claude-permission-mode"]).toBe("bypass");
+    expect(overlay["codex-permission-mode"]).toBe("bypass");
   });
   it.each([
     { backend: "unsupported" },
@@ -53,6 +56,9 @@ describe("Firstmate managed home", () => {
     expect(
       await readFile(join(home, "config/claude-permission-mode"), "utf8"),
     ).toBe("auto\n");
+    expect(
+      await readFile(join(home, "config/codex-permission-mode"), "utf8"),
+    ).toBe("restricted\n");
     expect((await stat(home)).mode & 0o777).toBe(0o700);
     expect((await stat(join(home, "config/backend"))).mode & 0o777).toBe(0o600);
     for (const directory of ["state", "data", "projects"])

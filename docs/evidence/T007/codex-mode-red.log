@@ -1,0 +1,40 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/managed-home.test.ts (12 tests | 2 failed) 25ms
+   ❯ Firstmate managed home (12)
+     × forces auto permissions without changing the imported values 5ms
+     × creates private operational directories and refuses to overwrite an existing home 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > forces auto permissions without changing the imported values
+Error: Unsupported overlay
+ ❯ mergeOverlay packages/crew/src/managed-home.ts:20:13
+     18|       Buffer.byteLength(value) > 65536
+     19|     )
+     20|       throw new Error("Unsupported overlay");
+       |             ^
+     21|   }
+     22|   const merged = {
+ ❯ packages/crew/tests/managed-home.test.ts:37:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/crew/tests/managed-home.test.ts > Firstmate managed home > creates private operational directories and refuses to overwrite an existing home
+Error: ENOENT: no such file or directory, open '/tmp/amun-home-test-YW5RID/primary/config/codex-permission-mode'
+ ❯ packages/crew/tests/managed-home.test.ts:59:12
+     57|       await readFile(join(home, "config/claude-permission-mode"), "utf…
+     58|     ).toBe("auto\n");
+     59|     expect(await readFile(join(home, "config/codex-permission-mode"), …
+       |            ^
+     60|     expect((await stat(home)).mode & 0o777).toBe(0o700);
+     61|     expect((await stat(join(home, "config/backend"))).mode & 0o777).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 10 passed (12)
+   Start at  01:51:25
+   Duration  215ms (transform 43%, tests 31%, import 18%, worker 7%)

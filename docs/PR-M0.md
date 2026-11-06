@@ -14,11 +14,12 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 - Bounded restart delays; app shutdown cancels retries and stops the child.
 - Pi 1.4.0 pinned, bounded JSONL parser and live isolated state/model-discovery probe.
 - Unsigned Forge packaging includes deployed production Pi; packaged Electron-as-Node proof uses an empty PATH and rejects links escaping the artifact. Regression tests verify the copied runtime remains usable after its build source is removed.
-- Managed Firstmate home helper forces auto permissions and refuses unsafe imports or overwrites; live Firstmate integration remains open.
+- Pinned, checksum-verified Firstmate distribution included in the app. Isolated probes verify watcher loading and missing-ownership refusal over RPC, including in the packaged runtime.
+- Managed homes force Claude auto and Codex restricted, refuse unsafe imports/overwrites, and preserve a synthetic personal-home tree. Operational watcher and worker integration remain open.
 
 ## Validation
 
-- 66 local unit tests pass, with recorded failing tests before implementation.
+- 72 local unit tests pass, with recorded failing tests before implementation.
 - macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
 - macOS run 42145190729 passed all 66 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, and both packaged launch/isolation and crash-recovery tests.

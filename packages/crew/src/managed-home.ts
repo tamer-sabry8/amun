@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 const allowed = new Set([
   "backend",
   "claude-permission-mode",
+  "codex-permission-mode",
   "secondmate-harness",
   "crew-dispatch.json",
 ]);
@@ -24,6 +25,7 @@ export function mergeOverlay(
     "secondmate-harness": "codex",
     ...overlay,
     "claude-permission-mode": "auto",
+    "codex-permission-mode": "restricted",
   };
   if (!["herdr", "tmux"].includes(merged.backend.trim()))
     throw new Error("Unsupported backend");

@@ -20,7 +20,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T002: six entity contracts plus health RPC implemented with schema rejection/round-trip tests. Consumer adoption exists in renderer/service; Pi bridge remains T037.
 - T005: complete. macOS CI run 42013744485 passed both launch/isolation and real service crash-recovery tests (<5 s recovery).
 - T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged Linux Electron-as-Node probe passes with empty PATH; macOS packaged containment, RPC, launch/isolation and crash-recovery checks passed (run 42145190729). Streaming/extension UI and authenticated provider proofs remain open.
-- T007: managed operational-home helper implemented and unit-tested; distribution, trust and live watcher/worker proof remain open.
+- T007: checksum-pinned Firstmate distribution is packaged; real watcher command/marker loading and missing-ownership refusal pass in isolated source and packaged probes. Every Amun-created home forces Claude auto and Codex restricted. Owned watcher operation, personal skills import and worker approval/dispatch remain open.
 - T008–T012: pending. Unsigned packaging proof is implemented; signing and performance gates remain open. M0 is not complete.
 
 ## Current blockers

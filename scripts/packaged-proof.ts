@@ -29,6 +29,14 @@ const runtime = spawnSync(
 );
 if (runtime.error) throw runtime.error;
 if (runtime.status !== 0) process.exit(runtime.status ?? 1);
+await assertRuntimeContained(join(resources, "firstmate"));
+const firstmate = spawnSync(
+  process.execPath,
+  ["scripts/firstmate-proof.ts", join(resources, "firstmate"), entry, binary],
+  { stdio: "inherit", timeout: 30000 },
+);
+if (firstmate.error) throw firstmate.error;
+if (firstmate.status !== 0) process.exit(firstmate.status ?? 1);
 const e2e = spawnSync(
   process.execPath,
   ["node_modules/@playwright/test/cli.js", "test"],
