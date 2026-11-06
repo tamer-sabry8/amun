@@ -1,6 +1,6 @@
 # R1 milestone tracker
 
-Only **M0** has been implemented. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
+M0 is merged. **M1** is active by user instruction on 2026-11-06; M2 remains locked. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
 
 The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. The user confirmed Electron/TypeScript; see ADR-001-desktop-stack.md. Product scope and task IDs remain traceable.
 
@@ -73,7 +73,7 @@ T010 is explicitly narrowed to secure preview, external federated-auth handoff a
       DoD: tested unsigned development package and measured budgets/limitations recorded in ADR. Signing, notarization, signed native modules, notarized DMG and clean-account release acceptance remain mandatory before public release, deferred by explicit user decision on 2026-11-06.
       **M0 exit gate:** every item in the M0 DoD has evidence; failures become product-owner decisions before M1.
 
-## M1 — Durable core and shell — LOCKED
+## M1 — Durable core and shell — ACTIVE
 
 - [ ] **T013 — Database and migrations** · P0 · TS · Dep T002
       Build: Drizzle schema for section 8.6; migrations; FTS5 for search.
