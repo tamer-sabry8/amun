@@ -1,0 +1,77 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/tmux-scope.test.ts (4 tests | 4 failed) 20ms
+   × creates distinct private socket roots for independent homes 6ms
+   × rejects long paths before creating anything to respect macOS socket limits 7ms
+   × removes inherited session selectors, config overrides, shell startup hooks and credentials 4ms
+   × rejects relative socket roots 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/tmux-scope.test.ts > creates distinct private socket roots for independent homes
+Error: not implemented
+ ❯ createTmuxScope packages/crew/src/tmux-scope.ts:1:82
+      1| export async function createTmuxScope(_parent = "/tmp"): Promise<strin…
+       |                                                                                  ^
+      2| export function tmuxEnvironment(_scope: string, _source: NodeJS.Proces…
+      3|
+ ❯ packages/crew/tests/tmux-scope.test.ts:10:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  packages/crew/tests/tmux-scope.test.ts > rejects long paths before creating anything to respect macOS socket limits
+AssertionError: expected [Function] to throw error including 'short' but got 'not implemented'
+
+Expected: "short"
+Received: "not implemented"
+
+ ❯ packages/crew/tests/tmux-scope.test.ts:19:40
+     17|   const parent = join(await root(), 'a'.repeat(70));
+     18|   await mkdir(parent);
+     19|   await expect(createTmuxScope(parent)).rejects.toThrow('short');
+       |                                        ^
+     20|   expect(await readdir(parent)).toEqual([]);
+     21| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  packages/crew/tests/tmux-scope.test.ts > removes inherited session selectors, config overrides, shell startup hooks and credentials
+AssertionError: expected {} to deeply equal { HOME: '/personal', …(6) }
+
+- Expected
++ Received
+
+- {
+-   "FM_BACKEND": "tmux",
+-   "FM_HOME": "/managed",
+-   "FM_ROOT_OVERRIDE": "/pinned",
+-   "HOME": "/personal",
+-   "PATH": "/usr/bin",
+-   "TERM": "xterm-256color",
+-   "TMUX_TMPDIR": "/tmp/amun-private",
+- }
++ {}
+
+ ❯ packages/crew/tests/tmux-scope.test.ts:24:56
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  packages/crew/tests/tmux-scope.test.ts > rejects relative socket roots
+AssertionError: expected [Function] to throw an error
+ ❯ packages/crew/tests/tmux-scope.test.ts:28:78
+     26| });
+     27| it('rejects relative socket roots', () => {
+     28|   expect(() => tmuxEnvironment('relative', { HOME: '/home', PATH: '/bi…
+       |                                                                              ^
+     29| });
+     30|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  02:25:14
+   Duration  227ms (transform 45%, tests 29%, import 19%, worker 7%)

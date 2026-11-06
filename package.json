@@ -20,7 +20,8 @@
     "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm --filter @amun/desktop package",
     "test:packaged": "node scripts/packaged-proof.ts",
     "firstmate:stage": "node scripts/stage-firstmate.ts",
-    "test:firstmate": "node scripts/firstmate-proof.ts"
+    "test:firstmate": "node scripts/firstmate-proof.ts",
+    "test:tmux": "node scripts/tmux-proof.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

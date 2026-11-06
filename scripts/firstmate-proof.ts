@@ -11,6 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createManagedHome } from "../packages/crew/src/managed-home.ts";
+import {
+  createTmuxScope,
+  tmuxEnvironment,
+} from "../packages/crew/src/tmux-scope.ts";
 import { JsonLineDecoder } from "../packages/crew/src/jsonl.ts";
 
 const root = await realpath(
@@ -31,7 +35,8 @@ const operational = await createManagedHome(root, "managed", {
 });
 const config = join(root, "pi-config");
 await mkdir(config, { mode: 0o700 });
-const env: NodeJS.ProcessEnv = {
+const socketDirectory = await createTmuxScope();
+const env = tmuxEnvironment(socketDirectory, {
   PATH: process.env.PATH ?? "",
   HOME: personal,
   PI_CODING_AGENT_DIR: config,
@@ -39,7 +44,7 @@ const env: NodeJS.ProcessEnv = {
   PI_OFFLINE: "1",
   FM_HOME: operational,
   FM_ROOT_OVERRIDE: distribution,
-};
+});
 if (process.argv[4]) env.ELECTRON_RUN_AS_NODE = "1";
 const child = spawn(
   process.argv[4] ?? process.execPath,
@@ -186,4 +191,5 @@ try {
   });
   clearTimeout(force);
   await rm(root, { recursive: true, force: true });
+  await rm(socketDirectory, { recursive: true, force: true });
 }

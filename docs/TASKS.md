@@ -26,6 +26,8 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - Backend clarification: Amun must not depend on Herdr. Managed-home creation now rejects Herdr and requires explicit tmux selection for the M0 proof; operational tmux integration remains unproven. The original attached plan is preserved as reference, with this user clarification taking precedence.
 
+- T007 isolation increment: private short tmux socket roots and a launch-environment allowlist are unit-tested; source/packaged startup probes use them. A new macOS integration probe checks two same-named sessions remain independent. Worker lifecycle and persistent reconnect remain open; see [evidence](evidence/T007/tmux-isolation.md).
+
 ## Current blockers
 
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
