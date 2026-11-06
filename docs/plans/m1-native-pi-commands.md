@@ -34,3 +34,7 @@ RED evidence: missing router, SDK adapter and contract modules; native UI missin
 ## Session lifecycle follow-up
 
 Actual source and packaged SDK lifecycle acceptance now covers new, resume, clone, tree-entry selection and fork. See [evidence](../evidence/M1/2026-11-06-subscription-and-native-sessions.md). This updates the earlier foundation limitation; full hierarchical presentation, imports and other command families remain open.
+
+## Expanded native controls — d763366
+
+Source and packaged acceptance now also covers native copy, runtime settings, scoped trust, JSONL/HTML transcript review, changelog paging, quit and model scope/cycling. Native save validates frame/format/content and creates only a new file selected by the OS dialog; 512 KiB document/review limits are explicit. Subscription buttons pass actual Codex and Claude CLI inference in source/package. `/hotkeys` describes available native controls without claiming terminal-shortcut parity. See the exact tested commits and limitations in the [evidence](../evidence/M1/2026-11-06-subscription-and-native-sessions.md). Share destination is awaiting user input; remaining independent M1 work continues.
