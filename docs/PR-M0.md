@@ -17,9 +17,11 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 - Pinned, checksum-verified Firstmate distribution included in the app. Isolated probes verify watcher loading and missing-ownership refusal over RPC, including in the packaged runtime.
 - Managed homes force Claude auto and Codex restricted, refuse unsafe imports/overwrites, and preserve a synthetic personal-home tree. Operational watcher and worker integration remain open.
 
+- Read-only existing-Pi discovery and state separation protect the first installer’s Herdr → Pi → Firstmate setup. Matching versions still require a protocol probe; runtime reuse and attachment remain pending.
+
 ## Validation
 
-- 72 local unit tests pass, with recorded failing tests before implementation.
+- 83 local unit tests pass, with recorded failing tests before implementation.
 - macOS CI run 42013744485 passed 45 unit tests and two real Electron E2E tests, including service kill and recovery within five seconds.
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
 - macOS run 42147118853 passed all 72 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, source and packaged Firstmate startup/refusal proofs, and both packaged launch/isolation and crash-recovery tests.

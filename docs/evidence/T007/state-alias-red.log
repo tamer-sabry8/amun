@@ -1,0 +1,30 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/existing-setup.test.ts (11 tests | 1 failed) 78ms
+   × does not inspect a state directory redirected outside the Firstmate home 13ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > does not inspect a state directory redirected outside the Firstmate home
+AssertionError: expected 'possibly_running' to be 'unknown' // Object.is equality
+
+Expected: "unknown"
+Received: "possibly_running"
+
+ ❯ packages/crew/tests/existing-setup.test.ts:196:64
+    194|   await writeFile(join(input.piConfigDirectory, ".lock"), `${process.p…
+    195|   await symlink(input.piConfigDirectory, join(input.firstmateHome, "st…
+    196|   expect((await inspectExistingSetup(input)).firstmateSession).toBe("u…
+       |                                                                ^
+    197| });
+    198| it("does not include malformed metadata contents in errors", async () …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 passed (11)
+   Start at  02:10:33
+   Duration  262ms (tests 57%, transform 28%, import 12%, worker 3%)
+

@@ -1,0 +1,139 @@
+
+ RUN  v5.1.0 /workspace/amun
+
+ ❯ packages/crew/tests/existing-setup.test.ts (6 tests | 6 failed) 42ms
+   ❯ existing installation coexistence (6)
+     × reports a live PID as possibly running, without taking over or exposing credentials 13ms
+     × keeps newer versions unverified rather than overwriting or downgrading them 7ms
+     × treats missing or malformed lock evidence as uncertain, not permission to start another captain 4ms
+     × refuses a different package or executable-looking version string 7ms
+     × rejects state directories overlapping existing code, configuration or a running home 4ms
+     × resolves symlink aliases before checking state-path conflicts 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > reports a live PID as possibly running, without taking over or exposing credentials
+AssertionError: expected '' to be '1.4.0' // Object.is equality
+
+- Expected
++ Received
+
+- 1.4.0
+
+ ❯ packages/crew/tests/existing-setup.test.ts:26:30
+     24|     const before = await readFile(join(input.firstmateHome, 'state/.lo…
+     25|     const report = await inspectExistingSetup(input);
+     26|     expect(report.piVersion).toBe('1.4.0');
+       |                              ^
+     27|     expect(report.versionMatchesBaseline).toBe(true);
+     28|     expect(report.compatibility).toBe('requires_rpc_probe');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > keeps newer versions unverified rather than overwriting or downgrading them
+AssertionError: expected 'unknown' to be 'requires_rpc_probe' // Object.is equality
+
+Expected: "requires_rpc_probe"
+Received: "unknown"
+
+ ❯ packages/crew/tests/existing-setup.test.ts:42:34
+     40|     const report = await inspectExistingSetup(input);
+     41|     expect(report.versionMatchesBaseline).toBe(false);
+     42|     expect(report.compatibility).toBe('requires_rpc_probe');
+       |                                  ^
+     43|     expect(await readFile(join(input.piPackageDirectory, 'package.json…
+     44|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > treats missing or malformed lock evidence as uncertain, not permission to start another captain
+AssertionError: expected 'unknown' to be 'not_observed' // Object.is equality
+
+Expected: "not_observed"
+Received: "unknown"
+
+ ❯ packages/crew/tests/existing-setup.test.ts:48:66
+     46|     const input = await fixture();
+     47|     await rm(join(input.firstmateHome, 'state/.lock'));
+     48|     expect((await inspectExistingSetup(input)).firstmateSession).toBe(…
+       |                                                                  ^
+     49|     await writeFile(join(input.firstmateHome, 'state/.lock'), 'PRIVATE…
+     50|     const report = await inspectExistingSetup(input);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > refuses a different package or executable-looking version string
+AssertionError: promise resolved "{ piVersion: '', …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "attachSupported": true,
++   "compatibility": "unknown",
++   "firstmateSession": "unknown",
++   "piVersion": "",
++   "reuseMode": "unknown",
++   "versionMatchesBaseline": false,
+  }
+
+ ❯ packages/crew/tests/existing-setup.test.ts:58:46
+     56|     const input = await fixture();
+     57|     await writeFile(join(input.piPackageDirectory, 'package.json'), '{…
+     58|     await expect(inspectExistingSetup(input)).rejects.toThrow();
+       |                                              ^
+     59|     await writeFile(join(input.piPackageDirectory, 'package.json'), '{…
+     60|     await expect(inspectExistingSetup(input)).rejects.toThrow();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > rejects state directories overlapping existing code, configuration or a running home
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ packages/crew/tests/existing-setup.test.ts:65:76
+     63|     const input = await fixture();
+     64|     for (const protectedPath of [input.piPackageDirectory, input.piCon…
+     65|       await expect(assertIsolatedStatePath(protectedPath, [protectedPa…
+       |                                                                            ^
+     66|       await expect(assertIsolatedStatePath(join(protectedPath, 'amun')…
+     67|       await expect(assertIsolatedStatePath(root, [protectedPath])).rej…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  packages/crew/tests/existing-setup.test.ts > existing installation coexistence > resolves symlink aliases before checking state-path conflicts
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ packages/crew/tests/existing-setup.test.ts:74:95
+     72|     const input = await fixture();
+     73|     await symlink(input.firstmateHome, join(root, 'alias'));
+     74|     await expect(assertIsolatedStatePath(join(root, 'alias/new-home'),…
+       |                                                                                               ^
+     75|     await expect(assertIsolatedStatePath(input.amunStateDirectory, [in…
+     76|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  02:04:47
+   Duration  275ms (tests 42%, transform 40%, import 13%, worker 4%)
+

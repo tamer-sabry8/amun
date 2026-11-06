@@ -21,6 +21,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T005: complete. macOS CI run 42013744485 passed both launch/isolation and real service crash-recovery tests (<5 s recovery).
 - T006: Pi 1.4.0 pinned; bounded LF-only parser unit-tested; isolated live get_state/get_available_models probe passes. Packaged Linux Electron-as-Node probe passes with empty PATH; macOS packaged containment, RPC, launch/isolation and crash-recovery checks passed (run 42145190729). Streaming/extension UI and authenticated provider proofs remain open.
 - T007: checksum-pinned Firstmate distribution is packaged; real watcher command/marker loading and missing-ownership refusal pass in isolated source and packaged probes on macOS (run 42147118853). Every Amun-created home forces Claude auto and Codex restricted. Owned watcher operation, personal skills import and worker approval/dispatch remain open.
+- First-installer requirement: preserve the existing Herdr → Pi → Firstmate setup. Read-only discovery and state-isolation unit tests are implemented; actual reuse/attachment and Mac onboarding remain open. See [ADR-005](decisions/ADR-005-existing-installations.md) and [coexistence evidence](evidence/T007/coexistence.md).
 - T008–T012: pending. Unsigned packaging proof is implemented; signing and performance gates remain open. M0 is not complete.
 
 ## Current blockers
