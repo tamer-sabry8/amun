@@ -17,3 +17,7 @@ The source and packaged Firstmate startup proofs now use that launch environment
 - Socket namespacing prevents accidental collisions; it is not a security boundary against malicious code running as the same OS user.
 
 These foundations leave T007/T008 open.
+
+## macOS result
+
+[CI run 42150376823](https://github.com/tamer-sabry8/amun/actions/runs/42150376823) passed for implementation commit `0f1f992786313a4adb45f8d14c102d4db5590851`: 90 unit tests, lint/type/format checks, real tmux isolation probe, source and packaged Firstmate startup, Pi RPC probes, and source/packaged Electron isolation and crash recovery. This establishes synthetic-session isolation, not authenticated worker dispatch.

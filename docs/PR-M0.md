@@ -30,6 +30,8 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 - Live Pi get_state and get_available_models commands succeeded without provider credentials in an isolated config directory.
 - macOS run 42147118853 passed all 72 unit tests, unsigned packaging, contained bundled-Pi execution with empty PATH, source and packaged Firstmate startup/refusal proofs, and both packaged launch/isolation and crash-recovery tests.
 
+- macOS run 42150376823 passed all 90 unit tests, live tmux socket isolation through the pinned adapter, and source/packaged startup and recovery checks.
+
 ## Remaining M0 gates
 
 Packaged Pi and provider sign-in, managed Firstmate homes, worker reattachment, live Azure DevOps, browser/terminal proofs, release signing and performance budgets. M0 remains incomplete. Test credentials must use secure settings, never chat or repository files.
