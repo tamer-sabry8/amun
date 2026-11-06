@@ -89,6 +89,8 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
       Tests: crash between write and ack; duplicate-suppression tests.
       DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
+      Implementation progress (T016–T022; gates remain open): [foundation evidence](evidence/M1/2026-11-06-foundations.md).
+
 - [ ] **T016 — Auth broker** · P0 · TS · Dep T006, T013
       Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
       Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.

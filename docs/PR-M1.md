@@ -9,3 +9,5 @@ Acceptance remains open for independent Keychain/Pi connections, redacted audit/
 M2 is not started. Existing personal sessions and configurations are preserved. M0 release gate R001 remains open and separate. This PR is draft; no merge is authorized by the M1 start request.
 
 Theme decision (user, 2026-11-06): use Appendix A’s dark default, with Navy Gold and Navy Cyan alternatives.
+
+Latest foundation evidence: [auth, audit, backup, attention and tokens](docs/evidence/M1/2026-11-06-foundations.md), tested at `b0eb52e`: 254 tests, domain/governance coverage above 95%, source upgrade/sandbox/restart checks pass. Native Keychain roundtrip passes. UI, live provider sign-ins and remaining M1 acceptance are still open.
