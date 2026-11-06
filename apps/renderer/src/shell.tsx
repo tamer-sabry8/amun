@@ -248,6 +248,7 @@ function Settings({
   const [kind, setKind] = useState<"github" | "ado" | "notion">("github");
   const [baseUrl, setBaseUrl] = useState("https://github.com");
   const [secret, setSecret] = useState("");
+  const [notionTarget, setNotionTarget] = useState("");
   const [notionBrowser, setNotionBrowser] = useState<"edge" | "dia">("edge");
   const [model, setModel] = useState("github-copilot:oauth");
   const modelBusy = Object.values(state.modelStatus).includes("checking");
@@ -424,6 +425,33 @@ function Settings({
                   }
                 >
                   Cancel Notion sign-in
+                </button>
+                <label>
+                  Notion destination link
+                  <input
+                    aria-label="Notion destination link"
+                    type="url"
+                    value={notionTarget}
+                    onChange={(event) => setNotionTarget(event.target.value)}
+                    maxLength={2048}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    !notionTarget ||
+                    state.modelStatus["notion-mcp"] === "checking"
+                  }
+                  onClick={() =>
+                    bridge.send({
+                      version: 1,
+                      kind: "auth",
+                      action: "notion-target",
+                      url: notionTarget,
+                    })
+                  }
+                >
+                  Check Notion destination
                 </button>
               </div>
             ) : (

@@ -2,16 +2,43 @@ import { z } from "zod";
 const base = { version: z.literal(1), kind: z.literal("native-pi") };
 const id = z.string().min(1).max(128);
 export const nativePiCommand = z.discriminatedUnion("action", [
-  z.strictObject({
-    ...base,
-    action: z.literal("run"),
-    id,
-    command: z.string().regex(/^[a-z][a-z-]{0,63}$/),
-    argument: z.string().max(16384),
-  }),
+  z
+    .strictObject({
+      ...base,
+      action: z.literal("run"),
+      id,
+      command: z.string().regex(/^[a-z][a-z-]{0,63}$/),
+      argument: z.string().max(524288),
+    })
+    .refine(
+      (value) =>
+        value.command === "import-preview" || value.argument.length <= 16384,
+    ),
   z.strictObject({ ...base, action: z.literal("close") }),
 ]);
+export const notionApprovalRequest = z.strictObject({
+  reviewId: z.uuid(),
+  binding: z.string().regex(/^[a-f0-9]{64}$/),
+});
 export const nativePiResult = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("import-review"),
+    token: z.uuid(),
+    sessionId: z.uuid(),
+    originalCwd: z.string().max(4096),
+    targetCwd: z.string().max(4096),
+    entries: z.number().int().min(0).max(4096),
+    removedParent: z.boolean(),
+  }),
+  z.strictObject({
+    kind: z.literal("notion-review"),
+    reviewId: z.uuid(),
+    binding: z.string().regex(/^[a-f0-9]{64}$/),
+    title: z.string().max(256),
+    text: z.string().max(262144),
+    destination: z.string().max(256),
+    destinationId: z.uuid(),
+  }),
   z.strictObject({
     kind: z.literal("notion-preview"),
     title: z.string().max(256),

@@ -18,40 +18,52 @@ export function migrate(
     throw new Error("Migration requires its own transaction");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
-  db.transaction(() => {
-    const current = db.pragma("user_version", { simple: true }) as number;
-    if (current > schemaVersion || current < 0)
-      throw new Error("Unsupported database version");
-    if (target < current) throw new Error("Database downgrade refused");
-    const exists = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+  // SQLite table rebuilds require foreign_keys off outside the transaction.
+  // Validate every reference before commit, and always restore enforcement.
+  const rebuildingActions =
+    (db.pragma("user_version", { simple: true }) as number) < 4 && target >= 4;
+  if (rebuildingActions) db.pragma("foreign_keys = OFF");
+  try {
+    db.transaction(() => {
+      const current = db.pragma("user_version", { simple: true }) as number;
+      if (current > schemaVersion || current < 0)
+        throw new Error("Unsupported database version");
+      if (target < current) throw new Error("Database downgrade refused");
+      const exists = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+        )
+        .get();
+      if (!exists && current !== 0)
+        throw new Error("Missing migration history");
+      db.exec(
+        "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)",
+      );
+      const history = db
+        .prepare(
+          "SELECT version,checksum FROM schema_migrations ORDER BY version",
+        )
+        .all() as { version: number; checksum: string }[];
+      if (
+        history.length !== current ||
+        history.some(
+          (row, index) =>
+            row.version !== index + 1 ||
+            row.checksum !== migrationChecksums[index],
+        )
       )
-      .get();
-    if (!exists && current !== 0) throw new Error("Missing migration history");
-    db.exec(
-      "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)",
-    );
-    const history = db
-      .prepare(
-        "SELECT version,checksum FROM schema_migrations ORDER BY version",
-      )
-      .all() as { version: number; checksum: string }[];
-    if (
-      history.length !== current ||
-      history.some(
-        (row, index) =>
-          row.version !== index + 1 ||
-          row.checksum !== migrationChecksums[index],
-      )
-    )
-      throw new Error("Corrupt migration history");
-    for (let index = current; index < target; index++) {
-      db.exec(migrations[index]!);
-      db.prepare(
-        "INSERT INTO schema_migrations(version,checksum) VALUES (?,?)",
-      ).run(index + 1, migrationChecksums[index]!);
-      db.pragma(`user_version = ${index + 1}`);
-    }
-  }).immediate();
+        throw new Error("Corrupt migration history");
+      for (let index = current; index < target; index++) {
+        db.exec(migrations[index]!);
+        db.prepare(
+          "INSERT INTO schema_migrations(version,checksum) VALUES (?,?)",
+        ).run(index + 1, migrationChecksums[index]!);
+        db.pragma(`user_version = ${index + 1}`);
+      }
+      if ((db.pragma("foreign_key_check") as unknown[]).length)
+        throw Error("Invalid database references");
+    }).immediate();
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
 }

@@ -118,6 +118,25 @@ export class AuthBroker {
     this.states.set(id, state);
     return state;
   }
+  /** Service-only capability: never expose this callback or the credential through IPC. */
+  async withNotionCredential<T>(
+    operation: (secret: string) => Promise<T>,
+  ): Promise<T> {
+    const connection = {
+      kind: "notion" as const,
+      baseUrl: "https://api.notion.com/",
+    };
+    if (this.status(connection) !== "ready")
+      throw Error("Connect and test Notion in Amun first");
+    try {
+      const secret = this.keyring.get(this.account(connection));
+      if (!secret) throw Error("Missing credential");
+      this.redactor.register(secret);
+      return await operation(secret);
+    } catch {
+      throw Error("Notion operation failed");
+    }
+  }
   forget(connection: Connection): void {
     this.keyring.delete(this.account(connection));
     this.next(connection);

@@ -282,4 +282,21 @@ CREATE TRIGGER search_memory_entities_insert AFTER INSERT ON memory_entities BEG
 CREATE TRIGGER search_memory_entities_update AFTER UPDATE ON memory_entities BEGIN DELETE FROM search_index WHERE product_id=old.product_id AND entity_id=old.id AND kind='memory'; INSERT INTO search_index(product_id,entity_id,kind,title,body) VALUES (new.product_id,new.id,'memory',COALESCE(new.type,''),COALESCE(new.data_json,'')); END;
 CREATE TRIGGER search_memory_entities_delete AFTER DELETE ON memory_entities BEGIN DELETE FROM search_index WHERE product_id=old.product_id AND entity_id=old.id AND kind='memory'; END;
 INSERT INTO search_index(product_id,entity_id,kind,title,body) SELECT product_id,id,'memory',COALESCE(type,''),COALESCE(data_json,'') FROM memory_entities;`,
+  `CREATE TABLE actions_workspace_upgrade (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  payload_hash TEXT NOT NULL,
+  target_revisions_json TEXT NOT NULL DEFAULT '{}',
+  state TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  operation_marker TEXT NOT NULL UNIQUE,
+  CONSTRAINT actions_payload_json_valid CHECK (json_valid(payload_json)),
+  CONSTRAINT actions_target_revisions_json_valid CHECK (json_valid(target_revisions_json)),
+  CONSTRAINT actions_workspace_kind CHECK (product_id IS NOT NULL OR kind = 'notion_publish')
+);
+INSERT INTO actions_workspace_upgrade SELECT * FROM actions;
+DROP TABLE actions;
+ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
 ] as const;

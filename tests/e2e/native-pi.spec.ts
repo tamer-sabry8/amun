@@ -209,10 +209,25 @@ test("native Pi commands create an owned SDK session and update its real name", 
     ).not.toHaveValue(/AMUN_TEST_SECRET/);
     await expect(
       page.getByRole("button", {
-        name: "Publish new Notion page",
+        name: "Approve and publish this content",
         exact: true,
       }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: "Review destination and exact publication",
+        exact: true,
+      })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "First check your Notion destination",
+    );
+    await expect(
+      page.getByRole("button", {
+        name: "Approve and publish this content",
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await page
       .getByLabel("Native Pi command", { exact: true })
       .selectOption("share");

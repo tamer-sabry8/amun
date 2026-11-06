@@ -13,7 +13,7 @@ import {
 } from "../../domain/src/governance.ts";
 export interface Proposal {
   id: string;
-  productId: string;
+  productId: string | null;
   kind: ActionKind;
   payload: unknown;
   revisions: unknown;
@@ -50,14 +50,19 @@ export class ActionStore {
     };
   }
   propose(input: Proposal): void {
-    for (const value of [
-      input.id,
-      input.productId,
-      input.requestedBy,
-      input.operationMarker,
-    ])
-      if (!value.trim() || value.length > 256)
+    for (const value of [input.id, input.requestedBy, input.operationMarker])
+      if (typeof value !== "string" || !value.trim() || value.length > 256)
         throw new Error("Invalid action identity");
+    if (input.productId === null) {
+      if (input.kind !== "notion_publish")
+        throw Error("Product scope required");
+    } else if (
+      typeof input.productId !== "string" ||
+      !input.productId.trim() ||
+      input.productId.length > 256
+    ) {
+      throw Error("Invalid action scope");
+    }
     const binding = bindAction(input.kind, input.payload, input.revisions);
     this.db
       .transaction(() => {
@@ -157,14 +162,19 @@ export class ActionStore {
       })
       .immediate();
   }
-  claim(kind?: ActionKind): StoredAction | undefined {
+  claim(kind?: ActionKind, actionId?: string): StoredAction | undefined {
     return this.db
       .transaction(() => {
         const row = this.db
           .prepare(
-            "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='ready' AND (? IS NULL OR a.kind=?) ORDER BY o.rowid LIMIT 1",
+            "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='ready' AND (? IS NULL OR a.kind=?) AND (? IS NULL OR a.id=?) ORDER BY o.rowid LIMIT 1",
           )
-          .get(kind ?? null, kind ?? null) as { action_id: string } | undefined;
+          .get(
+            kind ?? null,
+            kind ?? null,
+            actionId ?? null,
+            actionId ?? null,
+          ) as { action_id: string } | undefined;
         if (!row) return;
         const action = this.read(row.action_id);
         const approval = this.db
@@ -205,12 +215,13 @@ export class ActionStore {
       })
       .immediate();
   }
-  uncertain(kind?: ActionKind): StoredAction | undefined {
+  uncertain(kind?: ActionKind, actionId?: string): StoredAction | undefined {
     const row = this.db
       .prepare(
-        "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='unknown' AND (? IS NULL OR a.kind=?) ORDER BY o.rowid LIMIT 1",
+        "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='unknown' AND (? IS NULL OR a.kind=?) AND (? IS NULL OR a.id=?) ORDER BY o.rowid LIMIT 1",
       )
-      .get(kind ?? null, kind ?? null) as { action_id: string } | undefined;
+      .get(kind ?? null, kind ?? null, actionId ?? null, actionId ?? null) as
+      { action_id: string } | undefined;
     return row ? this.read(row.action_id) : undefined;
   }
   finish(id: string, state: "succeeded" | "failed" | "unknown"): void {
@@ -241,8 +252,9 @@ export interface Connector {
 export async function dispatchOne(
   store: ActionStore,
   connector: Connector,
+  actionId?: string,
 ): Promise<boolean> {
-  const uncertain = store.uncertain(connector.kind);
+  const uncertain = store.uncertain(connector.kind, actionId);
   if (uncertain) {
     try {
       const result = await connector.reconcile(uncertain.operationMarker);
@@ -253,7 +265,7 @@ export async function dispatchOne(
     }
     return true;
   }
-  const action = store.claim(connector.kind);
+  const action = store.claim(connector.kind, actionId);
   if (!action) return false;
   try {
     await connector.execute(action);

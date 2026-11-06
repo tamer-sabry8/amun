@@ -95,3 +95,32 @@ it("refuses a serialized payload above the API request budget before sending", a
   ).rejects.toThrow("Notion publication exceeds request limits");
   expect(send).not.toHaveBeenCalled();
 });
+it("creates database entries under the data source using its selected title property", async () => {
+  const send = vi.fn<NotionSend>(async () => ({
+    status: 200,
+    data: {
+      object: "page",
+      id: pageId,
+      parent: { type: "data_source_id", data_source_id: parentId },
+    },
+  }));
+  const result = await new NotionPublisher(send).create({
+    parentId,
+    parentType: "data_source_id",
+    titleProperty: "Doc name",
+    title: "Reviewed conversation",
+    text: "Safe text",
+  });
+  expect(result).toEqual({ state: "created", pageId });
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parent: { type: "data_source_id", data_source_id: parentId },
+      properties: {
+        "Doc name": {
+          type: "title",
+          title: [{ type: "text", text: { content: "Reviewed conversation" } }],
+        },
+      },
+    }),
+  );
+});

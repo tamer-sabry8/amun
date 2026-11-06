@@ -1,3 +1,8 @@
+import { NativePiImport } from "../../../packages/crew/src/native-pi-import.ts";
+import {
+  NativePiCredentials,
+  type CredentialSession,
+} from "../../../packages/crew/src/native-pi-credentials.ts";
 import { Redactor } from "../../../packages/security/src/redaction.ts";
 import {
   conversationSharePreview,
@@ -45,18 +50,25 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: NativePiSession &
+  session: CredentialSession &
+    NativePiSession &
     PreferenceSession &
     ExportSession &
     SettingsSession & {
       modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
       sessionManager: { getBranch(): unknown[] };
     };
+  importFromJsonl(
+    path: string,
+    cwdOverride: string,
+  ): Promise<{ cancelled: boolean }>;
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
 let sessionActions: NativePiSessions | undefined;
+let importActions: NativePiImport | undefined;
 let trustActions: NativePiTrust | undefined;
+let credentialActions: NativePiCredentials | undefined;
 let changelogPath: string | undefined;
 let readCredential: ((provider: string, path: string) => unknown) | undefined;
 let privateAuthPath: string | undefined;
@@ -150,6 +162,10 @@ async function initialize() {
       sessionManager: sdk.SessionManager.create(cwd, sessions),
     },
   );
+  importActions = new NativePiImport(runtime, cwd, async () =>
+    (await sdk.SessionManager.list(cwd, sessions)).map((session) => session.id),
+  );
+  credentialActions = new NativePiCredentials(runtime.session);
   changelogPath = join(sdk.getPackageDir(), "CHANGELOG.md");
   readCredential = sdk.readStoredCredential;
   trustActions = new NativePiTrust(new sdk.ProjectTrustStore(root!), cwd);
@@ -157,7 +173,7 @@ async function initialize() {
     sdk.SessionManager.list(cwd, sessions),
   );
 }
-const decoder = new JsonLineDecoder(65536);
+const decoder = new JsonLineDecoder(4194304);
 const send = (id: string, result: unknown) =>
   process.stdout.write(
     JSON.stringify(
@@ -223,6 +239,18 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "import-preview") {
+          send(command.id, importActions!.preview(command.argument));
+          return;
+        }
+        if (command.command === "import") {
+          send(command.id, await importActions!.confirm(command.argument));
+          return;
+        }
+        if (command.command === "logout") {
+          send(command.id, await credentialActions!.run(command.argument));
+          return;
+        }
         if (command.command === "share-notion") {
           const redactor = new Redactor();
           const credentials =

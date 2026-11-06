@@ -15,6 +15,11 @@ const provider = z.enum([
 export const authCommand = z.discriminatedUnion("action", [
   z.strictObject({
     ...base,
+    action: z.literal("notion-target"),
+    url: z.string().url().max(2048),
+  }),
+  z.strictObject({
+    ...base,
     action: z.literal("notion-connect"),
     browser: z.enum(["edge", "dia"]),
   }),

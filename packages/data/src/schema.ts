@@ -240,9 +240,7 @@ export const actions = sqliteTable(
   "actions",
   {
     id: text("id").primaryKey().notNull(),
-    product_id: text("product_id")
-      .notNull()
-      .references(() => products.id),
+    product_id: text("product_id").references(() => products.id),
     kind: text("kind").notNull(),
     payload_json: text("payload_json").notNull().default("{}"),
     payload_hash: text("payload_hash").notNull(),
@@ -254,6 +252,10 @@ export const actions = sqliteTable(
     operation_marker: text("operation_marker").notNull().unique(),
   },
   () => [
+    check(
+      "actions_workspace_kind",
+      sql`product_id IS NOT NULL OR kind = 'notion_publish'`,
+    ),
     check("actions_payload_json_valid", sql`json_valid(payload_json)`),
     check(
       "actions_target_revisions_json_valid",

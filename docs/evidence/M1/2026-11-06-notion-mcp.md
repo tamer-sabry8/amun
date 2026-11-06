@@ -1,4 +1,4 @@
-# Notion hosted MCP — implementation and pending live acceptance
+# Notion hosted MCP — authentication acceptance and remaining publication gates
 
 Parent commit: 06fe2e7; changes recorded with this evidence commit. User replaced Notion token onboarding with hosted MCP browser OAuth; ADR-011 records the stress test and later-milestone boundaries.
 
@@ -13,3 +13,25 @@ Source UI passed (595 ms) and packaged UI passed (4.1 s): Edge/Dia selector, no 
 Live packaged consent was started in the existing isolated M1 acceptance profile, explicitly using Edge. User authorization, expected workspace identity, durable reconnect/refresh, disconnect/revocation, rate limits, bounded MCP results, target discovery and approved publication remain OPEN. The chat's Notion connector is not evidence for Amun authentication. No page was published. The older REST draft adapters are not the chosen production route.
 
 Logs: /tmp/amun-mcp-loopback-red.log, /tmp/amun-mcp-provider-red.log, /tmp/amun-mcp-command-red.log, /tmp/amun-mcp-check2.log, /tmp/amun-mcp-coverage.log, /tmp/amun-mcp-ui-source.log, /tmp/amun-mcp-ui-packaged.log.
+
+## Live follow-up — 2026-11-06, 22:22–22:40 +04
+
+The user completed official Notion consent in Microsoft Edge. The packaged Amun service independently reached ready through notion-get-self. After reopening the packaged acceptance profile, it reused the saved grant without another authorization, identified the expected workspace (Tamer’s Space), and read the selected Document Hub reference through notion-fetch. No page was created. This proves authentication, persisted-grant reuse and destination readability, not publication permission or schema validation.
+
+A separate Node diagnostic triggered a macOS Keychain access prompt. It was stopped before obtaining credentials; the user was advised to deny it. Subsequent verification ran inside the packaged Amun service. No external diagnostic credential extraction is required.
+
+Added tests prove twenty concurrent near-expiry checks cause one refresh, token rotation is saved before callers proceed, unknown MCP tools are blocked, identity projection excludes private fields, and oversized MCP JSON/SSE responses are rejected. Final full check passed 352 tests. Packaged Notion settings and native login/logout tests passed together (12.2 seconds). Logs: /tmp/amun-m1-check-final.log, /tmp/amun-notion-service-ui.log, /tmp/amun-notion-service-package.log.
+
+Still OPEN: live expired-token refresh, disconnect/revocation behavior, rate-limit handling, verified destination schema/identity, exact approved publication through MCP and uncertain-result reconciliation. Publication remains blocked until the user reviews the exact content and destination. No publication approval has been inferred from sign-in.
+
+## Destination and exact review follow-up
+
+The first strict schema check failed against the live database: official MCP wraps collection URLs in `{{…}}`. A sanitized failing fixture reproduced this, then the parser was corrected without accepting foreign hosts, mismatched page IDs or ambiguous data sources. The packaged Amun service subsequently verified Document Hub as a database and its title field. The connected chat Notion tool supplied format reference only; the later packaged Amun check supplies the acceptance evidence.
+
+Conversation publication now uses the official MCP create-pages tool, a service-retained redacted preview, a verified destination, a workspace-bound durable action and exact-review approval. A new append-only migration permits workspace-scoped notion_publish actions without manufacturing a product; other actions still require product scope. Migration tests preserve existing approvals/outbox records, refuse orphaned references, roll back and restore foreign-key enforcement. Only the selected action is dispatched. The transport has no automatic auth replay; malformed, warning, async, lost or uncertain results do not trigger another create.
+
+Source native-session/import/Notion UI tests pass (6.0 seconds). Six packaged authentication/import/native-session/Notion tests pass (27.8 seconds). Full check passed 367 tests before the additional import security regression, which also passed separately. Governance coverage passes: domain 97.24%, outbox 98.52%, Notion review 93.75%; measured aggregate coverage is 89.04% and is not represented as a global 90% result.
+
+A clearly labelled acceptance fixture was prepared in the isolated Amun profile and the exact-content review displayed. The harness did not click approval, and no page was published. The live publication gate remains pending the user's review and approval. Logs: /tmp/amun-m1-import-e2e.log, /tmp/amun-m1-review-packaged.log, /tmp/amun-m1-review-coverage.log. The review field width was subsequently corrected; final package check remains required for that small UI change.
+
+Final follow-up: full check passed 368 tests. The final packaged native-session/import/Notion UI tests passed (7.5 seconds), including the readable review field. The live packaged application again verified Document Hub and displayed the exact fixture review. Approval was left to the user; publication was not clicked by the harness. Logs: /tmp/amun-m1-before-commit.log and /tmp/amun-m1-final-package-ui.log.

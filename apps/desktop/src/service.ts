@@ -1,3 +1,11 @@
+import { createHash } from "node:crypto";
+import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
+import {
+  nativePiCommand,
+  nativePiEvent,
+  notionApprovalRequest,
+  type NativePiEvent,
+} from "../../../packages/contracts/src/native-pi.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -195,6 +203,32 @@ process.parentPort?.on("message", (event) => {
 
   const port = event.ports[0];
   if (!port) return;
+  let notionPreview: { title: string; text: string; at: number } | undefined;
+  let notionReviewBusy = false;
+  const notionReviews = new NotionConversationReview(workspace, {
+    create: async (input, context) => {
+      const row = workspace
+        .prepare(
+          "SELECT value_json FROM workspace_settings WHERE id='notion.destination'",
+        )
+        .get() as { value_json: string } | undefined;
+      if (!row) throw Error("Notion destination missing");
+      const target = await notionConnection.inspectTarget(
+        JSON.parse(row.value_json) as string,
+      );
+      if (
+        target.parentId !== input.parentId ||
+        target.parentType !== input.parentType ||
+        target.titleProperty !== input.titleProperty
+      )
+        throw Error("Destination changed; review again");
+      return notionConnection.publish(input, context.workspaceId);
+    },
+  });
+  const sendNative = (id: string, result: NativePiEvent["result"]) =>
+    port.postMessage(
+      nativePiEvent.parse({ version: 1, kind: "native-pi-result", id, result }),
+    );
   const nativePi = new NativePiProcess(
     {
       binary: process.env.AMUN_PI_BINARY!,
@@ -202,7 +236,28 @@ process.parentPort?.on("message", (event) => {
       entry: process.env.AMUN_PI_ENTRY!,
       root: process.env.AMUN_AUTH_ROOT!,
     },
-    (event) => port.postMessage(event),
+    (event) => {
+      if (event.result.kind === "notion-preview") {
+        notionPreview = {
+          title: redactor.text(event.result.title),
+          text: redactor.text(event.result.text),
+          at: Date.now(),
+        };
+      }
+      if (event.result.kind === "notion-preview" && notionPreview) {
+        port.postMessage({
+          ...event,
+          result: {
+            ...event.result,
+            title: notionPreview.title,
+            text: notionPreview.text,
+            contentHash: createHash("sha256")
+              .update(JSON.stringify([notionPreview.title, notionPreview.text]))
+              .digest("hex"),
+          },
+        });
+      } else port.postMessage(event);
+    },
   );
   const auth = new AuthSession(
     authBroker,
@@ -360,16 +415,131 @@ process.parentPort?.on("message", (event) => {
           opening = false;
         });
     } else {
+      const nativeRequest = nativePiCommand.safeParse(message.data);
+      if (
+        nativeRequest.success &&
+        nativeRequest.data.action === "run" &&
+        ["notion-review", "notion-publish"].includes(nativeRequest.data.command)
+      ) {
+        const command = nativeRequest.data;
+        if (notionReviewBusy) {
+          sendNative(command.id, {
+            kind: "message",
+            text: "Wait for the current Notion review operation.",
+          });
+          return;
+        }
+        notionReviewBusy = true;
+        void (async () => {
+          if (command.command === "notion-publish") {
+            const approval = notionApprovalRequest.parse(
+              JSON.parse(command.argument),
+            );
+            const outcome = await notionReviews.publish(
+              approval.reviewId,
+              approval.binding,
+            );
+            sendNative(command.id, {
+              kind: "message",
+              text:
+                outcome === "succeeded"
+                  ? "The reviewed conversation was published as a new Notion page."
+                  : "Publication outcome is unconfirmed. Do not retry; reconciliation is required to avoid a duplicate page.",
+            });
+          } else {
+            const preview = notionPreview;
+            if (!preview || Date.now() - preview.at > 600000)
+              throw Error("Conversation preview expired");
+            const row = workspace
+              .prepare(
+                "SELECT value_json FROM workspace_settings WHERE id='notion.destination'",
+              )
+              .get() as { value_json: string } | undefined;
+            if (!row) {
+              sendNative(command.id, {
+                kind: "message",
+                text: "First check your Notion destination in Settings → Connections. Nothing has been published.",
+              });
+              return;
+            }
+            const target = await notionConnection.inspectTarget(
+              JSON.parse(row.value_json) as string,
+            );
+            const identity = notionConnection.identity;
+            if (!identity) throw Error("Notion workspace unavailable");
+            const review = notionReviews.prepare(
+              {
+                title: redactor.text(preview.title),
+                text: redactor.text(preview.text),
+              },
+              target,
+              identity.workspaceId,
+            );
+            sendNative(command.id, {
+              kind: "notion-review",
+              reviewId: review.id,
+              binding: review.binding,
+              title: review.title,
+              text: review.text,
+              destination: review.destination,
+              destinationId: target.parentId,
+            });
+          }
+        })()
+          .catch(() =>
+            sendNative(command.id, {
+              kind: "message",
+              text:
+                command.command === "notion-publish"
+                  ? "Publication could not be confirmed. Do not retry until its outcome has been checked."
+                  : "Amun could not prepare this Notion review. Check the destination and connection, then preview the conversation again. Nothing was published.",
+            }),
+          )
+          .finally(() => {
+            notionReviewBusy = false;
+          });
+        return;
+      }
+      if (nativeRequest.success) notionPreview = undefined;
       nativePi.handle(message.data);
       const parsedAuth = authCommand.safeParse(message.data);
       if (
         parsedAuth.success &&
-        ["notion-connect", "notion-check", "notion-cancel"].includes(
-          parsedAuth.data.action,
-        )
+        [
+          "notion-connect",
+          "notion-check",
+          "notion-cancel",
+          "notion-target",
+        ].includes(parsedAuth.data.action)
       ) {
         const command = parsedAuth.data;
-        if (command.action === "notion-cancel") notionConnection.cancelLogin();
+        if (command.action === "notion-target") {
+          void notionConnection
+            .inspectTarget(command.url)
+            .then((destination) => {
+              workspace
+                .prepare(
+                  "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.destination',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+                )
+                .run(JSON.stringify(command.url));
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message: redactor.text(
+                  `Notion verified ${destination.title} (${destination.parentType === "data_source_id" ? "database" : "page"}). Publication is still blocked until content and destination are reviewed.`,
+                ),
+              });
+            })
+            .catch(() =>
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message:
+                  "Amun could not verify this Notion destination. Check its link and workspace access. Nothing was published.",
+              }),
+            );
+        } else if (command.action === "notion-cancel")
+          notionConnection.cancelLogin();
         else if (
           command.action === "notion-connect" ||
           command.action === "notion-check"
@@ -395,8 +565,9 @@ process.parentPort?.on("message", (event) => {
               port.postMessage({
                 version: 1,
                 kind: "auth-notice",
-                message:
-                  "Notion MCP connected and its identity tool responded. Publishing still requires review.",
+                message: redactor.text(
+                  `Notion MCP connected to ${notionConnection.identity?.workspaceName ?? "your workspace"}. Publishing still requires review.`,
+                ),
               });
             })
             .catch(() => {

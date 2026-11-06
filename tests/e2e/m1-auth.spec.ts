@@ -92,3 +92,61 @@ test("Copilot enterprise text prompt permits github.com default without inventin
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("native login and confirmed logout affect only the disposable Amun Pi credential", async () => {
+  const root = await mkdtemp(join(tmpdir(), "amun-native-auth-ui-"));
+  const app = await electron.launch({
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--user-data-dir=" + root,
+    ],
+    ...(process.env.AMUN_PACKAGED_PATH
+      ? { executablePath: process.env.AMUN_PACKAGED_PATH }
+      : {}),
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(page.locator("#service-status")).toHaveText("Connected");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Models", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Open Pi commands", exact: true })
+      .click();
+    await page.getByLabel("Native Pi command").selectOption("login");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByTestId("native-pi-result")
+      .getByRole("button", { name: "OpenAI API key", exact: true })
+      .click();
+    const prompt = page.getByRole("dialog", { name: "Complete sign-in" });
+    await expect(prompt).toBeVisible({ timeout: 20000 });
+    const canary = "CANARY-NATIVE-LOGOUT-PRIVATE";
+    await prompt.locator("input").fill(canary);
+    await prompt.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(prompt).not.toBeVisible();
+    await page.getByLabel("Native Pi command").selectOption("logout");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    const result = page.getByTestId("native-pi-result");
+    await expect(
+      result.getByRole("button", { name: "openai", exact: true }),
+    ).toBeVisible({ timeout: 20000 });
+    await result.getByRole("button", { name: "openai", exact: true }).click();
+    expect(await readFile(join(root, "pi-agent/auth.json"), "utf8")).toContain(
+      canary,
+    );
+    await result
+      .getByRole("button", { name: "Confirm sign-out", exact: true })
+      .click();
+    await expect(result).toContainText("Signed out of openai");
+    expect(
+      await readFile(join(root, "pi-agent/auth.json"), "utf8"),
+    ).not.toContain(canary);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

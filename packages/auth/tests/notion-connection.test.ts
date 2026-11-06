@@ -30,6 +30,7 @@ it("completes real SDK discovery/PKCE flow, reuses registration and never retrie
   let registrations = 0;
   let exchanges = 0;
   let refreshes = 0;
+  let refreshReject = true;
   let opens = 0;
   let checks = 0;
   const fetcher: typeof fetch = async (input, init) => {
@@ -65,7 +66,14 @@ it("completes real SDK discovery/PKCE flow, reuses registration and never retrie
       const body = new URLSearchParams(String(init?.body));
       if (body.get("grant_type") === "refresh_token") {
         refreshes++;
-        return json({ error: "invalid_grant" }, 400);
+        return refreshReject
+          ? json({ error: "invalid_grant" }, 400)
+          : json({
+              access_token: "test-access",
+              refresh_token: "rotated-refresh",
+              token_type: "Bearer",
+              expires_in: 3600,
+            });
       }
       exchanges++;
       expect(body.get("code_verifier")).toBeTruthy();
@@ -122,10 +130,22 @@ it("completes real SDK discovery/PKCE flow, reuses registration and never retrie
       parsed.expiresAt = 1;
       records.set(key, JSON.stringify(parsed));
     }
+    refreshReject = false;
+    await Promise.all(
+      Array.from({ length: 20 }, () => connection.connect("edge", false)),
+    );
+    expect(refreshes).toBe(1);
+    expect([...records.values()][0]).toContain("rotated-refresh");
+    refreshReject = true;
+    for (const [key, value] of records) {
+      const parsed = JSON.parse(value);
+      parsed.expiresAt = 1;
+      records.set(key, JSON.stringify(parsed));
+    }
     await expect(connection.connect("edge", false)).rejects.toThrow(
       "Reconnect Notion",
     );
-    expect(refreshes).toBe(1);
+    expect(refreshes).toBe(2);
     expect(opens).toBe(1);
     expect(connection.configured()).toBe(false);
     await connection.connect("dia");

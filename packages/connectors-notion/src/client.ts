@@ -1,5 +1,7 @@
 export interface NotionPublication {
   parentId: string;
+  parentType?: "page_id" | "data_source_id";
+  titleProperty?: string;
   title: string;
   text: string;
 }
@@ -14,7 +16,13 @@ const idPattern =
 export class NotionPublisher {
   constructor(private readonly send: NotionSend) {}
   async create(input: NotionPublication): Promise<NotionResult> {
+    const parentType = input.parentType ?? "page_id";
+    const titleProperty = input.titleProperty ?? "title";
     if (
+      !["page_id", "data_source_id"].includes(parentType) ||
+      !titleProperty.trim() ||
+      titleProperty.length > 256 ||
+      /[\0\r\n]/.test(titleProperty) ||
       !idPattern.test(input.parentId) ||
       !input.title.trim() ||
       input.title.length > 256 ||
@@ -35,9 +43,9 @@ export class NotionPublisher {
     }
     if (chunk) chunks.push(chunk);
     const body = {
-      parent: { type: "page_id", page_id: input.parentId },
+      parent: { type: parentType, [parentType]: input.parentId },
       properties: {
-        title: {
+        [titleProperty]: {
           type: "title",
           title: [{ type: "text", text: { content: input.title } }],
         },
@@ -55,16 +63,21 @@ export class NotionPublisher {
       const page = response.data as {
         object?: unknown;
         id?: unknown;
-        parent?: { type?: unknown; page_id?: unknown };
+        parent?: {
+          type?: unknown;
+          page_id?: unknown;
+          data_source_id?: unknown;
+        };
       } | null;
       if (
         response.status !== 200 ||
         page?.object !== "page" ||
         typeof page.id !== "string" ||
         !idPattern.test(page.id) ||
-        page.parent?.type !== "page_id" ||
-        typeof page.parent.page_id !== "string" ||
-        page.parent.page_id.toLowerCase() !== input.parentId.toLowerCase()
+        page.parent?.type !== parentType ||
+        typeof page.parent[parentType] !== "string" ||
+        (page.parent[parentType] as string).toLowerCase() !==
+          input.parentId.toLowerCase()
       )
         return { state: "unknown" };
       return { state: "created", pageId: page.id };

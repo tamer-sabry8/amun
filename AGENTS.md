@@ -27,3 +27,7 @@ The user selected browser sign-in through each provider's official hosted MCP se
 For Notion, replace the manual integration-token onboarding with official hosted MCP OAuth in an external browser. Respect the user's browser choice and company restrictions (Microsoft Edge for company sign-ins; Edge or Dia for Notion). Do not introduce a manual-token alternative merely because a reference proposal includes one. If hosted MCP browser authentication is unavailable or incompatible, verify and explain the supported alternatives before changing the connection approach; never invent support or silently fall back.
 
 Keep credentials in Amun's protected service-owned storage, never in renderer state, logs or exports. Authentication does not authorize publication: preserve governed writes, exact-content review, destination binding and uncertain-write reconciliation. This preference does not expand milestone scope or prove a connector's live acceptance.
+
+## Interface redesign approval
+
+The user requires explicit approval before starting T022c (neumorphic interface redesign). Keep the task recorded but do not begin design or implementation until asking and receiving approval. The provided HTML is reference only; its colors are not selected. Continue independent M1 work while this task awaits approval.

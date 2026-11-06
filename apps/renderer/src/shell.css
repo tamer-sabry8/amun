@@ -1269,3 +1269,11 @@ input[aria-invalid="true"] {
   max-height: 24rem;
   overflow: auto;
 }
+
+/* Keep exact publication review readable; this is not the deferred redesign. */
+.native-pi-review-content {
+  display: block;
+  width: 100%;
+  max-width: 740px;
+  min-height: 280px;
+}

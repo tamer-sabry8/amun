@@ -38,7 +38,7 @@ it("waits for child teardown after cancellation instead of rejecting at the abor
     process.execPath,
     [
       "-e",
-      "const fs=require('node:fs');fs.writeFileSync(process.argv[1],'ready');process.on('SIGTERM',()=>setTimeout(()=>{fs.unlinkSync(process.argv[1]);process.exit(0)},100));setInterval(()=>{},1000)",
+      "const fs=require('node:fs');process.on('SIGTERM',()=>setTimeout(()=>{fs.unlinkSync(process.argv[1]);process.exit(0)},100));fs.writeFileSync(process.argv[1],'ready');setInterval(()=>{},1000)",
       marker,
     ],
     {
@@ -54,6 +54,7 @@ it("waits for child teardown after cancellation instead of rejecting at the abor
       if ((await readFile(marker, "utf8").catch(() => "")) === "ready") break;
       await new Promise((r) => setTimeout(r, 10));
     }
+    expect(await readFile(marker, "utf8")).toBe("ready");
     controller.abort();
     expect(await result).toBe("cancelled");
     await expect(access(marker)).rejects.toThrow();

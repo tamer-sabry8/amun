@@ -169,3 +169,47 @@ it("ignores stale probe results after credentials are replaced or forgotten", as
   await pending2;
   expect(broker.status(connection)).toBe("missing");
 });
+it("allows internal Notion operations only after a successful scoped connection check and sanitizes failures", async () => {
+  const values = new Map<string, string>();
+  const redactor = new Redactor();
+  const broker = new AuthBroker(
+    "workspace",
+    {
+      get: (k) => values.get(k),
+      set: (k, v) => {
+        values.set(k, v);
+      },
+      delete: (k) => {
+        values.delete(k);
+      },
+    },
+    redactor,
+    async () => true,
+  );
+  const connection = {
+    kind: "notion" as const,
+    baseUrl: "https://api.notion.com/",
+  };
+  let calls = 0;
+  const operation = async (secret: string) => {
+    calls++;
+    expect(secret).toBe("NOTION_CANARY");
+    return "safe-result";
+  };
+  await expect(broker.withNotionCredential(operation)).rejects.toThrow();
+  broker.save(connection, "NOTION_CANARY");
+  await expect(broker.withNotionCredential(operation)).rejects.toThrow();
+  expect(calls).toBe(0);
+  await broker.check(connection);
+  expect(await broker.withNotionCredential(operation)).toBe("safe-result");
+  expect(calls).toBe(1);
+  await expect(
+    broker.withNotionCredential(async () => {
+      throw Error("NOTION_CANARY");
+    }),
+  ).rejects.toThrow("Notion operation failed");
+  expect(redactor.text("NOTION_CANARY")).toBe("[REDACTED]");
+  broker.forget(connection);
+  await expect(broker.withNotionCredential(operation)).rejects.toThrow();
+  expect(calls).toBe(1);
+});

@@ -40,3 +40,38 @@ it("bounds native requests and rejects injected operations and raw runtime resul
     }).success,
   ).toBe(false);
 });
+it("accepts only a bounded exact Notion review and approval identity", () => {
+  const result = {
+    kind: "notion-review",
+    reviewId: "11111111-1111-4111-8111-111111111111",
+    binding: "a".repeat(64),
+    title: "Conversation",
+    text: "Reviewed text",
+    destination: "Documents",
+    destinationId: "22222222-2222-4222-8222-222222222222",
+  };
+  expect(
+    nativePiEvent.safeParse({
+      version: 1,
+      kind: "native-pi-result",
+      id: "review",
+      result,
+    }).success,
+  ).toBe(true);
+  expect(
+    nativePiEvent.safeParse({
+      version: 1,
+      kind: "native-pi-result",
+      id: "review",
+      result: { ...result, access_token: "secret" },
+    }).success,
+  ).toBe(false);
+  expect(
+    nativePiEvent.safeParse({
+      version: 1,
+      kind: "native-pi-result",
+      id: "review",
+      result: { ...result, binding: "bad" },
+    }).success,
+  ).toBe(false);
+});

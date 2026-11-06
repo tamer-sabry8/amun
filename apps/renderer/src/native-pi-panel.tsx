@@ -1,3 +1,4 @@
+import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.ts";
 import { useEffect, useRef, useState } from "react";
 import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
@@ -103,6 +104,25 @@ export function NativePiPanel() {
     [],
   );
   const run = (value = argument, selectedCommand = command) => {
+    if (selectedCommand === "login") {
+      try {
+        const choice = nativePiLoginChoice(value);
+        if (choice.kind === "choices") setResult(choice);
+        else {
+          bridge.send(choice);
+          setResult({
+            kind: "message",
+            text: "Complete the provider sign-in prompt. Opening sign-in does not prove model access.",
+          });
+        }
+      } catch {
+        setResult({
+          kind: "message",
+          text: "Choose a supported Pi provider from the sign-in list.",
+        });
+      }
+      return;
+    }
     if (selectedCommand === "quit") {
       bridge.send({ version: 1, kind: "native-pi", action: "close" });
       setOpen(false);
@@ -196,6 +216,34 @@ export function NativePiPanel() {
       </div>
       {loginStatus && <p role="status">{loginStatus}</p>}
       <label>
+        Import Pi session JSONL (maximum 512 KiB)
+        <input
+          type="file"
+          accept=".jsonl,application/jsonl"
+          disabled={busy}
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (file.size > 524288) {
+              setResult({
+                kind: "message",
+                text: "Import exceeds the 512 KiB review limit.",
+              });
+              return;
+            }
+            try {
+              run(await file.text(), "import-preview");
+            } catch {
+              setResult({
+                kind: "message",
+                text: "Could not read this session file.",
+              });
+            }
+          }}
+        />
+      </label>
+      <label>
         Native Pi command
         <select
           aria-label="Native Pi command"
@@ -210,6 +258,8 @@ export function NativePiPanel() {
           {[
             "session",
             "settings",
+            "login",
+            "logout",
             "new",
             "resume",
             "fork",
@@ -223,6 +273,7 @@ export function NativePiPanel() {
             "export",
             "share",
             "compact",
+            "import",
             "reload",
             "trust",
             "changelog",
@@ -301,16 +352,89 @@ export function NativePiPanel() {
             </p>
             <h5>{result.title}</h5>
             <textarea
+              className="native-pi-review-content"
               aria-label="Redacted Notion conversation preview"
               value={result.text}
               readOnly
               rows={12}
             />
-            <button disabled>Publish new Notion page</button>
+            <button disabled={busy} onClick={() => run("", "notion-review")}>
+              Review destination and exact publication
+            </button>
             <p>
-              Publishing is blocked until an Amun Notion connection and parent
-              section are configured. No content has been uploaded.
+              Publishing remains blocked until the destination is verified and
+              you approve the final review. No content has been uploaded.
             </p>
+          </>
+        ) : result?.kind === "import-review" ? (
+          <>
+            <h4>Review session import</h4>
+            <p>
+              Retain session ID: <code>{result.sessionId}</code> ·{" "}
+              {result.entries} entries
+            </p>
+            <p>
+              Original working directory: <code>{result.originalCwd}</code>
+            </p>
+            <p>
+              Use Amun’s isolated directory instead:{" "}
+              <code>{result.targetCwd}</code>
+            </p>
+            <p>
+              The original file is unchanged. Imported context can contain
+              sensitive content. No model request or tool execution occurs
+              during import.
+            </p>
+            {result.removedParent && (
+              <p>
+                The external parent-session link will be removed from the
+                imported copy.
+              </p>
+            )}
+            <button disabled={busy} onClick={() => run(result.token, "import")}>
+              Confirm import into Amun
+            </button>
+            <button disabled={busy} onClick={() => setResult(null)}>
+              Cancel import
+            </button>
+          </>
+        ) : result?.kind === "notion-review" ? (
+          <>
+            <h4>Approve Share to Notion</h4>
+            <p>New page in {result.destination}</p>
+            <p>
+              Destination ID: <code>{result.destinationId}</code>
+            </p>
+            <h5>{result.title}</h5>
+            <textarea
+              className="native-pi-review-content"
+              aria-label="Exact Notion publication content"
+              readOnly
+              value={result.text}
+              rows={14}
+            />
+            <p>
+              Review this exact content and destination. It inherits the
+              destination’s Notion permissions. Publishing creates one new page.
+            </p>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                run(
+                  JSON.stringify({
+                    reviewId: result.reviewId,
+                    binding: result.binding,
+                  }),
+                  "notion-publish",
+                )
+              }
+            >
+              Approve and publish this content
+            </button>
+            <button disabled={busy} onClick={() => setResult(null)}>
+              Cancel review
+            </button>
           </>
         ) : result?.kind === "document" ? (
           <>

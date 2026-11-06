@@ -40,7 +40,11 @@ if (!existingToken) await run(["set-option", "-g", "@amun-owner", token]);
 const userData = join(setup.scope, "app-data");
 const packaged = process.argv.includes("--packaged");
 const app = await electron.launch({
-  args: [...(packaged ? [] : ["apps/desktop"]), "--user-data-dir=" + userData],
+  args: [
+    ...(packaged ? [] : ["apps/desktop"]),
+    "--amun-proof",
+    "--user-data-dir=" + userData,
+  ],
   ...(packaged
     ? {
         executablePath: resolve(
