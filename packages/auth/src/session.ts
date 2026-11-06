@@ -72,6 +72,8 @@ export class AuthSession {
         });
       } else if (command.action === "list") this.list();
       else if (command.action === "save") {
+        if (command.connection.kind === "notion")
+          throw Error("Use Notion browser sign-in");
         connectionId(command.connection);
         if (
           this.metadata.list().length >= 100 &&

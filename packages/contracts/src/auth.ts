@@ -13,6 +13,15 @@ const provider = z.enum([
   "anthropic",
 ]);
 export const authCommand = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...base,
+    action: z.literal("notion-connect"),
+    browser: z.enum(["edge", "dia"]),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.enum(["notion-check", "notion-cancel"]),
+  }),
   z.strictObject({ ...base, action: z.literal("readiness"), provider }),
   z.strictObject({ ...base, action: z.literal("list") }),
   z.strictObject({

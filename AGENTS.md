@@ -19,3 +19,11 @@ Bundled Pi/Firstmate/native dependencies remain reproducibly pinned and checksum
 ## Sharing destinations
 
 The user selected Notion as Amun's R1 default for sharing conversations, PRDs, decisions and stakeholder updates (ADR-010). Disable Pi's native `/share`; never fall back to GitHub gist or Radius. Share to Notion requires an Amun connection, a user-chosen parent section, secret removal and exact-content review before a new page is published. Keep publishing blocked when prerequisites are missing. Transfrm.ai (GitHub/Cloudflare-hosted HTML/PDF) is R2 reference only.
+
+## Connector authentication
+
+The user selected browser sign-in through each provider's official hosted MCP server as the preferred connection route on 2026-11-06. Investigate this route first for Amun connectors whenever the provider supports it. Azure DevOps is explicitly excepted: preserve its supported API/MCP authentication path and company Edge requirements; do not substitute browser-session or cookie extraction.
+
+For Notion, replace the manual integration-token onboarding with official hosted MCP OAuth in an external browser. Respect the user's browser choice and company restrictions (Microsoft Edge for company sign-ins; Edge or Dia for Notion). Do not introduce a manual-token alternative merely because a reference proposal includes one. If hosted MCP browser authentication is unavailable or incompatible, verify and explain the supported alternatives before changing the connection approach; never invent support or silently fall back.
+
+Keep credentials in Amun's protected service-owned storage, never in renderer state, logs or exports. Authentication does not authorize publication: preserve governed writes, exact-content review, destination binding and uncertain-write reconciliation. This preference does not expand milestone scope or prove a connector's live acceptance.

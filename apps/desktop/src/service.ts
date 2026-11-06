@@ -1,3 +1,10 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import {
+  NotionConnection,
+  notionBrowserArgs,
+} from "../../../packages/auth/src/notion-connection.ts";
+import { authCommand } from "../../../packages/contracts/src/auth.ts";
 import { NativePiProcess } from "../../service/src/native-pi-process.ts";
 import {
   exportWorkspace,
@@ -75,6 +82,23 @@ const authBroker = new AuthBroker(
   redactor,
   probeConnection,
 );
+const notionConnection = new NotionConnection({
+  workspace: workspaceIdentity(workspace),
+  root: workspaceRoot,
+  keyring: {
+    get: (account) => authKeyring().get(account),
+    set: (account, value) => authKeyring().set(account, value),
+    delete: (account) => authKeyring().delete(account),
+  },
+  registerSecret: (value) => redactor.register(value),
+  open: async (browser, url) => {
+    await promisify(execFile)(
+      "/usr/bin/open",
+      notionBrowserArgs(browser, url),
+      { timeout: 10000 },
+    );
+  },
+});
 const authMetadata = {
   list: (): Connection[] => {
     const row = workspace
@@ -337,7 +361,60 @@ process.parentPort?.on("message", (event) => {
         });
     } else {
       nativePi.handle(message.data);
-      void auth.handle(message.data);
+      const parsedAuth = authCommand.safeParse(message.data);
+      if (
+        parsedAuth.success &&
+        ["notion-connect", "notion-check", "notion-cancel"].includes(
+          parsedAuth.data.action,
+        )
+      ) {
+        const command = parsedAuth.data;
+        if (command.action === "notion-cancel") notionConnection.cancelLogin();
+        else if (
+          command.action === "notion-connect" ||
+          command.action === "notion-check"
+        ) {
+          port.postMessage({
+            version: 1,
+            kind: "auth-status",
+            id: "notion-mcp",
+            status: "checking",
+          });
+          void notionConnection
+            .connect(
+              command.action === "notion-connect" ? command.browser : "edge",
+              command.action === "notion-connect",
+            )
+            .then(() => {
+              port.postMessage({
+                version: 1,
+                kind: "auth-status",
+                id: "notion-mcp",
+                status: "ready",
+              });
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message:
+                  "Notion MCP connected and its identity tool responded. Publishing still requires review.",
+              });
+            })
+            .catch(() => {
+              port.postMessage({
+                version: 1,
+                kind: "auth-status",
+                id: "notion-mcp",
+                status: "error",
+              });
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message:
+                  "Notion sign-in or access check did not complete. Reconnect in your selected browser; no content was published.",
+              });
+            });
+        }
+      } else void auth.handle(message.data);
       void crew.handle(message.data);
       if (
         backendOpening &&

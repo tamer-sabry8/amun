@@ -4,7 +4,6 @@ export default defineConfig({
     lib: {
       entry: {
         main: "src/main.ts",
-        preload: "src/preload.ts",
         service: "src/service.ts",
         "auth-worker": "src/auth-worker.ts",
         "native-pi-worker": "src/native-pi-worker.ts",

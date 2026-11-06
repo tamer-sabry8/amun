@@ -248,6 +248,7 @@ function Settings({
   const [kind, setKind] = useState<"github" | "ado" | "notion">("github");
   const [baseUrl, setBaseUrl] = useState("https://github.com");
   const [secret, setSecret] = useState("");
+  const [notionBrowser, setNotionBrowser] = useState<"edge" | "dia">("edge");
   const [model, setModel] = useState("github-copilot:oauth");
   const modelBusy = Object.values(state.modelStatus).includes("checking");
   const save = (event: FormEvent) => {
@@ -343,6 +344,7 @@ function Settings({
             <label>
               Service
               <select
+                aria-label="Service"
                 value={kind}
                 onChange={(event) => {
                   const value = event.target.value as typeof kind;
@@ -362,38 +364,103 @@ function Settings({
                 <option value="notion">Notion</option>
               </select>
             </label>
-            <label>
-              {kind === "ado"
-                ? "Collection or organisation URL"
-                : "Service URL"}
-              <input
-                type="url"
-                required
-                value={baseUrl}
-                onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="https://dev.azure.com/your-organisation"
-              />
-            </label>
-            <label>
-              {kind === "notion"
-                ? "Internal integration token"
-                : "Personal access token"}
-              <input
-                type="password"
-                required
-                autoComplete="off"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                maxLength={65536}
-              />
-            </label>
-            <p className="muted">
-              Stored in this workspace’s macOS Keychain entry. Browser sign-in
-              does not grant API access.
-            </p>
-            <button className="primary" type="submit">
-              Save connection
-            </button>
+            {kind === "notion" ? (
+              <div>
+                <p>
+                  Connect through Notion’s hosted MCP server. Sign in and choose
+                  your workspace in your browser. No token entry is needed.
+                </p>
+                <label>
+                  Sign-in browser
+                  <select
+                    aria-label="Sign-in browser"
+                    value={notionBrowser}
+                    onChange={(event) =>
+                      setNotionBrowser(event.target.value as "edge" | "dia")
+                    }
+                  >
+                    <option value="edge">Microsoft Edge</option>
+                    <option value="dia">Dia</option>
+                  </select>
+                </label>
+                <p role="status">
+                  {state.modelStatus["notion-mcp"] ?? "Not checked"}
+                </p>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={state.modelStatus["notion-mcp"] === "checking"}
+                  onClick={() =>
+                    bridge.send({
+                      version: 1,
+                      kind: "auth",
+                      action: "notion-connect",
+                      browser: notionBrowser,
+                    })
+                  }
+                >
+                  Connect Notion in browser
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    bridge.send({
+                      version: 1,
+                      kind: "auth",
+                      action: "notion-check",
+                    })
+                  }
+                >
+                  Test Notion connection
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    bridge.send({
+                      version: 1,
+                      kind: "auth",
+                      action: "notion-cancel",
+                    })
+                  }
+                >
+                  Cancel Notion sign-in
+                </button>
+              </div>
+            ) : (
+              <>
+                {" "}
+                <label>
+                  {kind === "ado"
+                    ? "Collection or organisation URL"
+                    : "Service URL"}
+                  <input
+                    type="url"
+                    required
+                    value={baseUrl}
+                    onChange={(event) => setBaseUrl(event.target.value)}
+                    placeholder="https://dev.azure.com/your-organisation"
+                  />
+                </label>
+                <label>
+                  Personal access token
+                  <input
+                    type="password"
+                    required
+                    autoComplete="off"
+                    value={secret}
+                    onChange={(event) => setSecret(event.target.value)}
+                    maxLength={65536}
+                  />
+                </label>
+                <p className="muted">
+                  Stored in this workspace’s macOS Keychain entry. Browser
+                  sign-in does not grant API access.
+                </p>
+                <button className="primary" type="submit">
+                  Save connection
+                </button>
+              </>
+            )}
           </form>
         </section>
       )}
