@@ -14,6 +14,8 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - PRs explain user benefit, security boundaries, performance impact, tests and outstanding gates.
 - Never log secrets, disable TLS, auto-approve writes, or represent unknown outcomes as success.
 
+- External integrations use supported APIs or MCPs; discover compatible existing CLI/MCP setups and reuse supported sign-ins with explicit selection. See [ADR-007](decisions/ADR-007-existing-tools-and-api-integrations.md).
+
 ## Current progress
 
 - T001/T003/T004: complete. macOS CI run 42012823971 passed the clean install, checks and live shell launch/isolation test. See evidence links.
@@ -32,7 +34,7 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 ## Current blockers
 
-- Credentialed M0 acceptance location needs the user’s answer; see [required setup](evidence/M0-acceptance-prerequisites.md). No configured secrets are available in this cloud environment.
+- Credentialed M0 acceptance will run on the user’s Mac using existing sign-ins. This Linux cloud task cannot access the supplied Mac paths; a local execution context is required. See [handoff](MAC-ACCEPTANCE-HANDOFF.md) and [required setup](evidence/M0-acceptance-prerequisites.md).
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
 - This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
 - M0 live integration needs authorised Tahaluf test access, provider sign-in and a verified non-Herdr worker runtime. Do not request credentials in chat.
