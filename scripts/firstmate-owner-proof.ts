@@ -72,6 +72,12 @@ try {
     PI_OFFLINE: "1",
     ...(packaged ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
   });
+  if (process.argv.includes("--wake")) {
+    // Supported watcher timing knobs, scoped only to this disposable acceptance home.
+    env.FM_POLL = "1";
+    env.FM_SIGNAL_GRACE = "1";
+    env.FM_CHECK_INTERVAL = "999999";
+  }
   const child = spawn(
     binary,
     [
@@ -88,6 +94,7 @@ try {
   );
   let outcome = "unobserved";
   let modelTurns = 0;
+  let wakeDelivered = false;
   let complete: () => void = () => {};
   const observed = new Promise<void>((done) => {
     complete = done;
@@ -97,9 +104,21 @@ try {
       child.stdin.write(line);
     },
     (frame) => {
+      if (
+        frame.type === "message_start" &&
+        frame.message &&
+        typeof frame.message === "object"
+      ) {
+        const message = frame.message as { role?: string; content?: unknown };
+        if (
+          message.role === "user" &&
+          JSON.stringify(message.content).includes("FIRSTMATE WATCHER WAKE:")
+        )
+          wakeDelivered = true;
+      }
       if (frame.type === "agent_start") {
         modelTurns++;
-        outcome = "unexpected_model_turn";
+        if (!process.argv.includes("--wake")) outcome = "unexpected_model_turn";
       }
       if (
         frame.type === "extension_ui_request" &&
@@ -207,6 +226,38 @@ try {
         await new Promise((done) => setTimeout(done, 250));
       }
     }
+    let automaticRearm = false;
+    if (process.argv.includes("--wake") && watcherLive) {
+      const prior = (
+        await readFile(join(home, "state/.watch.lock/pid"), "utf8")
+      ).trim();
+      await writeFile(
+        join(home, "state/acceptance.status"),
+        "done: acceptance wake delivery probe; no worker action required\n",
+        { mode: 0o600, flag: "wx" },
+      );
+      for (let attempt = 0; attempt < 240; attempt++) {
+        try {
+          const next = (
+            await readFile(join(home, "state/.watch.lock/pid"), "utf8")
+          ).trim();
+          const beat = await stat(join(home, "state/.last-watcher-beat"));
+          if (
+            wakeDelivered &&
+            next !== prior &&
+            Number(next) > 1 &&
+            Date.now() - beat.mtimeMs < 5000
+          ) {
+            process.kill(Number(next), 0);
+            automaticRearm = true;
+            break;
+          }
+        } catch {
+          /* wait for actual replacement and consumed user wake */
+        }
+        await new Promise((done) => setTimeout(done, 250));
+      }
+    }
     console.log(
       JSON.stringify({
         packaged,
@@ -215,6 +266,9 @@ try {
         realGitWorktree: true,
         watcherLive,
         recovered,
+        wakeDelivered,
+        automaticRearm,
+        wakeModelHandling: "not tested: offline delivery probe",
         workerDispatches: 0,
         modelTurns,
       }),
@@ -222,7 +276,9 @@ try {
     if (
       outcome !== "AMUN_OWNER_ACQUIRED" ||
       !lockMatches ||
-      modelTurns !== 0 ||
+      (!process.argv.includes("--wake") && modelTurns !== 0) ||
+      (process.argv.includes("--wake") &&
+        (!wakeDelivered || !automaticRearm)) ||
       (process.argv.includes("--recover") && !recovered) ||
       (process.argv.includes("--watch") && !watcherLive)
     )

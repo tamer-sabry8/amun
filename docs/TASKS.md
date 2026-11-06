@@ -223,3 +223,5 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 - T012: current process-cold/warm-cache launches 322/317/330 ms, summed Electron working set 481 MiB, echo 13/13/12 ms. Clean-account installation and signing/notarization remain open.
 - Personal CLI version issue: Claude's updater changed its shared launcher from 2.1.311 to 2.1.319 during the first worker run. Amun update guards are now tested; the user's decision on restoring the launcher is pending.
 - T010 remains blocked. No M1/M2 work or merge.
+
+- T007 follow-up: real offline signal-to-Pi delivery probe failed with both default and short supported polling/grace settings. Lock ownership and watcher startup still pass; consumed wake and automatic replacement remain unverified. See `evidence/T007/owned-watcher.md`.

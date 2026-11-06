@@ -27,3 +27,5 @@ Bounded Pi text/dialog projection now reaches the renderer; real offline select/
 Real Git worktree provisioning now replaces copied operational homes. Official Codex and Claude sign-ins and no-tool inference pass in separate Amun profiles. A bounded login helper opens the official authorization URL in Chrome; it does not copy cookies or expose credentials. Real worker reattachment remains open.
 
 Latest live evidence: source and packaged service each survive ten restarts while the same real Codex/Claude worker process IDs and start times remain unchanged, with zero duplicate workers. Native read-only backend terminal attachment, explicit control, resize and ownership-loss refusal pass in both builds. T007 actionable wake handling and T008 production dispatch/Run integration remain open. An unintended Claude background update was disclosed; update guards are now tested and restoration of the shared launcher awaits the user's decision.
+
+The subsequent real offline wake-delivery probe remains red under both default and short supported polling/grace settings; T007 is explicitly open. Startup/explicit re-arm evidence is not substituted for automatic wake handling.
