@@ -45,6 +45,8 @@ test("development gallery renders every attention type, size and theme accessibl
         await expect(group).toHaveScreenshot(`gallery-${theme}-${size}.png`, {
           scale: "css",
           animations: "disabled",
+          // Inspected cross-Mac artifacts differ by two isolated text-edge pixels.
+          maxDiffPixels: 4,
         });
       }
     }
