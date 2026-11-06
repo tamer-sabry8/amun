@@ -1,3 +1,4 @@
+import { installWorkerLogin } from "./worker-login.ts";
 import { installPiExport } from "./pi-export.ts";
 import { installPiClipboard } from "./pi-clipboard.ts";
 import { randomBytes } from "node:crypto";
@@ -169,6 +170,7 @@ function openWindow(): void {
   installBrowser(window, "m0");
   installPiClipboard(window);
   installPiExport(window);
+  installWorkerLogin(window);
   installBackup(
     window,
     (job) =>

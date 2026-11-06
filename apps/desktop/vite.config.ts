@@ -8,6 +8,7 @@ export default defineConfig({
         service: "src/service.ts",
         "auth-worker": "src/auth-worker.ts",
         "native-pi-worker": "src/native-pi-worker.ts",
+        "worker-login-helper": "../../scripts/worker-login.ts",
       },
       formats: ["cjs"],
       fileName: (_format, name) => `${name}.cjs`,

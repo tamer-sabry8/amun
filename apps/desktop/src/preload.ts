@@ -53,3 +53,14 @@ window.addEventListener("message", (event) => {
 ipcRenderer.on("amun-pi-export-status", (_event, result: unknown) => {
   window.postMessage({ kind: "amun-pi-export-status", result }, "*");
 });
+
+window.addEventListener("message", (event) => {
+  if (
+    event.source === window &&
+    event.data?.kind === "amun-worker-login-command"
+  )
+    ipcRenderer.send("amun-worker-login", event.data.command);
+});
+ipcRenderer.on("amun-worker-login-status", (_event, result: unknown) =>
+  window.postMessage({ kind: "amun-worker-login-status", result }, "*"),
+);

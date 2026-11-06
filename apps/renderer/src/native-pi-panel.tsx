@@ -7,6 +7,26 @@ export function NativePiPanel() {
     [argument, setArgument] = useState(""),
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
+  const [loginStatus, setLoginStatus] = useState("");
+  const [loginPending, setLoginPending] = useState(false);
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (
+        event.source !== window ||
+        event.data?.kind !== "amun-worker-login-status" ||
+        !["codex", "claude"].includes(event.data.result?.tool)
+      )
+        return;
+      setLoginPending(false);
+      setLoginStatus(
+        event.data.result.status === "opened"
+          ? "Official CLI sign-in opened in Terminal. Complete any Microsoft Edge authorization there, then check the subscription below. Opening Terminal does not confirm sign-in."
+          : "The official sign-in window could not open. Your existing profile is unchanged.",
+      );
+    };
+    window.addEventListener("message", listener);
+    return () => window.removeEventListener("message", listener);
+  }, []);
   const pending = useRef<string | null>(null);
   const copyPending = useRef<string | null>(null);
   const exportPending = useRef<string | null>(null);
@@ -149,6 +169,19 @@ export function NativePiPanel() {
       <div className="button-row">
         {(["codex", "claude"] as const).map((tool) => (
           <div key={tool}>
+            <button
+              disabled={busy || loginPending}
+              onClick={() => {
+                setLoginPending(true);
+                setLoginStatus("Opening official CLI sign-in…");
+                window.postMessage(
+                  { kind: "amun-worker-login-command", command: { tool } },
+                  "*",
+                );
+              }}
+            >
+              Sign in to {tool === "codex" ? "Codex CLI" : "Claude Code CLI"}
+            </button>
             <button disabled={busy} onClick={() => run(tool, "worker-status")}>
               Check {tool === "codex" ? "Codex" : "Claude Code"} subscription
             </button>
@@ -161,6 +194,7 @@ export function NativePiPanel() {
           </div>
         ))}
       </div>
+      {loginStatus && <p role="status">{loginStatus}</p>}
       <label>
         Native Pi command
         <select
