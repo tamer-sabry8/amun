@@ -32,11 +32,13 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - T006 protocol increment: bounded correlated request client, stream-event delivery and explicit select/confirm responses pass 12 unit tests; source Pi probe uses the client. Authenticated inference and renderer integration remain open. See [evidence](evidence/T006/rpc-client.md).
 
+- Local Mac baseline and installation inventory completed: see [local evidence](evidence/M0-local-mac.md). T010 now has a live local prototype/security/redirect proof; real authenticated browsing remains open.
+
 ## Current blockers
 
-- Credentialed M0 acceptance will run on the user’s Mac using existing sign-ins. This Linux cloud task cannot access the supplied Mac paths; a local execution context is required. See [handoff](MAC-ACCEPTANCE-HANDOFF.md) and [required setup](evidence/M0-acceptance-prerequisites.md).
+- Local execution is now verified on the user’s Mac. The historical Linux handoff is superseded for execution access by [local evidence](evidence/M0-local-mac.md); authenticated acceptance gates remain open.
 - Stack decision resolved: Electron/TypeScript, as explicitly selected by the user.
-- This machine is Linux: macOS launch, Keychain, signing, notarization and packaged-app performance need a Mac runner.
+- Apple Developer signing/notarization and clean-account installation remain open; unsigned local Mac source/package tests pass.
 - M0 live integration needs authorised Tahaluf test access, provider sign-in and a verified non-Herdr worker runtime. Do not request credentials in chat.
 - GitHub API access restored. Work is tracked in draft PR #1.
 

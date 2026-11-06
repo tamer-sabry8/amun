@@ -1,3 +1,4 @@
+import { installBrowser } from "./browser.js";
 import {
   app,
   BrowserWindow,
@@ -60,6 +61,7 @@ function openWindow(): void {
       preload: join(app.getAppPath(), "dist/preload.cjs"),
     },
   });
+  installBrowser(window, "m0");
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.on("did-finish-load", () => {

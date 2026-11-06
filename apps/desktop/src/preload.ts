@@ -8,3 +8,12 @@ ipcRenderer.on("amun-status", (_event, status: unknown) => {
   if (status === "reconnecting")
     window.postMessage({ kind: "amun-status", status }, "*");
 });
+
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data?.kind === "amun-browser-command")
+    ipcRenderer.send("amun-browser", event.data.command);
+});
+ipcRenderer.on("amun-browser-status", (_event, message: unknown) => {
+  if (typeof message === "string")
+    window.postMessage({ kind: "amun-browser-status", message }, "*");
+});

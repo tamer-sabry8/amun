@@ -15,6 +15,18 @@
       </p>
     </main>
     <p id="service-status" role="status">Connecting</p>
+    <form id="browser-form">
+      <label for="browser-url"
+        >M0 browser proof — HTTPS or local prototype URL</label
+      >
+      <input id="browser-url" type="url" required size="50" />
+      <button type="submit">Open browser</button>
+      <button type="button" data-browser="back">Back</button>
+      <button type="button" data-browser="forward">Forward</button>
+      <button type="button" data-browser="reload">Reload</button>
+      <button type="button" data-browser="close">Close browser</button>
+    </form>
+    <p id="browser-status" aria-live="polite">Browser closed</p>
     <script src="./renderer.js"></script>
   </body>
 </html>

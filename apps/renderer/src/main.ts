@@ -37,3 +37,38 @@ window.addEventListener("message", (event) => {
     healthRequest.parse({ version: 1, id, method: "health", params: {} }),
   );
 });
+
+document.getElementById("browser-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const input = document.getElementById("browser-url") as HTMLInputElement;
+  window.postMessage(
+    {
+      kind: "amun-browser-command",
+      command: { action: "navigate", url: input.value },
+    },
+    "*",
+  );
+});
+for (const button of document.querySelectorAll<HTMLButtonElement>(
+  "[data-browser]",
+)) {
+  button.addEventListener("click", () =>
+    window.postMessage(
+      {
+        kind: "amun-browser-command",
+        command: { action: button.dataset.browser },
+      },
+      "*",
+    ),
+  );
+}
+window.addEventListener("message", (event) => {
+  if (
+    event.source !== window ||
+    event.data?.kind !== "amun-browser-status" ||
+    typeof event.data.message !== "string"
+  )
+    return;
+  const status = document.getElementById("browser-status");
+  if (status) status.textContent = event.data.message;
+});

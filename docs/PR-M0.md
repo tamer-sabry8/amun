@@ -37,3 +37,7 @@ M0 only; M1–M6 remain locked. No product workflows or external write capabilit
 ## Remaining M0 gates
 
 Packaged Pi and provider sign-in, managed Firstmate homes, worker reattachment, live Azure DevOps, browser/terminal proofs, release signing and performance budgets. M0 remains incomplete. Test credentials must use secure settings, never chat or repository files.
+
+## Local Mac continuation
+
+Verified the first installer’s real Mac setup and ran all existing source/package probes successfully. Added an isolated WebContentsView and narrow navigation controls with 13 policy tests and a real Electron prototype/redirect/security test. `pnpm check` passes 115 tests and source E2E passes three. Real authenticated browsing, provider inference, operational crew supervision, Azure writes, terminal integration and release acceptance remain open. See `docs/evidence/M0-local-mac.md` and `docs/evidence/T010/README.md`.
