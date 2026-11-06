@@ -89,35 +89,35 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
       Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
       Tests: crash between write and ack; duplicate-suppression tests.
       DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
-      Implementation progress (T016–T022; gates remain open): [foundation evidence](evidence/M1/2026-11-06-foundations.md).
+      Foundation history: [initial evidence](evidence/M1/2026-11-06-foundations.md). Current T017–T022 acceptance: [source and packaged shell evidence](evidence/M1/2026-11-06-shell-acceptance.md). T016 remains open for real Copilot/OpenRouter OAuth completion; M1 is not complete.
 
 - [ ] **T016 — Auth broker** · P0 · TS · Dep T006, T013
       Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
       Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
       DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
-- [ ] **T017 — Audit and redaction** · P0 · TS · Dep T013
+- [x] **T017 — Audit and redaction** · P0 · TS · Dep T013
       Build: audit_log writer; pino redaction; export redaction.
       Tests: canary-secret test across logs, exports, memory, updates.
       DoD: canary never found.
-- [ ] **T018 — Backup and restore** · P1 · TS · Dep T013
+- [x] **T018 — Backup and restore** · P1 · TS · Dep T013
       DoD: encrypted export/import of a workspace; secrets excluded; restore test passes.
-- [ ] **T019 — Design tokens and themes** · P0 · TS/JSON · Dep T001
+- [x] **T019 — Design tokens and themes** · P0 · TS/JSON · Dep T001
       Build: DTCG tokens for Tamer Sabry default, Navy Gold, Navy Cyan (values from the brand table in Appendix A); Style Dictionary → `--amun-*` CSS variables; locked safety tokens; contrast validator.
       Tests: contrast unit tests (≥ 4.5:1 text, ≥ 3:1 UI); theme switch persists.
       DoD: all component states render in three themes.
-- [ ] **T020 — App shell layout** · P0 · TS/React · Dep T005, T019
+- [x] **T020 — App shell layout** · P0 · TS/React · Dep T005, T019
       Build: sidebar (switcher, ⌘K, 6 fixed tiles, nav, pinned tabs, artifacts), top bar with mode tabs, Focus and the status pill slot, workspace router, right edge in fixed order (status rail, drawer layer, single-slot inspector with Issue/Web tabs), composer, terminal dock, Focus mode with exact restore.
       Tests: Playwright layout + keyboard navigation; axe.
       DoD: no auto-reordering of tiles; inspector and drawers never open without user action; drawers overlay without layout shift.
-- [ ] **T021a — Firstmate Island (action queue)** · P0 · TS/React · Dep T002, T013, T020
+- [x] **T021a — Firstmate Island (action queue)** · P0 · TS/React · Dep T002, T013, T020
       Build: attention-item store and contract (5.3); item types; origin labels (Firstmate / Secondmate / Crewmate / Amun); ordering; Rail, Pill, Card, Expanded sizes; "+N more"; snooze; navigate vs inline modes; governed items always navigate; removal only on resolution or snooze; live region; ⌘⇧J; reduced motion; empty state.
       Tests: unit for ordering, resolution and snooze rules; test that a governed item can never resolve from the Island; visual baselines for every type × size × theme; a11y.
       DoD: gallery page in the dev build shows all combinations; clicking an item and navigating away leaves it open.
-- [ ] **T021b — Status pill, status rail and drawers** · P0 · TS/React · Dep T002, T020
+- [x] **T021b — Status pill, status rail and drawers** · P0 · TS/React · Dep T002, T020
       Build: top-bar status pill (counts, colour states, click pins Activity); right rail with Notifications, Activity, Artifacts, Downloads, Skills and extensions; drawer layer with 150 ms hover intent, 250 ms close grace, click to pin, ⌥⌘1–5, Esc, focus management; one drawer at a time; overlay without layout shift; tap = pin.
       Tests: Playwright hover-intent and pin tests; keyboard-only test; one-drawer rule; a11y; visual baselines per drawer × theme.
       DoD: run and publication progress appear only in the pill and Activity drawer, never in the Island.
-- [ ] **T022 — Requests and command palette** · P1 · TS · Dep T020
+- [x] **T022 — Requests and command palette** · P1 · TS · Dep T020
       DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
 
 ## M2 — Product context and PRD — LOCKED

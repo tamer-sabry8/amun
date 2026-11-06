@@ -1,13 +1,9 @@
 # M1: durable core and application shell
 
-Continue from merged main at 0b8b3bd. Implement only T013–T022, including T021a/T021b, with test-first behavior, real integration/packaged acceptance where mocks are insufficient, and at least 90% domain/governance line coverage.
+Build the durable core and working foundation shell from merged main `0b8b3bd`. SQLite migration persistence, approval binding/invalidation and an atomic outbox now sit behind the isolated service. The dark React shell adds persisted themes, a shared Requests/Island queue, entity search, Focus restoration, bounded terminal, single inspector and accessible overlay drawers. Native encrypted backup/restore and private Pi/Keychain connection settings are connected to the UI.
 
-T013–T015 pass: source/packaged SQLite upgrade persistence, approval binding/invalidation (96.72% governance line coverage), and ten real HTTP write/SIGKILL/restart trials with zero duplicates (96.82% outbox line coverage).
+T013–T015 and T017–T022 pass their recorded gates. **T016 and the M1 exit remain open:** the user must complete official GitHub Copilot and OpenRouter OAuth in the separate Amun profile, followed by live verification. API-key canary and metadata readiness tests do not establish authenticated provider access.
 
-Acceptance remains open for independent Keychain/Pi connections, redacted audit/export, encrypted workspace restore, three accessible persisted themes, complete keyboard-accessible shell/Focus restore, Island and Requests consistency, and timed/pinned overlay drawers. No item is complete merely because a helper exists.
+Validation at `56566e8`: 261 tests; lint/types/format pass; governance 96.72%, attention 95.45%, outbox 96.82% line coverage. Real source Electron acceptance: 16 passed. Packaged acceptance: 15 passed, development gallery intentionally excluded. Bundled Pi/Firstmate probes pass. Thirty visual baselines cover the gallery, shared controls and all five drawers across three themes, with zero serious/critical axe findings in the tested surfaces.
 
-M2 is not started. Existing personal sessions and configurations are preserved. M0 release gate R001 remains open and separate. This PR is draft; no merge is authorized by the M1 start request.
-
-Theme decision (user, 2026-11-06): use Appendix A’s dark default, with Navy Gold and Navy Cyan alternatives.
-
-Latest foundation evidence: [auth, audit, backup, attention and tokens](docs/evidence/M1/2026-11-06-foundations.md), tested at `b0eb52e`: 254 tests, domain/governance coverage above 95%, source upgrade/sandbox/restart checks pass. Native Keychain roundtrip passes. UI, live provider sign-ins and remaining M1 acceptance are still open.
+See [durable core evidence](docs/evidence/T013/2026-11-06-durable-core.md) and [shell acceptance and limitations](docs/evidence/M1/2026-11-06-shell-acceptance.md). Appendix A's dark default follows the user's explicit decision. M2 and the later Firstmate/PRD/backlog workflows are not started; the composer is a disabled layout slot until its governed bridge milestone. Personal sessions/configuration remain untouched. Release signing/notarization/clean-account gate R001 stays open. This PR remains draft and is not authorized for automatic merge.
