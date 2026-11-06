@@ -83,7 +83,13 @@ export function parseReadiness(
     )
       throw Error();
     if (data.status === "ready") return "configured";
-    if (data.status === "missing" || data.status === "unconfigured")
+    if (
+      data.status === "missing" ||
+      data.status === "unconfigured" ||
+      (data.status === "not_ready" &&
+        "reason" in data &&
+        data.reason === "credentials_not_configured")
+    )
       return "missing";
     return "error";
   } catch {

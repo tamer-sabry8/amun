@@ -1,3 +1,4 @@
+import * as filesystem from "node:fs";
 import { createHash } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
@@ -15,18 +16,8 @@ export interface Keyring {
   set(account: string, value: string): void;
   delete(account: string): void;
 }
-export const modelLoginOptions: readonly {
-  provider: string;
-  type: "oauth" | "api_key";
-  label: string;
-}[] = [
-  { provider: "github-copilot", type: "oauth", label: "GitHub Copilot" },
-  { provider: "openrouter", type: "oauth", label: "OpenRouter" },
-  { provider: "openai-codex", type: "oauth", label: "OpenAI / Codex" },
-  { provider: "openai", type: "api_key", label: "OpenAI API key" },
-  { provider: "openrouter", type: "api_key", label: "OpenRouter API key" },
-  { provider: "anthropic", type: "api_key", label: "Anthropic API key" },
-];
+export { modelLoginOptions } from "../../contracts/src/auth.ts";
+
 export function connectionId(connection: Connection): string {
   if (!["ado", "github", "notion"].includes(connection.kind))
     throw Error("Unsupported connection");
@@ -155,6 +146,7 @@ export async function withRefreshLock<T>(
   )
     throw Error("Unsafe auth root");
   const release = await lockfile.lock(root, {
+    fs: { ...filesystem },
     lockfilePath: join(root, ".amun-refresh.lock"),
     stale: 30000,
     update: 5000,

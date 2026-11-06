@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { windowPreferences, contentSecurityPolicy } from "../src/security.js";
+import {
+  windowPreferences,
+  contentSecurityPolicy,
+  shellSecurityPolicy,
+} from "../src/security.js";
 
 describe("desktop isolation policy", () => {
   it("sandboxes unprivileged content without Node or preload capabilities", () => {
@@ -26,4 +30,12 @@ describe("desktop isolation policy", () => {
     expect(contentSecurityPolicy).not.toContain("unsafe-inline");
     expect(contentSecurityPolicy).not.toContain("unsafe-eval");
   });
+});
+
+it("permits only nonce-scoped terminal styles while keeping scripts and remote content blocked", () => {
+  const policy = shellSecurityPolicy("abcdefghijklmnopqrstuvwx");
+  expect(policy).toContain("style-src 'self' 'nonce-abcdefghijklmnopqrstuvwx'");
+  expect(policy).toContain("script-src 'self'");
+  expect(policy).not.toContain("unsafe-inline");
+  expect(() => shellSecurityPolicy("bad' nonce")).toThrow();
 });

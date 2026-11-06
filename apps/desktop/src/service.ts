@@ -1,3 +1,9 @@
+import {
+  exportWorkspace,
+  restoreWorkspace,
+} from "../../../packages/data/src/backup.ts";
+import { backupRequest } from "./backup-policy.ts";
+import { checkPiReadiness } from "../../../packages/auth/src/readiness.ts";
 import { WorkspaceService } from "../../../packages/data/src/workspace-service.ts";
 import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
 import {
@@ -104,7 +110,64 @@ const authMetadata = {
 };
 const authSessions = new Set<AuthSession>();
 const sessions = new Set<TerminalSession>();
+let backupBusy = false;
 process.parentPort?.on("message", (event) => {
+  if (event.data?.kind === "backup") {
+    const job = event.data;
+    const request = backupRequest({
+      action: job.action,
+      password: job.password,
+    });
+    if (
+      !request ||
+      typeof job.id !== "string" ||
+      typeof job.archive !== "string" ||
+      typeof job.target !== "string" ||
+      backupBusy
+    )
+      return;
+    backupBusy = true;
+    void (async () => {
+      let ok = false;
+      try {
+        if (request.action === "export")
+          await exportWorkspace(
+            workspace,
+            workspaceRoot!,
+            job.archive,
+            request.password,
+            redactor,
+          );
+        else
+          await restoreWorkspace(
+            job.archive,
+            job.target,
+            request.password,
+            requireNative(databaseModule!) as typeof Database,
+          );
+        ok = true;
+        outputs.audit(
+          "pm",
+          request.action === "export" ? "backup.exported" : "backup.restored",
+          "workspace",
+          {},
+        );
+      } catch {
+        /* No raw paths or passphrase errors cross IPC. */
+      } finally {
+        request.password = "";
+        job.password = "";
+        backupBusy = false;
+        process.parentPort?.postMessage({
+          kind: "backup-result",
+          id: job.id,
+          ok,
+        });
+      }
+    })();
+    return;
+  }
+
   const port = event.ports[0];
   if (!port) return;
   const auth = new AuthSession(
@@ -123,6 +186,13 @@ process.parentPort?.on("message", (event) => {
           url,
         }),
     ),
+    (provider) =>
+      checkPiReadiness(
+        process.env.AMUN_PI_BINARY!,
+        process.env.AMUN_PI_ENTRY!,
+        process.env.AMUN_AUTH_ROOT!,
+        provider,
+      ),
   );
   authSessions.add(auth);
   let home: string | undefined;

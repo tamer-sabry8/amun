@@ -13,6 +13,7 @@ const provider = z.enum([
   "anthropic",
 ]);
 export const authCommand = z.discriminatedUnion("action", [
+  z.strictObject({ ...base, action: z.literal("readiness"), provider }),
   z.strictObject({ ...base, action: z.literal("list") }),
   z.strictObject({
     ...base,
@@ -90,3 +91,16 @@ export const authEvent = z.discriminatedUnion("kind", [
 ]);
 export type AuthCommand = z.infer<typeof authCommand>;
 export type AuthEvent = z.infer<typeof authEvent>;
+
+export const modelLoginOptions: readonly {
+  provider: string;
+  type: "oauth" | "api_key";
+  label: string;
+}[] = [
+  { provider: "github-copilot", type: "oauth", label: "GitHub Copilot" },
+  { provider: "openrouter", type: "oauth", label: "OpenRouter" },
+  { provider: "openai-codex", type: "oauth", label: "OpenAI / Codex" },
+  { provider: "openai", type: "api_key", label: "OpenAI API key" },
+  { provider: "openrouter", type: "api_key", label: "OpenRouter API key" },
+  { provider: "anthropic", type: "api_key", label: "Anthropic API key" },
+];

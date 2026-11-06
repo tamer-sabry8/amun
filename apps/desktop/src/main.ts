@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { installBackup } from "./backup-ui.ts";
 import { execFile } from "node:child_process";
 import { authBrowserUrl } from "../../../packages/auth/src/pi-auth.ts";
 import { installBrowser } from "./browser.js";
@@ -10,15 +12,20 @@ import {
   type UtilityProcess,
 } from "electron";
 import { join } from "node:path";
-import { windowPreferences, contentSecurityPolicy } from "./security.js";
+import { windowPreferences, shellSecurityPolicy } from "./security.js";
 import { restartDelay } from "../../service/src/health.js";
 
+const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;
 let quitting = false;
 let attempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | undefined;
 let stableTimer: ReturnType<typeof setTimeout> | undefined;
 const loadedWindows = new Set<BrowserWindow>();
+const backupJobs = new Map<
+  string,
+  { done: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }
+>();
 
 function attach(window: BrowserWindow): void {
   if (!service || window.isDestroyed()) return;
@@ -77,6 +84,25 @@ function startService(): void {
   service = child;
   child.on("message", (message: unknown) => {
     if (
+      message &&
+      typeof message === "object" &&
+      "kind" in message &&
+      message.kind === "backup-result" &&
+      "id" in message &&
+      typeof message.id === "string" &&
+      "ok" in message &&
+      typeof message.ok === "boolean"
+    ) {
+      const job = backupJobs.get(message.id);
+      if (job) {
+        clearTimeout(job.timer);
+        backupJobs.delete(message.id);
+        job.done(message.ok);
+      }
+      return;
+    }
+
+    if (
       !message ||
       typeof message !== "object" ||
       !("kind" in message) ||
@@ -106,6 +132,11 @@ function startService(): void {
     }, 10000);
   });
   child.once("exit", () => {
+    for (const job of backupJobs.values()) {
+      clearTimeout(job.timer);
+      job.done(false);
+    }
+    backupJobs.clear();
     clearTimeout(stableTimer);
     if (service !== child) return;
     service = undefined;
@@ -129,6 +160,22 @@ function openWindow(): void {
     },
   });
   installBrowser(window, "m0");
+  installBackup(
+    window,
+    (job) =>
+      new Promise((resolve) => {
+        if (!service) {
+          resolve(false);
+          return;
+        }
+        const timer = setTimeout(() => {
+          backupJobs.delete(job.id);
+          resolve(false);
+        }, 120000);
+        backupJobs.set(job.id, { done: resolve, timer });
+        service.postMessage({ kind: "backup", ...job });
+      }),
+  );
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.on("did-finish-load", () => {
@@ -137,7 +184,16 @@ function openWindow(): void {
   });
   window.once("closed", () => loadedWindows.delete(window));
   window.once("ready-to-show", () => window.show());
-  void window.loadFile(join(app.getAppPath(), "renderer/index.html"));
+  void window.loadFile(join(app.getAppPath(), "renderer/index.html"), {
+    query: {
+      styleNonce,
+      ...(app.commandLine.hasSwitch("amun-proof")
+        ? { proof: "1" }
+        : !app.isPackaged && app.commandLine.hasSwitch("amun-gallery")
+          ? { gallery: "1" }
+          : {}),
+    },
+  });
 }
 void app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler(
@@ -148,7 +204,7 @@ void app.whenReady().then(() => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        "Content-Security-Policy": [contentSecurityPolicy],
+        "Content-Security-Policy": [shellSecurityPolicy(styleNonce)],
       },
     });
   });

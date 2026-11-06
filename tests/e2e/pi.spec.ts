@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { test, expect, _electron as electron } from "@playwright/test";
 test("Pi extension dialogs cross the service boundary with explicit answers", async () => {
   const app = await electron.launch({
-    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--amun-proof",
+    ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),
@@ -37,7 +40,10 @@ test("Pi extension dialogs cross the service boundary with explicit answers", as
 
 test("service loss clears Pi dialogs and terminal control instead of replaying them", async () => {
   const app = await electron.launch({
-    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--amun-proof",
+    ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),

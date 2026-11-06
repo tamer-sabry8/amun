@@ -46,6 +46,7 @@ test("direct first-party login survives full app restart in the isolated partiti
   const launch = () =>
     electron.launch({
       args: [
+        "--amun-proof",
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
         "--user-data-dir=" + root,
       ],

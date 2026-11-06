@@ -22,6 +22,9 @@ export class AuthSession {
   };
   private readonly send: (event: AuthEvent) => void;
   private readonly start: StartLogin;
+  private readonly readiness: (
+    provider: string,
+  ) => Promise<"configured" | "missing" | "error">;
   private login: LoginProcess | undefined;
   private closed = false;
   private generation = 0;
@@ -30,6 +33,7 @@ export class AuthSession {
     metadata: AuthSession["metadata"],
     send: (event: AuthEvent) => void,
     start: StartLogin,
+    readiness: AuthSession["readiness"] = async () => "error",
   ) {
     this.broker = broker;
     this.metadata = metadata;
@@ -37,6 +41,7 @@ export class AuthSession {
       if (!this.closed) send(event);
     };
     this.start = start;
+    this.readiness = readiness;
   }
   private list(): void {
     this.send({
@@ -50,7 +55,22 @@ export class AuthSession {
     if (!parsed.success || this.closed) return false;
     const command = parsed.data;
     try {
-      if (command.action === "list") this.list();
+      if (command.action === "readiness") {
+        if (this.login) throw Error("Login active");
+        this.send({
+          version: 1,
+          kind: "auth-status",
+          id: command.provider,
+          status: "checking",
+        });
+        const status = await this.readiness(command.provider);
+        this.send({
+          version: 1,
+          kind: "auth-status",
+          id: command.provider,
+          status,
+        });
+      } else if (command.action === "list") this.list();
       else if (command.action === "save") {
         connectionId(command.connection);
         if (

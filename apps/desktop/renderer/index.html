@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="tamer-sabry-default">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,80 +7,7 @@
     <link rel="stylesheet" href="./renderer.css" />
   </head>
   <body>
-    <main>
-      <h1>Amun</h1>
-      <p>Your product workspace.</p>
-      <p>
-        Foundation preview. Connections and product workflows are not available
-        yet.
-      </p>
-    </main>
-    <p id="service-status" role="status">Connecting</p>
-    <form id="browser-form">
-      <label for="browser-url"
-        >M0 browser proof — HTTPS or local prototype URL</label
-      >
-      <input id="browser-url" type="url" required size="50" />
-      <button type="submit">Open browser</button>
-      <button type="button" data-browser="back">Back</button>
-      <button type="button" data-browser="forward">Forward</button>
-      <button type="button" data-browser="reload">Reload</button>
-      <button type="button" data-browser="close">Close browser</button>
-    </form>
-    <div id="browser-handoff" hidden>
-      <span id="handoff-host"></span> — Restart sign-in externally. This will
-      not sign the panel in. <button id="handoff-chrome">Open in Chrome</button
-      ><button id="handoff-default">Open in default browser</button
-      ><button id="handoff-dismiss">Dismiss</button>
-    </div>
-    <p id="browser-status" aria-live="polite">Browser closed</p>
-    <section aria-label="M0 terminal proof">
-      <button type="button" data-terminal="open">Open terminal</button>
-      <button type="button" data-terminal="take-control">Take control</button>
-      <button type="button" data-terminal="release-control">Read only</button>
-      <button type="button" data-terminal="resize">Resize 100 × 30</button>
-      <button type="button" data-terminal="close">Close terminal</button>
-      <span id="terminal-status">closed</span>
-      <p>Isolated proof shell. Worker attachment is not enabled.</p>
-      <div id="terminal-dock" hidden></div>
-      <pre id="terminal-output" hidden></pre>
-    </section>
-    <section aria-label="M0 Pi protocol proof">
-      <p>
-        Select the offline protocol proof or reuse one existing Pi provider
-        sign-in in isolated Amun state.
-      </p>
-      <button type="button" id="pi-open">Open Pi protocol proof</button>
-      <button type="button" data-pi-provider="openrouter">
-        Use Pi OpenRouter
-      </button>
-      <button type="button" data-pi-provider="github-copilot">
-        Use Pi GitHub Copilot
-      </button>
-      <button type="button" id="pi-close">Close Pi</button>
-      <p id="pi-models"></p>
-      <span id="pi-status">closed</span>
-      <form id="pi-form">
-        <label for="pi-prompt">Pi prompt</label
-        ><input
-          id="pi-prompt"
-          maxlength="16384"
-          value="/amun-dialog-proof"
-        /><button>Send to Pi</button>
-      </form>
-      <pre id="pi-output"></pre>
-      <div id="pi-dialog" aria-live="polite"></div>
-    </section>
-    <section aria-label="M0 crew observation proof">
-      <label
-        >Firstmate task ID
-        <input id="crew-task" value="proof-codex" maxlength="64"
-      /></label>
-      <button id="observe-crew">Observe worker endpoint</button>
-      <button id="attach-backend">Attach terminal read-only</button>
-      <p id="crew-run">unknown</p>
-      <p id="crew-observation">unknown</p>
-    </section>
+    <div id="root"></div>
     <script src="./renderer.js"></script>
   </body>
 </html>
