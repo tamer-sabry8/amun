@@ -21,6 +21,10 @@ export interface NativePiSession {
   abort(): Promise<void>;
 }
 export type NativePiResult =
+  | {
+      kind: "session-tree";
+      rows: ReturnType<typeof import("./native-session-tree.ts").sessionTree>;
+    }
   | { kind: "choices"; title: string; choices: { id: string; label: string }[] }
   | { kind: "message"; text: string }
   | { kind: "copy"; text: string }

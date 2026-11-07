@@ -20,14 +20,21 @@ test("native Pi commands create an owned SDK session and update its real name", 
         cwd: string,
         dir: string,
       ): {
-        appendSessionInfo(name: string): void;
-        appendMessage(message: unknown): void;
+        appendSessionInfo(name: string): string;
+        branch(id: string): void;
+        appendMessage(message: unknown): string;
       };
     };
   };
   const saved = sdk.SessionManager.create(cwd, sessions);
-  saved.appendSessionInfo("Saved session acceptance");
-  saved.appendMessage({
+  const rootEntry = saved.appendSessionInfo("Saved session acceptance");
+  const alternate = saved.appendMessage({
+    role: "user",
+    content: [{ type: "text", text: "Separate branch fixture" }],
+    timestamp: Date.now(),
+  });
+  saved.branch(rootEntry);
+  const activeUser = saved.appendMessage({
     role: "user",
     content: [
       { type: "text", text: "Saved session fixture password=AMUN_TEST_SECRET" },
@@ -179,6 +186,29 @@ test("native Pi commands create an owned SDK session and update its real name", 
     );
     await page
       .getByLabel("Native Pi command", { exact: true })
+      .selectOption("tree");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "message · " + alternate + " · Level 2",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "message · " + activeUser + " · Level 2",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("list", { name: "Session tree entries" })
+        .locator('[aria-current="step"]'),
+    ).toHaveCount(1);
+    await page
+      .getByLabel("Native Pi command", { exact: true })
       .selectOption("name");
     await page
       .getByRole("button", { name: "Run command", exact: true })
@@ -262,6 +292,18 @@ test("native Pi commands create an owned SDK session and update its real name", 
         }),
       ).toBeVisible();
     }
+    await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await page
+      .getByLabel("Conversation message", { exact: true })
+      .fill("/tree");
+    await page
+      .getByRole("button", { name: "Run /tree", exact: true })
+      .click({ timeout: 4000 });
+    await expect(
+      page.getByRole("list", { name: "Session tree entries" }),
+    ).toBeVisible();
     await page
       .getByRole("button", { name: "Read active conversation", exact: true })
       .click();

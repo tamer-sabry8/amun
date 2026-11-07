@@ -1,3 +1,4 @@
+import { composerCommand, nativeCommandNames } from "./composer-command.ts";
 import { HostingForm } from "./hosting-form.tsx";
 import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.ts";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +18,8 @@ export function NativePiPanel({
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
   const [loginStatus, setLoginStatus] = useState("");
   const [draft, setDraft] = useState("");
+  const slash = composerCommand(draft);
+  const importFile = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   useEffect(() => {
@@ -280,6 +283,7 @@ export function NativePiPanel({
       <label>
         Import Pi session JSONL (maximum 512 KiB)
         <input
+          ref={importFile}
           type="file"
           accept=".jsonl,application/jsonl"
           disabled={busy}
@@ -317,33 +321,7 @@ export function NativePiPanel({
             setResult(null);
           }}
         >
-          {[
-            "mcp",
-            "session",
-            "settings",
-            "login",
-            "logout",
-            "new",
-            "resume",
-            "fork",
-            "clone",
-            "tree",
-            "model",
-            "thinking",
-            "scoped-models",
-            "name",
-            "copy",
-            "export",
-            "share",
-            "bug",
-            "compact",
-            "import",
-            "reload",
-            "trust",
-            "changelog",
-            "hotkeys",
-            "quit",
-          ].map((name) => (
+          {nativeCommandNames.map((name) => (
             <option key={name} value={name}>
               /{name}
               {name === "share" ? " — disabled; use Notion" : ""}
@@ -448,20 +426,53 @@ export function NativePiPanel({
                 onChange={(event) => setDraft(event.target.value)}
               />
             </label>
+            {draft.trim() === "/" && (
+              <label>
+                Choose a slash command
+                <select
+                  value=""
+                  onChange={(e) => setDraft("/" + e.target.value)}
+                >
+                  <option value="">Choose a command</option>
+                  {nativeCommandNames.map((name) => (
+                    <option key={name} value={name}>
+                      /{name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {draft.trim().startsWith("/") && !slash && draft.trim() !== "/" && (
+              <p role="status">
+                This command is unavailable in the active conversation.
+              </p>
+            )}
             <button
               type="button"
               disabled={
                 busy ||
-                !result.model ||
-                !draft.trim() ||
-                /^[!/]/.test(draft.trimStart()) ||
-                JSON.stringify({
-                  sessionId: result.sessionId,
-                  model: result.model,
-                  text: draft,
-                }).length > 16384
+                (!slash &&
+                  (!result.model ||
+                    !draft.trim() ||
+                    /^[!/]/.test(draft.trimStart()) ||
+                    JSON.stringify({
+                      sessionId: result.sessionId,
+                      model: result.model,
+                      text: draft,
+                    }).length > 16384))
               }
               onClick={() => {
+                if (slash) {
+                  if (slash.name === "import") {
+                    importFile.current?.click();
+                    return;
+                  }
+                  setCommand(slash.name);
+                  setArgument(slash.argument);
+                  setDraft("");
+                  run(slash.argument, slash.name);
+                  return;
+                }
                 run(
                   JSON.stringify({
                     sessionId: result.sessionId,
@@ -473,7 +484,7 @@ export function NativePiPanel({
                 setDraft("");
               }}
             >
-              Send message
+              {slash ? "Run /" + slash.name : "Send message"}
             </button>
             {sending && (
               <button
@@ -560,6 +571,28 @@ export function NativePiPanel({
             <button disabled={busy} onClick={() => run("github-cancel", "mcp")}>
               Cancel GitHub sign-in
             </button>
+          </section>
+        ) : result?.kind === "session-tree" ? (
+          <section>
+            <h4>Session tree</h4>
+            {!result.rows.length && <p>This session has no entries.</p>}
+            <ol aria-label="Session tree entries">
+              {result.rows.map((row) => (
+                <li
+                  key={row.id}
+                  style={{ marginInlineStart: Math.min(row.depth, 8) + "em" }}
+                >
+                  <button
+                    type="button"
+                    aria-current={row.current ? "step" : undefined}
+                    onClick={() => run(row.id, "tree")}
+                  >
+                    {row.type} · {row.id} · Level {row.depth + 1}
+                    {row.current ? " · Current" : ""}
+                  </button>
+                </li>
+              ))}
+            </ol>
           </section>
         ) : result?.kind === "choices" ? (
           <>

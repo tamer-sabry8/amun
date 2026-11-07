@@ -1,3 +1,4 @@
+import { sessionTree, type SessionEntryRef } from "./native-session-tree.ts";
 import { lstat, realpath } from "node:fs/promises";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { NativePiResult } from "./native-pi.ts";
@@ -6,7 +7,7 @@ export interface NativeSessionRuntime {
     isStreaming: boolean;
     sessionManager: {
       getLeafId(): string | null;
-      getEntries(): { id: string; type: string }[];
+      getEntries(): SessionEntryRef[];
     };
     getUserMessagesForForking(): { entryId: string; text: string }[];
     navigateTree(
@@ -101,17 +102,12 @@ export class NativePiSessions {
       result = await this.runtime.fork(argument);
     } else if (command === "tree") {
       const entries = this.runtime.session.sessionManager.getEntries();
-      if (entries.length > 2048) throw Error("Session tree too large");
-      if (!argument)
-        return {
-          kind: "choices",
-          title: "Session entries",
-          choices: entries.map((entry) => ({
-            id: entry.id,
-            label: entry.type + " · " + entry.id,
-          })),
-        };
-      if (!entries.some((entry) => entry.id === argument))
+      const rows = sessionTree(
+        entries,
+        this.runtime.session.sessionManager.getLeafId(),
+      );
+      if (!argument) return { kind: "session-tree", rows };
+      if (!rows.some((row) => row.id === argument))
         throw Error("Unknown tree entry");
       result = await this.runtime.session.navigateTree(argument, {
         summarize: false,

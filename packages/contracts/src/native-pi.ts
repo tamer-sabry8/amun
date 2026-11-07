@@ -36,6 +36,19 @@ export const notionApprovalRequest = z.strictObject({
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("session-tree"),
+    rows: z
+      .array(
+        z.strictObject({
+          id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+          type: z.string().regex(/^\w{1,64}$/),
+          depth: z.number().int().min(0).max(2047),
+          current: z.boolean(),
+        }),
+      )
+      .max(2048),
+  }),
+  z.strictObject({
     kind: z.literal("hosting-setup"),
     destination: hostingDestination.nullable(),
   }),

@@ -21,7 +21,7 @@ it("selects only owned session IDs and uses the SDK lifecycle for new/resume/for
       isStreaming: false,
       sessionManager: {
         getLeafId: () => "leaf",
-        getEntries: () => [{ id: "leaf", type: "message" }],
+        getEntries: () => [{ id: "leaf", type: "message", parentId: null }],
       },
       getUserMessagesForForking: () => [
         { entryId: "user", text: "private prompt" },
