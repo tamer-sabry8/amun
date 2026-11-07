@@ -22,11 +22,24 @@ async function workerIdentities(pane: number, harness: string) {
   for (let i = 0; i < 20; i++)
     for (const row of rows)
       if (descendants.has(Number(row[2]))) descendants.add(Number(row[1]));
-  return rows
-    .filter(
-      (row) =>
-        descendants.has(Number(row[1])) && row[4]!.split("/").pop() === harness,
-    )
+  const workers = rows.filter(
+    (row) =>
+      descendants.has(Number(row[1])) && row[4]!.split("/").pop() === harness,
+  );
+  const workerPids = new Set(workers.map((row) => Number(row[1])));
+  const parents = new Map(rows.map((row) => [Number(row[1]), Number(row[2])]));
+  // Some CLI workers launch short-lived children using the same executable.
+  // Keep each independent worker root so replacement and duplicate spawns still fail.
+  return workers
+    .filter((row) => {
+      let parent = Number(row[2]);
+      while (descendants.has(parent)) {
+        if (workerPids.has(parent)) return false;
+        if (parent === pane) break;
+        parent = parents.get(parent) ?? 0;
+      }
+      return true;
+    })
     .map((row) => row[1] + " " + row[3])
     .sort();
 }

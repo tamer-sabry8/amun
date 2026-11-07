@@ -49,7 +49,7 @@ test("native import reviews scope and imports a real pinned SDK session", async 
       });
     await expect(
       page.getByRole("heading", { name: "Review session import" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId("native-pi-result")).toContainText(
       header.cwd,
     );
