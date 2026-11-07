@@ -56,3 +56,7 @@ The user confirmed there is no llama.cpp router available. Keep `/llama` live ac
 The Conversations view now shows a bounded redacted transcript with the active session identity, empty-state handling and omitted-entry counts. The real owned SDK transcript is exercised in source/package UI tests. Published conversations lists verified persistent receipts without making a network write. These journey improvements do not close the still-open composer, MCP/resources, bug/debug, Firstmate or router command gates.
 
 Native `/bug` now prepares a redacted local report with exact review/save. No automatic upload, transcript collection or credential/environment dump is performed. Gateway upload/ZIP parity is not claimed. See [native journey evidence](../evidence/M1/2026-11-07-native-journeys.md).
+
+## Typed native commands and session branches
+
+The source and packaged Conversations view now accepts supported built-ins directly in the composer. A real sibling-branch fixture verified the native hierarchy, current entry and navigation. Dynamic resources, Firstmate skill execution and the live llama router gate remain open. [Tested revision and acceptance evidence](../evidence/M1/2026-11-07-agents-and-native-tree.md).
