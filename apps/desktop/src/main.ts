@@ -64,6 +64,11 @@ function startService(): void {
               app.getAppPath(),
               ".runtime/database/node_modules/better-sqlite3",
             ),
+        AMUN_CANDIDATE_RECEIPTS:
+          app.commandLine.hasSwitch("amun-proof") &&
+          app.commandLine.hasSwitch("amun-herdr-candidate-proof")
+            ? join(app.getPath("userData"), "candidate-receipts")
+            : "",
         AMUN_CREW_RECEIPTS: join(app.getPath("userData"), "crew", "receipts"),
         AMUN_TMUX_BINARY:
           process.platform === "darwin"

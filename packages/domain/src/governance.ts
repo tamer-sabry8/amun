@@ -9,6 +9,7 @@ export const actionKinds = [
   "file_destructive",
   "skill_install",
   "model_outside_allowlist",
+  "pi_tool_review",
 ] as const;
 export type ActionKind = (typeof actionKinds)[number];
 export const actionStates = [

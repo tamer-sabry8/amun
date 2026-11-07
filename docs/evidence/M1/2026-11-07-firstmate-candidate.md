@@ -16,3 +16,11 @@ The 105 upstream commits affect 317 files. Among the changes are watcher markers
 - Promotion, previous-pin selection and one-click rollback remain open. The bundled manifest retains the baseline.
 
 A second trial in fresh worktrees identified a folder-trust prompt in both the Codex and Claude panes. No trust decision was entered. Each fresh observer found its scoped pane. The named lab was torn down and the default-session tripwire passed. Neither trial proves authenticated worker completion or recovery through an Amun service restart. Firstmate also warned that its pre-launch secondmate sync could not resolve the disposable repository's default branch. Both worker worktrees were independently created at the exact candidate commit.
+
+## Follow-up with scoped folder and hook trust
+
+The owner authorized folder trust and verified Firstmate hooks in disposable Amun Git worktrees. The Codex lab accepted all five reviewed hooks and returned the expected arithmetic answer. The Claude process started, but its model call reported that it needed login. A separate tool-free inference through the same Amun Claude subscription profile passed.
+
+Ten actual Electron service restarts rediscovered both original Herdr endpoints. An independent observer verified the same process IDs and start times and exactly one matching CLI per worktree. Missing receipts returned unknown. This used the proof-only Herdr adapter and a source Electron build. Worker completion is recorded separately from endpoint identity.
+
+The [Pi bridge matrix](2026-11-07-pi-bridge.md) passed alongside the candidate watcher. The earlier missing-bridge and trust blockers are resolved.

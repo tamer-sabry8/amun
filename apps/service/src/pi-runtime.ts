@@ -1,3 +1,8 @@
+import bridgeSource from "../../../packages/pi-bridge/src/extension.ts?raw";
+import clientSource from "../../../packages/pi-bridge/src/client.ts?raw";
+import gateSource from "../../../packages/pi-bridge/src/gate.ts?raw";
+import { openBridge } from "../../../packages/pi-bridge/src/socket.ts";
+import type { BridgeRequest } from "../../../packages/contracts/src/pi-bridge.ts";
 import { cleanupExtension } from "./pi-cleanup.ts";
 import { pathToFileURL } from "node:url";
 import { selectedPiStoredCredential } from "../../../packages/crew/src/pi-inference.ts";
@@ -13,9 +18,26 @@ export async function openPiProtocol(
   entry: string,
   send: (event: PiEvent) => void,
   provider: "protocol" | "openrouter" | "github-copilot" = "protocol",
+  handleBridge: (request: BridgeRequest) => string,
 ): Promise<PiSession> {
   const root = await mkdtemp(join(tmpdir(), "amun-pi-service-"));
+  let bridge: Awaited<ReturnType<typeof openBridge>> | undefined;
   try {
+    let bridgeReady = false;
+    const bridgeEntry = join(root, "extension.ts");
+    for (const [name, source] of [
+      ["extension.ts", bridgeSource],
+      ["gate.ts", gateSource],
+      ["client.ts", clientSource],
+    ] as const)
+      await writeFile(join(root, name), source, { mode: 0o600, flag: "wx" });
+    bridge = await openBridge(async (request) => {
+      if (request.op === "event" && request.name === "bridge_ready") {
+        bridgeReady = true;
+        return "ready";
+      }
+      return handleBridge(request);
+    }, root);
     const config = join(root, "config");
     await mkdir(config, { mode: 0o700 });
     const model =
@@ -75,11 +97,16 @@ export async function openPiProtocol(
         extension,
         "--extension",
         cleanupPath,
+        "--extension",
+        bridgeEntry,
       ],
       {
         cwd: root,
         env: {
           HOME: root,
+          AMUN_BRIDGE_SOCKET: bridge.path,
+          AMUN_BRIDGE_TOKEN: bridge.token,
+          AMUN_BRIDGE_ENTRY: bridgeEntry,
           PATH: "",
           PI_CODING_AGENT_DIR: config,
           PI_SKIP_VERSION_CHECK: "1",
@@ -108,6 +135,7 @@ export async function openPiProtocol(
     const cleanup = () => {
       clearTimeout(timer);
       clearTimeout(force);
+      void bridge?.close();
       session.close();
       void rm(root, { recursive: true, force: true });
     };
@@ -118,6 +146,7 @@ export async function openPiProtocol(
     try {
       await session.ready(
         provider === "protocol" ? undefined : { provider, model },
+        () => bridgeReady,
       );
     } catch {
       session.close();
@@ -125,6 +154,7 @@ export async function openPiProtocol(
     }
     return session;
   } catch {
+    await bridge?.close();
     await rm(root, { recursive: true, force: true });
     throw new Error("Pi runtime unavailable");
   }

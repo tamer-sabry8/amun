@@ -8,6 +8,8 @@ Provision and validate Git worktree identity before Firstmate seeding, dispatch,
 
 Preserve personal Firstmate/Herdr/Pi checkouts, homes, active sessions, locks and configurations. Never repair Amun's worktree setup by switching the user's checkout branch, resetting it, or adopting a personal worktree. Use isolated Amun-owned repository/worktree state and record real acceptance evidence.
 
+The owner grants standing folder trust for disposable Amun-owned Git worktrees. Verify the worktree and repository identities and apply trust in the Amun test profile without asking again. Scope trust to the individual worktree. For every user, automatically accept the corresponding Firstmate and secondmate hook prompts in that disposable scope. Verify the hook definitions and executable sources against the selected Firstmate revision and reviewed overlay. Keep real repositories, persistent worktrees, personal profiles and unrelated hooks outside this policy.
+
 ## External tool updates
 
 The user revised this policy on 2026-11-06: keep Claude 2.1.319 and allow supported updates of external apps/CLIs used by Amun. Do not impose blanket updater-disable flags or automatically restore an older launcher. Use supported updater mechanisms; preserve personal configurations, credentials, working directories, locks and running sessions. Do not restart active workers to apply an update.

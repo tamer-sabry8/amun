@@ -167,7 +167,7 @@ export class ActionStore {
       .transaction(() => {
         const row = this.db
           .prepare(
-            "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='ready' AND (? IS NULL OR a.kind=?) AND (? IS NULL OR a.id=?) ORDER BY o.rowid LIMIT 1",
+            "SELECT o.action_id FROM outbox o JOIN actions a ON a.id=o.action_id WHERE o.state='ready' AND a.kind<>'pi_tool_review' AND (? IS NULL OR a.kind=?) AND (? IS NULL OR a.id=?) ORDER BY o.rowid LIMIT 1",
           )
           .get(
             kind ?? null,

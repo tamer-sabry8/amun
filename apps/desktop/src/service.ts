@@ -1,3 +1,4 @@
+import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
 import { crewList } from "../../../packages/contracts/src/crew.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
@@ -64,6 +65,7 @@ import {
 import { ActionStore } from "../../../packages/data/src/outbox.ts";
 import type Database from "better-sqlite3";
 import { openWorkspace } from "../../../packages/data/src/workspace.ts";
+import { observeCandidate } from "../../../packages/crew/src/herdr-candidate.ts";
 import { CrewObserver } from "../../service/src/crew-observer.ts";
 import { observeOwnedTmux } from "../../../packages/crew/src/observe-owned-tmux.ts";
 import { openBackendTerminal } from "../../service/src/backend-terminal.ts";
@@ -372,6 +374,8 @@ process.parentPort?.on("message", (event) => {
   let listingCrew = false;
   const crew = new CrewObserver(
     async (id) => {
+      if (process.env.AMUN_CANDIDATE_RECEIPTS)
+        return observeCandidate(process.env.AMUN_CANDIDATE_RECEIPTS, id);
       const root = process.env.AMUN_CREW_RECEIPTS;
       const binary = process.env.AMUN_TMUX_BINARY;
       if (!root || !binary) return { endpoint: "unknown", worker: "unknown" };
@@ -465,6 +469,11 @@ process.parentPort?.on("message", (event) => {
           if (!closed) port.postMessage(event);
         },
         request.action === "open-provider" ? request.provider : "protocol",
+        handleBridgeRequest(
+          workspace,
+          workspaceService.snapshot().preferences.productId,
+          redactor,
+        ),
       )
         .then((session) => {
           if (closed) session.close();
