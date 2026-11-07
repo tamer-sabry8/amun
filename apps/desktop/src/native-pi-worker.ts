@@ -1,3 +1,4 @@
+import { nativeBugReport } from "../../../packages/crew/src/native-pi-bug.ts";
 import { nativeConversationView } from "../../../packages/crew/src/native-pi-conversation.ts";
 import { NativePiImport } from "../../../packages/crew/src/native-pi-import.ts";
 import {
@@ -72,6 +73,7 @@ let importActions: NativePiImport | undefined;
 let trustActions: NativePiTrust | undefined;
 let credentialActions: NativePiCredentials | undefined;
 let changelogPath: string | undefined;
+let piVersion = "unknown";
 let readCredential: ((provider: string, path: string) => unknown) | undefined;
 let privateAuthPath: string | undefined;
 let busy = false;
@@ -169,6 +171,18 @@ async function initialize() {
   );
   credentialActions = new NativePiCredentials(runtime.session);
   changelogPath = join(sdk.getPackageDir(), "CHANGELOG.md");
+  const packagePath = join(sdk.getPackageDir(), "package.json");
+  if ((await lstat(packagePath)).size > 65536)
+    throw Error("Runtime metadata too large");
+  const packageInfo = JSON.parse(await readFile(packagePath, "utf8")) as {
+    version?: unknown;
+  };
+  if (
+    typeof packageInfo.version !== "string" ||
+    packageInfo.version.length > 128
+  )
+    throw Error("Runtime version unavailable");
+  piVersion = packageInfo.version;
   readCredential = sdk.readStoredCredential;
   trustActions = new NativePiTrust(new sdk.ProjectTrustStore(root!), cwd);
   sessionActions = new NativePiSessions(runtime, cwd, sessions, () =>
@@ -253,7 +267,7 @@ process.stdin.on("data", (chunk: string) => {
           send(command.id, await credentialActions!.run(command.argument));
           return;
         }
-        if (["share-notion", "conversation"].includes(command.command)) {
+        if (["share-notion", "conversation", "bug"].includes(command.command)) {
           const redactor = new Redactor();
           const credentials =
             await runtime!.session.modelRuntime.listCredentials();
@@ -264,6 +278,25 @@ process.stdin.on("data", (chunk: string) => {
               redactor,
               readCredential!(info.providerId, privateAuthPath!),
             );
+          if (command.command === "bug") {
+            const model = runtime!.session.model;
+            send(
+              command.id,
+              nativeBugReport(
+                {
+                  sessionId: runtime!.session.sessionId,
+                  hint: command.argument,
+                  piVersion,
+                  platform: process.platform,
+                  model: model
+                    ? model.provider + "/" + model.id
+                    : "No model selected",
+                },
+                redactor,
+              ),
+            );
+            return;
+          }
           send(
             command.id,
             command.command === "conversation"

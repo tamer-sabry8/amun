@@ -4,8 +4,10 @@ import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
 export function NativePiPanel({
   subscriptionsOnly = false,
+  onConnectNotion,
 }: {
   subscriptionsOnly?: boolean;
+  onConnectNotion?: () => void;
 }) {
   const [open, setOpen] = useState(false),
     [command, setCommand] = useState("session"),
@@ -101,12 +103,7 @@ export function NativePiPanel({
       }),
     [],
   );
-  useEffect(
-    () => () => {
-      bridge.send({ version: 1, kind: "native-pi", action: "close" });
-    },
-    [],
-  );
+  // Navigation does not own the service session. Explicit /quit or service shutdown closes it.
   const run = (value = argument, selectedCommand = command) => {
     if (selectedCommand === "login") {
       try {
@@ -221,6 +218,11 @@ export function NativePiPanel({
       }}
     >
       <h3>Pi session commands</h3>
+      {onConnectNotion && (
+        <button type="button" disabled={busy} onClick={onConnectNotion}>
+          Set up Notion sharing
+        </button>
+      )}
       <button
         type="button"
         disabled={busy}
@@ -310,6 +312,7 @@ export function NativePiPanel({
             "copy",
             "export",
             "share",
+            "bug",
             "compact",
             "import",
             "reload",

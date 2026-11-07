@@ -1,9 +1,24 @@
 import { mkdir, lstat, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+export function workerProfileName(
+  tool: "codex" | "claude",
+  instanceId?: string,
+) {
+  if (!["codex", "claude"].includes(tool)) throw Error("Invalid worker tool");
+  if (instanceId === undefined) return "m0-" + tool;
+  if (
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
+      instanceId,
+    )
+  )
+    throw Error("Invalid isolated profile ID");
+  return "instance-" + instanceId + "-" + tool;
+}
 /** Creates missing Amun-owned directories only; never changes existing permissions or files. */
 export async function prepareWorkerProfile(
   base: string,
   tool: "codex" | "claude",
+  instanceId?: string,
 ) {
   if (
     !isAbsolute(base) ||
@@ -21,7 +36,7 @@ export async function prepareWorkerProfile(
     parentStat.uid !== process.getuid?.()
   )
     throw Error("Unsafe worker parent");
-  const root = join(base, "m0-" + tool);
+  const root = join(base, workerProfileName(tool, instanceId));
   for (const path of [
     base,
     root,

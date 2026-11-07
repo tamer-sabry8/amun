@@ -48,3 +48,26 @@ it("refuses foreign links, unsafe permissions and invalid tool selection", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it("provisions a separately named Amun profile without touching the signed-in default", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-separate-worker-")),
+  );
+  try {
+    const base = join(root, "profiles");
+    const original = await prepareWorkerProfile(base, "codex");
+    await writeFile(join(original, "state", "sentinel"), "preserved");
+    const id = "11111111-1111-4111-8111-111111111111";
+    const isolated = await prepareWorkerProfile(base, "codex", id);
+    expect(isolated).not.toBe(original);
+    expect(await readFile(join(original, "state", "sentinel"), "utf8")).toBe(
+      "preserved",
+    );
+    for (const invalid of ["../personal", "m0", "", "x".repeat(512)])
+      await expect(
+        prepareWorkerProfile(base, "claude", invalid),
+      ).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

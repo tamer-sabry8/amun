@@ -1,3 +1,4 @@
+import { workerProfileName } from "./worker-profile.ts";
 import { join } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { userInfo } from "node:os";
@@ -30,6 +31,7 @@ export class SubscriptionWorker {
       binary: string;
       tool: "codex" | "claude";
       signal?: AbortSignal;
+      instanceId?: string;
     },
     private run: typeof runClosedInput = runClosedInput,
     private validate: typeof validateProfile = validateProfile,
@@ -37,7 +39,7 @@ export class SubscriptionWorker {
     this.root = join(
       config.home,
       "Library/Application Support/Amun/workers",
-      "m0-" + config.tool,
+      workerProfileName(config.tool, config.instanceId),
     );
     this.label = config.tool === "codex" ? "Codex CLI" : "Claude Code CLI";
     workerEnvironment(config.tool, config.home, this.root, config.binary);

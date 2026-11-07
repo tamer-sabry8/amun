@@ -13,15 +13,25 @@ async function main() {
     throw new Error("Choose claude or codex");
   if (!process.stdin.isTTY || !process.stdout.isTTY)
     throw new Error("Run this sign-in helper in a visible Terminal");
+  // The regular UI uses the existing profile. A separately owned profile can prove fresh onboarding without signing it out.
+  const profileArg = process.argv[3];
+  if (
+    process.argv.length > 4 ||
+    (profileArg !== undefined && !profileArg.startsWith("--profile-id="))
+  )
+    throw Error("Invalid worker profile argument");
+  const instanceId = profileArg?.slice("--profile-id=".length);
   const root = await prepareWorkerProfile(
     join(homedir(), "Library/Application Support/Amun/workers"),
     tool,
+    instanceId,
   );
   await withRefreshLock(root, async () => {
     const current = new SubscriptionWorker({
       home: homedir(),
       binary: process.execPath,
       tool,
+      ...(instanceId ? { instanceId } : {}),
     });
     try {
       if ((await current.status()).includes("subscription configured")) {

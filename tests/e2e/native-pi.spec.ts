@@ -200,6 +200,39 @@ test("native Pi commands create an owned SDK session and update its real name", 
       ).toBeVisible();
     }
     await page
+      .getByRole("button", { name: "Set up Notion sharing", exact: true })
+      .click();
+    await expect(page.getByLabel("Service", { exact: true })).toHaveValue(
+      "notion",
+    );
+    await page
+      .getByRole("button", { name: "Return to conversation", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Open Pi commands", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Active conversation text", { exact: true }),
+    ).toHaveValue(/Native clipboard acceptance/);
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("bug");
+    await page
+      .getByLabel("Command argument", { exact: true })
+      .fill("Bug fixture password=BUG_REPORT_CANARY");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Export review document", { exact: true }),
+    ).toHaveValue(/Local bug report — not uploaded/);
+    await expect(
+      page.getByLabel("Export review document", { exact: true }),
+    ).not.toHaveValue(/BUG_REPORT_CANARY/);
+    await page
       .getByRole("button", { name: "Read active conversation", exact: true })
       .click();
     await expect(

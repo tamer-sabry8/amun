@@ -237,15 +237,17 @@ function BackupControls() {
   );
 }
 function Settings({
+  initialService = "github",
   preferences,
   onPreferences,
 }: {
+  initialService?: "github" | "ado" | "notion";
   preferences: UiPreferences;
   onPreferences(value: UiPreferences): void;
 }) {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [tab, setTab] = useState("connections");
-  const [kind, setKind] = useState<"github" | "ado" | "notion">("github");
+  const [kind, setKind] = useState<"github" | "ado" | "notion">(initialService);
   const [baseUrl, setBaseUrl] = useState("https://github.com");
   const [secret, setSecret] = useState("");
   const [notionTarget, setNotionTarget] = useState("");
@@ -665,6 +667,7 @@ export function App() {
   const preferences = snapshot?.preferences ?? emptyPreferences;
   const [layout, dispatch] = useReducer(layoutReducer, initialLayout);
   const [route, setRoute] = useState("overview");
+  const [returnToConversation, setReturnToConversation] = useState(false);
   const [mode, setMode] = useState("Write");
   const [selected, setSelected] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<
@@ -1244,12 +1247,31 @@ export function App() {
               </div>
             )}
             {route === "settings" ? (
-              <Settings
-                preferences={preferences}
-                onPreferences={savePreferences}
-              />
+              <>
+                {returnToConversation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReturnToConversation(false);
+                      setRoute("conversations");
+                    }}
+                  >
+                    Return to conversation
+                  </button>
+                )}
+                <Settings
+                  initialService={returnToConversation ? "notion" : "github"}
+                  preferences={preferences}
+                  onPreferences={savePreferences}
+                />
+              </>
             ) : route === "conversations" ? (
-              <NativePiPanel />
+              <NativePiPanel
+                onConnectNotion={() => {
+                  setReturnToConversation(true);
+                  setRoute("settings");
+                }}
+              />
             ) : route === "requests" ? (
               <>
                 <div className="request-filters">
