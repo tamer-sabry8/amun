@@ -26,11 +26,11 @@ docs/plans/product-and-r1-plan.md is the full product and R1 plan. docs/TASKS.md
 
 ## M1 tasks still needing completion/audit
 
-- T016c hosted Notion OAuth remains unchecked. Consent, registration reuse, refresh rotation, scoped disconnect/reconnect, invalid_grant and live revocation now have evidence. First audit every criterion against docs/evidence/M1/2026-11-06-notion-mcp.md. The final packaged reconnect-message check passed after Keychain approval in this handoff.
+- T016c passed. New source consent and restart confirmed the workspace after the earlier packaged lifecycle tests. See docs/TASKS.md.
 - T016b CLI subscription access remains open for normal persistent Firstmate crew dispatch and initial endpoint receipt issuance. Native sign-ins, fresh onboarding and real subscription inference for both Codex and Claude passed. Existing-worker permissions and ten service-restart reattachment trials pass. They do not prove normal persistent launch. See 2026-11-07-agents-and-native-tree.md and 2026-11-07-native-journeys.md.
-- T022a native UI for ALL requested Pi commands remains open. Use pinned Pi 1.4.0 interfaces and actual loaded resources. Many session/model/settings/auth/import/export/trust/tree/compose paths pass. Dynamic extensions/templates/skills and remaining Firstmate skill paths need completion and live proof. Current SDK worker deliberately disables resources; inspect its actual loader before claiming custom commands. Do not forward unsupported built-ins as model prompts.
+- T022a native UI for ALL requested Pi commands remains open. Use pinned Pi 1.4.0 interfaces and actual loaded resources. Many session/model/settings/auth/import/export/trust/tree/compose paths pass. Amun-owned prompt templates and skill drafts passed real source and packaged acceptance. Executable extensions, operational Firstmate commands and remaining composer actions are still open. Do not forward unsupported built-ins as model prompts.
 - Native /llama live acceptance is explicitly BLOCKED because the owner has no llama.cpp router. Keep it tracked, continue independent work.
-- T022d remaining MCP connectors need actual implementation/acceptance. GitHub hosted read/write passed, including approved issue #3. Gmail/Drive/Calendar official hosted initialization and tool listing pass in source and package. Their OAuth/account reads are explicitly NON-GATING follow-ups. Other requested connectors include Playwright, Chrome DevTools, Obsidian, scoped filesystem, archived Puppeteer, Sheets/Maps and Cloudflare docs. Audit individually. No Chroma. Obsidian live testing awaits installation and a vault. Never grant whole-disk access by default.
+- T022d now includes all eight official Workspace servers and Maps tool discovery, folder-scoped read-only filesystem, and blank Chrome sessions through Playwright, Chrome DevTools and the archived Puppeteer adapter. Source and packaged acceptance passed. Obsidian loopback MCP setup is implemented and the owner deferred live vault testing. Account-specific Google reads and physical external-media acceptance remain open. See docs/evidence/M1/2026-11-07-mcp-and-composer.md.
 - T022c redesign awaits explicit approval. Appendix A dark theme is the chosen default. User's HTML reference supplies depth/layout ideas, not colors. Never start redesign just because it is on M1's list.
 - T022g final handoff comes last after the separately approved redesign and actual gates. This interim file does not complete it.
 - T022b sharing, T022f hosting, T037 amun-bridge (moved into M1), T022h staged Firstmate updates/rollback are checked. T013–T022 foundation tasks have recorded acceptance. Re-audit changing behavior and current CI.
@@ -95,7 +95,7 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 ## Resume sequence
 
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
-2. Read canonical tasks/evidence and audit T016c using the now-passed final reconnect check.
+2. Read the current task ledger and incremental acceptance evidence. The package at /private/tmp/amun-m1-resource-drafts/Amun-darwin-arm64/Amun.app passed 28 end-to-end tests with two skips at code checkpoint 0ae2c8a.
 3. Finish normal persistent crew dispatch/receipt path and native dynamic command/resource coverage with safe real worktree acceptance.
 4. Complete unblocked remaining MCP gates; keep explicit non-gating/deferred items honest.
 5. Keep redesign and M2 gated. Once independent M1 work is done, obtain explicit redesign approval with a concrete reviewable plan.

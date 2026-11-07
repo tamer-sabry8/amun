@@ -1,3 +1,4 @@
+import { ownedWorktreeBranch } from "./firstmate-worktree.ts";
 import { observedRun } from "./observed-run.ts";
 import type { Run } from "../../contracts/src/entities.ts";
 import { execFile } from "node:child_process";
@@ -64,31 +65,9 @@ export async function observeOwnedTmux(
         ).stdout,
     );
     const endpoint = matchOwnedEndpoint(receipt.identity, record, live);
-    if (endpoint !== "verified" || !productId)
-      return { endpoint, worker: "unknown" };
-    const git = async (args: string[]) =>
-      (
-        await promisify(execFile)(
-          "/usr/bin/git",
-          ["-C", record.worktree, ...args],
-          {
-            env: {
-              PATH: "/usr/bin:/bin",
-              GIT_CONFIG_NOSYSTEM: "1",
-              GIT_CONFIG_GLOBAL: "/dev/null",
-              GIT_OPTIONAL_LOCKS: "0",
-            },
-            timeout: 3000,
-            maxBuffer: 8192,
-          },
-        )
-      ).stdout.trim();
-    if (
-      (await realpath(record.worktree)) !== record.worktree ||
-      (await git(["rev-parse", "--show-toplevel"])) !== record.worktree
-    )
-      return unknown;
-    const branch = await git(["symbolic-ref", "--short", "HEAD"]);
+    if (endpoint !== "verified") return unknown;
+    const branch = await ownedWorktreeBranch(receipt.home, record.worktree);
+    if (!productId) return { endpoint, worker: "unknown" };
     return {
       endpoint,
       worker: "unknown",
