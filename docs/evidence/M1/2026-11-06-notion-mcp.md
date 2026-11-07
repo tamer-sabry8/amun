@@ -36,7 +36,6 @@ A clearly labelled acceptance fixture was prepared in the isolated Amun profile 
 
 Final follow-up: full check passed 368 tests. The final packaged native-session/import/Notion UI tests passed (7.5 seconds), including the readable review field. The live packaged application again verified Document Hub and displayed the exact fixture review. Approval was left to the user; publication was not clicked by the harness. Logs: /tmp/amun-m1-before-commit.log and /tmp/amun-m1-final-package-ui.log.
 
-
 ## 2026-11-07 publication-result discrepancy
 
 Tested implementation: `6f83fda`. The user reported “Published successfully”. Read-only verification of the running packaged M1-acceptance profile found two `notion_publish` actions, both `pending_approval`, and no `notion.receipt.*` records. The default Amun workspace contained no publication actions. The running Amun main process still uses the intended M1-acceptance profile. A separate read-only connected Notion search scoped to Document Hub for “Amun M1” returned no results. This search is corroboration only, not proof of absence or proof of Amun authentication.
