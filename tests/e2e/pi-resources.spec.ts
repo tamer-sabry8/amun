@@ -56,6 +56,14 @@ test("owned Pi template and skill commands expand into an editable draft", async
     );
     await draft.fill("/unknown-resource");
     await expect(button("Send message")).toBeDisabled();
+    await draft.fill("Private unsent text for the original conversation");
+    await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("new");
+    await button("Run command").click();
+    await expect(button("Read active conversation")).toBeEnabled();
+    await button("Read active conversation").click();
+    await expect(draft).toHaveValue("", { timeout: 2000 });
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

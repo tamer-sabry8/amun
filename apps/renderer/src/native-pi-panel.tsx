@@ -25,7 +25,22 @@ export function NativePiPanel({
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
   const [loginStatus, setLoginStatus] = useState("");
   const [recoveryUrls, setRecoveryUrls] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState("");
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const sessionId = result?.kind === "conversation" ? result.sessionId : null;
+  const draft = sessionId ? (drafts.get(sessionId) ?? "") : "";
+  function saveDraft(id: string, text: string) {
+    setDrafts((previous) => {
+      const next = new Map(previous);
+      if (text) next.set(id, text);
+      else next.delete(id);
+      return next;
+    });
+  }
+  const setDraft = (text: string) => {
+    if (sessionId) saveDraft(sessionId, text);
+  };
   const resources =
     result?.kind === "conversation" ? (result.resources ?? []) : [];
   const slash = composerCommand(draft);
@@ -131,7 +146,10 @@ export function NativePiPanel({
             event.data.result.kind === "conversation" &&
             event.data.result.resourceDraft !== undefined
           )
-            setDraft(event.data.result.resourceDraft);
+            saveDraft(
+              event.data.result.sessionId,
+              event.data.result.resourceDraft,
+            );
           setResult(event.data.result);
         } else if (
           value &&

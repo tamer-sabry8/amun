@@ -20,3 +20,7 @@ Tested code revision `d6f4b0e`, including worker recovery at `4a019a5`. Source a
 ## Persistent crew home
 
 The normal Agents screen now opens one persistent crew home per workspace. It prepares a primary and two linked worker checkouts from the selected verified archive. Opening the home again validates the original Git registrations. A full application restart and a rollback of the revision for new checkouts preserved the original crew. The source and packaged Mac journeys passed in 18.2 and 22.6 seconds after reproducing the missing control. This verifies provisioning and reuse. Initial dispatch and endpoint issuance remain open.
+
+## Full quit and worker recovery
+
+The owner chose to pause primary supervision on full application quit. Both the source app and a fresh arm64 package quit completely with the two existing disposable workers present. The previous Amun service PID exited. Reopening Agents verified the same Codex and Claude endpoints and original worker process identities. Each build also completed ten service restarts with zero duplicate workers. The test did not launch a persistent primary model turn. Its pause/resume acceptance belongs with normal dispatch.

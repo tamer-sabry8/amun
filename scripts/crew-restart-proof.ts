@@ -42,23 +42,25 @@ if (!existingToken) await run(["set-option", "-g", "@amun-owner", token]);
 const userData = join(setup.scope, "app-data");
 const normalShell = process.argv.includes("--agents");
 const packaged = process.argv.includes("--packaged");
-const app = await electron.launch({
-  args: [
-    ...(packaged ? [] : ["apps/desktop"]),
-    ...(normalShell ? [] : ["--amun-proof"]),
-    "--user-data-dir=" + userData,
-  ],
-  ...(packaged
-    ? {
-        executablePath:
-          process.env.AMUN_PACKAGED_PATH ||
-          resolve(
-            `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/MacOS/Amun`,
-          ),
-      }
-    : {}),
-  chromiumSandbox: true,
-});
+const launch = () =>
+  electron.launch({
+    args: [
+      ...(packaged ? [] : ["apps/desktop"]),
+      ...(normalShell ? [] : ["--amun-proof"]),
+      "--user-data-dir=" + userData,
+    ],
+    ...(packaged
+      ? {
+          executablePath:
+            process.env.AMUN_PACKAGED_PATH ||
+            resolve(
+              `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/MacOS/Amun`,
+            ),
+        }
+      : {}),
+    chromiumSandbox: true,
+  });
+let app = await launch();
 try {
   if ((await app.evaluate(({ app }) => app.getPath("userData"))) !== userData)
     throw Error("Proof app userData isolation failed");
@@ -313,6 +315,49 @@ try {
       observationPathSpawns: 0,
     }),
   );
+  if (normalShell) {
+    const servicePid = await app.evaluate(
+      ({ app }) =>
+        app.getAppMetrics().find((p) => p.name === "Amun Service")?.pid,
+    );
+    if (!servicePid) throw Error("Service identity unavailable");
+    await app.close();
+    await expect
+      .poll(() => {
+        try {
+          process.kill(servicePid, 0);
+          return true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+          return false;
+        }
+      })
+      .toBe(false);
+    if ((await workerProcesses()) !== originalWorkers)
+      throw Error("Worker changed during app quit");
+    app = await launch();
+    const reopened = await app.firstWindow();
+    await expect(reopened.locator("#service-status")).toHaveText("Connected");
+    await reopened.getByRole("button", { name: "Agents", exact: true }).click();
+    for (const id of ["proof-codex", "proof-claude"]) {
+      await reopened.getByLabel("Saved workers").selectOption(id);
+      await reopened
+        .getByRole("button", { name: "Observe worker", exact: true })
+        .click();
+      await expect(reopened.getByTestId("agent-endpoint")).toHaveText(
+        id + " · Endpoint verified",
+      );
+    }
+    if ((await workerProcesses()) !== originalWorkers)
+      throw Error("Worker changed after relaunch");
+    console.log(
+      JSON.stringify({
+        fullQuit: true,
+        previousServiceExited: true,
+        sameWorkersAfterRelaunch: true,
+      }),
+    );
+  }
 } finally {
   await app.close();
 }
