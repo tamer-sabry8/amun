@@ -18,7 +18,10 @@ export class PiSession {
     this.stop = stop;
     this.client = new PiRpcClient(write, (frame) => this.project(frame));
   }
-  async ready(expected?: { provider: string; model: string }): Promise<void> {
+  async ready(
+    expected?: { provider: string; model: string },
+    bridgeReady = () => true,
+  ): Promise<void> {
     const response = (await this.client.request("get_available_models")) as {
       models?: unknown;
     };
@@ -43,6 +46,7 @@ export class PiSession {
     )
       throw new Error("Selected model unavailable");
     if (this.closed) throw new Error("Pi closed");
+    if (!bridgeReady()) throw Error("Bridge unavailable");
     this.send(projected);
     this.state("ready");
   }

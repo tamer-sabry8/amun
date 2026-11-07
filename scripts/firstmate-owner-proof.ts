@@ -9,7 +9,7 @@ import {
   realpath,
   stat,
 } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { wakeAcknowledgement } from "../packages/crew/src/wake-ack.ts";
 import { selectedCredential } from "../packages/crew/src/pi-inference.ts";
 import { tmpdir, homedir } from "node:os";
@@ -36,9 +36,11 @@ if (process.argv.includes("--managed-location")) {
 const root = await realpath(await mkdtemp(join(proofParent, "amun-owner-")));
 const socket = await createTmuxScope();
 try {
-  const resources = resolve(
-    `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/Resources`,
+  const packagedBinary = resolve(
+    process.env.AMUN_PACKAGED_PATH ||
+      `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/MacOS/Amun`,
   );
+  const resources = resolve(dirname(packagedBinary), "../Resources");
   const distribution = packaged
     ? join(resources, "firstmate")
     : resolve("apps/desktop/.runtime/firstmate");
@@ -50,11 +52,7 @@ try {
     : resolve(
         "runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js",
       );
-  const binary = packaged
-    ? resolve(
-        `apps/desktop/out/Amun-darwin-${process.arch}/Amun.app/Contents/MacOS/Amun`,
-      )
-    : process.execPath;
+  const binary = packaged ? packagedBinary : process.execPath;
   const worktrees = await createFirstmateWorktrees(
     distribution,
     join(root, "git"),
@@ -394,6 +392,13 @@ try {
     )
       process.exitCode = 1;
   } finally {
+    const watcherPid = process.argv.includes("--watch")
+      ? Number(
+          await readFile(join(home, "state/.watch.lock/pid"), "utf8").catch(
+            () => "",
+          ),
+        )
+      : 0;
     clearTimeout(timer);
     client.close();
     child.stdin.end();
@@ -401,6 +406,20 @@ try {
     if (child.exitCode === null && child.signalCode === null)
       await new Promise<void>((done) => child.once("exit", () => done()));
     clearTimeout(force);
+    if (watcherPid > 1) {
+      let alive = true;
+      for (let i = 0; i < 30 && alive; i++) {
+        try {
+          process.kill(watcherPid, 0);
+          await new Promise((done) => setTimeout(done, 100));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+          alive = false;
+        }
+      }
+      console.log(JSON.stringify({ ownedWatcherStoppedOnPrimaryExit: !alive }));
+      if (alive) process.exitCode = 1;
+    }
     await promisify(execFile)(
       "/bin/bash",
       [join(home, "bin/fm-watch-arm.sh"), "--stop"],

@@ -1,7 +1,10 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 test("service PTY is read-only until control, echoes and resizes with a minimal environment", async () => {
   const app = await electron.launch({
-    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--amun-proof",
+    ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),

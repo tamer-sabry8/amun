@@ -1,0 +1,10 @@
+{
+  "name": "@amun/security",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/redaction.ts",
+  "dependencies": {
+    "pino": "10.4.0"
+  }
+}

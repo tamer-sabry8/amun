@@ -84,3 +84,24 @@ it("publishes only a matching validated unknown-state Run", async () => {
     expect(JSON.stringify(send.mock.calls)).not.toContain("canary");
   }
 });
+it("observes the latest selection after an in-flight read, including after navigating back", async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const read = vi.fn(async (id: string) => {
+    if (id === "a") await pending;
+    return { endpoint: "unknown" };
+  });
+  const send = vi.fn(),
+    observer = new CrewObserver(read, send);
+  const request = (taskId: string) =>
+    observer.handle({ version: 1, kind: "crew-observe", taskId });
+  const first = request("a");
+  await request("b");
+  await request("c");
+  finish();
+  await first;
+  await vi.waitFor(() => expect(send.mock.calls.at(-1)?.[0].taskId).toBe("c"));
+  expect(read.mock.calls.map(([id]) => id)).toEqual(["a", "c"]);
+});

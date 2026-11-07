@@ -9,6 +9,7 @@ import {
   tmuxEnvironment,
 } from "../packages/crew/src/tmux-scope.ts";
 import { saveEndpointReceipt } from "../packages/crew/src/endpoint-receipt.ts";
+import { createFirstmateWorktrees } from "../packages/crew/src/firstmate-worktree.ts";
 import { observeOwnedTmux } from "../packages/crew/src/observe-owned-tmux.ts";
 if (process.argv[2] === "--observe") {
   console.log(
@@ -23,11 +24,18 @@ if (process.argv[2] === "--observe") {
   ).stdout.trim();
   assert(binary.startsWith("/"));
   const scope = await createTmuxScope();
-  const home = join(scope, "home"),
-    state = join(home, "state"),
-    work = join(scope, "work"),
+  const source = join(scope, "source");
+  await mkdir(source, { mode: 0o700 });
+  await writeFile(join(source, "README.md"), "Disposable observation fixture.");
+  const { homes } = await createFirstmateWorktrees(source, join(scope, "git"), [
+    "primary",
+    "worker",
+  ]);
+  const home = homes.primary!,
+    work = homes.worker!;
+  const state = join(home, "state"),
     receipts = join(scope, "receipts");
-  for (const directory of [home, state, work, receipts])
+  for (const directory of [state, receipts])
     await mkdir(directory, { mode: 0o700 });
   const env = tmuxEnvironment(scope, { HOME: home, PATH: "/usr/bin:/bin" });
   const run = async (args: string[]) =>

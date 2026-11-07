@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  listReceiptTasks,
   saveEndpointReceipt,
   loadEndpointReceipt,
 } from "../src/endpoint-receipt.ts";
@@ -62,6 +63,40 @@ it("rejects traversal, unsafe identifiers, extra fields and symlink receipts", a
     await symlink(join(root, "proof-1.json"), join(root, "redirect.json"));
     await expect(loadEndpointReceipt(root, "redirect")).rejects.toThrow();
     await expect(loadEndpointReceipt(root, "../proof-1")).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+it("lists only validated owned task IDs in a private receipt directory", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-receipt-list-")),
+  );
+  try {
+    await saveEndpointReceipt(root, receipt);
+    await symlink(join(root, "proof-1.json"), join(root, "other.json"));
+    expect(await listReceiptTasks(root)).toEqual(["proof-1"]);
+    await chmod(root, 0o755);
+    await expect(listReceiptTasks(root)).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("rejects a receipt exceeding the reader limit before reserving its task ID", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-receipt-size-")),
+  );
+  const path = "/" + "a".repeat(4000);
+  try {
+    await expect(
+      saveEndpointReceipt(root, {
+        ...receipt,
+        home: path,
+        identity: { ...receipt.identity, worktree: path },
+      }),
+    ).rejects.toThrow("Oversized");
+    await saveEndpointReceipt(root, receipt);
+    expect(await loadEndpointReceipt(root, "proof-1")).toEqual(receipt);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

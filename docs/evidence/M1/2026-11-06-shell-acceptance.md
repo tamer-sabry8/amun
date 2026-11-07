@@ -1,0 +1,51 @@
+# M1 shell and connected foundations acceptance — 2026-11-06
+
+Tested implementation: `56566e855b820dd1ecbbb1619a9cca766797ed4c`, on the user's Darwin/arm64 Mac in `/Users/tamersabry/Projects/amun`, using Node 24.22.1 and pnpm 11.25.0. Branch `feat/m1-durable-core-shell` descends from merged main `0b8b3bd`; PR #2 remains draft.
+
+## Verified gates
+
+| Task  | Evidence and result                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T017  | Shared pino/audit/export/memory/update canary tests pass, including encoded values and sensitive fields. Real built-worker and source/packaged UI API-key canary tests show no secret in renderer text or workspace SQLite; the credential is stored only in the private Pi auth file. Audit records are durable; native backup calls are audited without passphrases or paths.                                                                                         |
+| T018  | Real SQLite/artifact encrypted roundtrip, authenticated tamper/wrong-password refusal, credential exclusion, unsafe paths/links refusal, fresh restore identity and invalidated approvals pass. Source and packaged native-picker/service roundtrips restore into a new folder and refuse an existing destination. The picker is stubbed in E2E; encryption, service IPC, file writes and restore are real. Restore deliberately leaves the active workspace unchanged. |
+| T019  | Three DTCG themes, locked safety tokens and contrast thresholds pass. Theme choice survives a real app restart in source and package. Local Inter/JetBrains Mono fonts and OFL licences ship in the app. Thirty visual baseline images cover Island combinations, shared control states and drawers. Baselines are regression references; final product-owner visual approval remains M6.                                                                               |
+| T020  | React shell, static six tiles, navigation/pins/artifacts, mode controls, single Issue/Web inspector, composer slot, terminal dock and 68px Focus rail pass. Exact layout restoration, keyboard access, native preview bounds/visibility and modal coverage pass. Native preview forwards only approved shell shortcuts; product scope changes close the old view and select an isolated partition. Data updates cannot open/reorder panels.                             |
+| T021a | Shared queue and durable store tests cover ordering, scope, resolution, snooze and expiry. Governed requests cannot resolve through the Island or generic review. Real UI tests prove navigation leaves approvals open, inline non-governed answers persist, badge/count remain equal, and Cmd+Shift+J focuses the primary request. The development gallery renders all 10 types plus empty state × 4 sizes × 3 themes (132 cases).                                     |
+| T021b | Controlled-clock Electron tests verify 150ms hover intent, 250ms close grace, pin persistence, one drawer, Escape focus restoration and keyboard shortcuts. Drawers overlay without workspace layout movement. All five drawers have baselines and zero serious/critical axe findings in all three themes. Progress stays in the pill/Activity, separate from attention items.                                                                                          |
+| T022  | Real SQLite FTS-backed palette search opens the matching request. Resolution persists into filtered history, with the same queue count used by Requests and Island. Palette commands navigate existing shell routes.                                                                                                                                                                                                                                                    |
+
+The disabled composer and workflow placeholders are intentional milestone boundaries: live governed Firstmate conversation is T037/T038; PRD/backlog workflows remain later milestones. They are not presented as implemented product workflows. The prior M0 acceptance page is retained behind the explicit `--amun-proof` diagnostic switch. The gallery uses `--amun-gallery` only in development builds.
+
+## Verification totals
+
+- `pnpm check`: 261 tests in 60 files; lint, types and formatting pass.
+- Configured coverage gates pass: governance 96.72% lines, attention 95.45%, outbox 96.82%, browser adapter 91.83%; overall selected files 91.08% lines.
+- Final source Electron suite: **16 passed**.
+- Final packaged Electron suite: **15 passed, 1 intentionally skipped** (development-only gallery). Source gallery itself passes, including screenshot comparison and axe.
+- `pnpm test:packaged`: bundled Pi protocol and isolated Firstmate startup/refusal probes pass. Packaged resources are contained; no global Pi is required.
+- Packaging reused the already-staged, unchanged pinned Pi/Firstmate/native resources. No dependency reinstall or external application upgrade was needed for this shell increment. The package remains unsigned; release gate R001 is unchanged.
+
+Local run logs are under `/tmp/amun-m1-*`; durable assertions and visual references are checked into the test suites. No credential values, device codes or provider callback URLs are included in this evidence.
+
+## Meaningful failures found and fixed
+
+- The original shell acceptance failed because the workspace UI did not exist. React's production flag and local font handling were then corrected without allowing inline scripts or remote fonts.
+- Gallery and request tests caught decorative-label/accessibility-name mismatches and clipped visual captures. Fixed and inspected full captures; axe uses its supported single-page mode because Electron cannot create axe's auxiliary browser page.
+- The Focus-width acceptance failed at 264px instead of 68px; implemented the accessible collapsed rail and preserved restoration.
+- The real built auth worker failed before login because bundled graceful-fs lacked `realpath`. Supplying a mutable copy of Node's native filesystem to proper-lockfile fixes bundled and source behavior. An immutable module namespace failed source lock tests and was corrected before commit.
+- Strict CSP blocked xterm's dynamic style sheets and allowed its unconstrained diagnostic surface to cover the next control. A per-launch style nonce, scoped to xterm's supported documentOverride, and bounded terminal containers restore rendering without `unsafe-inline`. Real Pi service-loss and terminal tests pass again.
+- First packaged API-key prompt assertion exceeded its initial 5-second deadline. Direct packaged SDK/worker diagnostics and a traced UI rerun passed. The test now gives cold SDK startup an explicit 20-second bound; the full packaged rerun passed. This is not a claim of cold-start or inference performance.
+
+## T016 remains open: human OAuth completion required
+
+Implemented and tested: independent Keychain connections for ADO/GitHub/GHES/Notion, strict provider options (no Claude subscription OAuth), supported Pi ModelRuntime login into Amun-private state, bounded prompt correlation, provider-owned Chrome handoff, refresh serialization, and `pi auth check --provider … --json`. Native Keychain roundtrip was verified in the preceding foundation evidence. Source and packaged API-key prompt/storage/readiness acceptance now pass with a test canary; this is not authenticated inference.
+
+The real GitHub Copilot flow was started through Pi in the separate `~/Library/Application Support/Amun/M1-acceptance` profile. After the bundling fix it remained pending and reached the five-minute cancellation bound without completed authorization. OpenRouter OAuth has not yet been completed through this new M1 UI. Neither is marked passed based on M0 credentials, model metadata, the canary key or a browser opening.
+
+Required next step: in the M1 acceptance window, Settings → Models → GitHub Copilot → Sign in with Pi, finish the official Chrome/device flow, then repeat for OpenRouter. Credentials and codes go only into Amun/provider windows, never chat. Verify independent private-profile readiness and an actual bounded provider request afterward. All other M1 tasks have been carried through their available acceptance gates. M1 is incomplete until this live gate passes; no M2 work or merge is authorized.
+
+## Cross-Mac visual verification follow-up
+
+CI exposed viewport clamping, native control sizing, OS scrollbar chrome, and screenshot color-profile conversion differences. Tests now set a fixed viewport, device scale 1 and sRGB; the gallery hides OS scrollbar chrome for captures. Selects and inherited line height are explicit. CI image artifacts were inspected: the cyan focus ring was RGB (15,242,255) on the runner versus (112,238,252) in the prior local capture, despite identical geometry. This justified the color-profile correction. Baselines were regenerated and both full visual suites pass locally without increased thresholds, masks, or skipped assertions. Fresh CI remains required.
+
+The next sRGB CI run passed all drawer baselines and left two isolated text-edge pixels in the navy-gold card gallery (over one million image pixels). The artifact diff was inspected. Gallery-group captures now permit at most four differing pixels for cross-Mac rasterization; no ratio-based tolerance or image masks were introduced. Dimensions, all other visual comparisons and axe/behavior checks remain enforced. This is an explicit calibration of the visual assertion, not removal of a milestone gate.

@@ -5,7 +5,7 @@ Milestone: M0, T007
 
 ## Distribution and trust
 
-Pin Firstmate commit 4a67799d8a8670d6ea1a55250b67d8474b070a09 and the SHA-256 of its GitHub source archive in runtime/firstmate/manifest.json. The stage command verifies the archive before extracting or executing it, checks extracted symlink containment, and preserves the MIT licence. An upstream archive-byte change fails closed; never automatically update the expected digest.
+The original M0 pin was 4a67799d8a8670d6ea1a55250b67d8474b070a09. Record the active commit and the SHA-256 of its GitHub source archive in runtime/firstmate/manifest.json. The stage command verifies the archive before extracting or executing it, checks extracted symlink containment, and preserves the MIT licence. An upstream archive-byte change fails closed; never automatically update the expected digest.
 
 The unsigned development package includes the verified distribution as Resources/firstmate and repairs copied dependency links to remain inside that directory. The proof grants process-local project trust (`--approve`) to this pinned distribution only. It does not save global project trust or install user-selected extensions.
 
@@ -40,3 +40,7 @@ Acquire a real Firstmate ownership lock using its supported lifecycle, prove wat
 Historical startup-only observations above are superseded by the current real Git-worktree proofs. Use the public Pi CLI entry with --mode rpc to preserve Firstmate owner-process identity. Real owner lock, watcher heartbeat, automatic replacement after watcher SIGKILL, actual wake delivery, successful authenticated no-tool completion, and Firstmate drain/ack pass in source and packaged execution under Application Support. The previous offline probe had no model and could not establish Pi consumption, although diagnostics showed durable wake publication and successor startup.
 
 Real Codex restricted and Claude auto secondmates were seeded/dispatched with pinned Firstmate scripts and separate Amun sign-ins. Existing worker TUIs provide the supported interactive trust/CLI setup surface; Amun's verified read-only terminal attachment and explicit take-control are the tested fallback. Rich Firstmate custom UI beyond supported select/confirm remains outside this proof. No general headless compatibility for every extension widget is claimed. Ten source and ten packaged service restarts preserve actual worker identity; see the final M0 audit.
+
+## M1 staged promotion on 7 November 2026
+
+The owner approved `bf05a4fcd69b8bb27f261177eac4abb57f98aa1b` conditional on verified one-click rollback. A pre-promotion packaged test passed before the active manifest changed. The package includes both verified source archives for offline worktree creation. **Agents → Firstmate runtime → Roll back to previous Firstmate** saves the workspace selection atomically. **Prepare Firstmate worktree** builds a new Git worktree from that revision with the checked permission overlay. Existing homes keep their files, Git history and running sessions. The local snapshot commit includes the Amun patch. Its upstream identity is recorded separately.

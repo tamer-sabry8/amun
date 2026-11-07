@@ -213,3 +213,20 @@ it("reports readiness only after a bounded projected model response", async () =
   expect(JSON.stringify(send.mock.calls)).not.toContain("secret-canary");
   session.close();
 });
+it("withholds model metadata and readiness when the required bridge failed to activate", async () => {
+  const { session, send, write } = setup();
+  const ready = session.ready(undefined, () => false);
+  const id = JSON.parse(write.mock.calls[0]![0]).id;
+  session.receive(
+    JSON.stringify({
+      type: "response",
+      id,
+      command: "get_available_models",
+      success: true,
+      data: { models: [] },
+    }) + "\n",
+  );
+  await expect(ready).rejects.toThrow("Bridge");
+  expect(send).not.toHaveBeenCalled();
+  session.close();
+});

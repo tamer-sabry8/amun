@@ -1,3 +1,4 @@
+import { tmpdir, userInfo } from "node:os";
 import { isAbsolute, join, dirname, resolve } from "node:path";
 /** Explicit environment, never a spread of personal shell variables or credential values. */
 export function workerEnvironment(
@@ -9,7 +10,11 @@ export function workerEnvironment(
   for (const path of [normalHome, profile, nodeBinary])
     if (!isAbsolute(path) || resolve(path) !== path || /[\0\r\n]/.test(path))
       throw Error("Unsafe worker path");
+  const username = userInfo().username;
   return {
+    USER: username,
+    LOGNAME: username,
+    TMPDIR: tmpdir(),
     HOME: tool === "claude" ? normalHome : join(profile, "home"),
     PATH: dirname(nodeBinary) + ":/usr/bin:/bin",
     ENABLE_CLAUDEAI_MCP_SERVERS: "false",

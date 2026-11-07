@@ -46,6 +46,7 @@ vi.mock("electron", () => ({
       state.views.push(this);
     }
     setBounds = vi.fn();
+    setVisible = vi.fn();
   },
 }));
 import { installBrowser } from "../src/browser.ts";
@@ -63,6 +64,7 @@ beforeEach(() => {
 function fixture() {
   const frame = {};
   const wc = {
+    focus: vi.fn(),
     mainFrame: frame,
     send: (...args: unknown[]) => state.sent.push(args),
   };
@@ -236,4 +238,67 @@ it("reports external failures without leaking exception details", async () => {
     ),
   ).toBe(true);
   expect(JSON.stringify(state.sent)).not.toContain("private");
+});
+
+it("fits/hides the native view, discards old scope endpoints and forwards only shell shortcut keys", () => {
+  const { send } = fixture();
+  send({
+    action: "layout",
+    visible: false,
+    bounds: { x: 400, y: 100, width: 300, height: 400 },
+  });
+  send({ action: "navigate", url: "https://example.com" });
+  const first = state.views[0] as {
+    setBounds: ReturnType<typeof vi.fn>;
+    setVisible: ReturnType<typeof vi.fn>;
+    webContents: { close: ReturnType<typeof vi.fn> };
+  };
+  expect(first.setBounds).toHaveBeenLastCalledWith({
+    x: 400,
+    y: 100,
+    width: 300,
+    height: 400,
+  });
+  expect(first.setVisible).toHaveBeenLastCalledWith(false);
+  send({
+    action: "layout",
+    visible: true,
+    bounds: { x: 400, y: 100, width: 300, height: 400 },
+  });
+  expect(first.setVisible).toHaveBeenLastCalledWith(true);
+  const preventDefault = vi.fn();
+  const key = state.events.get("before-input-event")!;
+  key({ preventDefault }, { type: "keyUp", key: "Escape" });
+  key({ preventDefault }, { type: "keyDown", key: "a", code: "KeyA" });
+  expect(preventDefault).not.toHaveBeenCalled();
+  key(
+    { preventDefault },
+    {
+      type: "keyDown",
+      key: "Escape",
+      code: "Escape",
+      meta: false,
+      alt: false,
+      shift: false,
+    },
+  );
+  expect(preventDefault).toHaveBeenCalledOnce();
+  expect(state.sent.at(-1)).toEqual([
+    "amun-shell-shortcut",
+    {
+      key: "Escape",
+      code: "Escape",
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    },
+  ]);
+  send({ action: "scope", product: "other" });
+  expect(first.webContents.close).toHaveBeenCalledOnce();
+  send({ action: "navigate", url: "https://example.com" });
+  expect(state.preferences[1]!.partition).not.toBe(
+    state.preferences[0]!.partition,
+  );
+  send({ action: "scope", product: "other" });
+  expect(state.sessions).toHaveLength(2);
 });

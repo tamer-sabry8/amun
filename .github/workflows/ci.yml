@@ -2,7 +2,7 @@ name: Foundation checks
 on:
   pull_request:
   push:
-    branches: [main, "feat/m0-*"]
+    branches: [main, "feat/m0-*", "feat/m1-*"]
 permissions:
   contents: read
 jobs:
@@ -19,7 +19,17 @@ jobs:
       - run: pnpm exec vitest run --coverage
       - run: pnpm --filter @amun/desktop exec install-electron
       - run: pnpm exec electron-rebuild -m runtime/terminal -v 45.2.3 -w node-pty -f
+      - run: pnpm database:stage
+      - run: pnpm firstmate:stage
       - run: pnpm test:e2e
+      - name: Preserve failed Electron acceptance images
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: electron-acceptance
+          path: test-results/
+          retention-days: 3
+      - run: pnpm test:pi-bridge
       - run: pnpm test:runtime
       - run: pnpm package
       - run: command -v tmux || brew install tmux

@@ -3,6 +3,8 @@ packages:
   - packages/*
   - runtime/*
 allowBuilds:
+  puppeteer: false
+  better-sqlite3: true
   node-pty: true
   electron: true
   "@google/genai": true
@@ -13,3 +15,5 @@ minimumReleaseAgeExclude:
   - msw@3.0.4
 publicHoistPattern:
   - electron
+overrides:
+  "@axe-core/playwright>playwright-core": 1.64.1

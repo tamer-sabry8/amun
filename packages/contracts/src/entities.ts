@@ -84,6 +84,7 @@ export const notification = z.strictObject({
 });
 export const statusActivity = z.strictObject({
   ...base,
+  productId: id.nullable(),
   kind: z.enum([
     "run",
     "publication",
@@ -91,6 +92,7 @@ export const statusActivity = z.strictObject({
     "sync",
     "reconciliation",
     "runtime_health",
+    "action",
   ]),
   state: z.enum(["working", "waiting", "failed", "completed"]),
   ref: id,
@@ -101,6 +103,7 @@ export const actionKind = z.enum([
   "commit",
   "merge",
   "notion_publish",
+  "github_issue",
   "file_destructive",
   "skill_install",
   "model_outside_allowlist",

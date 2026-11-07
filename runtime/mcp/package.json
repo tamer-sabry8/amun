@@ -1,0 +1,12 @@
+{
+  "name": "@amun/mcp-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2.2.0",
+    "@modelcontextprotocol/server-puppeteer": "2025.5.12",
+    "@playwright/mcp": "0.0.84",
+    "chrome-devtools-mcp": "1.12.0"
+  }
+}
