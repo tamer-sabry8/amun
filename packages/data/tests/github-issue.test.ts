@@ -47,3 +47,13 @@ it("keeps an invalid remote issue number unconfirmed and supplies no receipt", a
   expect(review.receipt(item.id)).toBeNull();
   db.close();
 });
+it("returns the completed acceptance issue after reopening the workspace", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const review = new GithubIssueReview(db),
+    item = review.prepare();
+  expect(review.completedIssue()).toBeNull();
+  await review.publish(item.id, item.binding, async () => 17);
+  expect(new GithubIssueReview(db).completedIssue()).toBe(17);
+  db.close();
+});

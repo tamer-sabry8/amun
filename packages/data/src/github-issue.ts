@@ -81,6 +81,18 @@ export class GithubIssueReview {
     );
     return store.read(id).state;
   }
+  completedIssue() {
+    const row = this.db
+      .prepare(
+        "SELECT id FROM actions WHERE kind='github_issue' AND state='succeeded' AND operation_marker='github-issue-acceptance-v1'",
+      )
+      .get() as { id: string } | undefined;
+    if (!row) return null;
+    const number = this.receipt(row.id);
+    return number !== null && Number.isSafeInteger(number) && number > 0
+      ? number
+      : null;
+  }
   receipt(id: string) {
     const row = this.db
       .prepare("SELECT value_json FROM workspace_settings WHERE id=?")

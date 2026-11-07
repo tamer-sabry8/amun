@@ -651,6 +651,18 @@ process.parentPort?.on("message", (event) => {
             showCode();
             return;
           }
+          if (cmd.argument === "github-issue-review") {
+            const receipt = new GithubIssueReview(workspace).completedIssue();
+            if (receipt) {
+              sendNative(cmd.id, {
+                kind: "message",
+                text:
+                  "Previously created GitHub issue: https://github.com/tamer-sabry8/amun/issues/" +
+                  receipt,
+              });
+              return;
+            }
+          }
           const stored = authKeyring().get(githubAccount);
           if (!stored) {
             sendNative(cmd.id, {
