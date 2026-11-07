@@ -58,3 +58,17 @@ it("renders an empty session honestly and rejects invalid scope and oversized co
     ),
   ).toThrow();
 });
+it("ignores executable accessors on recorded tool output", () => {
+  const part = {
+    type: "text",
+    get text() {
+      throw Error("accessor invoked");
+    },
+  };
+  const entries = [
+    { type: "message", message: { role: "toolResult", content: [part] } },
+  ];
+  expect(
+    nativeConversationView(id, "Tools", entries, new Redactor()),
+  ).not.toHaveProperty("toolOutput");
+});

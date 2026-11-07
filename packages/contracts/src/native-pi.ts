@@ -157,6 +157,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("conversation"),
     calm: z.boolean().optional(),
+    toolOutput: z.string().max(32768).optional(),
+    summaries: z.string().max(32768).optional(),
     fileOptions: z.array(z.string().max(513)).max(100).optional(),
     acceptsImage: z.boolean().optional(),
     extensionCommands: z.array(z.string().max(64)).max(256).optional(),

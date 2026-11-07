@@ -76,6 +76,8 @@ export function NativePiPanel({
       : undefined;
   const draftAction = useRef<HTMLButtonElement>(null);
   const importFile = useRef<HTMLInputElement>(null);
+  const [showTools, setShowTools] = useState(false),
+    [showSummaries, setShowSummaries] = useState(false);
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [queueText, renderQueueText] = useState("");
   const queueDraft = useRef({ id: "", text: "" });
@@ -403,6 +405,23 @@ export function NativePiPanel({
           });
           return;
         }
+        if (
+          result?.kind === "conversation" &&
+          !result.calm &&
+          !event.nativeEvent.isComposing &&
+          event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          !event.repeat
+        ) {
+          const key = event.key.toLowerCase();
+          if (key === "o" || key === "t") {
+            event.preventDefault();
+            if (key === "o") setShowTools((v) => !v);
+            else setShowSummaries((v) => !v);
+            return;
+          }
+        }
         const shortcut = piModelShortcut(event.nativeEvent);
         if (!shortcut) return;
         event.preventDefault();
@@ -680,6 +699,44 @@ export function NativePiPanel({
               />
             ) : (
               <p>No conversation messages yet.</p>
+            )}
+            {!result.calm && (
+              <>
+                {result.toolOutput && (
+                  <>
+                    <button
+                      aria-expanded={showTools}
+                      onClick={() => setShowTools(!showTools)}
+                    >
+                      Tool output
+                    </button>
+                    {showTools && (
+                      <textarea
+                        aria-label="Tool output"
+                        value={result.toolOutput}
+                        readOnly
+                      />
+                    )}
+                  </>
+                )}
+                {result.summaries && (
+                  <>
+                    <button
+                      aria-expanded={showSummaries}
+                      onClick={() => setShowSummaries(!showSummaries)}
+                    >
+                      Reasoning summaries
+                    </button>
+                    {showSummaries && (
+                      <textarea
+                        aria-label="Reasoning summaries"
+                        value={result.summaries}
+                        readOnly
+                      />
+                    )}
+                  </>
+                )}
+              </>
             )}
             <label>
               Message this conversation

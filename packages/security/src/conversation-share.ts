@@ -36,6 +36,12 @@ export function registerCredentialSecrets(
   };
   walk(credential, 0);
 }
+export function ownDataField(value: unknown, key: string): unknown {
+  if (!value || typeof value !== "object") return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && "value" in descriptor ? descriptor.value : undefined;
+}
+
 export function conversationSharePreview(
   title: string,
   entries: unknown,
@@ -44,11 +50,6 @@ export function conversationSharePreview(
 ) {
   if (title.length > 256 || !Array.isArray(entries) || entries.length > 1000)
     throw Error("Conversation exceeds review limits");
-  const data = (value: unknown, key: string): unknown => {
-    if (!value || typeof value !== "object") return undefined;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor && "value" in descriptor ? descriptor.value : undefined;
-  };
   const parts: string[] = [];
   let omittedItems = 0,
     totalText = 0,
@@ -59,16 +60,16 @@ export function conversationSharePreview(
     return redactor.text(text);
   };
   for (const entry of entries) {
-    const message = data(entry, "message"),
-      role = data(message, "role");
+    const message = ownDataField(entry, "message"),
+      role = ownDataField(message, "role");
     if (
-      data(entry, "type") !== "message" ||
+      ownDataField(entry, "type") !== "message" ||
       (role !== "user" && role !== "assistant")
     ) {
       omittedItems++;
       continue;
     }
-    const content = data(message, "content");
+    const content = ownDataField(message, "content");
     let text = "";
     if (typeof content === "string") text = safeText(content);
     else if (Array.isArray(content))
@@ -76,8 +77,11 @@ export function conversationSharePreview(
         .flatMap((part) => {
           if (++contentItems > 10000)
             throw Error("Conversation exceeds review limits");
-          const value = data(part, "text");
-          if (data(part, "type") === "text" && typeof value === "string")
+          const value = ownDataField(part, "text");
+          if (
+            ownDataField(part, "type") === "text" &&
+            typeof value === "string"
+          )
             return [safeText(value)];
           omittedItems++;
           return [];

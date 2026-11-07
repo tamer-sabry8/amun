@@ -35,6 +35,42 @@ test("captain explicitly runs a Mac command and chooses Pi model context", async
     content: [{ type: "text", text: "Shell verification fixture" }],
     timestamp: Date.now(),
   });
+  saved.appendMessage({
+    role: "toolResult",
+    toolCallId: "proof",
+    toolName: "local_check",
+    content: [{ type: "text", text: "Tool output password=TEST_TOOL_CANARY" }],
+    isError: false,
+    timestamp: Date.now(),
+  });
+  saved.appendMessage({
+    role: "assistant",
+    api: "openai-responses",
+    provider: "openai",
+    model: "fixture",
+    content: [
+      {
+        type: "thinking",
+        thinking: "PRIVATE_FIXTURE",
+        thinkingSignature: JSON.stringify({
+          type: "reasoning",
+          summary: [{ type: "summary_text", text: "Public fixture summary" }],
+          encrypted_content: "PRIVATE_SIGNATURE",
+        }),
+      },
+      { type: "text", text: "Completed." },
+    ],
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  });
   const marker = join(outside, "ran");
   const executablePath = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
@@ -58,6 +94,19 @@ test("captain explicitly runs a Mac command and chooses Pi model context", async
     await button("Shell context proof").click();
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Session change completed",
+    );
+    await button("Read active conversation").click();
+    await page.getByLabel("Conversation message").press("Control+o");
+    await expect(page.getByLabel("Tool output")).toHaveValue(
+      /Tool output password=\[REDACTED\]/,
+      { timeout: 2200 },
+    );
+    await page.getByLabel("Conversation message").press("Control+t");
+    await expect(page.getByLabel("Reasoning summaries")).toHaveValue(
+      "Public fixture summary",
+    );
+    await expect(page.getByTestId("native-pi-result")).not.toContainText(
+      "PRIVATE_FIXTURE",
     );
     for (const prefix of ["!", "!!"]) {
       await button("Read active conversation").click();
