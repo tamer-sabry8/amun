@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("Google Sheets and Maps verify their live tools from Conversations", async () => {
+test("Google Workspace and Maps verify their live tools from Conversations", async () => {
+  test.setTimeout(120000);
   test.skip(
     process.env.AMUN_LIVE_GOOGLE_MCP !== "1",
     "Requires the live Google MCP endpoint",
@@ -28,15 +29,24 @@ test("Google Sheets and Maps verify their live tools from Conversations", async 
       .getByLabel("Native Pi command", { exact: true })
       .selectOption("mcp");
     await button("Run command").click();
-    await button("Google Sheets").click();
-    await expect(page.getByTestId("native-pi-result")).toContainText(
-      "Google Sheets MCP tools verified. Access to your account still requires Google authorization.",
-      { timeout: 15000 },
-    );
-    await page
-      .getByLabel("Native Pi command", { exact: true })
-      .selectOption("mcp");
-    await button("Run command").click();
+    for (const label of [
+      "Gmail",
+      "Google Drive",
+      "Google Docs",
+      "Google Sheets",
+      "Google Slides",
+      "Google Calendar",
+      "Google Chat",
+      "Google People / Contacts",
+    ]) {
+      await button(label).click();
+      await expect(page.getByTestId("native-pi-result")).toContainText(
+        label +
+          " MCP tools verified. Access to your account still requires Google authorization.",
+        { timeout: 15000 },
+      );
+      await button("Run command").click();
+    }
     await button("Google Maps").click();
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Google Maps MCP tools verified. Place searches require a configured Google Maps project and credentials.",

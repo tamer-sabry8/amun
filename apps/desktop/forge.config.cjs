@@ -18,6 +18,7 @@ module.exports = {
       ".runtime/terminal",
       ".runtime/database",
       ".runtime/auth",
+      ".runtime/mcp",
     ],
     afterCopyExtraResources: [
       async ({ buildPath, platform }) => {
@@ -28,6 +29,10 @@ module.exports = {
           platform === "darwin"
             ? join(buildPath, "Amun.app/Contents/Resources")
             : join(buildPath, "resources");
+        await repairRuntimeLinks(
+          join(__dirname, ".runtime/mcp"),
+          join(resources, "mcp"),
+        );
         await repairRuntimeLinks(
           join(__dirname, ".runtime/auth"),
           join(resources, "auth"),

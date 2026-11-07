@@ -1,3 +1,4 @@
+import { builtinModules } from "node:module";
 import { defineConfig } from "vite";
 export default defineConfig({
   build: {
@@ -14,7 +15,7 @@ export default defineConfig({
     },
     outDir: "dist",
     rolldownOptions: {
-      external: ["electron", /^node:/],
+      external: ["electron", ...builtinModules, /^node:/],
     },
   },
 });

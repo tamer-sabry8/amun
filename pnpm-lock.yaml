@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@axe-core/playwright>playwright-core': 1.64.1
+
 importers:
 
   .:
@@ -26,6 +29,9 @@ importers:
       eslint:
         specifier: 10.14.0
         version: 10.14.0(jiti@2.7.0)
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
       prettier:
         specifier: 3.9.10
         version: 3.9.10
@@ -167,6 +173,15 @@ importers:
         specifier: 13.0.3
         version: 13.0.3
 
+  runtime/mcp:
+    dependencies:
+      '@playwright/mcp':
+        specifier: 0.0.84
+        version: 0.0.84
+      chrome-devtools-mcp:
+        specifier: 1.12.0
+        version: 1.12.0
+
   runtime/pi:
     dependencies:
       '@earendil-works/pi-coding-agent':
@@ -278,7 +293,7 @@ packages:
     resolution: {integrity: sha512-SGUhG5PIHd2eMdpgBF2PyQLOhX+qyDR2PT4cmoS4Qk2ak+jX/rrSvst9l0PGv5WTHolKpUMvVmoHpr4cZgf1RQ==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
-      playwright-core: '>= 1.0.0'
+      playwright-core: 1.64.1
 
   '@babel/helper-string-parser@7.29.13':
     resolution: {integrity: sha512-fWegr+WsEsiMVW4KUNdIIzzMTZSzNiqhy0//6+2MRi2d5NFNsL/AYwBQW8eBnRbTBVRnDVzjaJEUqKaCWjMMdQ==}
@@ -788,6 +803,11 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
+  '@playwright/mcp@0.0.84':
+    resolution: {integrity: sha512-weqLrA7/D8MJzNV9/t3Hnjp100tS2sxFXKeb2gH6Nhktqmdfvx5qRA9AZ5Mhjnre1jY0wltsrRK5VZS5NBgcvw==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   '@playwright/test@1.64.1':
     resolution: {integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==}
     engines: {node: '>=20'}
@@ -1255,6 +1275,19 @@ packages:
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
     engines: {node: '>=18'}
+
+  chrome-devtools-mcp@1.12.0:
+    resolution: {integrity: sha512-lAGpH0zXT1ZdaPefP1KK/MvxwihOlu7VGQ7p4wbhD9OhN17vUC4KWk/ImUYR9DE4s+7r4r0ySV4xr2OkTa7ZMA==}
+    engines: {node: ^20.19.0 || ^22.12.0 || >=23}
+    hasBin: true
+    peerDependencies:
+      '@blackwell-systems/gcf': ^2.2.2
+      '@toon-format/toon': ^4.1.0
+    peerDependenciesMeta:
+      '@blackwell-systems/gcf':
+        optional: true
+      '@toon-format/toon':
+        optional: true
 
   chrome-trace-event@1.0.4:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
@@ -2398,8 +2431,18 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
+  playwright-core@1.65.0-alpha-2026-10-30:
+    resolution: {integrity: sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   playwright@1.64.1:
     resolution: {integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.65.0-alpha-2026-10-30:
+    resolution: {integrity: sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -3895,6 +3938,11 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
+  '@playwright/mcp@0.0.84':
+    dependencies:
+      playwright: 1.65.0-alpha-2026-10-30
+      playwright-core: 1.65.0-alpha-2026-10-30
+
   '@playwright/test@1.64.1':
     dependencies:
       playwright: 1.64.1
@@ -4334,6 +4382,8 @@ snapshots:
   change-case@5.4.4: {}
 
   chownr@3.0.0: {}
+
+  chrome-devtools-mcp@1.12.0: {}
 
   chrome-trace-event@1.0.4: {}
 
@@ -5351,9 +5401,15 @@ snapshots:
 
   playwright-core@1.64.1: {}
 
+  playwright-core@1.65.0-alpha-2026-10-30: {}
+
   playwright@1.64.1:
     dependencies:
       playwright-core: 1.64.1
+
+  playwright@1.65.0-alpha-2026-10-30:
+    dependencies:
+      playwright-core: 1.65.0-alpha-2026-10-30
 
   plist@3.1.1:
     dependencies:

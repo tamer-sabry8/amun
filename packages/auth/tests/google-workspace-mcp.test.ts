@@ -22,6 +22,17 @@ it("recognizes only the selected Google product servers", () => {
   for (const key of ["docker", "__proto__", "https://example.org"])
     expect(googleMcpProduct(key)).toBeUndefined();
 });
+it.each([
+  ["docs", "docsmcp", "read_doc"],
+  ["slides", "slidesmcp", "read_presentation"],
+  ["chat", "chatmcp", "list_messages"],
+  ["people", "people", "search_contacts"],
+])("routes %s to its official product server", (key, host, tool) => {
+  expect(googleMcpProduct(key)).toMatchObject({
+    endpoint: "https://" + host + ".googleapis.com/mcp/v1",
+    tool,
+  });
+});
 it("binds anonymous discovery to the selected origin and strips ambient authority", async () => {
   const target = googleMcpProduct("gmail")!,
     send = vi.fn(async () => new Response("{}"));

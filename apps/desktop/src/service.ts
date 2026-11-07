@@ -301,6 +301,7 @@ process.parentPort?.on("message", (event) => {
     {
       binary: process.env.AMUN_PI_BINARY!,
       worker: process.env.AMUN_NATIVE_PI_WORKER!,
+      mcpModules: process.env.AMUN_MCP_MODULES!,
       entry: process.env.AMUN_PI_ENTRY!,
       root: process.env.AMUN_AUTH_ROOT!,
     },

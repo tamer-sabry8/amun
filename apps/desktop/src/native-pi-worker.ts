@@ -2,6 +2,7 @@ import {
   googleMcpProduct,
   discoverGoogleMcp,
 } from "../../../packages/auth/src/google-workspace-mcp.ts";
+import { checkBrowserMcp } from "../../../packages/auth/src/browser-mcp.ts";
 import { discoverCloudflareDocs } from "../../../packages/auth/src/cloudflare-docs.ts";
 import { checkFirstmateCandidate } from "../../../packages/crew/src/firstmate-candidate.ts";
 import { nativeMcp } from "../../../packages/crew/src/native-mcp.ts";
@@ -272,6 +273,22 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (command.command === "mcp") {
+          if (
+            command.argument === "playwright" ||
+            command.argument === "chrome"
+          ) {
+            if (!process.env.AMUN_MCP_MODULES)
+              throw Error("Browser adapter runtime missing");
+            const text = await checkBrowserMcp(
+              command.argument,
+              process.env.AMUN_MCP_MODULES,
+            ).catch(
+              () =>
+                "Browser check failed. Verify Google Chrome is installed and retry.",
+            );
+            send(command.id, { kind: "message", text });
+            return;
+          }
           const google = googleMcpProduct(command.argument);
           if (google) {
             send(command.id, {

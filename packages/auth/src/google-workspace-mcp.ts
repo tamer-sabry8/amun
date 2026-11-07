@@ -32,6 +32,30 @@ const products = [
     endpoint: "https://mapstools.googleapis.com/mcp",
     tool: "search_places",
   },
+  {
+    id: "docs",
+    label: "Google Docs",
+    endpoint: "https://docsmcp.googleapis.com/mcp/v1",
+    tool: "read_doc",
+  },
+  {
+    id: "slides",
+    label: "Google Slides",
+    endpoint: "https://slidesmcp.googleapis.com/mcp/v1",
+    tool: "read_presentation",
+  },
+  {
+    id: "chat",
+    label: "Google Chat",
+    endpoint: "https://chatmcp.googleapis.com/mcp/v1",
+    tool: "list_messages",
+  },
+  {
+    id: "people",
+    label: "Google People / Contacts",
+    endpoint: "https://people.googleapis.com/mcp/v1",
+    tool: "search_contacts",
+  },
 ] as const;
 type Product = (typeof products)[number];
 export function googleMcpProduct(key: string) {

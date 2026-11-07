@@ -1,0 +1,10 @@
+{
+  "name": "@amun/mcp-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@playwright/mcp": "0.0.84",
+    "chrome-devtools-mcp": "1.12.0"
+  }
+}

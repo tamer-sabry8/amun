@@ -15,6 +15,7 @@ export class NativePiProcess {
     private readonly config: {
       binary: string;
       worker: string;
+      mcpModules?: string;
       entry: string;
       root: string;
     },
@@ -69,6 +70,9 @@ export class NativePiProcess {
           ELECTRON_RUN_AS_NODE: "1",
           PI_CODING_AGENT_DIR: root,
           PI_SKIP_VERSION_CHECK: "1",
+          ...(this.config.mcpModules
+            ? { AMUN_MCP_MODULES: this.config.mcpModules }
+            : {}),
           AMUN_AUTH_ROOT: root,
           AMUN_AUTH_SDK: join(dirname(dirname(entry)), "index.js"),
         },

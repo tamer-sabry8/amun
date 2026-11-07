@@ -55,6 +55,7 @@ export async function removeDeploymentSelfLink(
       "terminal-runtime",
       "database-runtime",
       "auth-runtime",
+      "mcp-runtime",
     ].includes(packageName)
   )
     throw new Error("Unsupported deployment package");

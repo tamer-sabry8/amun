@@ -75,6 +75,10 @@ const inventory = new Map<string, readonly [string, string]>([
     "obsidian",
     ["Obsidian", "Requires Obsidian, its companion plugin and a chosen vault."],
   ],
+  ["docs", ["Google Docs", ""]],
+  ["slides", ["Google Slides", ""]],
+  ["chat", ["Google Chat", ""]],
+  ["people", ["Google People / Contacts", ""]],
   ["cloudflare-hosting", ["Choose workspace hosting", ""]],
   [
     "cloudflare",
