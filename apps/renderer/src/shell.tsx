@@ -495,7 +495,7 @@ function Settings({
       {tab === "models" && (
         <section>
           <h2>Model access through Pi</h2>
-          <NativePiPanel />
+          <NativePiPanel subscriptionsOnly />
           <p className="muted">
             Provider credentials stay in Amun’s private Pi configuration. Worker
             sign-ins remain separate.
@@ -660,8 +660,10 @@ export function App() {
   const product = products.find(
     (product) => product.id === preferences.productId,
   );
-  const scoped = (productId: string) =>
-    preferences.productId === null || productId === preferences.productId;
+  const scoped = (productId: string | null) =>
+    productId === null ||
+    preferences.productId === null ||
+    productId === preferences.productId;
   const activities = (snapshot?.activities ?? []).filter((item) =>
     scoped(item.productId),
   );
@@ -919,6 +921,7 @@ export function App() {
       ...tools,
       ["artifacts", "Artifacts"],
       ["settings", "Settings"],
+      ["conversations", "Conversations"],
     ].find(([id]) => id === route)?.[1] ?? "Workspace";
   const requests = (snapshot?.attention ?? []).filter(
     (item) =>
@@ -1210,6 +1213,8 @@ export function App() {
                 preferences={preferences}
                 onPreferences={savePreferences}
               />
+            ) : route === "conversations" ? (
+              <NativePiPanel />
             ) : route === "requests" ? (
               <>
                 <div className="request-filters">
@@ -1317,6 +1322,9 @@ export function App() {
                     onClick={() => setRoute("settings")}
                   >
                     Open connections
+                  </button>
+                  <button onClick={() => setRoute("conversations")}>
+                    Open conversations
                   </button>
                 </section>
                 <div className="overview-sections">
@@ -1668,6 +1676,7 @@ export function App() {
             ...navigation,
             ...tools,
             ["settings", "Settings"],
+            ["conversations", "Conversations"],
             ["focus", "Toggle Focus"],
           ]
             .filter(([, label]) =>

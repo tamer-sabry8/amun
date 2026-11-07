@@ -74,3 +74,42 @@ it("does not persist invalid product selections or leak storage errors", () => {
   });
   db.close();
 });
+
+it("shows workspace-scoped Notion progress without breaking the workspace snapshot", async () => {
+  const { NotionConversationReview } = await import("../src/notion-review.ts");
+  const db = new Database(":memory:");
+  migrate(db);
+  try {
+    const review = new NotionConversationReview(db, {
+      create: async () => ({ state: "unknown" as const }),
+    }).prepare(
+      { title: "Reviewed conversation", text: "Approved content" },
+      {
+        title: "Documents",
+        parentId: "11111111-1111-4111-8111-111111111111",
+        parentType: "page_id",
+        titleProperty: "title",
+      },
+      "workspace",
+    );
+    const service = new WorkspaceService(db);
+    for (const [state, kind, display] of [
+      ["executing", "publication", "working"],
+      ["unknown", "reconciliation", "waiting"],
+      ["failed", "publication", "failed"],
+    ]) {
+      db.prepare("UPDATE actions SET state=? WHERE id=?").run(state, review.id);
+      const snapshot = service.handle({
+        version: 1,
+        kind: "workspace",
+        action: "snapshot",
+      });
+      expect(snapshot).toMatchObject({
+        kind: "workspace-snapshot",
+        activities: [{ productId: null, kind, state: display, ref: review.id }],
+      });
+    }
+  } finally {
+    db.close();
+  }
+});

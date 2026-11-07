@@ -63,8 +63,9 @@ test("native Pi commands create an owned SDK session and update its real name", 
   try {
     const page = await app.firstWindow();
     await expect(page.getByRole("status")).toHaveText("Connected");
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await page.getByRole("tab", { name: "Models", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Open conversations", exact: true })
+      .click();
     await page
       .getByRole("button", { name: "Open Pi commands", exact: true })
       .click();

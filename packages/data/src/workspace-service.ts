@@ -56,7 +56,7 @@ export class WorkspaceService {
       )
       .all() as {
       id: string;
-      product_id: string;
+      product_id: string | null;
       kind: string;
       state: string;
     }[];

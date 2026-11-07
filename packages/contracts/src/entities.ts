@@ -84,6 +84,7 @@ export const notification = z.strictObject({
 });
 export const statusActivity = z.strictObject({
   ...base,
+  productId: id.nullable(),
   kind: z.enum([
     "run",
     "publication",

@@ -2,7 +2,11 @@ import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.
 import { useEffect, useRef, useState } from "react";
 import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
-export function NativePiPanel() {
+export function NativePiPanel({
+  subscriptionsOnly = false,
+}: {
+  subscriptionsOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false),
     [command, setCommand] = useState("session"),
     [argument, setArgument] = useState(""),
@@ -147,8 +151,59 @@ export function NativePiPanel() {
       argument: value,
     });
   };
+  const subscriptions = (
+    <>
+      <h4>CLI subscriptions</h4>
+      <p className="muted">
+        These checks use your separate Amun CLI profiles. Pi model-provider
+        authorization is managed in Models. Inference checks send a small test
+        request to your subscription.
+      </p>
+      <div className="button-row">
+        {(["codex", "claude"] as const).map((tool) => (
+          <div key={tool}>
+            <button
+              disabled={busy || loginPending}
+              onClick={() => {
+                setLoginPending(true);
+                setLoginStatus("Opening official CLI sign-in…");
+                window.postMessage(
+                  { kind: "amun-worker-login-command", command: { tool } },
+                  "*",
+                );
+              }}
+            >
+              Sign in to {tool === "codex" ? "Codex CLI" : "Claude Code CLI"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(tool, "worker-status")}
+            >
+              Check {tool === "codex" ? "Codex" : "Claude Code"} subscription
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => run(tool, "worker-inference")}
+            >
+              Verify {tool === "codex" ? "Codex" : "Claude Code"} inference
+            </button>
+          </div>
+        ))}
+      </div>
+      {loginStatus && <p role="status">{loginStatus}</p>}
+      <div data-testid="native-pi-result" aria-live="polite">
+        {result?.kind === "message" ? result.text : null}
+      </div>
+    </>
+  );
+  if (subscriptionsOnly) return <section>{subscriptions}</section>;
   if (!open)
-    return <button onClick={() => setOpen(true)}>Open Pi commands</button>;
+    return (
+      <button type="button" onClick={() => setOpen(true)}>
+        Open Pi commands
+      </button>
+    );
   return (
     <section
       aria-label="Pi commands"
@@ -171,7 +226,11 @@ export function NativePiPanel() {
         sessions are saved after their first message.
       </p>
       <div className="button-row">
-        <button disabled={busy} onClick={() => run("", "share-notion")}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run("", "share-notion")}
+        >
           Share to Notion
         </button>
       </div>
@@ -180,41 +239,6 @@ export function NativePiPanel() {
         your chosen parent section, secret removal, and exact-content review.
         Pi’s gist/Radius sharing is disabled.
       </p>
-      <h4>CLI subscriptions</h4>
-      <p className="muted">
-        These checks use your separate Amun CLI profiles. Pi model-provider
-        authorization is managed above. Inference checks send a small test
-        request to your subscription.
-      </p>
-      <div className="button-row">
-        {(["codex", "claude"] as const).map((tool) => (
-          <div key={tool}>
-            <button
-              disabled={busy || loginPending}
-              onClick={() => {
-                setLoginPending(true);
-                setLoginStatus("Opening official CLI sign-in…");
-                window.postMessage(
-                  { kind: "amun-worker-login-command", command: { tool } },
-                  "*",
-                );
-              }}
-            >
-              Sign in to {tool === "codex" ? "Codex CLI" : "Claude Code CLI"}
-            </button>
-            <button disabled={busy} onClick={() => run(tool, "worker-status")}>
-              Check {tool === "codex" ? "Codex" : "Claude Code"} subscription
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => run(tool, "worker-inference")}
-            >
-              Verify {tool === "codex" ? "Codex" : "Claude Code"} inference
-            </button>
-          </div>
-        ))}
-      </div>
-      {loginStatus && <p role="status">{loginStatus}</p>}
       <label>
         Import Pi session JSONL (maximum 512 KiB)
         <input
@@ -297,13 +321,21 @@ export function NativePiPanel() {
         />
       </label>
       <div className="button-row">
-        <button disabled={busy} onClick={() => run("backward", "cycle-model")}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run("backward", "cycle-model")}
+        >
           Previous model
         </button>
-        <button disabled={busy} onClick={() => run("forward", "cycle-model")}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run("forward", "cycle-model")}
+        >
           Next model
         </button>
-        <button disabled={busy} onClick={() => run()}>
+        <button type="button" disabled={busy} onClick={() => run()}>
           Run command
         </button>
         <button
@@ -325,7 +357,9 @@ export function NativePiPanel() {
             <ul className="plain-list">
               {result.choices.map((choice) => (
                 <li key={choice.id}>
-                  <button onClick={() => run(choice.id)}>{choice.label}</button>
+                  <button type="button" onClick={() => run(choice.id)}>
+                    {choice.label}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -358,7 +392,11 @@ export function NativePiPanel() {
               readOnly
               rows={12}
             />
-            <button disabled={busy} onClick={() => run("", "notion-review")}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run("", "notion-review")}
+            >
               Review destination and exact publication
             </button>
             <p>
@@ -391,10 +429,18 @@ export function NativePiPanel() {
                 imported copy.
               </p>
             )}
-            <button disabled={busy} onClick={() => run(result.token, "import")}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(result.token, "import")}
+            >
               Confirm import into Amun
             </button>
-            <button disabled={busy} onClick={() => setResult(null)}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setResult(null)}
+            >
               Cancel import
             </button>
           </>
@@ -432,7 +478,11 @@ export function NativePiPanel() {
             >
               Approve and publish this content
             </button>
-            <button disabled={busy} onClick={() => setResult(null)}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setResult(null)}
+            >
               Cancel review
             </button>
           </>
