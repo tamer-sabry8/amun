@@ -14,8 +14,21 @@ export const nativePiCommand = z.discriminatedUnion("action", [
       (value) =>
         value.command === "import-preview" || value.argument.length <= 16384,
     ),
+  z.strictObject({ ...base, action: z.literal("abort-turn"), id }),
   z.strictObject({ ...base, action: z.literal("close") }),
 ]);
+export const nativeTurnRequest = z.strictObject({
+  sessionId: z.uuid(),
+  model: z.string().min(1).max(512),
+  text: z
+    .string()
+    .min(1)
+    .max(12000)
+    .refine(
+      (s) =>
+        Boolean(s.trim()) && !s.includes("\0") && !/^[!\/]/.test(s.trimStart()),
+    ),
+});
 export const notionApprovalRequest = z.strictObject({
   reviewId: z.uuid(),
   binding: z.string().regex(/^[a-f0-9]{64}$/),
@@ -35,6 +48,7 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("conversation"),
+    model: z.string().min(1).max(512).nullable(),
     sessionId: z.uuid(),
     title: z.string().max(256),
     text: z.string().max(262144),

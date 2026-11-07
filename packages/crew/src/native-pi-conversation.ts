@@ -5,6 +5,7 @@ export function nativeConversationView(
   title: string,
   entries: unknown,
   redactor: Redactor,
+  model: string | null = null,
 ) {
   if (
     !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
@@ -16,6 +17,7 @@ export function nativeConversationView(
   return {
     kind: "conversation" as const,
     sessionId,
+    model,
     title: preview.title,
     text: preview.text,
     omittedItems: preview.omittedItems,

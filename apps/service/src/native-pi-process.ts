@@ -10,6 +10,7 @@ export class NativePiProcess {
   private child: ChildProcessWithoutNullStreams | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending: string | undefined;
+  private pendingTurn = false;
   constructor(
     private readonly config: {
       binary: string;
@@ -27,7 +28,9 @@ export class NativePiProcess {
         id: this.pending,
         result: {
           kind: "message",
-          text: "Native Pi is unavailable. Reopen the command view to retry.",
+          text: this.pendingTurn
+            ? "Model turn not confirmed. Read the conversation before sending another message."
+            : "Native Pi is unavailable. Reopen the command view to retry.",
         },
       });
     this.pending = undefined;
@@ -36,6 +39,11 @@ export class NativePiProcess {
     const parsed = nativePiCommand.safeParse(input);
     if (!parsed.success) return;
     const command = parsed.data;
+    if (command.action === "abort-turn") {
+      if (this.pendingTurn && this.pending === command.id)
+        this.child?.stdin.write(JSON.stringify(command) + "\n");
+      return;
+    }
     if (command.action === "close") {
       this.close();
       return;
@@ -97,13 +105,16 @@ export class NativePiProcess {
       child.once("error", finished);
       child.once("exit", finished);
     }
+    this.pendingTurn = command.command === "conversation-send";
     this.pending = command.id;
     this.timer = setTimeout(
       () => {
         this.failure();
         this.close();
       },
-      command.command === "worker-inference" ? 120000 : 60000,
+      ["worker-inference", "conversation-send"].includes(command.command)
+        ? 120000
+        : 60000,
     );
     this.timer.unref();
     this.child.stdin.write(JSON.stringify(command) + "\n");

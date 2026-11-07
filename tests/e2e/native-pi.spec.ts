@@ -71,6 +71,18 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .click();
     await page
       .getByLabel("Native Pi command", { exact: true })
+      .selectOption("mcp");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Chrome DevTools", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "separate Chrome profile",
+    );
+    await page
+      .getByLabel("Native Pi command", { exact: true })
       .selectOption("name");
     await page
       .getByLabel("Command argument", { exact: true })
@@ -199,6 +211,15 @@ test("native Pi commands create an owned SDK session and update its real name", 
         }),
       ).toBeVisible();
     }
+    await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await page
+      .getByLabel("Conversation message", { exact: true })
+      .fill("/unsupported");
+    await expect(
+      page.getByRole("button", { name: "Send message", exact: true }),
+    ).toBeDisabled();
     await page
       .getByRole("button", { name: "Set up Notion sharing", exact: true })
       .click();

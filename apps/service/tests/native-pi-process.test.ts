@@ -110,3 +110,55 @@ it("rejects malformed runtime records and terminates stalled operations", () => 
     vi.clearAllTimers();
   }
 });
+
+it("forwards stop only for the matching active model request", () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn(),
+    exitCode: null,
+    signalCode: null,
+  });
+  mock.spawn.mockReturnValue(child);
+  const written: string[] = [];
+  child.stdin.on("data", (buf) => written.push(String(buf)));
+  const p = new NativePiProcess(
+    {
+      binary: "/a",
+      worker: "/w",
+      entry: "/pi/dist/bundle/rpc-entry.js",
+      root: "/private/pi",
+    },
+    vi.fn(),
+  );
+  const stop = (id: string) =>
+    p.handle({ version: 1, kind: "native-pi", action: "abort-turn", id });
+  stop("old");
+  expect(mock.spawn).not.toHaveBeenCalled();
+  p.handle({
+    version: 1,
+    kind: "native-pi",
+    action: "run",
+    id: "turn",
+    command: "conversation-send",
+    argument: "{}",
+  });
+  stop("unrelated");
+  expect(written).toHaveLength(1);
+  stop("turn");
+  expect(written).toHaveLength(2);
+  child.stdout.emit(
+    "data",
+    JSON.stringify({
+      version: 1,
+      kind: "native-pi-result",
+      id: "turn",
+      result: { kind: "message", text: "Stopped" },
+    }) + "\n",
+  );
+  stop("turn");
+  expect(written).toHaveLength(2);
+  p.close();
+  child.emit("exit");
+});

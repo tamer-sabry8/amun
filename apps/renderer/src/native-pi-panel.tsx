@@ -15,6 +15,8 @@ export function NativePiPanel({
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
   const [loginStatus, setLoginStatus] = useState("");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   useEffect(() => {
     const listener = (event: MessageEvent) => {
@@ -85,6 +87,7 @@ export function NativePiPanel({
         const event = nativePiEvent.safeParse(value);
         if (event.success && event.data.id === pending.current) {
           pending.current = null;
+          setSending(false);
           setBusy(false);
           setResult(event.data.result);
         } else if (
@@ -94,6 +97,7 @@ export function NativePiPanel({
           value.kind === "service-lost"
         ) {
           pending.current = null;
+          setSending(false);
           setBusy(false);
           setResult({
             kind: "message",
@@ -133,7 +137,11 @@ export function NativePiPanel({
     const id = crypto.randomUUID();
     pending.current = id;
     setBusy(true);
-    if (selectedCommand !== "settings" || result?.kind !== "preferences")
+    setSending(selectedCommand === "conversation-send");
+    if (
+      selectedCommand !== "conversation-send" &&
+      (selectedCommand !== "settings" || result?.kind !== "preferences")
+    )
       setResult(null);
     setCopyStatus("");
     copyPending.current = null;
@@ -296,6 +304,7 @@ export function NativePiPanel({
           }}
         >
           {[
+            "mcp",
             "session",
             "settings",
             "login",
@@ -397,6 +406,7 @@ export function NativePiPanel({
           <section aria-label="Active conversation">
             <h4>{result.title}</h4>
             <p>Session: {result.sessionId}</p>
+            <p>Model: {result.model ?? "Select a model before sending"}</p>
             {result.text ? (
               <textarea
                 className="native-pi-review-content"
@@ -407,6 +417,63 @@ export function NativePiPanel({
             ) : (
               <p>No conversation messages yet.</p>
             )}
+            <label>
+              Message this conversation
+              <textarea
+                aria-label="Conversation message"
+                value={draft}
+                maxLength={12000}
+                disabled={sending}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={
+                busy ||
+                !result.model ||
+                !draft.trim() ||
+                /^[!/]/.test(draft.trimStart()) ||
+                JSON.stringify({
+                  sessionId: result.sessionId,
+                  model: result.model,
+                  text: draft,
+                }).length > 16384
+              }
+              onClick={() => {
+                run(
+                  JSON.stringify({
+                    sessionId: result.sessionId,
+                    model: result.model,
+                    text: draft,
+                  }),
+                  "conversation-send",
+                );
+                setDraft("");
+              }}
+            >
+              Send message
+            </button>
+            {sending && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (pending.current)
+                    bridge.send({
+                      version: 1,
+                      kind: "native-pi",
+                      action: "abort-turn",
+                      id: pending.current,
+                    });
+                }}
+              >
+                Stop response
+              </button>
+            )}
+            <p>
+              Send uses the displayed model. Use the command selector for slash
+              commands. No shell or external tools run here.
+            </p>
             <p>
               Text view only. {result.omittedItems} non-text or internal entries
               omitted. Secrets are redacted.

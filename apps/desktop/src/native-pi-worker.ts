@@ -1,3 +1,9 @@
+import { discoverCloudflareDocs } from "../../../packages/auth/src/cloudflare-docs.ts";
+import { nativeMcp } from "../../../packages/crew/src/native-mcp.ts";
+import {
+  nativeTurn,
+  type NativeTurnSession,
+} from "../../../packages/crew/src/native-pi-turn.ts";
 import { nativeBugReport } from "../../../packages/crew/src/native-pi-bug.ts";
 import { nativeConversationView } from "../../../packages/crew/src/native-pi-conversation.ts";
 import { NativePiImport } from "../../../packages/crew/src/native-pi-import.ts";
@@ -52,7 +58,8 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: CredentialSession &
+  session: NativeTurnSession &
+    CredentialSession &
     NativePiSession &
     PreferenceSession &
     ExportSession &
@@ -77,6 +84,7 @@ let piVersion = "unknown";
 let readCredential: ((provider: string, path: string) => unknown) | undefined;
 let privateAuthPath: string | undefined;
 let busy = false;
+let activeTurnId: string | undefined;
 let stopping = false;
 const workerOperation = new ScopedOperation();
 async function privateDirectory(path: string) {
@@ -129,7 +137,8 @@ async function initialize() {
     modelsPath: null,
     modelsStorePath: join(root!, "models-cache.json"),
     allowModelNetwork: false,
-    refreshOnCreate: false,
+    // Populate the installed catalog and scoped credential availability without network discovery.
+    refreshOnCreate: true,
   });
   runtime = await sdk.createAgentSessionRuntime(
     async (options) => {
@@ -211,6 +220,11 @@ process.stdin.on("data", (chunk: string) => {
   try {
     for (const frame of decoder.push(chunk)) {
       const command = nativePiCommand.parse(frame);
+      if (command.action === "abort-turn") {
+        if (activeTurnId === command.id)
+          void runtime?.session.abort().catch(() => {});
+        continue;
+      }
       if (command.action === "close") {
         stop();
         return;
@@ -242,6 +256,15 @@ process.stdin.on("data", (chunk: string) => {
           if (!stopping) send(command.id, { kind: "message", text });
           return;
         }
+        if (command.command === "mcp") {
+          send(
+            command.id,
+            command.argument === "cloudflare"
+              ? { kind: "message", text: await discoverCloudflareDocs() }
+              : await nativeMcp(command.argument),
+          );
+          return;
+        }
         if (command.command === "share") {
           send(command.id, {
             kind: "message",
@@ -255,6 +278,24 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "conversation-send") {
+          activeTurnId = command.id;
+          try {
+            const outcome = await nativeTurn(
+              runtime!.session,
+              JSON.parse(command.argument),
+            );
+            if (outcome === "aborted") {
+              send(command.id, {
+                kind: "message",
+                text: "Turn stopped. Read the conversation to see any partial reply.",
+              });
+              return;
+            }
+          } finally {
+            activeTurnId = undefined;
+          }
+        }
         if (command.command === "import-preview") {
           send(command.id, importActions!.preview(command.argument));
           return;
@@ -267,7 +308,11 @@ process.stdin.on("data", (chunk: string) => {
           send(command.id, await credentialActions!.run(command.argument));
           return;
         }
-        if (["share-notion", "conversation", "bug"].includes(command.command)) {
+        if (
+          ["share-notion", "conversation", "conversation-send", "bug"].includes(
+            command.command,
+          )
+        ) {
           const redactor = new Redactor();
           const credentials =
             await runtime!.session.modelRuntime.listCredentials();
@@ -299,12 +344,17 @@ process.stdin.on("data", (chunk: string) => {
           }
           send(
             command.id,
-            command.command === "conversation"
+            ["conversation", "conversation-send"].includes(command.command)
               ? nativeConversationView(
                   runtime!.session.sessionId,
                   runtime!.session.sessionName ?? "Unnamed conversation",
                   runtime!.session.sessionManager.getBranch(),
                   redactor,
+                  runtime!.session.model
+                    ? runtime!.session.model.provider +
+                        "/" +
+                        runtime!.session.model.id
+                    : null,
                 )
               : conversationSharePreview(
                   runtime!.session.sessionName ?? "Amun conversation",
@@ -405,7 +455,10 @@ process.stdin.on("data", (chunk: string) => {
             !stopping &&
             send(command.id, {
               kind: "message",
-              text: "This native action could not be completed. Check session state and the supported argument.",
+              text:
+                command.command === "conversation-send"
+                  ? "Turn outcome could not be verified. Read the conversation before sending another message."
+                  : "This native action could not be completed. Check session state and the supported argument.",
             }),
         )
         .finally(() => {
