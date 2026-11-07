@@ -64,3 +64,11 @@ window.addEventListener("message", (event) => {
 ipcRenderer.on("amun-worker-login-status", (_event, result: unknown) =>
   window.postMessage({ kind: "amun-worker-login-status", result }, "*"),
 );
+
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data?.kind === "amun-choose-folder")
+    ipcRenderer.send("amun-choose-folder", event.data.id);
+});
+ipcRenderer.on("amun-folder-result", (_event, result: unknown) =>
+  window.postMessage({ kind: "amun-folder-result", result }, "*"),
+);

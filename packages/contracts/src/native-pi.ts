@@ -91,6 +91,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("conversation"),
+    resources: z.array(z.string().min(1).max(128)).max(512).optional(),
+    resourceDraft: z.string().max(12000).optional(),
     model: z.string().min(1).max(512).nullable(),
     sessionId: z.uuid(),
     title: z.string().max(256),

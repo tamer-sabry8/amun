@@ -9,7 +9,7 @@ export function macKeyring(
 ): Keyring {
   const entry = (account: string) => {
     if (
-      !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion|cloudflare)-[a-f0-9]{32}$/.test(
+      !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion|cloudflare|obsidian)-[a-f0-9]{32}$/.test(
         account,
       )
     )

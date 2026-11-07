@@ -66,3 +66,7 @@ The source and packaged Conversations view now accepts supported built-ins direc
 Both `/updatefirstmate` and `/skill:updatefirstmate` in Conversations resolve the upstream main revision. T022h passed staged promotion and packaged one-click rollback for newly prepared worktrees. [Candidate report](../evidence/M1/2026-11-07-firstmate-candidate.md).
 
 Pi's Control+L binding opens the native model picker from the conversation. Control+P and Control+Shift+P cycle models in opposite directions. Keyboard handling is scoped to the Pi panel and preserves input-method composition.
+
+## Amun-owned templates and skills
+
+Source and packaged Pi sessions discovered private prompt templates and skills and expanded each into an editable draft in the originating conversation. The pinned SDK supplies the loaded resource catalog. Executable extensions and operational Firstmate skills remain open.

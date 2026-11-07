@@ -1,4 +1,10 @@
 import {
+  resourceDirectories,
+  resourceNames,
+  expandResource,
+  type ResourceSession,
+} from "../../../packages/crew/src/native-pi-resources.ts";
+import {
   googleMcpProduct,
   discoverGoogleMcp,
 } from "../../../packages/auth/src/google-workspace-mcp.ts";
@@ -64,7 +70,8 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: NativeTurnSession &
+  session: ResourceSession &
+    NativeTurnSession &
     CredentialSession &
     NativePiSession &
     PreferenceSession &
@@ -81,6 +88,8 @@ type Runtime = NativeSessionRuntime & {
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
+let expandPiTemplate: Parameters<typeof expandResource>[4];
+let stripPiFrontmatter: Parameters<typeof expandResource>[5];
 let sessionActions: NativePiSessions | undefined;
 let importActions: NativePiImport | undefined;
 let trustActions: NativePiTrust | undefined;
@@ -138,6 +147,13 @@ async function initialize() {
       options: unknown,
     ): Promise<Runtime>;
   };
+  const core = dirname(entry!);
+  ({ expandPromptTemplate: expandPiTemplate } = await import(
+    pathToFileURL(join(core, "core/prompt-templates.js")).href
+  ));
+  ({ stripFrontmatter: stripPiFrontmatter } = await import(
+    pathToFileURL(join(core, "utils/frontmatter.js")).href
+  ));
   const modelRuntime = await sdk.ModelRuntime.create({
     authPath,
     modelsPath: null,
@@ -150,6 +166,7 @@ async function initialize() {
     async (options) => {
       if (options.cwd !== cwd || options.agentDir !== root)
         throw Error("Foreign session context");
+      const dirs = await resourceDirectories(root!);
       const services = await sdk.createAgentSessionServices({
         cwd,
         agentDir: root,
@@ -157,6 +174,8 @@ async function initialize() {
         resourceLoaderOptions: {
           noExtensions: true,
           disabledBuiltinExtensions: ["mcp"],
+          additionalSkillPaths: [dirs.skills],
+          additionalPromptTemplatePaths: [dirs.prompts],
           noSkills: true,
           noPromptTemplates: true,
           noThemes: true,
@@ -275,7 +294,8 @@ process.stdin.on("data", (chunk: string) => {
         if (command.command === "mcp") {
           if (
             command.argument === "playwright" ||
-            command.argument === "chrome"
+            command.argument === "chrome" ||
+            command.argument === "puppeteer"
           ) {
             if (!process.env.AMUN_MCP_MODULES)
               throw Error("Browser adapter runtime missing");
@@ -318,6 +338,7 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "reload") await resourceDirectories(root!);
         if (command.command === "conversation-send") {
           activeTurnId = command.id;
           try {
@@ -349,9 +370,13 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (
-          ["share-notion", "conversation", "conversation-send", "bug"].includes(
-            command.command,
-          )
+          [
+            "share-notion",
+            "conversation",
+            "conversation-send",
+            "resource-draft",
+            "bug",
+          ].includes(command.command)
         ) {
           const redactor = new Redactor();
           const credentials =
@@ -382,26 +407,53 @@ process.stdin.on("data", (chunk: string) => {
             );
             return;
           }
-          send(
-            command.id,
-            ["conversation", "conversation-send"].includes(command.command)
-              ? nativeConversationView(
-                  runtime!.session.sessionId,
-                  runtime!.session.sessionName ?? "Unnamed conversation",
-                  runtime!.session.sessionManager.getBranch(),
-                  redactor,
-                  runtime!.session.model
-                    ? runtime!.session.model.provider +
-                        "/" +
-                        runtime!.session.model.id
-                    : null,
-                )
-              : conversationSharePreview(
-                  runtime!.session.sessionName ?? "Amun conversation",
-                  runtime!.session.sessionManager.getBranch(),
-                  redactor,
-                ),
+          if (command.command === "share-notion") {
+            send(
+              command.id,
+              conversationSharePreview(
+                runtime!.session.sessionName ?? "Amun conversation",
+                runtime!.session.sessionManager.getBranch(),
+                redactor,
+              ),
+            );
+            return;
+          }
+          const session = runtime!.session;
+          const view = nativeConversationView(
+            session.sessionId,
+            session.sessionName ?? "Unnamed conversation",
+            session.sessionManager.getBranch(),
+            redactor,
+            session.model
+              ? session.model.provider + "/" + session.model.id
+              : null,
           );
+          let resourceDraft: string | undefined;
+          if (command.command === "resource-draft") {
+            const input = JSON.parse(command.argument);
+            if (
+              input?.sessionId !== session.sessionId ||
+              typeof input.name !== "string" ||
+              typeof input.argument !== "string" ||
+              session.isStreaming
+            )
+              throw Error("Resource session changed");
+            resourceDraft = redactor.text(
+              await expandResource(
+                session,
+                root!,
+                input.name,
+                input.argument,
+                expandPiTemplate,
+                stripPiFrontmatter,
+              ),
+            );
+          }
+          send(command.id, {
+            ...view,
+            resources: resourceNames(session),
+            ...(resourceDraft === undefined ? {} : { resourceDraft }),
+          });
           return;
         }
         if (command.command === "changelog") {

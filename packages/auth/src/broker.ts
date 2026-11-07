@@ -4,7 +4,8 @@ import { lstat } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
 import lockfile from "proper-lockfile";
 import type { Redactor } from "../../security/src/redaction.ts";
-export type ConnectionKind = "ado" | "github" | "notion";
+import { obsidianEndpoints } from "../../contracts/src/auth.ts";
+export type ConnectionKind = "ado" | "github" | "notion" | "obsidian";
 export interface Connection {
   kind: ConnectionKind;
   baseUrl: string;
@@ -19,11 +20,16 @@ export interface Keyring {
 export { modelLoginOptions } from "../../contracts/src/auth.ts";
 
 export function connectionId(connection: Connection): string {
-  if (!["ado", "github", "notion"].includes(connection.kind))
+  if (!["ado", "github", "notion", "obsidian"].includes(connection.kind))
     throw Error("Unsupported connection");
+  if (
+    connection.kind === "obsidian" &&
+    !obsidianEndpoints.some((endpoint) => endpoint === connection.baseUrl)
+  )
+    throw Error("Unsupported Obsidian endpoint");
   const url = new URL(connection.baseUrl);
   if (
-    url.protocol !== "https:" ||
+    (url.protocol !== "https:" && connection.kind !== "obsidian") ||
     url.username ||
     url.password ||
     url.search ||

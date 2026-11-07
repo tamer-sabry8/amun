@@ -1,0 +1,63 @@
+import { expect, test, _electron as electron } from "@playwright/test";
+import { mkdtemp, rm, mkdir, writeFile, realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+test("owned Pi template and skill commands expand into an editable draft", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-pi-resources-")),
+  );
+  const agent = join(root, "pi-agent");
+  await mkdir(agent, { mode: 0o700 });
+  const prompts = join(agent, "prompts"),
+    skill = join(agent, "skills", "summary");
+  await mkdir(prompts, { mode: 0o700 });
+  await mkdir(skill, { recursive: true, mode: 0o700 });
+  await writeFile(join(prompts, "product-review.md"), "Review $1 against $2.", {
+    mode: 0o600,
+  });
+  await writeFile(
+    join(skill, "SKILL.md"),
+    "---\nname: summary\ndescription: Acceptance summary\n---\nSummarize the supplied decision.",
+    { mode: 0o600 },
+  );
+  const executablePath = process.env.AMUN_PACKAGED_PATH;
+  const app = await electron.launch({
+    ...(executablePath ? { executablePath } : {}),
+    args: [
+      ...(executablePath ? [] : ["apps/desktop"]),
+      "--user-data-dir=" + root,
+    ],
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(page.locator("#service-status")).toHaveText("Connected");
+    const button = (name: string) =>
+      page.getByRole("button", { name, exact: true });
+    await button("Open conversations").click();
+    await button("Open Pi commands").click();
+    await button("Read active conversation").click();
+    const draft = page.getByLabel("Conversation message");
+    await draft.fill("/");
+    for (const name of ["product-review", "skill:summary"]) {
+      await expect(
+        page
+          .getByLabel("Choose a slash command")
+          .locator("option", { hasText: "/" + name }),
+      ).toHaveCount(1);
+    }
+    await draft.fill('/product-review "phase one" acceptance');
+    await button("Apply /product-review").click();
+    await expect(draft).toHaveValue("Review phase one against acceptance.");
+    await draft.fill("/skill:summary Keep it short.");
+    await button("Apply /skill:summary").click();
+    await expect(draft).toHaveValue(
+      /Summarize the supplied decision[.][\s\S]*Keep it short[.]/,
+    );
+    await draft.fill("/unknown-resource");
+    await expect(button("Send message")).toBeDisabled();
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

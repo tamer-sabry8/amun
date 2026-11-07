@@ -73,7 +73,10 @@ const inventory = new Map<string, readonly [string, string]>([
   ],
   [
     "obsidian",
-    ["Obsidian", "Requires Obsidian, its companion plugin and a chosen vault."],
+    [
+      "Obsidian",
+      "Open Settings → Connections → Obsidian to connect the Local REST API with MCP plugin.",
+    ],
   ],
   ["docs", ["Google Docs", ""]],
   ["slides", ["Google Slides", ""]],

@@ -27,6 +27,14 @@ const adapters = {
     params: {},
     expected: "## Pages\n1: about:blank [selected]",
   },
+  puppeteer: {
+    label: "Puppeteer",
+    entry: "@modelcontextprotocol/server-puppeteer/dist/index.js",
+    args: [],
+    tool: "puppeteer_navigate",
+    params: { url: "about:blank" },
+    expected: "Navigated to about:blank",
+  },
 } as const;
 
 export async function checkBrowserMcp(
@@ -53,6 +61,17 @@ export async function checkBrowserMcp(
         PATH: "/usr/bin:/bin",
         ELECTRON_RUN_AS_NODE: "1",
         CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1",
+        ...(key === "puppeteer"
+          ? {
+              PUPPETEER_LAUNCH_OPTIONS: JSON.stringify({
+                executablePath:
+                  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                headless: true,
+                userDataDir: join(home, "profile"),
+                pipe: true,
+              }),
+            }
+          : {}),
       },
       stderr: "ignore",
       maxBufferSize: 1048576,

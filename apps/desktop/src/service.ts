@@ -518,6 +518,38 @@ process.parentPort?.on("message", (event) => {
       const nativeRequest = nativePiCommand.safeParse(message.data);
       if (nativeRequest.success && nativeRequest.data.action === "run") {
         const request = nativeRequest.data;
+        if (request.command === "mcp" && request.argument === "obsidian") {
+          const configured = authMetadata
+            .list()
+            .filter((c) => c.kind === "obsidian");
+          if (configured.length !== 1) {
+            sendNative(request.id, {
+              kind: "message",
+              text: configured.length
+                ? "Select Test connection for the Obsidian endpoint you want in Settings → Connections."
+                : "Open Settings → Connections → Obsidian to connect the Local REST API with MCP plugin.",
+            });
+            return;
+          }
+          void authBroker
+            .check(configured[0]!)
+            .then((status) =>
+              sendNative(request.id, {
+                kind: "message",
+                text:
+                  status === "ready"
+                    ? "Obsidian MCP verified the vault read tool."
+                    : "Obsidian is unavailable. Check the selected listener, certificate and saved plugin API key in Settings → Connections.",
+              }),
+            )
+            .catch(() =>
+              sendNative(request.id, {
+                kind: "message",
+                text: "Obsidian connection unavailable.",
+              }),
+            );
+          return;
+        }
         if (request.command === "firstmate-release") {
           if (updatingFirstmate) {
             sendNative(request.id, {

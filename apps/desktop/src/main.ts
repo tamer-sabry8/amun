@@ -1,3 +1,4 @@
+import { installFolderPicker } from "./folder-picker.ts";
 import { installWorkerLogin } from "./worker-login.ts";
 import { installPiExport } from "./pi-export.ts";
 import { installPiClipboard } from "./pi-clipboard.ts";
@@ -36,6 +37,11 @@ function attach(window: BrowserWindow): void {
   service.postMessage({ kind: "attach" }, [port1]);
   window.webContents.postMessage("amun-port", null, [port2]);
 }
+function mcpModules() {
+  return app.isPackaged
+    ? join(process.resourcesPath, "mcp/node_modules")
+    : join(app.getAppPath(), "../../runtime/mcp/node_modules");
+}
 function startService(): void {
   if (quitting) return;
   const child = utilityProcess.fork(
@@ -47,9 +53,7 @@ function startService(): void {
         ...process.env,
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
-        AMUN_MCP_MODULES: app.isPackaged
-          ? join(process.resourcesPath, "mcp/node_modules")
-          : join(app.getAppPath(), "../../runtime/mcp/node_modules"),
+        AMUN_MCP_MODULES: mcpModules(),
         AMUN_NATIVE_PI_WORKER: join(
           app.getAppPath(),
           "dist/native-pi-worker.cjs",
@@ -180,6 +184,7 @@ function openWindow(): void {
   });
   installBrowser(window, "m0");
   installPiClipboard(window);
+  installFolderPicker(window, mcpModules());
   installPiExport(window);
   installWorkerLogin(window);
   installBackup(

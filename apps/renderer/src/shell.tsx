@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   modelLoginOptions,
+  obsidianEndpoints,
   type AttentionItem,
   type UiPreferences,
   type WorkspaceSnapshot,
@@ -242,15 +243,17 @@ function Settings({
   preferences,
   onPreferences,
 }: {
-  initialService?: "github" | "ado" | "notion";
+  initialService?: "github" | "ado" | "notion" | "obsidian";
   preferences: UiPreferences;
   onPreferences(value: UiPreferences): void;
 }) {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [tab, setTab] = useState("connections");
-  const [kind, setKind] = useState<"github" | "ado" | "notion">(initialService);
+  const [kind, setKind] = useState<"github" | "ado" | "notion" | "obsidian">(
+    initialService,
+  );
   const [baseUrl, setBaseUrl] = useState("https://github.com");
-  const [secret, setSecret] = useState("");
+  const keyInput = useRef<HTMLInputElement>(null);
   const [notionTarget, setNotionTarget] = useState("");
   const [confirmNotionDisconnect, setConfirmNotionDisconnect] = useState(false);
   const [notionBrowser, setNotionBrowser] = useState<"edge" | "dia">("edge");
@@ -258,6 +261,9 @@ function Settings({
   const modelBusy = Object.values(state.modelStatus).includes("checking");
   const save = (event: FormEvent) => {
     event.preventDefault();
+    if (!keyInput.current) return;
+    const secret = keyInput.current.value;
+    keyInput.current.value = "";
     bridge.send({
       version: 1,
       kind: "auth",
@@ -265,7 +271,6 @@ function Settings({
       connection: { kind, baseUrl },
       secret,
     });
-    setSecret("");
   };
   return (
     <div className="settings-content">
@@ -305,7 +310,9 @@ function Settings({
                       ? "Azure DevOps"
                       : connection.kind === "github"
                         ? "GitHub"
-                        : "Notion"}
+                        : connection.kind === "obsidian"
+                          ? "Obsidian"
+                          : "Notion"}
                   </strong>
                   <p>{connection.baseUrl}</p>
                   <span className="state-tag">{connection.status}</span>
@@ -359,14 +366,17 @@ function Settings({
                       ? "https://github.com"
                       : value === "notion"
                         ? "https://api.notion.com"
-                        : "",
+                        : value === "obsidian"
+                          ? obsidianEndpoints[0]
+                          : "",
                   );
-                  setSecret("");
+                  if (keyInput.current) keyInput.current.value = "";
                 }}
               >
                 <option value="github">GitHub or GitHub Enterprise</option>
                 <option value="ado">Azure DevOps</option>
                 <option value="notion">Notion</option>
+                <option value="obsidian">Obsidian</option>
               </select>
             </label>
             {kind === "notion" ? (
@@ -495,26 +505,54 @@ function Settings({
             ) : (
               <>
                 {" "}
+                {kind === "obsidian" ? (
+                  <>
+                    <p>
+                      Enable Local REST API with MCP in Obsidian. Copy its API
+                      key from the plugin settings.
+                    </p>
+                    <label>
+                      Plugin endpoint
+                      <select
+                        value={baseUrl}
+                        onChange={(event) => setBaseUrl(event.target.value)}
+                      >
+                        <option value={obsidianEndpoints[0]}>
+                          HTTPS · {obsidianEndpoints[0]}
+                        </option>
+                        <option value={obsidianEndpoints[1]}>
+                          Local HTTP · {obsidianEndpoints[1]}
+                        </option>
+                      </select>
+                    </label>
+                    <p>
+                      HTTPS requires a trusted plugin certificate. Choose local
+                      HTTP only after enabling that listener in Obsidian.
+                    </p>
+                  </>
+                ) : (
+                  <label>
+                    {kind === "ado"
+                      ? "Collection or organisation URL"
+                      : "Service URL"}
+                    <input
+                      type="url"
+                      required
+                      value={baseUrl}
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      placeholder="https://dev.azure.com/your-organisation"
+                    />
+                  </label>
+                )}
                 <label>
-                  {kind === "ado"
-                    ? "Collection or organisation URL"
-                    : "Service URL"}
-                  <input
-                    type="url"
-                    required
-                    value={baseUrl}
-                    onChange={(event) => setBaseUrl(event.target.value)}
-                    placeholder="https://dev.azure.com/your-organisation"
-                  />
-                </label>
-                <label>
-                  Personal access token
+                  {kind === "obsidian"
+                    ? "Obsidian plugin API key"
+                    : "Personal access token"}
                   <input
                     type="password"
                     required
                     autoComplete="off"
-                    value={secret}
-                    onChange={(event) => setSecret(event.target.value)}
+                    ref={keyInput}
                     maxLength={65536}
                   />
                 </label>

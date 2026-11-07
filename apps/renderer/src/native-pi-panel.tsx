@@ -26,7 +26,14 @@ export function NativePiPanel({
   const [loginStatus, setLoginStatus] = useState("");
   const [recoveryUrls, setRecoveryUrls] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
+  const resources =
+    result?.kind === "conversation" ? (result.resources ?? []) : [];
   const slash = composerCommand(draft);
+  const resourceMatch = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(draft.trim());
+  const resource =
+    !slash && resourceMatch && resources.includes(resourceMatch[1]!)
+      ? resourceMatch[1]
+      : undefined;
   const importFile = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
@@ -49,6 +56,25 @@ export function NativePiPanel({
     return () => window.removeEventListener("message", listener);
   }, []);
   const pending = useRef<string | null>(null);
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      const data = event.data;
+      if (
+        event.source !== window ||
+        data?.kind !== "amun-folder-result" ||
+        !pending.current ||
+        data.result?.id !== pending.current ||
+        typeof data.result.text !== "string" ||
+        data.result.text.length > 65536
+      )
+        return;
+      pending.current = null;
+      setBusy(false);
+      setResult({ kind: "message", text: data.result.text });
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, []);
   const copyPending = useRef<string | null>(null);
   const exportPending = useRef<string | null>(null);
   const [exportStatus, setExportStatus] = useState("");
@@ -101,6 +127,11 @@ export function NativePiPanel({
           pending.current = null;
           setSending(false);
           setBusy(false);
+          if (
+            event.data.result.kind === "conversation" &&
+            event.data.result.resourceDraft !== undefined
+          )
+            setDraft(event.data.result.resourceDraft);
           setResult(event.data.result);
         } else if (
           value &&
@@ -168,6 +199,10 @@ export function NativePiPanel({
       (selectedCommand !== "settings" || result?.kind !== "preferences")
     )
       setResult(null);
+    if (selectedCommand === "mcp" && value === "filesystem") {
+      window.postMessage({ kind: "amun-choose-folder", id }, "*");
+      return;
+    }
     setCopyStatus("");
     copyPending.current = null;
     exportPending.current = null;
@@ -491,7 +526,7 @@ export function NativePiPanel({
                   onChange={(e) => setDraft("/" + e.target.value)}
                 >
                   <option value="">Choose a command</option>
-                  {nativeCommandNames.map((name) => (
+                  {[...nativeCommandNames, ...resources].map((name) => (
                     <option key={name} value={name}>
                       /{name}
                     </option>
@@ -499,16 +534,20 @@ export function NativePiPanel({
                 </select>
               </label>
             )}
-            {draft.trim().startsWith("/") && !slash && draft.trim() !== "/" && (
-              <p role="status">
-                This command is unavailable in the active conversation.
-              </p>
-            )}
+            {draft.trim().startsWith("/") &&
+              !slash &&
+              !resource &&
+              draft.trim() !== "/" && (
+                <p role="status">
+                  This command is unavailable in the active conversation.
+                </p>
+              )}
             <button
               type="button"
               disabled={
                 busy ||
                 (!slash &&
+                  !resource &&
                   (!result.model ||
                     !draft.trim() ||
                     /^[!/]/.test(draft.trimStart()) ||
@@ -519,6 +558,17 @@ export function NativePiPanel({
                     }).length > 16384))
               }
               onClick={() => {
+                if (resource) {
+                  run(
+                    JSON.stringify({
+                      sessionId: result.sessionId,
+                      name: resource,
+                      argument: resourceMatch?.[2] ?? "",
+                    }),
+                    "resource-draft",
+                  );
+                  return;
+                }
                 if (slash) {
                   if (slash.name === "import") {
                     importFile.current?.click();
@@ -541,7 +591,11 @@ export function NativePiPanel({
                 setDraft("");
               }}
             >
-              {slash ? "Run /" + slash.name : "Send message"}
+              {resource
+                ? "Apply /" + resource
+                : slash
+                  ? "Run /" + slash.name
+                  : "Send message"}
             </button>
             {sending && (
               <button

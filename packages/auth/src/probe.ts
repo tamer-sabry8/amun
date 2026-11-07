@@ -1,3 +1,4 @@
+import { probeObsidian } from "./obsidian.ts";
 import { connectionId, type Connection } from "./broker.ts";
 /** Read-only identity checks. Redirects are never followed with credentials. */
 export async function probeConnection(
@@ -6,6 +7,8 @@ export async function probeConnection(
   request: typeof fetch = fetch,
 ): Promise<boolean> {
   connectionId(connection);
+  if (connection.kind === "obsidian")
+    return probeObsidian(connection.baseUrl, secret, request);
   const base = new URL(connection.baseUrl);
   const headers: Record<string, string> = { Accept: "application/json" };
   let url: string;

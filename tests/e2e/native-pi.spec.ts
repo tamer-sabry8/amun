@@ -137,7 +137,8 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .getByRole("button", { name: "Chrome DevTools", exact: true })
       .click();
     await expect(page.getByTestId("native-pi-result")).toContainText(
-      "separate Chrome profile",
+      "Chrome DevTools verified a blank page in an isolated Chrome session.",
+      { timeout: 25000 },
     );
     await page
       .getByLabel("Native Pi command", { exact: true })

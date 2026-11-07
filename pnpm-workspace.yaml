@@ -3,6 +3,7 @@ packages:
   - packages/*
   - runtime/*
 allowBuilds:
+  puppeteer: false
   better-sqlite3: true
   node-pty: true
   electron: true

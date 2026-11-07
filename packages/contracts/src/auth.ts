@@ -1,7 +1,11 @@
 import { z } from "zod";
+export const obsidianEndpoints = [
+  "https://127.0.0.1:27124/mcp/",
+  "http://127.0.0.1:27123/mcp/",
+] as const;
 const id = z.string().min(1).max(256);
 export const connectionSchema = z.strictObject({
-  kind: z.enum(["ado", "github", "notion"]),
+  kind: z.enum(["ado", "github", "notion", "obsidian"]),
   baseUrl: z.string().url().max(2048),
 });
 const base = { version: z.literal(1), kind: z.literal("auth") };
