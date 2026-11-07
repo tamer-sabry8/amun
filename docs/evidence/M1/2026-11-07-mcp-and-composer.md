@@ -49,3 +49,5 @@ The source app and arm64 package passed the folder chooser journey against the p
 Obsidian Settings supports the local plugin HTTPS endpoint and an explicitly selected loopback HTTP listener. The broker stores the bearer key in Keychain. Controlled MCP protocol tests cover the connection check. The owner deferred live vault acceptance.
 
 The composer initially failed to list a private Pi resource. Source and package subsequently discovered and expanded both a template and a skill in the active session. A separate filesystem regression covers a readable skill file inside its private directory. The unit suite passed 439 tests. Domain and governance line coverage were 97.27% and 96.72%. The default source acceptance run passed 27 tests with three opt-in skips.
+
+The source app and arm64 package also passed the scoped folder journey on a separately mounted HFS+ disk image under /Volumes. Each listed the chosen directory, excluded its sibling and handled picker cancellation. The disposable volume was ejected after both tests. Physical USB hardware was not exercised.

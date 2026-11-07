@@ -7,10 +7,18 @@ test("Filesystem MCP lists only the chosen folder and cancels without granting a
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "amun-folder-mcp-")),
   );
-  const chosen = join(root, "chosen");
+  const volume = process.env.AMUN_ACCEPTANCE_VOLUME;
+  if (
+    volume &&
+    (!/^\/Volumes\/Amun-M1-[A-Za-z0-9-]+$/.test(volume) ||
+      (await realpath(volume)) !== volume)
+  )
+    throw Error("Expected a disposable Amun acceptance volume");
+  const fixture = volume ? await mkdtemp(join(volume, "amun-folder-")) : root;
+  const chosen = join(fixture, "chosen");
   await mkdir(chosen);
   await writeFile(join(chosen, "within-selection.txt"), "");
-  await writeFile(join(root, "outside-selection.txt"), "");
+  await writeFile(join(fixture, "outside-selection.txt"), "");
   const executablePath = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -49,6 +57,7 @@ test("Filesystem MCP lists only the chosen folder and cancels without granting a
     await expect(result).not.toContainText("within-selection.txt");
   } finally {
     await app.close();
+    if (volume) await rm(fixture, { recursive: true, force: true });
     await rm(root, { recursive: true, force: true });
   }
 });
