@@ -20,6 +20,7 @@ jobs:
       - run: pnpm --filter @amun/desktop exec install-electron
       - run: pnpm exec electron-rebuild -m runtime/terminal -v 45.2.3 -w node-pty -f
       - run: pnpm database:stage
+      - run: pnpm firstmate:stage
       - run: pnpm test:e2e
       - name: Preserve failed Electron acceptance images
         if: failure()
