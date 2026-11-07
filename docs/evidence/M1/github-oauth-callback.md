@@ -1,5 +1,7 @@
 # Provision and verify Amun’s GitHub callback
 
+**Scope decision, 7 November 2026.** T022e is optional in R4. The steps below apply only if the owner later chooses the web flow. Packaged GitHub device sign-in, repository read and approved issue creation passed in M1.
+
 The registered target is `https://amun.transfrm.ai/mcp/callback`. On the acceptance Mac on 7 November 2026, a request to that exact address failed at DNS resolution. GitHub separately issued a valid device challenge for Amun. Device sign-in completes at GitHub and polls the token endpoint. It does not exercise this callback.
 
 For device sign-in, open Conversations → Open Pi commands → /mcp → Run command → GitHub · Sign in with Microsoft Edge. Amun displays a short code in the **GitHub device code** field. Choose **Copy device code**, then **Open Microsoft Edge**, and paste the code into GitHub. After consent, return to Amun and choose **Check GitHub authorization**. Starting sign-in again while the code is valid shows the same code. After it expires, starting again requests a fresh one.
