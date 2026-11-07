@@ -21,6 +21,7 @@ export function NativePiPanel({
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<NativePiEvent["result"] | null>(null);
   const [loginStatus, setLoginStatus] = useState("");
+  const [recoveryUrls, setRecoveryUrls] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const slash = composerCommand(draft);
   const importFile = useRef<HTMLInputElement>(null);
@@ -393,7 +394,41 @@ export function NativePiPanel({
                 </p>
                 <ul>
                   {result.unconfirmed.map((item) => (
-                    <li key={item.id}>{item.title}</li>
+                    <li key={item.id}>
+                      {item.title} · {item.delivery ?? "sent-unknown"}
+                      {item.delivery !== "not sent" && (
+                        <>
+                          <label>
+                            Notion page URL for {item.title}
+                            <input
+                              value={recoveryUrls[item.id] ?? ""}
+                              onChange={(e) =>
+                                setRecoveryUrls({
+                                  ...recoveryUrls,
+                                  [item.id]: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              run(
+                                JSON.stringify({
+                                  id: item.id,
+                                  url: recoveryUrls[item.id] || undefined,
+                                }),
+                                "notion-reconcile",
+                              )
+                            }
+                          >
+                            {recoveryUrls[item.id]
+                              ? "Check page URL"
+                              : "Retry search"}
+                          </button>
+                        </>
+                      )}
+                    </li>
                   ))}
                 </ul>
               </section>
@@ -709,6 +744,9 @@ export function NativePiPanel({
         ) : result?.kind === "notion-review" ? (
           <>
             <h4>Approve Share to Notion</h4>
+            {result.markerPropertyId && (
+              <p>Amun publication ID: {result.markerPropertyId}</p>
+            )}
             <p>New page in {result.destination}</p>
             <p>
               Destination ID: <code>{result.destinationId}</code>

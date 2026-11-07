@@ -231,6 +231,7 @@ process.parentPort?.on("message", (event) => {
   let notionPreview: { title: string; text: string; at: number } | undefined;
   let notionReviewBusy = false;
   const notionReviews = new NotionConversationReview(workspace, {
+    marksSendBoundary: true,
     create: async (input, context) => {
       const row = workspace
         .prepare(
@@ -242,14 +243,34 @@ process.parentPort?.on("message", (event) => {
         JSON.parse(row.value_json) as string,
       );
       if (
+        (input.markerPropertyId && !target.markerPropertyAvailable) ||
         target.parentId !== input.parentId ||
         target.parentType !== input.parentType ||
         target.titleProperty !== input.titleProperty
       )
         throw Error("Destination changed; review again");
-      return notionConnection.publish(input, context.workspaceId);
+      return notionConnection.publish(
+        input,
+        context.workspaceId,
+        context.beforeSend,
+      );
     },
   });
+  const lookupPublication = notionConnection.locate.bind(notionConnection);
+  let checkingReceipt = false;
+  const timer = setInterval(() => {
+    if (checkingReceipt || notionReviewBusy) return;
+    const id = notionReviews.nextCheck();
+    if (!id) return;
+    checkingReceipt = true;
+    void notionReviews
+      .check(id, lookupPublication)
+      .catch(() => undefined)
+      .finally(() => {
+        checkingReceipt = false;
+      });
+  }, 30000);
+  port.once("close", () => clearInterval(timer));
   const sendNative = (id: string, result: NativePiEvent["result"]) =>
     port.postMessage(
       nativePiEvent.parse({ version: 1, kind: "native-pi-result", id, result }),
@@ -798,9 +819,12 @@ process.parentPort?.on("message", (event) => {
       if (
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
-        ["notion-review", "notion-publish", "notion-receipts"].includes(
-          nativeRequest.data.command,
-        )
+        [
+          "notion-review",
+          "notion-publish",
+          "notion-receipts",
+          "notion-reconcile",
+        ].includes(nativeRequest.data.command)
       ) {
         const command = nativeRequest.data;
         if (notionReviewBusy) {
@@ -812,11 +836,38 @@ process.parentPort?.on("message", (event) => {
         }
         notionReviewBusy = true;
         void (async () => {
-          if (command.command === "notion-receipts") {
+          if (command.command === "notion-reconcile") {
+            const input = JSON.parse(command.argument) as {
+              id: string;
+              url?: string;
+            };
+            if (
+              typeof input.id !== "string" ||
+              (input.url !== undefined &&
+                (typeof input.url !== "string" || input.url.length > 2048))
+            )
+              throw Error("Invalid lookup");
+            const status = await notionReviews.check(
+              input.id,
+              lookupPublication,
+              input.url,
+            );
+            const text = {
+              confirmed:
+                "Confirmed in Notion. Open Published conversations for the verified page.",
+              wait: "A recent search is still within its backoff period. Try again later.",
+              missing:
+                "No unique matching publication reference was found. Retry the search later or paste its Notion page URL.",
+              blocked:
+                "Notion lookup is unavailable. Amun will retry the read after backoff.",
+            }[status];
+            sendNative(command.id, { kind: "message", text });
+          } else if (command.command === "notion-receipts") {
             sendNative(command.id, {
               kind: "publication-receipts",
               unconfirmed: notionReviews.unconfirmed().map((item) => ({
                 ...item,
+                delivery: notionReviews.deliveryState(item.id),
                 title: redactor.text(item.title).slice(0, 256),
               })),
               pages: notionReviews
@@ -836,7 +887,10 @@ process.parentPort?.on("message", (event) => {
               text:
                 outcome === "succeeded"
                   ? "The reviewed conversation was published as a new Notion page."
-                  : "Publication outcome is unconfirmed. Do not retry; reconciliation is required to avoid a duplicate page.",
+                  : notionReviews.deliveryState(approval.reviewId) ===
+                      "not sent"
+                    ? "The request did not reach the send step. Reconnect Notion and review the conversation again."
+                    : "Publication outcome is unconfirmed. Do not retry; reconciliation is required to avoid a duplicate page.",
             });
           } else {
             const preview = notionPreview;
@@ -870,6 +924,9 @@ process.parentPort?.on("message", (event) => {
             sendNative(command.id, {
               kind: "notion-review",
               reviewId: review.id,
+              ...(review.markerPropertyId
+                ? { markerPropertyId: review.markerPropertyId }
+                : {}),
               binding: review.binding,
               title: review.title,
               text: review.text,

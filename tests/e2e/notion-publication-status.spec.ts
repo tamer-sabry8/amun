@@ -142,6 +142,19 @@ test("service restart reconciles interrupted Notion creates only with matching r
     store.approve(proposal.id, "user");
     const claimed = store.claim("notion_publish", proposal.id)!;
     if (title === "Saved receipt") await connector.execute(claimed);
+    else {
+      const interrupted = new NotionOutboxConnector(seed, {
+        marksSendBoundary: true,
+        async create(_payload, context) {
+          context.beforeSend();
+          return { state: "unknown" };
+        },
+      });
+      await expect(interrupted.execute(claimed)).rejects.toThrow(
+        "outcome is unknown",
+      );
+      expect(reviews.deliveryState(proposal.id)).toBe("sent-unknown");
+    }
   }
   seed.close();
   chmodSync(file, 0o600);
@@ -174,6 +187,9 @@ test("service restart reconciles interrupted Notion creates only with matching r
     ).toHaveValue("https://www.notion.so/22222222222242228222222222222222");
     const verify = new Database(file, { readonly: true });
     try {
+      await expect(
+        page.getByRole("button", { name: "Retry search", exact: true }),
+      ).toBeVisible();
       const read = verify.prepare(
         "SELECT a.state AS action,o.state AS delivery FROM actions a JOIN outbox o ON a.id=o.action_id WHERE a.id=?",
       );

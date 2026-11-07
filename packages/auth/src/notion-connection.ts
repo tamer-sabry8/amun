@@ -1,3 +1,9 @@
+import {
+  findNotionPublication,
+  propertyRows,
+  type PublicationLookup,
+} from "./notion-recovery.ts";
+import { randomUUID } from "node:crypto";
 import { notionRead } from "./notion-read-backoff.ts";
 import { NotionMcpPublisher } from "../../connectors-notion/src/mcp-publication.ts";
 import type {
@@ -53,7 +59,14 @@ async function verifyMcp(
   publication?: {
     input: NotionPublication;
     workspaceId: string;
+    beforeSend(): void;
     done(result: NotionResult): void;
+  },
+  recovery?: {
+    intent: PublicationLookup;
+    workspaceId: string;
+    url?: string;
+    done(id: string | undefined): void;
   },
 ): Promise<void> {
   const client = new Client({ name: "amun", version: "0.1.0" });
@@ -96,6 +109,25 @@ async function verifyMcp(
     );
     const identity = notionIdentity(result);
     onIdentity?.(identity);
+    const read = async (name: string, args: Record<string, unknown>) => {
+      if (
+        ![
+          "notion-search",
+          "notion-fetch",
+          "notion-query-data-sources",
+        ].includes(name) ||
+        !tools.tools.some((t) => t.name === name)
+      )
+        throw Error("Required Notion read unavailable");
+      return client.callTool({ name, arguments: args });
+    };
+    if (recovery) {
+      if (identity.workspaceId !== recovery.workspaceId)
+        throw Error("Workspace changed");
+      recovery.done(
+        await findNotionPublication(recovery.intent, read, recovery.url),
+      );
+    }
     if (publication) {
       if (
         identity.workspaceId.replaceAll("-", "").toLowerCase() !==
@@ -108,9 +140,10 @@ async function verifyMcp(
       )
         throw Error("Notion creation tool unavailable");
       publication.done(
-        await new NotionMcpPublisher((request) =>
-          client.callTool(request),
-        ).create(publication.input),
+        await new NotionMcpPublisher((request) => {
+          publication.beforeSend();
+          return client.callTool(request);
+        }).create(publication.input),
       );
     }
     if (target) {
@@ -125,7 +158,18 @@ async function verifyMcp(
           arguments: { id: notionTargetReference(target) },
         }),
       );
-      onTarget?.(notionDestination(fetched, notionTargetReference(target)));
+      const destination = notionDestination(
+        fetched,
+        notionTargetReference(target),
+      );
+      if (destination.markerPropertyAvailable) {
+        try {
+          await propertyRows(destination.parentId, randomUUID(), read);
+        } catch {
+          delete destination.markerPropertyAvailable;
+        }
+      }
+      onTarget?.(destination);
     }
   } finally {
     await client.close();
@@ -195,6 +239,7 @@ export class NotionConnection {
   async publish(
     input: NotionPublication,
     workspaceId: string,
+    beforeSend: () => void,
   ): Promise<NotionResult> {
     if (!/^[a-f0-9-]{32,36}$/i.test(workspaceId))
       throw Error("Reviewed Notion workspace missing");
@@ -218,6 +263,7 @@ export class NotionConnection {
         undefined,
         {
           input,
+          beforeSend,
           workspaceId,
           done: (result) => {
             outcome = result;
@@ -226,6 +272,37 @@ export class NotionConnection {
       );
     });
     return outcome;
+  }
+  async locate(intent: PublicationLookup, workspaceId: string, url?: string) {
+    await this.connect("edge", false);
+    return withRefreshLock(this.options.root, async () => {
+      const record = readNotionOAuthRecord(
+        this.options.keyring.get(this.account),
+      );
+      if (
+        !record?.tokens ||
+        !record.expiresAt ||
+        record.expiresAt <= Date.now()
+      )
+        throw Error("Reconnect Notion");
+      let pageId: string | undefined;
+      await verifyMcp(
+        record.tokens.access_token,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          intent,
+          workspaceId,
+          ...(url ? { url } : {}),
+          done: (id) => {
+            pageId = id;
+          },
+        },
+      );
+      return pageId;
+    });
   }
   configured() {
     return Boolean(

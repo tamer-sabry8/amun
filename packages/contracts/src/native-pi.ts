@@ -68,7 +68,15 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("publication-receipts"),
     unconfirmed: z
-      .array(z.strictObject({ id: z.uuid(), title: z.string().max(256) }))
+      .array(
+        z.strictObject({
+          id: z.uuid(),
+          delivery: z
+            .enum(["not sent", "sent-unknown", "confirmed"])
+            .optional(),
+          title: z.string().max(256),
+        }),
+      )
       .max(50)
       .default([]),
     pages: z
@@ -100,6 +108,7 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("notion-review"),
+    markerPropertyId: z.uuid().optional(),
     reviewId: z.uuid(),
     binding: z.string().regex(/^[a-f0-9]{64}$/),
     title: z.string().max(256),

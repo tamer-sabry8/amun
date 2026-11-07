@@ -1,5 +1,6 @@
 export interface NotionPublication {
   parentId: string;
+  markerPropertyId?: string;
   parentType?: "page_id" | "data_source_id";
   titleProperty?: string;
   title: string;

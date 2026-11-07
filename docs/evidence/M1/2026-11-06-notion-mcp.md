@@ -73,3 +73,11 @@ Final pre-commit checks passed 376 tests, lint, types and formatting (`/tmp/amun
 A source Electron regression first observed the action and outbox both stuck at unknown after service restart despite a matching saved page receipt. Startup now validates the receipt against the action marker, approved payload hash and destination before completing both records atomically. A separate interrupted create with no receipt remained unknown in the same launch. Conversations showed its title under Unconfirmed publications and showed the confirmed page URL for the recovered action.
 
 All 424 unit tests and the three relevant Electron journeys in each of the source and packaged builds passed. The interruption test used a real SQLite file with a fixture create response. It made no Notion write. Recovery when the remote response never reaches the service remains open.
+
+### Publication identity and interrupted delivery, 7 November
+
+Document Hub has no dedicated searchable publication-ID property. Amun includes the one-line UUID footer in its exact review there. A database with a dedicated text property must pass a scoped parameterized query before Amun offers property-based publication. Both forms bind the ID and destination to the approval. An interrupted send stays sent-unknown. Recovery may search or fetch a supplied URL and verify the immediate parent and ID. The PM can retry that read. Recovery has no create operation.
+
+The regression suite covers offline failure before and during send, lost reply, duplicate titles, modified or removed footers, and a saved receipt across service restart. A negative test initially accepted a property-like block written inside the conversation. The resolver now reads properties only from Notion's page header. All 429 unit tests, lint, type checking and formatting passed. The earlier verified page predates publication IDs and cannot serve as live evidence for this change.
+
+On this Mac, all three publication E2Es passed in the newly packaged arm64 app. The restart fixture persisted sent-unknown before closing its database and launching a fresh service. The full source E2E run passed 24 tests and skipped the packaged-only rollback test. A fresh exact review in the packaged acceptance profile displayed Document Hub, the synthetic conversation and its new publication-ID footer.

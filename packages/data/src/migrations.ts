@@ -316,4 +316,17 @@ ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
 INSERT INTO actions_workspace_upgrade SELECT * FROM actions;
 DROP TABLE actions;
 ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
+  `CREATE TABLE notion_delivery (
+    action_id TEXT PRIMARY KEY REFERENCES actions(id) ON DELETE CASCADE,
+    state TEXT NOT NULL CHECK (state IN ('not sent','sent-unknown','confirmed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    check_after INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO notion_delivery(action_id,state)
+    SELECT id,CASE WHEN state='succeeded' THEN 'confirmed' WHEN state IN ('executing','unknown') THEN 'sent-unknown' ELSE 'not sent' END FROM actions WHERE kind='notion_publish';
+  CREATE TRIGGER notion_intent_after_insert AFTER INSERT ON actions WHEN NEW.kind='notion_publish'
+    BEGIN INSERT INTO notion_delivery(action_id,state) VALUES(NEW.id,'not sent'); END;
+  CREATE TRIGGER notion_confirm_after_update AFTER UPDATE OF state ON actions WHEN NEW.kind='notion_publish' AND NEW.state='succeeded'
+    BEGIN UPDATE notion_delivery SET state='confirmed' WHERE action_id=NEW.id; END;
+  CREATE INDEX notion_delivery_due ON notion_delivery(state, check_after);`,
 ] as const;

@@ -21,6 +21,10 @@ export class NotionMcpPublisher {
     const type = input.parentType ?? "page_id";
     const property = input.titleProperty ?? "title";
     if (
+      (input.markerPropertyId !== undefined &&
+        (type !== "data_source_id" ||
+          !uuid.test(input.markerPropertyId) ||
+          property === "Amun publication ID")) ||
       !uuid.test(input.parentId) ||
       !["page_id", "data_source_id"].includes(type) ||
       !property.trim() ||
@@ -42,7 +46,15 @@ export class NotionMcpPublisher {
             ? { page_id: input.parentId }
             : { data_source_id: input.parentId },
         pages: [
-          { properties: { [property]: input.title }, content: input.text },
+          {
+            properties: {
+              [property]: input.title,
+              ...(input.markerPropertyId
+                ? { "Amun publication ID": input.markerPropertyId }
+                : {}),
+            },
+            content: input.text,
+          },
         ],
         allow_async: false,
       },

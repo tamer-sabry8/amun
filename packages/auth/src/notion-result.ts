@@ -67,6 +67,7 @@ export interface NotionDestination {
   parentId: string;
   parentType: "page_id" | "data_source_id";
   titleProperty: string;
+  markerPropertyAvailable?: boolean;
 }
 function uuidFromReference(id: string) {
   const hex = id.replaceAll("-", "").toLowerCase();
@@ -144,5 +145,10 @@ export function notionDestination(
     parentId: sourceId,
     parentType: "data_source_id",
     titleProperty: titles[0]![0],
+    ...(["text", "rich_text"].includes(
+      value.schema["Amun publication ID"]?.type ?? "",
+    )
+      ? { markerPropertyAvailable: true }
+      : {}),
   };
 }

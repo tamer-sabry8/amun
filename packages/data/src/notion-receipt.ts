@@ -21,6 +21,7 @@ export function publication(
         ![
           "contentHash",
           "parentId",
+          "markerPropertyId",
           "parentType",
           "titleProperty",
           "text",
@@ -38,6 +39,9 @@ export function publication(
         !value.titleProperty.trim() ||
         value.titleProperty.length > 256 ||
         /[\0\r\n]/.test(value.titleProperty))) ||
+    (value.markerPropertyId !== undefined &&
+      (!uuid.test(value.markerPropertyId) ||
+        value.parentType !== "data_source_id")) ||
     typeof value.parentId !== "string" ||
     !uuid.test(value.parentId) ||
     typeof value.title !== "string" ||

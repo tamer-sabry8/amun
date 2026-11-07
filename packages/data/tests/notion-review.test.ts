@@ -39,7 +39,7 @@ it("requires the exact reviewed binding and executes only the selected conversat
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]![0]).toMatchObject({
       title: "Second",
-      text: "Second exact text",
+      text: selected.text,
       parentId: target.parentId,
     });
     await expect(
@@ -100,6 +100,77 @@ it("restores only verified publication receipts without executing another write"
     ).run();
     expect(reviews.receipts()).toEqual([]);
     expect(create).toHaveBeenCalledTimes(1);
+  } finally {
+    db.close();
+  }
+});
+
+it("binds the visible ID before sending and recovers a lost create reply with one create", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  try {
+    const create = vi.fn(async () => ({ state: "unknown" as const }));
+    const reviews = new NotionConversationReview(db, { create });
+    const review = reviews.prepare(
+      { title: "Repeat", text: "Approved" },
+      target,
+      "workspace",
+    );
+    expect(review.text).toBe("Approved\n\nAmun publication ID: " + review.id);
+    expect(reviews.deliveryState(review.id)).toBe("not sent");
+    await reviews.publish(review.id, review.binding);
+    expect(create.mock.calls).toHaveLength(1);
+    expect(reviews.deliveryState(review.id)).toBe("sent-unknown");
+    const reopened = new NotionConversationReview(db, { create });
+    expect(
+      await reopened.check(review.id, async () => {
+        throw Error("offline");
+      }),
+    ).toBe("blocked");
+    const check = vi.fn(async () => "22222222-2222-4222-8222-222222222222");
+    expect(await reopened.check(review.id, check)).toBe("wait");
+    expect(check).not.toHaveBeenCalled();
+    expect(
+      await reopened.check(
+        review.id,
+        check,
+        "https://www.notion.so/22222222222242228222222222222222",
+      ),
+    ).toBe("confirmed");
+    expect(reopened.deliveryState(review.id)).toBe("confirmed");
+    expect(reopened.receipts()).toHaveLength(1);
+    await expect(reopened.publish(review.id, review.binding)).rejects.toThrow();
+    expect(create.mock.calls).toHaveLength(1);
+  } finally {
+    db.close();
+  }
+});
+it("distinguishes offline preflight from disconnection during send and preserves property-based review", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  try {
+    let send = false;
+    const reviews = new NotionConversationReview(db, {
+      marksSendBoundary: true,
+      create: async (_input, context) => {
+        if (send) context.beforeSend();
+        throw Error("Offline");
+      },
+    });
+    for (const mode of [false, true]) {
+      send = mode;
+      const review = reviews.prepare(
+        { title: "Test", text: "Approved" },
+        { ...target, markerPropertyAvailable: true },
+        "workspace",
+      );
+      expect(review.markerPropertyId).toBe(review.id);
+      expect(review.text).toBe("Approved");
+      await reviews.publish(review.id, review.binding);
+      expect(reviews.deliveryState(review.id)).toBe(
+        send ? "sent-unknown" : "not sent",
+      );
+    }
   } finally {
     db.close();
   }

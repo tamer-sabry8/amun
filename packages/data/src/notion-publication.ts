@@ -13,9 +13,10 @@ export class NotionOutboxConnector implements Connector {
   constructor(
     private readonly db: Database.Database,
     private readonly publisher: {
+      marksSendBoundary?: true;
       create(
         input: NotionPublication,
-        context: { workspaceId: string },
+        context: { workspaceId: string; beforeSend(): void },
       ): Promise<import("../../connectors-notion/src/client.ts").NotionResult>;
     },
   ) {}
@@ -38,18 +39,34 @@ export class NotionOutboxConnector implements Connector {
     )
       throw Error("Publication already has a receipt");
     const revisions = stored.revisions as { workspaceId?: unknown };
+    const beforeSend = () => {
+      if (
+        this.db
+          .prepare(
+            "UPDATE notion_delivery SET state='sent-unknown' WHERE action_id=? AND state='not sent'",
+          )
+          .run(action.id).changes !== 1
+      )
+        throw Error("Create already attempted");
+    };
+    if (!this.publisher.marksSendBoundary) beforeSend();
     const result = await this.publisher.create(payload, {
+      beforeSend,
       workspaceId:
         typeof revisions?.workspaceId === "string" ? revisions.workspaceId : "",
     });
     if (result.state !== "created")
       throw Error("Publication outcome is unknown");
+    this.saveReceipt(stored, result.pageId);
+  }
+  saveReceipt(stored: StoredAction, pageId: string) {
+    const payload = publication(stored.payload);
     this.db
       .prepare("INSERT INTO workspace_settings(id,value_json) VALUES (?,?)")
       .run(
         receiptKey(stored.operationMarker),
         JSON.stringify({
-          pageId: result.pageId,
+          pageId,
           parentId: payload.parentId,
           contentHash: payload.contentHash,
           ...(payload.parentType ? { parentType: payload.parentType } : {}),
