@@ -57,6 +57,9 @@ function startService(): void {
               app.getAppPath(),
               "../../runtime/auth/node_modules/@napi-rs/keyring",
             ),
+        AMUN_FIRSTMATE_ARCHIVES: app.isPackaged
+          ? join(process.resourcesPath, "firstmate-archives")
+          : join(app.getAppPath(), ".runtime/firstmate-archives"),
         AMUN_WORKSPACE_ROOT: join(app.getPath("userData"), "workspace"),
         AMUN_DATABASE_MODULE: app.isPackaged
           ? join(process.resourcesPath, "database/node_modules/better-sqlite3")

@@ -1,3 +1,4 @@
+import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.ts";
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
 import { crewList } from "../../../packages/contracts/src/crew.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
@@ -383,6 +384,7 @@ process.parentPort?.on("message", (event) => {
     },
     (event) => port.postMessage(event),
   );
+  let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
@@ -494,6 +496,58 @@ process.parentPort?.on("message", (event) => {
       const nativeRequest = nativePiCommand.safeParse(message.data);
       if (nativeRequest.success && nativeRequest.data.action === "run") {
         const request = nativeRequest.data;
+        if (request.command === "firstmate-release") {
+          if (updatingFirstmate) {
+            sendNative(request.id, {
+              kind: "message",
+              text: "A Firstmate runtime operation is already in progress.",
+            });
+            return;
+          }
+          updatingFirstmate = true;
+          void (async () => {
+            try {
+              const releases = await FirstmateReleases.open(
+                workspaceRoot!,
+                process.env.AMUN_FIRSTMATE_ARCHIVES!,
+              );
+              let text: string;
+              switch (request.argument) {
+                case "status":
+                  text =
+                    "Selected Firstmate revision " +
+                    (await releases.selected()).commit;
+                  break;
+                case "rollback":
+                  text =
+                    "Restored Firstmate revision " +
+                    (await releases.rollback()).commit +
+                    " for new worktrees.";
+                  break;
+                case "prepare": {
+                  const prepared = await releases.prepare();
+                  text =
+                    "Prepared Firstmate " +
+                    prepared.revision +
+                    " at " +
+                    prepared.home;
+                  break;
+                }
+                default:
+                  throw Error("Invalid action");
+              }
+              sendNative(request.id, { kind: "message", text });
+            } catch {
+              sendNative(request.id, {
+                kind: "message",
+                text: "Firstmate release operation failed. Check the retained package and workspace.",
+              });
+            } finally {
+              updatingFirstmate = false;
+            }
+          })();
+          return;
+        }
         if (
           request.command === "hosting-save" ||
           (request.command === "mcp" &&

@@ -14,6 +14,7 @@ module.exports = {
     extraResource: [
       ".runtime/pi",
       ".runtime/firstmate",
+      ".runtime/firstmate-archives",
       ".runtime/terminal",
       ".runtime/database",
       ".runtime/auth",

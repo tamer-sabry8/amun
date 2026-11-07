@@ -1,11 +1,54 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { crewInventory, crewObserve, crewObservation } from "@amun/contracts";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  nativePiEvent,
+  crewInventory,
+  crewObserve,
+  crewObservation,
+} from "@amun/contracts";
 import { bridge } from "./bridge.ts";
 export function AgentsPanel() {
   const { generation, status } = useSyncExternalStore(
     bridge.subscribe,
     bridge.getSnapshot,
   );
+  const releaseRequest = useRef<string | null>(null);
+  const [releaseStatus, setReleaseStatus] = useState("");
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  function releaseAction(argument: "status" | "prepare" | "rollback") {
+    if (releaseRequest.current) return;
+    const id = crypto.randomUUID();
+    releaseRequest.current = id;
+    setReleaseBusy(true);
+    bridge.send({
+      version: 1,
+      kind: "native-pi",
+      action: "run",
+      command: "firstmate-release",
+      argument,
+      id,
+    });
+  }
+  useEffect(() => {
+    releaseRequest.current = null;
+    setReleaseStatus("");
+    setReleaseBusy(false);
+    if (status !== "Connected" || !generation) return;
+    const off = bridge.onEvent((value) => {
+      const event = nativePiEvent.safeParse(value);
+      if (
+        event.success &&
+        event.data.kind === "native-pi-result" &&
+        event.data.id === releaseRequest.current &&
+        event.data.result.kind === "message"
+      ) {
+        releaseRequest.current = null;
+        setReleaseBusy(false);
+        setReleaseStatus(event.data.result.text);
+      }
+    });
+    releaseAction("status");
+    return off;
+  }, [generation, status]);
   const [input, setInput] = useState("");
   const [selection, select] = useState<{ id: string } | null>(null);
   const [answer, setAnswer] = useState<{
@@ -51,6 +94,28 @@ export function AgentsPanel() {
   return (
     <section aria-label="Workers">
       <h2>Workers</h2>
+      <section aria-label="Firstmate runtime">
+        <h3>Firstmate runtime</h3>
+        <p>
+          Choose the revision for new Amun worktrees. Existing workers keep
+          their revision.
+        </p>
+        <button
+          disabled={status !== "Connected" || releaseBusy}
+          onClick={() => releaseAction("prepare")}
+        >
+          Prepare Firstmate worktree
+        </button>
+        <button
+          disabled={status !== "Connected" || releaseBusy}
+          onClick={() => releaseAction("rollback")}
+        >
+          Roll back to previous Firstmate
+        </button>
+        <p role="status" aria-live="polite">
+          {releaseBusy ? "Checking Firstmate runtime…" : releaseStatus}
+        </p>
+      </section>
       {inventory &&
         inventory.generation === generation &&
         status === "Connected" &&

@@ -32,3 +32,9 @@ A controlled comparison of the same Claude launcher and isolated profile returne
 Both workers dispatched from the exact candidate and returned the requested sum in independent assistant messages. Claude returned “Six hundred fifty-one.” Codex returned “Six hundred and fifty-one.” Both original process IDs, start times, scoped terminal identities and one-worker counts survived all ten service restarts in packaged Amun. Missing receipts returned unknown. No promotion or personal fleet restart was performed. The proof-only Herdr reader is separate from normal persistent crew dispatch.
 
 The packaged suite passed 22 tests and skipped its development-only test. The unit suite passed 423 tests. Line coverage was 97.27% in the domain package and 96.72% in governance. The bridge and recovery implementation was committed in `18a7ddd`.
+
+## Promotion and rollback
+
+The owner approved the exact candidate after a passing rollback gate. A separate trial package carried the two verified archives while the active repository manifest still named the old release. The native Agents screen prepared a candidate Git worktree. One click selected the previous pin. After app restart the same workspace prepared another Git worktree from that retained archive. The test compared each worktree’s Herdr backend with its respective archive and rechecked the first worktree after rollback. The two worktrees had separate Git metadata. Corrupt archive, malformed selection and symlink tests failed closed.
+
+After the 15-second packaged test passed, the manifest was promoted to `bf05a4fcd69b8bb27f261177eac4abb57f98aa1b`. The previous manifest and verified archive remain available for offline rollback. Future candidates require fresh staging and owner approval. Running sessions are never upgraded in place.
