@@ -18,6 +18,7 @@ export const nativeCommandNames = [
   "export",
   "share",
   "bug",
+  "debug",
   "compact",
   "import",
   "reload",

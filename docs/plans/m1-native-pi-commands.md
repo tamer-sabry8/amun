@@ -70,3 +70,7 @@ Pi's Control+L binding opens the native model picker from the conversation. Cont
 ## Amun-owned templates and skills
 
 Source and packaged Pi sessions discovered private prompt templates and skills and expanded each into an editable draft in the originating conversation. The pinned SDK supplies the loaded resource catalog. Executable extensions and operational Firstmate skills remain open.
+
+## Native diagnostics
+
+The pinned terminal implementation of `/debug` writes terminal render lines and raw session messages. The native command opens a local JSONL export review containing the active session identity, Pi version, model, streaming state, redacted conversation text and count of omitted entries. Saving uses the existing native file chooser. The source and arm64 package passed the real-session journey after the original missing-command regression.

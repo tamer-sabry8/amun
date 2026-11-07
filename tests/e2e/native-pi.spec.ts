@@ -372,6 +372,19 @@ test("native Pi commands create an owned SDK session and update its real name", 
       page.getByLabel("Export review document", { exact: true }),
     ).not.toHaveValue(/BUG_REPORT_CANARY/);
     await page
+      .getByLabel("Native Pi command", { exact: true })
+      .selectOption("debug", { timeout: 3000 });
+    await page.getByLabel("Command argument", { exact: true }).fill("");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    const diagnostic = page.getByLabel("Export review document", {
+      exact: true,
+    });
+    await expect(diagnostic).toHaveValue(/amun-native-pi-debug/);
+    await expect(diagnostic).toHaveValue(/Native clipboard acceptance/);
+    await expect(diagnostic).not.toHaveValue(/BUG_REPORT_CANARY/);
+    await page
       .getByRole("button", { name: "Read active conversation", exact: true })
       .click();
     await expect(

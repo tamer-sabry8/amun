@@ -376,6 +376,7 @@ process.stdin.on("data", (chunk: string) => {
             "conversation-send",
             "resource-draft",
             "bug",
+            "debug",
           ].includes(command.command)
         ) {
           const redactor = new Redactor();
@@ -428,6 +429,31 @@ process.stdin.on("data", (chunk: string) => {
               ? session.model.provider + "/" + session.model.id
               : null,
           );
+          if (command.command === "debug") {
+            if (command.argument.trim())
+              throw Error("Unexpected debug argument");
+            const text =
+              JSON.stringify({
+                type: "amun-native-pi-debug",
+                schemaVersion: 1,
+                piVersion,
+                sessionId: view.sessionId,
+                model: view.model && redactor.text(view.model),
+                streaming: session.isStreaming,
+                title: view.title,
+                omittedItems: view.omittedItems,
+                transcript: view.text,
+              }) + "\n";
+            if (Buffer.byteLength(text) > 524288)
+              throw Error("Diagnostic exceeds review limit");
+            send(command.id, {
+              kind: "export",
+              format: "jsonl",
+              text,
+              review: text,
+            });
+            return;
+          }
           let resourceDraft: string | undefined;
           if (command.command === "resource-draft") {
             const input = JSON.parse(command.argument);
