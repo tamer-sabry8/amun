@@ -64,6 +64,8 @@ it("keeps an uncertain result unknown and never repeats it after a lost response
     expect(await reviews.publish(item.id, item.binding)).toBe("unknown");
     await expect(reviews.publish(item.id, item.binding)).rejects.toThrow();
     expect(create).toHaveBeenCalledTimes(1);
+    expect(reviews.unconfirmed()).toEqual([{ id: item.id, title: "Test" }]);
+    expect(reviews.receipts()).toEqual([]);
   } finally {
     db.close();
   }

@@ -24,6 +24,13 @@ export class NotionConversationReview {
     this.store = new ActionStore(db);
     this.connector = new NotionOutboxConnector(db, publisher);
   }
+  unconfirmed(): { id: string; title: string }[] {
+    return this.db
+      .prepare(
+        "SELECT id,json_extract(payload_json,'$.title') AS title FROM actions WHERE kind='notion_publish' AND state='unknown' AND json_type(payload_json,'$.title')='text' AND length(json_extract(payload_json,'$.title')) BETWEEN 1 AND 256 ORDER BY rowid DESC LIMIT 50",
+      )
+      .all() as { id: string; title: string }[];
+  }
   receipts() {
     const rows = this.db
       .prepare(

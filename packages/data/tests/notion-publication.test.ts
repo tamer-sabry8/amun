@@ -71,6 +71,7 @@ it("never retries a write with an uncertain result, including after service reco
     store.approve(draft.id, "user");
     await dispatchOne(store, connector);
     store.recover();
+    expect(store.read(draft.id).state).toBe("unknown");
     await dispatchOne(store, connector);
     expect(store.read(draft.id).state).toBe("unknown");
     expect(send).toHaveBeenCalledTimes(1);
@@ -95,6 +96,7 @@ it("recovers a persisted receipt after interruption without repeating creation",
     const claimed = store.claim("notion_publish")!;
     await connector.execute(claimed);
     store.recover();
+    expect(store.read(draft.id).state).toBe("succeeded");
     await dispatchOne(
       store,
       new NotionOutboxConnector(db, new NotionPublisher(send)),

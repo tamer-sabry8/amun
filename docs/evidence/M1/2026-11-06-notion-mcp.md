@@ -67,3 +67,9 @@ Validation: full checks passed 375 tests before one additional contract test; th
 Live packaged disconnect then succeeded in the isolated M1 profile; a subsequent Test connection refused access. The user completed official Edge consent and packaged Amun then verified reconnection successfully. No new external publication or personal configuration change occurred. Remaining real refresh/error/lifecycle acceptance is not silently waived.
 
 Final pre-commit checks passed 376 tests, lint, types and formatting (`/tmp/amun-m1-followups-final-check.log`).
+
+## 7 November · Interrupted publication recovery
+
+A source Electron regression first observed the action and outbox both stuck at unknown after service restart despite a matching saved page receipt. Startup now validates the receipt against the action marker, approved payload hash and destination before completing both records atomically. A separate interrupted create with no receipt remained unknown in the same launch. Conversations showed its title under Unconfirmed publications and showed the confirmed page URL for the recovered action.
+
+All 424 unit tests and the three relevant Electron journeys in each of the source and packaged builds passed. The interruption test used a real SQLite file with a fixture create response. It made no Notion write. Recovery when the remote response never reaches the service remains open.

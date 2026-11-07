@@ -384,6 +384,20 @@ export function NativePiPanel({
         {result?.kind === "publication-receipts" ? (
           <section aria-label="Published conversations">
             <h4>Published conversations</h4>
+            {result.unconfirmed.length > 0 && (
+              <section aria-label="Unconfirmed publications">
+                <h5>Unconfirmed publications</h5>
+                <p>
+                  Check the destination in Notion before sharing these
+                  conversations again. Amun has no confirmed page receipt.
+                </p>
+                <ul>
+                  {result.unconfirmed.map((item) => (
+                    <li key={item.id}>{item.title}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <p>
               Latest 50 verified receipts from this workspace. Reading receipts
               does not publish again.

@@ -67,6 +67,10 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("publication-receipts"),
+    unconfirmed: z
+      .array(z.strictObject({ id: z.uuid(), title: z.string().max(256) }))
+      .max(50)
+      .default([]),
     pages: z
       .array(
         z.strictObject({

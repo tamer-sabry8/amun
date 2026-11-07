@@ -1,3 +1,5 @@
+import { ActionStore } from "../../packages/data/src/outbox.ts";
+import { NotionOutboxConnector } from "../../packages/data/src/notion-publication.ts";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtempSync, mkdirSync, chmodSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -102,6 +104,90 @@ test("conversation sharing is outside model settings", async () => {
     await expect(
       page.getByRole("button", { name: "Sign in to Codex CLI", exact: true }),
     ).toHaveCount(0);
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("service restart reconciles interrupted Notion creates only with matching receipts", async () => {
+  const root = mkdtempSync(join(tmpdir(), "amun-notion-recovery-"));
+  const directory = join(root, "workspace");
+  mkdirSync(directory, { mode: 0o700 });
+  const file = join(directory, "workspace.sqlite");
+  const seed = new Database(file);
+  migrate(seed);
+  const store = new ActionStore(seed);
+  const publisher = {
+    create: async () => ({
+      state: "created" as const,
+      pageId: "22222222-2222-4222-8222-222222222222",
+    }),
+  };
+  const connector = new NotionOutboxConnector(seed, publisher);
+  const reviews = new NotionConversationReview(seed, publisher);
+  const ids: string[] = [];
+  for (const title of ["Missing receipt", "Saved receipt"]) {
+    const proposal = reviews.prepare(
+      { title, text: "Reviewed fixture" },
+      {
+        title: "Documents",
+        parentId: "11111111-1111-4111-8111-111111111111",
+        parentType: "page_id",
+        titleProperty: "title",
+      },
+      "workspace",
+    );
+    ids.push(proposal.id);
+    store.approve(proposal.id, "user");
+    const claimed = store.claim("notion_publish", proposal.id)!;
+    if (title === "Saved receipt") await connector.execute(claimed);
+  }
+  seed.close();
+  chmodSync(file, 0o600);
+  const app = await electron.launch({
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--user-data-dir=" + root,
+    ],
+    ...(process.env.AMUN_PACKAGED_PATH
+      ? { executablePath: process.env.AMUN_PACKAGED_PATH }
+      : {}),
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(page.locator("#service-status")).toHaveText("Connected");
+    await page
+      .getByRole("button", { name: "Open conversations", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Open Pi commands", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Published conversations", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Unconfirmed publications" }),
+    ).toContainText("Missing receipt");
+    await expect(
+      page.getByLabel("Notion page URL for Saved receipt"),
+    ).toHaveValue("https://www.notion.so/22222222222242228222222222222222");
+    const verify = new Database(file, { readonly: true });
+    try {
+      const read = verify.prepare(
+        "SELECT a.state AS action,o.state AS delivery FROM actions a JOIN outbox o ON a.id=o.action_id WHERE a.id=?",
+      );
+      expect(read.get(ids[0])).toEqual({
+        action: "unknown",
+        delivery: "unknown",
+      });
+      expect(read.get(ids[1])).toEqual({
+        action: "succeeded",
+        delivery: "succeeded",
+      });
+    } finally {
+      verify.close();
+    }
   } finally {
     await app.close();
     rmSync(root, { recursive: true, force: true });

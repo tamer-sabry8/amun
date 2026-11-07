@@ -1,3 +1,4 @@
+import { readNotionReceipt } from "./notion-receipt.ts";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import {
@@ -212,6 +213,15 @@ export class ActionStore {
             "UPDATE outbox SET state='unknown',last_error='Service interrupted before acknowledgement' WHERE state='executing'",
           )
           .run();
+        const interrupted = this.db
+          .prepare(
+            "SELECT a.id,a.operation_marker FROM actions a JOIN outbox o ON o.action_id=a.id WHERE a.kind='notion_publish' AND a.state='unknown' AND o.state='unknown'",
+          )
+          .all() as { id: string; operation_marker: string }[];
+        for (const action of interrupted) {
+          if (readNotionReceipt(this.db, action.operation_marker))
+            this.finish(action.id, "succeeded");
+        }
       })
       .immediate();
   }

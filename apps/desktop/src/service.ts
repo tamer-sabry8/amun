@@ -815,6 +815,10 @@ process.parentPort?.on("message", (event) => {
           if (command.command === "notion-receipts") {
             sendNative(command.id, {
               kind: "publication-receipts",
+              unconfirmed: notionReviews.unconfirmed().map((item) => ({
+                ...item,
+                title: redactor.text(item.title).slice(0, 256),
+              })),
               pages: notionReviews
                 .receipts()
                 .map((page) => ({ ...page, title: redactor.text(page.title) })),
