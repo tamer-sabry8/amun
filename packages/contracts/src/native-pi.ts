@@ -18,6 +18,25 @@ export const nativePiCommand = z.discriminatedUnion("action", [
   z.strictObject({ ...base, action: z.literal("abort-turn"), id }),
   z.strictObject({ ...base, action: z.literal("close") }),
 ]);
+export const captainShellRequest = z.strictObject({
+  sessionId: z.uuid(),
+  command: z.string().min(1).max(8192),
+  excludeFromContext: z.boolean(),
+});
+export const textAttachmentRequest = z.strictObject({
+  sessionId: z.uuid(),
+  draft: z.string().max(12000),
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((name) => !/[\/\\\p{Cc}\p{Cf}]/u.test(name)),
+  content: z
+    .string()
+    .min(1)
+    .max(12000)
+    .refine((text) => !/[\p{Cc}]/u.test(text.replace(/[\r\n\t]/g, ""))),
+});
 export const nativeTurnRequest = z.strictObject({
   sessionId: z.uuid(),
   model: z.string().min(1).max(512),

@@ -54,6 +54,19 @@ test("owned Pi template and skill commands expand into an editable draft", async
     await expect(draft).toHaveValue(
       /Summarize the supplied decision[.][\s\S]*Keep it short[.]/,
     );
+    await draft.fill("Review the decision @");
+    const attachment = join(root, "decision.txt");
+    await writeFile(
+      attachment,
+      "Choose the pilot. password=AMUN_ATTACHMENT_CANARY",
+    );
+    const picker = page.waitForEvent("filechooser");
+    await button("Attach text file").click({ timeout: 2000 });
+    await (await picker).setFiles(attachment);
+    await expect(draft).toHaveValue(
+      /Review the decision[\s\S]*decision.txt[\s\S]*Choose the pilot[\s\S]*REDACTED/,
+    );
+    expect(await draft.inputValue()).not.toContain("AMUN_ATTACHMENT_CANARY");
     await draft.fill("/unknown-resource");
     await expect(button("Send message")).toBeDisabled();
     await draft.fill("Private unsent text for the original conversation");

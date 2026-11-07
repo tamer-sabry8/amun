@@ -68,9 +68,8 @@ export async function verifyDisposableWorker(
     submitted = false;
   let state = "starting";
   for (let attempt = 0; attempt < 155; attempt++) {
-    const screen = (await tmux(["capture-pane", "-p", "-t", pane]))
-      .toLowerCase()
-      .replace(/\s+/g, " ");
+    const paneText = await tmux(["capture-pane", "-p", "-t", pane]);
+    const screen = paneText.toLowerCase().replace(/\s+/g, " ");
     if (submitted && /seven hundred(?: and)? thirty[- ]four/.test(screen))
       return;
     if (
@@ -110,10 +109,8 @@ export async function verifyDisposableWorker(
       !/hooks need review|yes, i trust|trust and continue/.test(screen) &&
       (/for shortcuts|for help|how can i help|gpt-[0-9].* · /.test(screen) ||
         (harness === "claude" &&
-          screen.includes("claude code") &&
           screen.includes("auto mode on") &&
-          screen.includes("❯") &&
-          !screen.includes("esc to interrupt")))
+          /^\s*❯\s*$/m.test(paneText)))
     ) {
       await check();
       await tmux([

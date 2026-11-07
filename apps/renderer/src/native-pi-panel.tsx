@@ -44,11 +44,14 @@ export function NativePiPanel({
   const resources =
     result?.kind === "conversation" ? (result.resources ?? []) : [];
   const slash = composerCommand(draft);
+  const shellPrefix = /^(!{1,2})(?![!])([\s\S]*)$/.exec(draft.trim());
   const resourceMatch = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(draft.trim());
   const resource =
     !slash && resourceMatch && resources.includes(resourceMatch[1]!)
       ? resourceMatch[1]
       : undefined;
+  const attachmentPicker = useRef<HTMLInputElement>(null);
+  const [attachmentError, setAttachmentError] = useState("");
   const importFile = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
@@ -532,10 +535,56 @@ export function NativePiPanel({
                 aria-label="Conversation message"
                 value={draft}
                 maxLength={12000}
-                disabled={sending}
+                disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
               />
             </label>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setAttachmentError("");
+                attachmentPicker.current?.click();
+              }}
+            >
+              Attach text file
+            </button>
+            <input
+              type="file"
+              hidden
+              ref={attachmentPicker}
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file || busy) return;
+                setBusy(true);
+                try {
+                  if (file.size > 12000 || !file.size) throw Error();
+                  const content = new TextDecoder("utf-8", {
+                    fatal: true,
+                  }).decode(await file.arrayBuffer());
+                  const payload = JSON.stringify({
+                    sessionId: result.sessionId,
+                    draft,
+                    name: file.name,
+                    content,
+                  });
+                  if (
+                    payload.length > 16384 ||
+                    draft.length + file.name.length + content.length + 18 >
+                      12000
+                  )
+                    throw Error();
+                  run(payload, "attach-text");
+                } catch {
+                  setBusy(false);
+                  setAttachmentError(
+                    "Choose a UTF-8 text file that fits in the 12,000-character conversation draft.",
+                  );
+                }
+              }}
+            />
+            {attachmentError && <p role="status">{attachmentError}</p>}
             {draft.trim() === "/" && (
               <label>
                 Choose a slash command
@@ -564,18 +613,32 @@ export function NativePiPanel({
               type="button"
               disabled={
                 busy ||
-                (!slash &&
-                  !resource &&
-                  (!result.model ||
-                    !draft.trim() ||
-                    /^[!/]/.test(draft.trimStart()) ||
-                    JSON.stringify({
-                      sessionId: result.sessionId,
-                      model: result.model,
-                      text: draft,
-                    }).length > 16384))
+                (shellPrefix
+                  ? !shellPrefix[2]!.trim() || shellPrefix[2]!.length > 8192
+                  : !slash &&
+                    !resource &&
+                    (!result.model ||
+                      !draft.trim() ||
+                      /^[!/]/.test(draft.trimStart()) ||
+                      JSON.stringify({
+                        sessionId: result.sessionId,
+                        model: result.model,
+                        text: draft,
+                      }).length > 16384))
               }
               onClick={() => {
+                if (shellPrefix) {
+                  run(
+                    JSON.stringify({
+                      sessionId: result.sessionId,
+                      command: shellPrefix[2]!.trim(),
+                      excludeFromContext: shellPrefix[1] === "!!",
+                    }),
+                    "captain-shell",
+                  );
+                  setDraft("");
+                  return;
+                }
                 if (resource) {
                   run(
                     JSON.stringify({
@@ -609,11 +672,15 @@ export function NativePiPanel({
                 setDraft("");
               }}
             >
-              {resource
-                ? "Apply /" + resource
-                : slash
-                  ? "Run /" + slash.name
-                  : "Send message"}
+              {shellPrefix
+                ? shellPrefix[1] === "!!"
+                  ? "Run shell without model context"
+                  : "Run shell with model context"
+                : resource
+                  ? "Apply /" + resource
+                  : slash
+                    ? "Run /" + slash.name
+                    : "Send message"}
             </button>
             {sending && (
               <button
@@ -633,7 +700,7 @@ export function NativePiPanel({
             )}
             <p>
               Send uses the displayed model. Use the command selector for slash
-              commands. No shell or external tools run here.
+              commands. Shell commands run with your Mac account permissions.
             </p>
             <p>
               Text view only. {result.omittedItems} non-text or internal entries

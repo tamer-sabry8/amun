@@ -1,4 +1,8 @@
 import {
+  runCaptainShell,
+  type ShellResult,
+} from "../../../packages/crew/src/native-shell.ts";
+import {
   resourceDirectories,
   resourceNames,
   expandResource,
@@ -58,6 +62,8 @@ import { mkdir, lstat, realpath, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import {
   nativePiCommand,
+  textAttachmentRequest,
+  captainShellRequest,
   nativePiEvent,
 } from "../../../packages/contracts/src/native-pi.ts";
 import {
@@ -80,6 +86,11 @@ type Runtime = NativeSessionRuntime & {
       modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
       sessionManager: { getBranch(): unknown[] };
       sessionId: string;
+      recordBashResult(
+        command: string,
+        result: ShellResult,
+        options: { excludeFromContext: boolean },
+      ): void;
     };
   importFromJsonl(
     path: string,
@@ -375,6 +386,8 @@ process.stdin.on("data", (chunk: string) => {
             "conversation",
             "conversation-send",
             "resource-draft",
+            "attach-text",
+            "captain-shell",
             "bug",
             "debug",
           ].includes(command.command)
@@ -389,6 +402,39 @@ process.stdin.on("data", (chunk: string) => {
               redactor,
               readCredential!(info.providerId, privateAuthPath!),
             );
+          if (command.command === "captain-shell") {
+            const input = captainShellRequest.parse(
+              JSON.parse(command.argument),
+            );
+            const session = runtime!.session;
+            if (session.isStreaming || input.sessionId !== session.sessionId)
+              throw Error("Shell session changed");
+            const cwd = join(dirname(root!), "pi-workspace");
+            await privateDirectory(cwd);
+            const shell = await workerOperation.run((signal) =>
+              runCaptainShell(input.command, cwd, signal),
+            );
+            shell.output = redactor.text(shell.output);
+            session.recordBashResult(redactor.text(input.command), shell, {
+              excludeFromContext: input.excludeFromContext,
+            });
+            send(command.id, {
+              kind: "message",
+              text: [
+                input.excludeFromContext
+                  ? "Excluded from Pi model context"
+                  : "Included in Pi model context",
+                shell.cancelled
+                  ? "Command stopped"
+                  : "Exit " + (shell.exitCode ?? "unknown"),
+                shell.output,
+                shell.truncated ? "Output truncated at 64 KiB." : "",
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            });
+            return;
+          }
           if (command.command === "bug") {
             const model = runtime!.session.model;
             send(
@@ -455,6 +501,21 @@ process.stdin.on("data", (chunk: string) => {
             return;
           }
           let resourceDraft: string | undefined;
+          if (command.command === "attach-text") {
+            const input = textAttachmentRequest.parse(
+              JSON.parse(command.argument),
+            );
+            if (input.sessionId !== session.sessionId || session.isStreaming)
+              throw Error("Attachment session changed");
+            const prefix = input.draft.replace(/(^|\s)@$/, "$1").trimEnd();
+            resourceDraft = redactor.text(
+              [prefix, "Attached file: " + input.name + "\n" + input.content]
+                .filter(Boolean)
+                .join("\n\n"),
+            );
+            if (resourceDraft.length > 12000)
+              throw Error("Attachment exceeds conversation draft limit");
+          }
           if (command.command === "resource-draft") {
             const input = JSON.parse(command.argument);
             if (

@@ -78,3 +78,7 @@ The pinned terminal implementation of `/debug` writes terminal render lines and 
 ## Native crew bearings
 
 The Conversations picker and typed `/bearings` or `/skill:bearings` use the current workspace's persistent primary worktree and the retained revision. The native digest projects the pinned snapshot into Captain’s Call, Recently Landed, Underway, and Charted Next. Plain mode leaves the dated report alone. File mode atomically replaces the daily report in that worktree. Explicit `include PRs` requests upstream discovery and displays its coverage. The real disposable crew used for acceptance had no associated GitHub repositories. Interactive board mode is still open.
+
+## Native conversation files and shell
+
+The captain can use the system file picker to add bounded UTF-8 text to the active session's editable draft. The service checks session identity and redacts the draft before display. Native `!` and `!!` run only after the captain clicks the labeled shell action. The owner selected ordinary Mac account permissions. The shell starts in the Pi workspace with the account's login shell and home. Amun bounds the captured output and redacts both command and output before calling Pi's session history API. A real external-file acceptance test checked the two recorded bash entries with the pinned SDK's model-context conversion. Only the `!` entry reached that conversion's output.
