@@ -81,3 +81,23 @@ it("lists only validated owned task IDs in a private receipt directory", async (
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it("rejects a receipt exceeding the reader limit before reserving its task ID", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-receipt-size-")),
+  );
+  const path = "/" + "a".repeat(4000);
+  try {
+    await expect(
+      saveEndpointReceipt(root, {
+        ...receipt,
+        home: path,
+        identity: { ...receipt.identity, worktree: path },
+      }),
+    ).rejects.toThrow("Oversized");
+    await saveEndpointReceipt(root, receipt);
+    expect(await loadEndpointReceipt(root, "proof-1")).toEqual(receipt);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
