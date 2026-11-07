@@ -1,3 +1,4 @@
+import { notionRead } from "./notion-read-backoff.ts";
 import { NotionMcpPublisher } from "../../connectors-notion/src/mcp-publication.ts";
 import type {
   NotionPublication,
@@ -87,10 +88,12 @@ async function verifyMcp(
     const tools = await client.listTools();
     if (!tools.tools.some((tool) => tool.name === "notion-get-self"))
       throw Error("Notion identity tool unavailable");
-    const result = await client.callTool({
-      name: "notion-get-self",
-      arguments: {},
-    });
+    const result = await notionRead("notion-get-self", () =>
+      client.callTool({
+        name: "notion-get-self",
+        arguments: {},
+      }),
+    );
     const identity = notionIdentity(result);
     onIdentity?.(identity);
     if (publication) {
@@ -116,10 +119,12 @@ async function verifyMcp(
         !tools.tools.some((tool) => tool.name === "notion-fetch")
       )
         throw Error("Notion destination read unavailable");
-      const fetched = await client.callTool({
-        name: "notion-fetch",
-        arguments: { id: notionTargetReference(target) },
-      });
+      const fetched = await notionRead("notion-fetch", () =>
+        client.callTool({
+          name: "notion-fetch",
+          arguments: { id: notionTargetReference(target) },
+        }),
+      );
       onTarget?.(notionDestination(fetched, notionTargetReference(target)));
     }
   } finally {
