@@ -108,6 +108,18 @@ export function NativePiPanel({
     [],
   );
   // Navigation does not own the service session. Explicit /quit or service shutdown closes it.
+  const copyText = (text: string) => {
+    const id = crypto.randomUUID();
+    copyPending.current = id;
+    setCopyStatus("Copying…");
+    window.postMessage(
+      {
+        kind: "amun-pi-clipboard-command",
+        command: { action: "copy", id, text },
+      },
+      "*",
+    );
+  };
   const run = (value = argument, selectedCommand = command) => {
     if (selectedCommand === "login") {
       try {
@@ -139,6 +151,7 @@ export function NativePiPanel({
     setBusy(true);
     setSending(selectedCommand === "conversation-send");
     if (
+      !(selectedCommand === "mcp" && result?.kind === "github-device") &&
       selectedCommand !== "conversation-send" &&
       (selectedCommand !== "settings" || result?.kind !== "preferences")
     )
@@ -479,6 +492,37 @@ export function NativePiPanel({
               omitted. Secrets are redacted.
             </p>
           </section>
+        ) : result?.kind === "github-device" ? (
+          <section aria-label="GitHub device sign-in">
+            <h3>GitHub device code</h3>
+            <label>
+              Code to enter in Edge
+              <input
+                autoFocus
+                aria-label="GitHub device code"
+                value={result.code}
+                readOnly
+                onFocus={(e) => e.currentTarget.select()}
+              />
+            </label>
+            <p>
+              Copy this code, then open Microsoft Edge and paste it on GitHub’s
+              device verification page.
+            </p>
+            <button onClick={() => copyText(result.code)}>
+              Copy device code
+            </button>
+            <span role="status">{copyStatus}</span>
+            <button disabled={busy} onClick={() => run("github-open", "mcp")}>
+              Open Microsoft Edge
+            </button>
+            <button disabled={busy} onClick={() => run("github-finish", "mcp")}>
+              Check GitHub authorization
+            </button>
+            <button disabled={busy} onClick={() => run("github-cancel", "mcp")}>
+              Cancel GitHub sign-in
+            </button>
+          </section>
         ) : result?.kind === "choices" ? (
           <>
             <h4>{result.title}</h4>
@@ -708,20 +752,7 @@ export function NativePiPanel({
                 (result.kind === "copy" ? "No assistant reply to copy" : "")}
             </p>
             {result.kind === "copy" && result.text ? (
-              <button
-                onClick={() => {
-                  const id = crypto.randomUUID();
-                  copyPending.current = id;
-                  setCopyStatus("Copying…");
-                  window.postMessage(
-                    {
-                      kind: "amun-pi-clipboard-command",
-                      command: { action: "copy", id, text: result.text },
-                    },
-                    "*",
-                  );
-                }}
-              >
+              <button onClick={() => copyText(result.text)}>
                 Copy reply to clipboard
               </button>
             ) : null}

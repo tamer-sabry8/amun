@@ -61,17 +61,21 @@ export class GithubDeviceLogin {
     this.generation++;
     this.pending = undefined;
   }
+  async openBrowser() {
+    if (!this.pending || this.now() >= this.pending.expires)
+      throw Error("Code expired");
+    await this.open();
+  }
   async start() {
-    if (this.busy || (this.pending && this.pending.expires > this.now()))
-      throw Error("Sign-in already active");
+    if (this.pending && this.pending.expires > this.now())
+      return this.pending.userCode;
+    if (this.busy) throw Error("Sign-in already active");
     const generation = ++this.generation;
     this.busy = true;
     try {
       const d = challengeSchema.parse(
         await this.post("/login/device/code", { scope: "public_repo" }),
       );
-      if (generation !== this.generation) throw Error("Cancelled");
-      await this.open();
       if (generation !== this.generation) throw Error("Cancelled");
       const interval = d.interval * 1000;
       this.pending = {

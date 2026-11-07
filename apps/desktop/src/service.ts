@@ -459,6 +459,7 @@ process.parentPort?.on("message", (event) => {
         nativeRequest.data.command === "mcp" &&
         [
           "github-connect",
+          "github-open",
           "github-finish",
           "github-cancel",
           "github-read",
@@ -466,19 +467,19 @@ process.parentPort?.on("message", (event) => {
       ) {
         const cmd = nativeRequest.data;
         void (async () => {
-          const pending = (title: string) =>
+          const showCode = () =>
             sendNative(cmd.id, {
-              kind: "choices",
-              title,
-              choices: [
-                { id: "github-finish", label: "Check GitHub authorization" },
-                { id: "github-cancel", label: "Cancel GitHub sign-in" },
-              ],
+              kind: "github-device",
+              code: githubLogin.userCode!,
             });
           if (cmd.argument === "github-connect") {
-            pending(
-              "Enter " + (await githubLogin.start()) + " in Microsoft Edge.",
-            );
+            await githubLogin.start();
+            showCode();
+            return;
+          }
+          if (cmd.argument === "github-open") {
+            await githubLogin.openBrowser();
+            showCode();
             return;
           }
           if (cmd.argument === "github-cancel") {
@@ -493,11 +494,7 @@ process.parentPort?.on("message", (event) => {
             cmd.argument === "github-finish" &&
             (await githubLogin.check()) === "pending"
           ) {
-            pending(
-              "Enter " +
-                githubLogin.userCode +
-                " in Microsoft Edge, then check authorization.",
-            );
+            showCode();
             return;
           }
           const stored = authKeyring().get(githubAccount);

@@ -35,6 +35,10 @@ export const notionApprovalRequest = z.strictObject({
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("github-device"),
+    code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/),
+  }),
+  z.strictObject({
     kind: z.literal("publication-receipts"),
     pages: z
       .array(

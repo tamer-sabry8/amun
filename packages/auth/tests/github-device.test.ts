@@ -34,6 +34,10 @@ it("shows only the user code, opens the trusted page, and saves a scoped token o
     },
   ]);
   expect(await s.login.start()).toBe(challenge.user_code);
+  expect(s.open).not.toHaveBeenCalled();
+  expect(await s.login.start()).toBe(challenge.user_code);
+  expect(s.post).toHaveBeenCalledTimes(1);
+  await s.login.openBrowser();
   expect(s.open).toHaveBeenCalledOnce();
   expect(await s.login.check()).toBe("pending");
   s.tick(5000);
@@ -61,4 +65,12 @@ it("refuses alternate sign-in pages, cancelled, expired, or excessive grants", a
     await expect(s.login.check()).rejects.toThrow();
     expect(s.save).not.toHaveBeenCalled();
   }
+});
+
+it("prevents opening Edge with a stale or cancelled code", async () => {
+  const s = setup([challenge]);
+  await s.login.start();
+  s.tick(901000);
+  await expect(s.login.openBrowser()).rejects.toThrow();
+  expect(s.open).not.toHaveBeenCalled();
 });
