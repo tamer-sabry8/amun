@@ -33,3 +33,7 @@ it("probes only the official GitHub endpoint, refuses redirects and distinguishe
     await nativeMcp("github", async () => new Response(null, { status: 403 })),
   ).toMatchObject({ text: expect.stringContaining("not verified") });
 });
+it("keeps Docker out of the M1 menu and refuses the deferred action", async () => {
+  expect(JSON.stringify(await nativeMcp(""))).not.toContain("Docker");
+  await expect(nativeMcp("docker")).rejects.toThrow();
+});

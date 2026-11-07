@@ -1,34 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { boundedMcpResponse } from "./notion-response.ts";
+import { publicMcpFetch } from "./public-mcp-fetch.ts";
 const endpoint = "https://docs.mcp.cloudflare.com/mcp";
-export async function docsFetch(
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-) {
-  const url = input instanceof Request ? input.url : String(input);
-  const headers = new Headers(init.headers);
-  if (
-    url !== endpoint ||
-    input instanceof Request ||
-    ["authorization", "cookie", "proxy-authorization"].some((key) =>
-      headers.has(key),
-    )
-  )
-    throw Error("Unsafe docs request");
-  return boundedMcpResponse(
-    await fetch(url, {
-      ...init,
-      headers,
-      redirect: "error",
-      credentials: "omit",
-      signal: AbortSignal.any([
-        AbortSignal.timeout(8000),
-        ...(init.signal ? [init.signal] : []),
-      ]),
-    }),
-  );
-}
+export const docsFetch = (input: RequestInfo | URL, init?: RequestInit) =>
+  publicMcpFetch(endpoint, fetch, input, init);
 export async function discoverCloudflareDocs(): Promise<string> {
   const c = new Client({ name: "amun", version: "0.1.0" });
   try {

@@ -1,3 +1,7 @@
+import {
+  googleMcpProduct,
+  discoverGoogleMcp,
+} from "../../../packages/auth/src/google-workspace-mcp.ts";
 import { discoverCloudflareDocs } from "../../../packages/auth/src/cloudflare-docs.ts";
 import { nativeMcp } from "../../../packages/crew/src/native-mcp.ts";
 import {
@@ -257,6 +261,14 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (command.command === "mcp") {
+          const google = googleMcpProduct(command.argument);
+          if (google) {
+            send(command.id, {
+              kind: "message",
+              text: await discoverGoogleMcp(google),
+            });
+            return;
+          }
           send(
             command.id,
             command.argument === "cloudflare"
