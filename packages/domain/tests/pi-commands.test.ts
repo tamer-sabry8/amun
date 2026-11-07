@@ -56,3 +56,16 @@ it("bounds input and discovery, preserves arguments without shell parsing and re
   ])
     expect(() => commandCatalog(value)).toThrow();
 });
+it("reserves the staged updater even when upstream supplies an update skill", async () => {
+  const actions = {
+    native: vi.fn(async () => undefined),
+    prompt: vi.fn(async () => undefined),
+  };
+  for (const name of ["updatefirstmate", "skill:updatefirstmate"])
+    await routePiInput("/" + name, [{ name, source: "skill" }], actions);
+  expect(actions.native.mock.calls).toEqual([
+    ["updatefirstmate", ""],
+    ["updatefirstmate", ""],
+  ]);
+  expect(actions.prompt).not.toHaveBeenCalled();
+});

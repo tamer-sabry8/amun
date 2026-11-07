@@ -60,3 +60,9 @@ Native `/bug` now prepares a redacted local report with exact review/save. No au
 ## Typed native commands and session branches
 
 The source and packaged Conversations view now accepts supported built-ins directly in the composer. A real sibling-branch fixture verified the native hierarchy, current entry and navigation. Dynamic resources, Firstmate skill execution and the live llama router gate remain open. [Tested revision and acceptance evidence](../evidence/M1/2026-11-07-agents-and-native-tree.md).
+
+## Firstmate update review and model selection
+
+Both `/updatefirstmate` and `/skill:updatefirstmate` in Conversations resolve the upstream main revision. The full promotion and rollback workflow remains open under T022h. [Candidate report](../evidence/M1/2026-11-07-firstmate-candidate.md).
+
+Pi's Control+L binding opens the native model picker from the conversation. Control+P and Control+Shift+P cycle models in opposite directions. Keyboard handling is scoped to the Pi panel and preserves input-method composition.

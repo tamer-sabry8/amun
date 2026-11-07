@@ -1,4 +1,8 @@
-import { composerCommand, nativeCommandNames } from "./composer-command.ts";
+import {
+  composerCommand,
+  nativeCommandNames,
+  piModelShortcut,
+} from "./composer-command.ts";
 import { HostingForm } from "./hosting-form.tsx";
 import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.ts";
 import { useEffect, useRef, useState } from "react";
@@ -230,15 +234,16 @@ export function NativePiPanel({
     <section
       aria-label="Pi commands"
       onKeyDown={(event) => {
-        if (
-          event.ctrlKey &&
-          !event.metaKey &&
-          !event.altKey &&
-          event.key.toLowerCase() === "p"
-        ) {
-          event.preventDefault();
-          if (!busy)
-            run(event.shiftKey ? "backward" : "forward", "cycle-model");
+        const shortcut = piModelShortcut(event.nativeEvent);
+        if (!shortcut) return;
+        event.preventDefault();
+        if (busy) return;
+        if (shortcut === "select") {
+          setCommand("model");
+          setArgument("");
+          run("", "model");
+        } else {
+          run(shortcut, "cycle-model");
         }
       }}
     >

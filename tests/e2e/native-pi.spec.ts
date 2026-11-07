@@ -309,6 +309,30 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .click();
     await page
       .getByLabel("Conversation message", { exact: true })
+      .fill("/skill:updatefirstmate --apply");
+    await page
+      .getByRole("button", { name: "Run /updatefirstmate", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Run /updatefirstmate without arguments",
+    );
+    await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await page
+      .getByLabel("Conversation message", { exact: true })
+      .press("Control+l");
+    await expect(
+      page.getByLabel("Native Pi command", { exact: true }),
+    ).toHaveValue("model", { timeout: 2000 });
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Select model",
+    );
+    await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await page
+      .getByLabel("Conversation message", { exact: true })
       .fill("/unsupported");
     await expect(
       page.getByRole("button", { name: "Send message", exact: true }),

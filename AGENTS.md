@@ -16,6 +16,12 @@ Treat installed versions as discoverable capabilities, not fixed assumptions. Re
 
 Bundled Pi/Firstmate/native dependencies remain reproducibly pinned and checksum-verified. Update those through reviewed dependency changes and relevant source/packaged acceptance; do not silently replace packaged resources. Permission to support updates does not expand M0 or authorize unrelated bulk upgrades.
 
+### Firstmate candidate, approval and rollback
+
+Resolve upstream Firstmate main to an exact commit for each requested update. Fetch into a disposable Amun-owned Git worktree, reapply the selected backend, crew dispatch, permission policy and skills overlay, and record conflicts. Run Pi RPC replay, the actual amun-bridge approval-gate suite, and a real Codex and Claude dispatch and recovery smoke in an isolated named Herdr session. This Herdr test is specific to the candidate. Preserve the user's personal fleet and verify the same workers after restart without spawning replacements.
+
+Report the commit, checksum, changes, overlay results and every gate. A missing or failed gate blocks promotion. Only explicit approval of the tested candidate can change the bundled pin. Retain the previous verified revision and checksum for one-click rollback. Never run the upstream update skill on an operational home or apply an update automatically.
+
 ## Sharing destinations
 
 The user selected Notion as Amun's R1 default for sharing conversations, PRDs, decisions and stakeholder updates (ADR-010). Disable Pi's native `/share`; never fall back to GitHub gist or Radius. Share to Notion requires an Amun connection, a user-chosen parent section, secret removal and exact-content review before a new page is published. Keep publishing blocked when prerequisites are missing. Transfrm.ai (GitHub/Cloudflare-hosted HTML/PDF) is R2 reference only.

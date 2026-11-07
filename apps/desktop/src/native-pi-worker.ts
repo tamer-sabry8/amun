@@ -3,6 +3,7 @@ import {
   discoverGoogleMcp,
 } from "../../../packages/auth/src/google-workspace-mcp.ts";
 import { discoverCloudflareDocs } from "../../../packages/auth/src/cloudflare-docs.ts";
+import { checkFirstmateCandidate } from "../../../packages/crew/src/firstmate-candidate.ts";
 import { nativeMcp } from "../../../packages/crew/src/native-mcp.ts";
 import {
   nativeTurn,
@@ -260,6 +261,16 @@ process.stdin.on("data", (chunk: string) => {
           if (!stopping) send(command.id, { kind: "message", text });
           return;
         }
+        if (command.command === "updatefirstmate") {
+          const text = await checkFirstmateCandidate(command.argument).catch(
+            () =>
+              command.argument.trim()
+                ? "Run /updatefirstmate without arguments to check the candidate."
+                : "Could not verify Firstmate’s upstream main. Check the network connection.",
+          );
+          send(command.id, { kind: "message", text });
+          return;
+        }
         if (command.command === "mcp") {
           const google = googleMcpProduct(command.argument);
           if (google) {
@@ -393,7 +404,7 @@ process.stdin.on("data", (chunk: string) => {
           send(
             command.id,
             nativeDocumentPage(
-              "Native Pi controls currently available:\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter / Space — activate the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
+              "Native Pi controls currently available:\nCtrl+L — select a model.\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter / Space — activate the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
               command.argument,
               "Amun native Pi shortcuts",
             ),

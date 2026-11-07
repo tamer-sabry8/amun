@@ -81,6 +81,11 @@ export async function routePiInput(
     return actions.native("shell-context", text.slice(1).trim());
   if (!text.startsWith("/")) return actions.prompt(input);
   const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
+  if (
+    match?.[1] === "updatefirstmate" ||
+    match?.[1] === "skill:updatefirstmate"
+  )
+    return actions.native("updatefirstmate", match[2] ?? "");
   const command = commandCatalog(resources).find(
     (item) => item.name === match?.[1],
   );
