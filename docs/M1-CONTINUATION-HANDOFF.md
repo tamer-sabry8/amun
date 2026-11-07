@@ -95,7 +95,7 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 ## Resume sequence
 
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
-2. Read the current task ledger and incremental acceptance evidence. The package at /private/tmp/amun-m1-resource-drafts/Amun-darwin-arm64/Amun.app passed 28 end-to-end tests with two skips at code checkpoint 0ae2c8a.
+2. Read the current task ledger and incremental acceptance evidence. The package at /private/tmp/amun-m1-native-debug/Amun-darwin-arm64/Amun.app passed 29 end-to-end tests at code checkpoint 358215f with live Google and browser checks enabled. The development-only gallery was skipped. The source suite and all 439 unit tests also passed.
 3. Finish normal persistent crew dispatch/receipt path and native dynamic command/resource coverage with safe real worktree acceptance.
 4. Complete unblocked remaining MCP gates; keep explicit non-gating/deferred items honest.
 5. Keep redesign and M2 gated. Once independent M1 work is done, obtain explicit redesign approval with a concrete reviewable plan.
