@@ -10,6 +10,8 @@ import {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { z } from "zod";
 export const NOTION_ISSUER = "https://mcp.notion.com";
+export const CF_ISSUER = "https://mcp.cloudflare.com";
+type HostedIssuer = typeof NOTION_ISSUER | typeof CF_ISSUER;
 export const NOTION_MCP = `${NOTION_ISSUER}/mcp`;
 const recordSchema = z.strictObject({
   redirectUrl: z.string().url(),
@@ -20,6 +22,7 @@ const recordSchema = z.strictObject({
 export type NotionOAuthRecord = z.infer<typeof recordSchema>;
 export function readNotionOAuthRecord(
   raw: string | undefined,
+  issuer: HostedIssuer = NOTION_ISSUER,
 ): NotionOAuthRecord | undefined {
   if (!raw) return undefined;
   if (raw.length > 65536) throw Error("Invalid Notion credential record");
@@ -34,8 +37,8 @@ export function readNotionOAuthRecord(
     url.hash ||
     url.username ||
     url.password ||
-    (record.client && record.client.issuer !== NOTION_ISSUER) ||
-    (record.tokens && record.tokens.issuer !== NOTION_ISSUER)
+    (record.client && record.client.issuer !== issuer) ||
+    (record.tokens && record.tokens.issuer !== issuer)
   )
     throw Error("Invalid Notion credential record");
   return record;
@@ -47,6 +50,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
   private disposed = false;
   constructor(
     private readonly options: {
+      issuer?: HostedIssuer;
       read(): string | undefined;
       write(value: string): void;
       redirectUrl: string;
@@ -55,6 +59,9 @@ export class NotionOAuthProvider implements OAuthClientProvider {
       registerSecret(secret: string): void;
     },
   ) {}
+  private get issuer() {
+    return this.options.issuer ?? NOTION_ISSUER;
+  }
   get redirectUrl() {
     return this.options.redirectUrl;
   }
@@ -72,7 +79,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
   }
   private record() {
     return (
-      readNotionOAuthRecord(this.options.read()) ?? {
+      readNotionOAuthRecord(this.options.read(), this.issuer) ?? {
         redirectUrl: this.redirectUrl,
       }
     );
@@ -85,7 +92,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
     return this.record().client;
   }
   saveClientInformation(info: OAuthClientInformationMixed) {
-    if (info.issuer !== NOTION_ISSUER)
+    if (info.issuer !== this.issuer)
       throw Error("Unexpected authorization issuer");
     if (info.client_secret) this.options.registerSecret(info.client_secret);
     this.save({
@@ -104,7 +111,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
   }
   saveTokens(tokens: OAuthTokens) {
     if (
-      tokens.issuer !== NOTION_ISSUER ||
+      tokens.issuer !== this.issuer ||
       tokens.token_type.toLowerCase() !== "bearer" ||
       (tokens.expires_in !== undefined &&
         (!Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0))
@@ -125,7 +132,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
   async redirectToAuthorization(url: URL) {
     if (
       this.disposed ||
-      url.origin !== NOTION_ISSUER ||
+      url.origin !== this.issuer ||
       url.pathname !== "/authorize" ||
       url.username ||
       url.password ||
@@ -167,8 +174,8 @@ export class NotionOAuthProvider implements OAuthClientProvider {
   saveDiscoveryState(state: OAuthDiscoveryState) {
     const metadata = state.authorizationServerMetadata;
     if (
-      state.authorizationServerUrl !== NOTION_ISSUER ||
-      metadata?.issuer !== NOTION_ISSUER ||
+      state.authorizationServerUrl !== this.issuer ||
+      metadata?.issuer !== this.issuer ||
       !metadata.code_challenge_methods_supported?.includes("S256") ||
       !metadata.token_endpoint_auth_methods_supported?.includes("none")
     )
@@ -178,7 +185,7 @@ export class NotionOAuthProvider implements OAuthClientProvider {
       metadata.token_endpoint,
       metadata.registration_endpoint,
     ]) {
-      if (!endpoint || new URL(endpoint).origin !== NOTION_ISSUER)
+      if (!endpoint || new URL(endpoint).origin !== this.issuer)
         throw Error("Unsafe Notion OAuth endpoint");
     }
   }
@@ -190,15 +197,13 @@ export class NotionOAuthProvider implements OAuthClientProvider {
 }
 
 /** OAuth JSON only. No redirects, foreign origins, unbounded bodies or raw error logging. */
-export function notionAuthFetch(fetcher: typeof fetch = fetch): typeof fetch {
+export function notionAuthFetch(
+  fetcher: typeof fetch = fetch,
+  issuer: HostedIssuer = NOTION_ISSUER,
+): typeof fetch {
   return async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
-    if (
-      url.origin !== NOTION_ISSUER ||
-      url.username ||
-      url.password ||
-      url.hash
-    )
+    if (url.origin !== issuer || url.username || url.password || url.hash)
       throw Error("Unsafe Notion OAuth endpoint");
     const response = await fetcher(input, {
       ...init,

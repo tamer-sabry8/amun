@@ -28,6 +28,10 @@ For Notion, replace the manual integration-token onboarding with official hosted
 
 Keep credentials in Amun's protected service-owned storage, never in renderer state, logs or exports. Authentication does not authorize publication: preserve governed writes, exact-content review, destination binding and uncertain-write reconciliation. This preference does not expand milestone scope or prove a connector's live acceptance.
 
+## Public hosting
+
+Use `https://amun.transfrm.ai` for Amun's public services. The user owns the parent zone in Cloudflare. Use Cloudflare's hosted API MCP with Code Mode for the hosting acceptance test. Inspect existing records, bind each proposed operation to the intended zone and hostname, and verify DNS and HTTPS after deployment. Track the GitHub web callback separately from device sign-in.
+
 ## Interface redesign approval
 
 The user requires explicit approval before starting T022c (neumorphic interface redesign). Keep the task recorded but do not begin design or implementation until asking and receiving approval. The provided HTML is reference only; its colors are not selected. Continue independent M1 work while this task awaits approval.

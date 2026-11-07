@@ -15,3 +15,5 @@ Run `node scripts/github-callback-proof.ts` from the repository with its pinned 
 Track DNS/TLS, invalid-state handling, and the complete web authorization as separate checks. A working device login does not close this ticket.
 
 References: [GitHub OAuth web and device flows](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Cloudflare Worker custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+The public origin for Amun is https://amun.transfrm.ai. Use Cloudflare's hosted API MCP at https://mcp.cloudflare.com/mcp for this acceptance. Its OAuth metadata advertises zone.read and dns.read. The native hosting inspection uses Code Mode search for the zone API and execute for two GET requests restricted to transfrm.ai and amun.transfrm.ai. Provisioning needs a separately reviewed deployment, suitable write permissions and a target serving the application. Verify that an existing record is safe to change before publishing. Keep the last two M1 tasks in order: approved redesign followed by the detailed new-chat handoff.

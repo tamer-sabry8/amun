@@ -74,3 +74,13 @@ it("prevents opening Edge with a stale or cancelled code", async () => {
   await expect(s.login.openBrowser()).rejects.toThrow();
   expect(s.open).not.toHaveBeenCalled();
 });
+it("requests repo only for an explicit repository authorization and binds the returned grant to that request", async () => {
+  const s = setup([
+    challenge,
+    { access_token: "fixture", token_type: "bearer", scope: "repo" },
+  ]);
+  await s.login.start("repo");
+  expect(s.post).toHaveBeenCalledWith("/login/device/code", { scope: "repo" });
+  s.tick(5000);
+  expect(await s.login.check()).toBe("authorized");
+});

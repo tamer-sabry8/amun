@@ -1,6 +1,13 @@
 import type { NativePiResult } from "./native-pi.ts";
 const inventory = new Map<string, readonly [string, string]>([
   ["github-connect", ["GitHub · Sign in with Microsoft Edge", ""]],
+  [
+    "github-repo-connect",
+    [
+      "GitHub · Review repository access in Edge (includes private repositories)",
+      "",
+    ],
+  ],
   ["github-read", ["GitHub · Test saved connection", ""]],
   ["github", ["GitHub · Check sign-in endpoint", ""]],
   [
@@ -74,6 +81,7 @@ const inventory = new Map<string, readonly [string, string]>([
       "The registry is a catalog. Choose a specific server before connecting.",
     ],
   ],
+  ["cloudflare-hosting", ["Cloudflare Code Mode · Inspect Amun hosting", ""]],
   [
     "cloudflare",
     [

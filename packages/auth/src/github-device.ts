@@ -14,7 +14,7 @@ export const githubGrant = z.object({
     .min(1)
     .max(4096)
     .regex(/^[A-Za-z0-9_.-]+$/),
-  scope: z.literal("public_repo"),
+  scope: z.enum(["public_repo", "repo"]),
   token_type: z.literal("bearer"),
   expires_in: z.number().int().positive().optional(),
   refresh_token: z.string().min(1).max(4096).optional(),
@@ -42,6 +42,7 @@ export class GithubDeviceLogin {
   private pending:
     | undefined
     | {
+        scope: "public_repo" | "repo";
         userCode: string;
         secret: string;
         expires: number;
@@ -66,7 +67,8 @@ export class GithubDeviceLogin {
       throw Error("Code expired");
     await this.open();
   }
-  async start() {
+  async start(scope: "public_repo" | "repo" = "public_repo") {
+    if (this.pending && this.pending.scope !== scope) this.cancel();
     if (this.pending && this.pending.expires > this.now())
       return this.pending.userCode;
     if (this.busy) throw Error("Sign-in already active");
@@ -74,11 +76,12 @@ export class GithubDeviceLogin {
     this.busy = true;
     try {
       const d = challengeSchema.parse(
-        await this.post("/login/device/code", { scope: "public_repo" }),
+        await this.post("/login/device/code", { scope }),
       );
       if (generation !== this.generation) throw Error("Cancelled");
       const interval = d.interval * 1000;
       this.pending = {
+        scope,
         userCode: d.user_code,
         secret: d.device_code,
         expires: this.now() + 1000 * d.expires_in,
@@ -116,7 +119,9 @@ export class GithubDeviceLogin {
         return "pending";
       }
       this.pending = undefined;
-      this.save(githubGrant.parse(result));
+      const grant = githubGrant.parse(result);
+      if (grant.scope !== d.scope) throw Error("Unexpected GitHub scope");
+      this.save(grant);
       return "authorized";
     } finally {
       this.busy = false;

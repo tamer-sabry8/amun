@@ -9,7 +9,9 @@ export function macKeyring(
 ): Keyring {
   const entry = (account: string) => {
     if (
-      !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion)-[a-f0-9]{32}$/.test(account)
+      !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion|cloudflare)-[a-f0-9]{32}$/.test(
+        account,
+      )
     )
       throw Error("Invalid Keychain account");
     return new Entry("ai.amun", account);

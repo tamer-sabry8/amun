@@ -1,9 +1,16 @@
 import {
+  cloudflareConsentArgs,
+  inspectCloudflareHosting,
+} from "../../../packages/auth/src/cloudflare-hosting.ts";
+import {
   GithubDeviceLogin,
   githubDevicePost,
   githubGrant,
 } from "../../../packages/auth/src/github-device.ts";
-import { checkGithubMcp } from "../../../packages/auth/src/github-mcp.ts";
+import {
+  GithubReadFailure,
+  checkGithubMcp,
+} from "../../../packages/auth/src/github-mcp.ts";
 import { createHash } from "node:crypto";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
@@ -96,6 +103,7 @@ const authBroker = new AuthBroker(
   redactor,
   probeConnection,
 );
+let cloudflareBusy = false;
 const notionConnection = new NotionConnection({
   workspace: workspaceIdentity(workspace),
   root: workspaceRoot,
@@ -457,7 +465,64 @@ process.parentPort?.on("message", (event) => {
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
         nativeRequest.data.command === "mcp" &&
+        nativeRequest.data.argument === "cloudflare-hosting"
+      ) {
+        const id = nativeRequest.data.id;
+        if (cloudflareBusy) {
+          sendNative(id, {
+            kind: "message",
+            text: "Cloudflare authorization is in progress.",
+          });
+          return;
+        }
+        cloudflareBusy = true;
+        const account =
+          workspaceIdentity(workspace) +
+          "/cloudflare-" +
+          createHash("sha256")
+            .update("https://mcp.cloudflare.com/mcp")
+            .digest("hex")
+            .slice(0, 32);
+        void inspectCloudflareHosting({
+          read: () => authKeyring().get(account),
+          write: (value) => authKeyring().set(account, value),
+          registerSecret: (value) => redactor.register(value),
+          open: async (url) => {
+            await promisify(execFile)(
+              "/usr/bin/open",
+              cloudflareConsentArgs(url),
+              { timeout: 10000 },
+            );
+          },
+        })
+          .then((records) => {
+            if (!closed)
+              sendNative(id, {
+                kind: "message",
+                text:
+                  "Cloudflare Code Mode verified transfrm.ai. DNS records for amun.transfrm.ai: " +
+                  records +
+                  ".",
+              });
+          })
+          .catch(() => {
+            if (!closed)
+              sendNative(id, {
+                kind: "message",
+                text: "Cloudflare hosting inspection incomplete. Verify the account, consent and zone access.",
+              });
+          })
+          .finally(() => {
+            cloudflareBusy = false;
+          });
+        return;
+      }
+      if (
+        nativeRequest.success &&
+        nativeRequest.data.action === "run" &&
+        nativeRequest.data.command === "mcp" &&
         [
+          "github-repo-connect",
           "github-connect",
           "github-open",
           "github-finish",
@@ -472,8 +537,13 @@ process.parentPort?.on("message", (event) => {
               kind: "github-device",
               code: githubLogin.userCode!,
             });
-          if (cmd.argument === "github-connect") {
-            await githubLogin.start();
+          if (
+            cmd.argument === "github-connect" ||
+            cmd.argument === "github-repo-connect"
+          ) {
+            await githubLogin.start(
+              cmd.argument === "github-repo-connect" ? "repo" : "public_repo",
+            );
             showCode();
             return;
           }
@@ -523,11 +593,14 @@ process.parentPort?.on("message", (event) => {
             kind: "message",
             text: "GitHub MCP connected. Read package.json from tamer-sabry8/amun.",
           });
-        })().catch(() => {
+        })().catch((error: unknown) => {
           if (!closed)
             sendNative(cmd.id, {
               kind: "message",
-              text: "GitHub operation could not be verified. Check the saved connection or start a new sign-in.",
+              text:
+                error instanceof GithubReadFailure
+                  ? error.message
+                  : "GitHub operation could not be verified. Check the saved connection or start a new sign-in.",
             });
         });
         return;
