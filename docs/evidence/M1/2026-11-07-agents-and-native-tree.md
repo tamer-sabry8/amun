@@ -24,3 +24,5 @@ The normal Agents screen now opens one persistent crew home per workspace. It pr
 ## Full quit and worker recovery
 
 The owner chose to pause primary supervision on full application quit. Both the source app and a fresh arm64 package quit completely with the two existing disposable workers present. The previous Amun service PID exited. Reopening Agents verified the same Codex and Claude endpoints and original worker process identities. Each build also completed ten service restarts with zero duplicate workers. The test did not launch a persistent primary model turn. Its pause/resume acceptance belongs with normal dispatch.
+
+The Pi shutdown regression ran the pinned CLI with a delayed session_shutdown handler. Before the fix the cleanup extension exited on stdin EOF and the handler never finished. The CLI now disposes its session before Amun removes the private runtime directory. In separate offline source and packaged Firstmate trials the real watcher stopped when its owning primary process exited, before the test teardown ran. This test performed zero model turns. The updated package passed 29 end-to-end tests and the full unit suite passed 440.
