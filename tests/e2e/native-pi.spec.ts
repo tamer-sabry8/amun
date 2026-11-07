@@ -77,6 +77,20 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .getByRole("button", { name: "Open Pi commands", exact: true })
       .click();
     await page
+      .getByRole("button", { name: "Read active conversation" })
+      .click();
+    const parked = page.getByLabel("Conversation message");
+    await parked.fill("Keep this draft while parked");
+    await parked.press("Control+z");
+    const resume = page.getByRole("button", { name: "Resume Pi commands" });
+    await expect(resume).toBeFocused({ timeout: 2000 });
+    await resume.press("Enter");
+    await expect(parked).toHaveValue("Keep this draft while parked");
+    await parked.press("Shift+Tab");
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      /Thinking level:|no thinking levels to cycle/,
+    );
+    await page
       .getByRole("button", { name: "Cycle thinking level", exact: true })
       .click();
     await expect(page.getByTestId("native-pi-result")).toContainText(

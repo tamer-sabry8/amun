@@ -1,7 +1,10 @@
 import { constants } from "node:fs";
 import { open, opendir, realpath, lstat } from "node:fs/promises";
 import { join, dirname } from "node:path";
-const token = /(?:^|\s)@([^@\s]*)$/u;
+import {
+  trailingWorkspaceReference,
+  workspaceDirectoryReference,
+} from "../../contracts/src/workspace-reference.ts";
 function permitted(path: string) {
   const parts = path.split("/");
   return (
@@ -14,17 +17,17 @@ function permitted(path: string) {
   );
 }
 export function workspaceReference(draft: string) {
-  const found = token.exec(draft);
-  if (!found || !permitted(found[1]!))
+  const found = trailingWorkspaceReference(draft);
+  if (!found || !permitted(found.prefix))
     throw Error("Unsupported workspace reference");
-  return found[1]!;
+  return found;
 }
 export async function workspaceFileChoices(root: string, draft: string) {
-  const prefix = workspaceReference(draft),
+  const { prefix } = workspaceReference(draft),
     slash = prefix.lastIndexOf("/"),
     parent = prefix.slice(0, slash + 1),
     query = prefix.slice(slash + 1);
-  const directory = join(root, parent);
+  const directory = join(root, parent.replace(/\/$/, ""));
   if (
     (await realpath(directory)) !== directory ||
     !(await lstat(directory)).isDirectory()
@@ -51,24 +54,23 @@ export async function completeWorkspaceFile(
 ) {
   if (!(await workspaceFileChoices(root, draft)).includes(pick))
     throw Error("Workspace selection changed");
-  const before = draft.slice(
-    0,
-    draft.length - workspaceReference(draft).length - 1,
-  );
-  if (pick.endsWith("/")) return before + "@" + pick;
+  const before = draft.slice(0, workspaceReference(draft).start);
+  if (pick.endsWith("/")) return before + workspaceDirectoryReference(pick);
   const path = join(root, pick),
     handle = await open(
       path,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
   try {
-    const info = await handle.stat();
+    const info = await handle.stat(),
+      current = await lstat(path);
     if (
       !info.isFile() ||
       info.size > 12000 ||
       info.nlink !== 1 ||
       (await realpath(dirname(path))) !== dirname(path) ||
-      (await lstat(path)).ino !== info.ino
+      current.dev !== info.dev ||
+      current.ino !== info.ino
     )
       throw Error("Unsupported workspace file");
     const bytes = Buffer.alloc(12001),

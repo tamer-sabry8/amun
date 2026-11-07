@@ -97,6 +97,7 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
 2. Read docs/TASKS.md and docs/plans/m1-native-pi-commands.md for current coverage. Packaged checkpoint 0cce52e passed 36 acceptance cases with live crew dispatch and Google and browser discovery enabled. Commit 7a4343b adds image drafts, workspace path completion and recovery of tampered extension trust.
 3. Continue the remaining Firstmate commands and native primary supervision in verified disposable Git worktrees. The owner's decision is to pause primary supervision on app quit and reattach surviving workers on reopen. Explicit captain shell commands use normal Mac account permissions. Each local executable extension requires individual review and trust.
+   Two owner decisions are pending: whether the Lavish Bearings board opens in Amun or the external browser, and whether verified local maintenance by an unattended Firstmate can proceed automatically or each action needs a Request. The pinned unattended branch constructs its own shell tool. The captain’s terminal permission applies to directly initiated commands.
 4. Complete unblocked remaining MCP gates; keep explicit non-gating/deferred items honest.
 5. Keep redesign and M2 gated. Once independent M1 work is done, obtain explicit redesign approval with a concrete reviewable plan.
 6. Update evidence/tasks and PR after tested increments. Final handoff and final M1 acceptance are later steps.

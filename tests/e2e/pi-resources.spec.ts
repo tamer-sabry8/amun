@@ -27,6 +27,11 @@ test("owned Pi template and skill commands expand into an editable draft", async
     join(workspace, "meeting.md"),
     "Workspace note password=AMUN_PATH_CANARY",
   );
+  await mkdir(join(workspace, "Team notes"));
+  await writeFile(
+    join(workspace, "Team notes", "first note.txt"),
+    "Minutes from the pilot.",
+  );
   const executablePath = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -74,6 +79,17 @@ test("owned Pi template and skill commands expand into an editable draft", async
     await button("Attach meeting.md").click({ timeout: 2500 });
     await expect(draft).toHaveValue(
       /Read[\s\S]*meeting.md[\s\S]*Workspace note password=\[REDACTED\]/,
+    );
+    await draft.fill("Summarize @Team");
+    await draft.press("Tab");
+    await button("Complete Team notes/").click();
+    await expect(draft).toHaveValue('Summarize @"Team notes/');
+    await draft.focus();
+    await draft.press("End");
+    await draft.press("Tab");
+    await button("Attach Team notes/first note.txt").click({ timeout: 2400 });
+    await expect(draft).toHaveValue(
+      "Summarize\n\nAttached file: Team notes/first note.txt\nMinutes from the pilot.",
     );
     await draft.fill("Review the decision @");
     const attachment = join(root, "decision.txt");

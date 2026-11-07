@@ -1,3 +1,4 @@
+import { trailingWorkspaceReference } from "../../../packages/contracts/src/workspace-reference.ts";
 import { DraftEditor } from "./draft-editor.tsx";
 import { pastedImage } from "./pasted-image.ts";
 import {
@@ -20,6 +21,7 @@ export function NativePiPanel({
   subscriptionsOnly?: boolean;
   onConnectNotion?: () => void;
 }) {
+  const [parked, setParked] = useState(false);
   const [open, setOpen] = useState(false),
     [command, setCommand] = useState("session"),
     [argument, setArgument] = useState(""),
@@ -382,8 +384,17 @@ export function NativePiPanel({
   if (subscriptionsOnly) return <section>{subscriptions}</section>;
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)}>
-        Open Pi commands
+      <button
+        type="button"
+        ref={(el) => {
+          if (parked) el?.focus();
+        }}
+        onClick={() => {
+          setParked(false);
+          setOpen(true);
+        }}
+      >
+        {parked ? "Resume Pi commands" : "Open Pi commands"}
       </button>
     );
   return (
@@ -744,9 +755,33 @@ export function NativePiPanel({
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing || event.repeat) return;
                   if (
+                    event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.altKey &&
+                    !event.shiftKey &&
+                    event.key.toLowerCase() === "z"
+                  ) {
+                    event.preventDefault();
+                    setParked(true);
+                    setOpen(false);
+                    return;
+                  }
+                  if (
+                    event.shiftKey &&
+                    !event.metaKey &&
+                    !event.altKey &&
+                    !event.ctrlKey &&
+                    event.key === "Tab" &&
+                    !busy
+                  ) {
+                    event.preventDefault();
+                    run("", "cycle-thinking");
+                    return;
+                  }
+                  if (
                     event.key === "Tab" &&
                     !event.shiftKey &&
-                    /(?:^|\s)@[^@\s]*$/.test(draft) &&
+                    trailingWorkspaceReference(draft) &&
                     event.currentTarget.selectionEnd === draft.length
                   ) {
                     event.preventDefault();
