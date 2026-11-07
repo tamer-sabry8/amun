@@ -1309,6 +1309,11 @@ export function App() {
               </>
             ) : route === "conversations" ? (
               <NativePiPanel
+                onBoard={(url) => {
+                  setPreviewURL(url);
+                  dispatch({ type: "inspect", tab: "web" });
+                  browser({ action: "navigate", url });
+                }}
                 onConnectNotion={() => {
                   setReturnToConversation(true);
                   setRoute("settings");

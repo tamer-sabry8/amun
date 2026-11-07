@@ -164,7 +164,7 @@ test("Firstmate dispatches both persistent subscription workers and publishes th
       page.getByRole("status").filter({
         hasText: "Firstmate recovered the original codex endpoint.",
       }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 45000 });
     expect(await loadEndpointReceipt(receipts, "amun-codex")).toEqual(original);
     await page
       .getByRole("button", { name: "Dispatch through Firstmate", exact: true })

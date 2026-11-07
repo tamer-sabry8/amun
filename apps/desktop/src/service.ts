@@ -1,3 +1,6 @@
+import { localStow } from "../../../packages/crew/src/firstmate-stow.ts";
+import { BoardError } from "../../../packages/crew/src/firstmate-board.ts";
+import { FirstmateSupervision } from "../../service/src/firstmate-supervision.ts";
 import { FirstmateModelPicker } from "../../service/src/firstmate-model-picker.ts";
 import {
   crewCalmEnabled,
@@ -306,8 +309,19 @@ process.parentPort?.on("message", (event) => {
       );
     },
   );
+  const supervisor = new FirstmateSupervision(
+    workspaceRoot!,
+    process.env.AMUN_FIRSTMATE_ARCHIVES!,
+    process.env.AMUN_PI_BINARY!,
+    process.env.AMUN_PI_ENTRY!,
+    process.env.AMUN_AUTH_ROOT!,
+    redactor,
+  );
+  void supervisor.resume();
+  port.once("close", () => supervisor.close());
   const branchPicker = new FirstmateModelPicker();
   port.once("close", () => branchPicker.close());
+  const ahoyPending = new Set<string>();
   const nativePi = new NativePiProcess(
     {
       binary: process.env.AMUN_PI_BINARY!,
@@ -317,6 +331,43 @@ process.parentPort?.on("message", (event) => {
       root: process.env.AMUN_AUTH_ROOT!,
     },
     (event) => {
+      if (event.result.kind === "stow-history-status") {
+        const hasConversation = event.result.hasConversation;
+        void FirstmateReleases.open(
+          workspaceRoot!,
+          process.env.AMUN_FIRSTMATE_ARCHIVES!,
+        )
+          .then((r) => localStow(r, hasConversation))
+          .then((text) => sendNative(event.id, { kind: "message", text }))
+          .catch(() =>
+            sendNative(event.id, {
+              kind: "message",
+              text: "Stow could not verify the local home, inventory or memory budget.",
+            }),
+          );
+        return;
+      }
+      if (
+        ahoyPending.delete(event.id) &&
+        event.result.kind === "first-captain-message"
+      ) {
+        void FirstmateReleases.open(
+          workspaceRoot!,
+          process.env.AMUN_FIRSTMATE_ARCHIVES!,
+        )
+          .then((r) => firstmateBearings(r, "", redactor))
+          .then((digest) => {
+            if (typeof digest !== "string") throw Error("Invalid digest");
+            sendNative(event.id, { kind: "message", text: digest });
+          })
+          .catch(() =>
+            sendNative(event.id, {
+              kind: "message",
+              text: "Initial Bearings is unavailable. If away posture is active, run /afk return and resolve the return briefing first.",
+            }),
+          );
+        return;
+      }
       if (event.result.kind === "notion-preview") {
         notionPreview = {
           title: redactor.text(event.result.title),
@@ -638,17 +689,46 @@ process.parentPort?.on("message", (event) => {
             });
           return;
         }
+        if (["ahoy", "afk", "quiet"].includes(request.command)) {
+          void supervisor
+            .run(request.command, request.argument)
+            .then((text) => {
+              if (request.command !== "ahoy")
+                return sendNative(request.id, { kind: "message", text });
+              ahoyPending.add(request.id);
+              nativePi.handle({ ...request, command: "ahoy-recap" });
+            })
+            .catch(() =>
+              sendNative(request.id, {
+                kind: "message",
+                text: "Firstmate could not verify this posture or its owned primary session.",
+              }),
+            );
+          return;
+        }
         if (request.command === "bearings") {
           void FirstmateReleases.open(
             workspaceRoot!,
             process.env.AMUN_FIRSTMATE_ARCHIVES!,
           )
-            .then((releases) => firstmateBearings(releases, request.argument))
-            .then((text) => sendNative(request.id, { kind: "message", text }))
-            .catch(() =>
+            .then((releases) =>
+              firstmateBearings(releases, request.argument, redactor),
+            )
+            .then((result) =>
+              sendNative(
+                request.id,
+                typeof result === "string"
+                  ? { kind: "message", text: result }
+                  : result,
+              ),
+            )
+            .catch((error: unknown) =>
               sendNative(request.id, {
                 kind: "message",
-                text: "Crew snapshot unavailable. Check the crew worktree and runtime dependencies.",
+                text:
+                  error instanceof BoardError
+                    ? error.message
+                    : "Crew snapshot unavailable. Check the crew worktree and runtime dependencies.",
               }),
             );
           return;
@@ -674,7 +754,17 @@ process.parentPort?.on("message", (event) => {
                 process.env.AMUN_TMUX_BINARY!,
                 JSON.parse(request.argument),
               );
-              sendNative(request.id, { kind: "message", text });
+              try {
+                await supervisor.ensureRunning();
+                sendNative(request.id, { kind: "message", text });
+              } catch {
+                sendNative(request.id, {
+                  kind: "message",
+                  text:
+                    text +
+                    " Primary supervision could not start. Use /ahoy to retry.",
+                });
+              }
             } catch {
               sendNative(request.id, {
                 kind: "message",

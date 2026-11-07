@@ -79,6 +79,18 @@ export const notionApprovalRequest = z.strictObject({
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("stow-history-status"),
+    hasConversation: z.boolean(),
+  }),
+  z.strictObject({ kind: z.literal("first-captain-message") }),
+  z.strictObject({
+    kind: z.literal("bearings-board"),
+    text: z.string().max(240000),
+    url: z
+      .string()
+      .regex(/^http:\/\/127\.0\.0\.1:\d{4,5}\/session\/[a-f0-9]{8,64}$/),
+  }),
+  z.strictObject({
     kind: z.literal("turn-queue"),
     sequence: z.uuid(),
     status: z.string().max(256),

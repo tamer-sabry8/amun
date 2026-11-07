@@ -55,7 +55,7 @@ const unavailable = (e: unknown) =>
   (e as NodeJS.ErrnoException).code === "ENOENT";
 
 type TmuxCommand = (args: string[], env?: NodeJS.ProcessEnv) => Promise<string>;
-async function crewServer(owner: string, path: string, tmux: TmuxCommand) {
+export async function crewScope(owner: string) {
   const binding = join(owner, "tmux.json");
   let server;
   try {
@@ -71,6 +71,10 @@ async function crewServer(owner: string, path: string, tmux: TmuxCommand) {
     await privateSetting(binding, JSON.stringify(server));
   }
   await privateDir(server.scope);
+  return server;
+}
+async function crewServer(owner: string, path: string, tmux: TmuxCommand) {
+  const server = await crewScope(owner);
   const socket = join(server.scope, "tmux-" + process.getuid!(), "default");
   await privateDir(dirname(socket));
   const config = join(owner, "crew-tmux.conf");

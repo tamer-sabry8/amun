@@ -1,3 +1,4 @@
+import { buildFirstmateBoard } from "./firstmate-board.ts";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -47,10 +48,13 @@ function describe(row: Record<string, unknown>) {
 export async function firstmateBearings(
   releases: FirstmateReleases,
   argument: string,
+  redactor = new Redactor(),
 ) {
-  const match = /^(?:(file)(?: |$))?(include PRs)?$/i.exec(argument.trim());
+  const match = /^(?:(file|lavish)(?: |$))?(include PRs)?$/i.exec(
+    argument.trim(),
+  );
   if (!match)
-    return "Supported options are /bearings, /bearings file and include PRs.";
+    return "Supported options are /bearings, /bearings file /bearings lavish and include PRs.";
   const { home, revision } = await releases.crewHome();
   await releases.verifyHomes(revision, [home]);
   const owner = dirname(dirname(home));
@@ -81,6 +85,14 @@ export async function firstmateBearings(
     if ((await realpath(dir)) !== dir || !(await lstat(dir)).isDirectory())
       throw Error("Unsafe crew state");
   }
+  const env = {
+    HOME: owner,
+    PATH: "/usr/bin:/bin:/opt/homebrew/bin",
+    FM_HOME: home,
+    FM_ROOT_OVERRIDE: home,
+    FM_BACKEND: "tmux",
+    TMUX_TMPDIR: scope,
+  };
   const { stdout } = await promisify(execFile)(
     "/bin/bash",
     [
@@ -90,14 +102,7 @@ export async function firstmateBearings(
     ],
     {
       cwd: home,
-      env: {
-        HOME: owner,
-        PATH: "/usr/bin:/bin:/opt/homebrew/bin",
-        FM_HOME: home,
-        FM_ROOT_OVERRIDE: home,
-        FM_BACKEND: "tmux",
-        TMUX_TMPDIR: scope,
-      },
+      env,
       timeout: 60000,
       maxBuffer: 1048576,
     },
@@ -109,7 +114,7 @@ export async function firstmateBearings(
     items: Record<string, unknown>[],
     empty: string,
   ) => name + "\n" + (items.length ? items.map(describe).join("\n") : empty);
-  const digest = new Redactor()
+  const digest = redactor
     .text(
       [
         section(
@@ -141,6 +146,12 @@ export async function firstmateBearings(
       ].join("\n\n"),
     )
     .slice(0, 240000);
+  if (match[1]?.toLowerCase() === "lavish")
+    return {
+      kind: "bearings-board" as const,
+      text: digest,
+      url: await buildFirstmateBoard(home, env, s, redactor),
+    };
   if (!match[1]) return digest;
   const filename = "status-report-" + s.generated.slice(0, 10) + ".md";
   const target = join(home, "data", filename),

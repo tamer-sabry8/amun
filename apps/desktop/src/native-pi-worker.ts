@@ -1,3 +1,4 @@
+import { ahoyRecap } from "../../../packages/crew/src/ahoy.ts";
 import {
   workspaceFileChoices,
   completeWorkspaceFile,
@@ -495,6 +496,21 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "stow") {
+          if (command.argument.trim()) throw Error("Unexpected Stow argument");
+          const entries = runtime!.session.sessionManager.getBranch();
+          send(command.id, {
+            kind: "stow-history-status",
+            hasConversation: entries.some(
+              (e) =>
+                e &&
+                typeof e === "object" &&
+                "type" in e &&
+                e.type === "message",
+            ),
+          });
+          return;
+        }
         if (command.command === "reload") {
           await resourceDirectories(root!);
           await reviewed!.refresh();
@@ -536,6 +552,7 @@ process.stdin.on("data", (chunk: string) => {
           [
             "share-notion",
             "conversation",
+            "ahoy-recap",
             "conversation-send",
             "resource-draft",
             "attach-text",
@@ -557,6 +574,19 @@ process.stdin.on("data", (chunk: string) => {
               redactor,
               readCredential!(info.providerId, privateAuthPath!),
             );
+          if (command.command === "ahoy-recap") {
+            const recap = ahoyRecap(
+              runtime!.session.sessionManager.getBranch(),
+              redactor,
+            );
+            send(
+              command.id,
+              recap === null
+                ? { kind: "first-captain-message" }
+                : { kind: "message", text: recap },
+            );
+            return;
+          }
           if (command.command === "extension-command") {
             const i = JSON.parse(command.argument),
               s = runtime!.session;

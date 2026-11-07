@@ -100,3 +100,11 @@ Clipboard image paste previews decoded pixels in the originating draft. The sour
 With Calm off, Control+O reveals bounded, redacted tool result text from the selected session. Control+T shows available OpenAI Responses reasoning summaries. The UI reads only provider summary fields and omits encrypted signatures and private thinking. Source acceptance exercises both controls against a saved Pi session.
 
 The native message field supports Shift+Tab to cycle the session’s thinking level and Control+Z to park the Pi controls. Keyboard focus moves to Resume Pi commands. Resuming preserves the conversation draft in the same window. Tab also traverses nested workspace folders with spaces and attaches the selected text to the draft. Source acceptance exercised each interaction.
+
+## Primary supervision, interactive Bearings and local Stow
+
+The packaged primary acquires the pinned Firstmate lock and starts its watcher in an Amun-owned worktree. The posture test checks the away contract, quits the app, waits for the original primary PID to exit and checks for a new owner after reopening. It exercises attended quiet mode, the return briefing and native Ahoy. A separate worker test verifies the surviving worker process identities.
+
+The unattended branch acceptance uses an isolated loopback model. It drains a genuine worker wake, rejects an unrelated shell command, records the outcome and acknowledges the exact wake sequence. This tests the real Pi branch and local scripts without a paid provider call. The interactive Bearings test sends a captain’s answer through the local Lavish form in the isolated preview and verifies the durable item closes.
+
+Native Stow measures the private primary’s startup memory before and after a local sweep and writes a receipt. The acceptance test covers a new home and a home with a seeded memory entry. The receipt excludes the entry’s contents. Nonempty conversations and registered workers can still need curation. The owner approved automatic ordinary edits and individual approval for pinned entries. Model-assisted curation awaits a decision about the data and processing destination. The current accounting path makes no model request.

@@ -17,8 +17,10 @@ function focusReview(heading: HTMLHeadingElement | null) {
 export function NativePiPanel({
   subscriptionsOnly = false,
   onConnectNotion,
+  onBoard,
 }: {
   subscriptionsOnly?: boolean;
+  onBoard?: (url: string) => void;
   onConnectNotion?: () => void;
 }) {
   const [parked, setParked] = useState(false);
@@ -1523,6 +1525,13 @@ export function NativePiPanel({
               Save reviewed export…
             </button>
             <p role="status">{exportStatus}</p>
+          </>
+        ) : result?.kind === "bearings-board" ? (
+          <>
+            <p>{result.text}</p>
+            <button type="button" onClick={() => onBoard?.(result.url)}>
+              Open local Bearings board
+            </button>
           </>
         ) : result?.kind === "message" || result?.kind === "copy" ? (
           <>

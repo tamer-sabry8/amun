@@ -1,6 +1,10 @@
 export const nativeCommandNames = [
   "mcp",
   "bearings",
+  "afk",
+  "quiet",
+  "ahoy",
+  "stow",
   "calm",
   "supervision-model",
   "updatefirstmate",
@@ -34,7 +38,10 @@ export function composerCommand(input: string) {
   if (input.length > 12000 || input.includes("\0")) return null;
   const normalized = input
     .trim()
-    .replace(/^\/skill:(bearings|updatefirstmate)(?=\s|$)/, "/$1");
+    .replace(
+      /^\/skill:(bearings|updatefirstmate|afk|quiet|ahoy|stow)(?=\s|$)/,
+      "/$1",
+    );
   const match = /^\/([a-z][a-z-]*)(?:\s+([\s\S]*))?$/.exec(normalized);
   if (!match || !nativeCommandNames.includes(match[1]!)) return null;
   return { name: match[1]!, argument: match[2] ?? "" };
