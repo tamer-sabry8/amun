@@ -97,3 +97,9 @@ Opening the share preview used to leave keyboard focus above the off-screen revi
 The owner completed consent in Edge for a new disposable packaged profile. A read-only comparison of the registered client identities confirmed its registration differs from the working Document Hub profile. For the refresh test, the harness overrode the local expiry reading to exercise the due path without waiting for natural expiry. Twenty concurrent calls to the production connection produced one real refresh request and one Keychain save. The refresh token rotated, the client registration was reused, and the workspace identity read succeeded.
 
 In a separate in-memory credential fixture, Notion rejected a synthetic invalid refresh token with invalid_grant. Amun cleared the fixture's credentials, made exactly one refresh request and opened no browser. Neither real grant was revoked by that test. The remaining live revocation check requires the owner’s decision for the disposable grant.
+
+### Live revocation, 7 November
+
+After explicit approval, the probe rechecked that the disposable profile and its OAuth registration were distinct from the working acceptance profile. It sent one revocation request for the disposable refresh token to the endpoint in Notion's issuer metadata. Notion returned HTTP 200. The production connector subsequently attempted refresh once, cleared the disposable credentials and returned reconnect-required. A separate read through the working profile still matched the approved Document Hub page receipt.
+
+The packaged disposable window received a connection-check click but the reconnect notice was not observed. The utility process held the refresh lock and its stack showed a blocking macOS Keychain lookup. The renderer gate remains open until this check returns and the reconnect message is visible.
