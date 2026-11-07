@@ -7,11 +7,13 @@ import {
   terminalEvent,
   piEvent,
   crewObservation,
+  crewInventory,
   type WorkspaceSnapshot,
   type AuthEvent,
 } from "@amun/contracts";
 export type ServiceEvent = unknown;
 interface BridgeState {
+  generation: string | null;
   status: "Connecting" | "Connected" | "Reconnecting";
   workspace: WorkspaceSnapshot | null;
   connections: Extract<AuthEvent, { kind: "auth-connections" }>["connections"];
@@ -22,6 +24,7 @@ interface BridgeState {
   searchQuery: string;
 }
 let state: BridgeState = {
+  generation: null,
   status: "Connecting",
   workspace: null,
   connections: [],
@@ -86,7 +89,7 @@ export function initializeBridge() {
           update({ status: "Reconnecting" });
           return;
         }
-        update({ status: "Connected" });
+        update({ status: "Connected", generation: id });
         bridge.send({ version: 1, kind: "workspace", action: "snapshot" });
         bridge.send({ version: 1, kind: "auth", action: "list" });
         return;
@@ -130,7 +133,12 @@ export function initializeBridge() {
       const validated = terminalEvent.safeParse(message.data);
       const pi = piEvent.safeParse(message.data);
       const crew = crewObservation.safeParse(message.data);
-      if (validated.success || pi.success || crew.success)
+      if (
+        validated.success ||
+        pi.success ||
+        crew.success ||
+        crewInventory.safeParse(message.data).success
+      )
         for (const listener of eventListeners) listener(message.data);
     };
     current.start();

@@ -1,3 +1,4 @@
+import { AgentsPanel } from "./agents-panel.tsx";
 import { NativePiPanel } from "./native-pi-panel.tsx";
 import { canSubmitAuthPrompt } from "./auth-prompt.ts";
 import { createRoot } from "react-dom/client";
@@ -1423,17 +1424,13 @@ export function App() {
                   </section>
                 </div>
               </>
+            ) : route === "agents" ? (
+              <AgentsPanel />
             ) : (
               <div className="empty-state">
                 <Icon name={route} />
                 <h2>{routeLabel}</h2>
                 <p>This workflow is not available in the foundation preview.</p>
-                {route === "agents" && (
-                  <p>
-                    Existing personal sessions remain separate. No workers have
-                    been started from this view.
-                  </p>
-                )}
               </div>
             )}
           </main>

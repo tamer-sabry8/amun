@@ -1,3 +1,5 @@
+import { crewList } from "../../../packages/contracts/src/crew.ts";
+import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
   readHosting,
   saveHosting,
@@ -367,6 +369,7 @@ process.parentPort?.on("message", (event) => {
     (message) => port.postMessage(message),
   );
   sessions.add(terminal);
+  let listingCrew = false;
   const crew = new CrewObserver(
     async (id) => {
       const root = process.env.AMUN_CREW_RECEIPTS;
@@ -379,7 +382,20 @@ process.parentPort?.on("message", (event) => {
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
-    else if (message.data?.kind === "workspace") {
+    else if (crewList.safeParse(message.data).success) {
+      if (listingCrew) return;
+      listingCrew = true;
+      const root = process.env.AMUN_CREW_RECEIPTS;
+      void (root ? listReceiptTasks(root) : Promise.resolve(null))
+        .catch(() => null)
+        .then((tasks) => {
+          if (!closed)
+            port.postMessage({ version: 1, kind: "crew-inventory", tasks });
+        })
+        .finally(() => {
+          listingCrew = false;
+        });
+    } else if (message.data?.kind === "workspace") {
       const reply = workspaceService.handle(message.data);
       if (reply) port.postMessage(reply);
     } else if (backendTerminalOpen.safeParse(message.data).success) {

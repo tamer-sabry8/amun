@@ -1,4 +1,4 @@
-import { open, lstat, realpath } from "node:fs/promises";
+import { opendir, open, lstat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
 import {
@@ -71,4 +71,24 @@ export async function loadEndpointReceipt(
   if (receipt.identity.taskId !== taskId)
     throw new Error("Receipt identity mismatch");
   return receipt;
+}
+
+export async function listReceiptTasks(root: string) {
+  try {
+    await privateRoot(root);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const ids: string[] = [];
+  let scanned = 0;
+  for await (const entry of await opendir(root)) {
+    if (++scanned > 512) throw Error("Receipt inventory exceeds limit");
+    if (!entry.isFile() || !/^[-a-zA-Z0-9_]{1,64}\.json$/.test(entry.name))
+      continue;
+    const id = entry.name.slice(0, -5);
+    await loadEndpointReceipt(root, id);
+    ids.push(id);
+  }
+  return ids.sort();
 }

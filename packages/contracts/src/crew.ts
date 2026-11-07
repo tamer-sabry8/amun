@@ -49,3 +49,16 @@ export const crewObservation = z.strictObject({
   worker: z.literal("unknown"),
   run: run.optional(),
 });
+
+export const crewList = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-list"),
+});
+export const crewInventory = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-inventory"),
+  tasks: z
+    .array(z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/))
+    .max(512)
+    .nullable(),
+});

@@ -6,13 +6,18 @@ import { run, type Run } from "../../../packages/contracts/src/entities.ts";
 export class CrewObserver {
   private closed = false;
   private busy = false;
+  private next: ReturnType<typeof crewObserve.parse> | undefined;
   constructor(
     private read: (id: string) => Promise<unknown>,
     private send: (result: unknown) => void,
   ) {}
   async handle(input: unknown): Promise<void> {
     const request = crewObserve.safeParse(input);
-    if (!request.success || this.closed || this.busy) return;
+    if (!request.success || this.closed) return;
+    if (this.busy) {
+      this.next = request.data;
+      return;
+    }
     this.busy = true;
     let mapped: Run | undefined;
     let endpoint: "verified" | "unknown" = "unknown";
@@ -51,8 +56,12 @@ export class CrewObserver {
           ...(mapped ? { run: mapped } : {}),
         }),
       );
+    const next = this.next;
+    this.next = undefined;
+    if (next && !this.closed) await this.handle(next);
   }
   close(): void {
+    this.next = undefined;
     this.closed = true;
   }
 }

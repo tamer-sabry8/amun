@@ -5,6 +5,7 @@ module.exports = {
     // App code is bundled; ship only the separately staged production runtime.
     prune: false,
     ignore: [
+      /^\/out(?:\/|$)/,
       /^\/node_modules(?:\/|$)/,
       /^\/\.runtime(?:\/|$)/,
       /^\/src(?:\/|$)/,
