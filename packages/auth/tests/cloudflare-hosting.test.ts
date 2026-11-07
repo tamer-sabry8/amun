@@ -19,7 +19,13 @@ it("opens only the Cloudflare Code Mode consent page in Edge", () => {
     expect(() => cloudflareConsentArgs(u)).toThrow();
 });
 it("limits the hosting preflight to reading the named zone and host", () => {
-  expect(cloudflareZoneCode).toContain("transfrm.ai");
-  expect(cloudflareZoneCode).toContain("amun.transfrm.ai");
-  expect(cloudflareZoneCode).not.toMatch(/POST|PATCH|DELETE|PUT/);
+  expect(cloudflareZoneCode("example.org", "mine.example.org")).toContain(
+    "example.org",
+  );
+  expect(cloudflareZoneCode("example.org", "mine.example.org")).toContain(
+    "mine.example.org",
+  );
+  expect(cloudflareZoneCode("example.org", "mine.example.org")).not.toMatch(
+    /POST|PATCH|DELETE|PUT/,
+  );
 });

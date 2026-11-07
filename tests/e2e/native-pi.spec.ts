@@ -70,8 +70,41 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .getByRole("button", { name: "Open Pi commands", exact: true })
       .click();
     await page
+      .getByRole("button", { name: "Cycle thinking level", exact: true })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      /Thinking level:|no thinking levels to cycle/,
+    );
+    await page
       .getByLabel("Native Pi command", { exact: true })
       .selectOption("mcp");
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    const hostingMenu = page.getByRole("button", {
+      name: "Choose workspace hosting",
+      exact: true,
+    });
+    await hostingMenu.click();
+    await expect(page.getByLabel("Hosting provider")).toHaveValue("");
+    await page.getByLabel("Hosting provider").selectOption("other");
+    await page.getByLabel("Publishing hostname").fill("work.example.org");
+    await page
+      .getByRole("button", { name: "Save hosting destination" })
+      .click();
+    await expect(
+      page.getByText("Saved destination: work.example.org"),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
+    await hostingMenu.click();
+    await expect(page.getByLabel("Publishing hostname")).toHaveValue(
+      "work.example.org",
+    );
+    await expect(
+      page.getByRole("button", { name: "Inspect DNS in Cloudflare" }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Run command", exact: true })
       .click();

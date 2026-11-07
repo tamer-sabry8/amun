@@ -1,3 +1,4 @@
+import { HostingForm } from "./hosting-form.tsx";
 import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.ts";
 import { useEffect, useRef, useState } from "react";
 import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
@@ -374,6 +375,13 @@ export function NativePiPanel({
         >
           Next model
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run("", "cycle-thinking")}
+        >
+          Cycle thinking level
+        </button>
         <button type="button" disabled={busy} onClick={() => run()}>
           Run command
         </button>
@@ -492,6 +500,12 @@ export function NativePiPanel({
               omitted. Secrets are redacted.
             </p>
           </section>
+        ) : result?.kind === "hosting-setup" ? (
+          <HostingForm
+            saved={result.destination}
+            save={(v) => run(JSON.stringify(v), "hosting-save")}
+            inspect={() => run("cloudflare-hosting-check", "mcp")}
+          />
         ) : result?.kind === "github-device" ? (
           <section aria-label="GitHub device sign-in">
             <h3>GitHub device code</h3>

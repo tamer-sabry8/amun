@@ -81,7 +81,7 @@ const inventory = new Map<string, readonly [string, string]>([
       "The registry is a catalog. Choose a specific server before connecting.",
     ],
   ],
-  ["cloudflare-hosting", ["Cloudflare Code Mode · Inspect Amun hosting", ""]],
+  ["cloudflare-hosting", ["Choose workspace hosting", ""]],
   [
     "cloudflare",
     [

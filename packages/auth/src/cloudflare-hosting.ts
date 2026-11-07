@@ -1,3 +1,4 @@
+import { cloudflareDestination } from "../../contracts/src/hosting.ts";
 import { auth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -23,20 +24,32 @@ export function cloudflareConsentArgs(input: string) {
     throw Error("Unexpected Cloudflare consent page");
   return ["-a", "Microsoft Edge", url.href];
 }
-export const cloudflareZoneCode = `async () => {
- const zones=await cloudflare.request({method:"GET",path:"/zones?name=transfrm.ai"});
- const zone=zones.result?.find(z=>z.name==="transfrm.ai");
- if(!zone||!zone.id) throw Error("Zone unavailable");
- const records=await cloudflare.request({method:"GET",path:"/zones/"+zone.id+"/dns_records?name=amun.transfrm.ai"});
+export function cloudflareZoneCode(zone: string, host: string) {
+  ({ zone, host } = cloudflareDestination.parse({
+    provider: "cloudflare",
+    zone,
+    host,
+  }));
+  return `async () => {
+ const zones=await cloudflare.request({method:"GET",path:${JSON.stringify("/zones?name=" + zone)}});
+ const zone=zones.result?.find(z=>z.name===${JSON.stringify(zone)});
+ if(!zone||!zone.id)throw Error("Zone unavailable");
+ const records=await cloudflare.request({method:"GET",path:"/zones/"+zone.id+${JSON.stringify("/dns_records?name=" + host)}});
  if(!Array.isArray(records.result))throw Error("DNS inspection failed");
- return {zone:"transfrm.ai",host:"amun.transfrm.ai",records:records.result.filter(r=>r.name==="amun.transfrm.ai").length};
+ return {zone:zone.name,host:${JSON.stringify(host)},records:records.result.filter(r=>r.name===${JSON.stringify(host)}).length};
 }`;
-export async function inspectCloudflareHosting(options: {
+}
+export interface CloudflareOAuthOptions {
   read: () => string | undefined;
   write: (v: string) => void;
   open: (url: string) => Promise<void>;
   registerSecret: (v: string) => void;
-}) {
+}
+export async function withCloudflareClient<T>(
+  options: CloudflareOAuthOptions,
+  scope: string,
+  use: (client: Client) => Promise<T>,
+) {
   const stored = readNotionOAuthRecord(options.read(), CF_ISSUER);
   let token = stored?.tokens?.access_token;
   if (!token || !stored?.expiresAt || stored.expiresAt <= Date.now() + 60000) {
@@ -53,7 +66,7 @@ export async function inspectCloudflareHosting(options: {
     try {
       const config = {
         serverUrl: endpoint,
-        scope: "user:read account:read zone.read dns.read",
+        scope,
         fetchFn: notionAuthFetch(fetch, CF_ISSUER),
       };
       if ((await auth(provider, config)) === "REDIRECT")
@@ -93,36 +106,49 @@ export async function inspectCloudflareHosting(options: {
       )
     )
       throw Error("Code Mode unavailable");
-    const search = await client.callTool({
-      name: "search",
-      arguments: {
-        code: 'async () => Object.keys(spec.paths).filter(p => p === "/zones" || p === "/zones/{zone_id}/dns_records")',
-      },
-    });
-    if (search.isError || !JSON.stringify(search.content).includes("/zones"))
-      throw Error("Zone API discovery failed");
-    const result = await client.callTool({
-      name: "execute",
-      arguments: { code: cloudflareZoneCode },
-    });
-    if (result.isError) throw Error("Cloudflare zone read failed");
-    const item = z
-      .object({
-        content: z
-          .array(
-            z.object({ type: z.literal("text"), text: z.string().max(2048) }),
-          )
-          .length(1),
-      })
-      .parse(result);
-    return z
-      .object({
-        zone: z.literal("transfrm.ai"),
-        host: z.literal("amun.transfrm.ai"),
-        records: z.number().int().nonnegative(),
-      })
-      .parse(JSON.parse(item.content[0]!.text)).records;
+    return await use(client);
   } finally {
     await client.close();
   }
+}
+export async function inspectCloudflareHosting(
+  options: CloudflareOAuthOptions,
+  zone: string,
+  host: string,
+) {
+  return withCloudflareClient(
+    options,
+    "user:read account:read zone.read dns.read",
+    async (client) => {
+      const search = await client.callTool({
+        name: "search",
+        arguments: {
+          code: 'async () => Object.keys(spec.paths).filter(p => p === "/zones" || p === "/zones/{zone_id}/dns_records")',
+        },
+      });
+      if (search.isError || !JSON.stringify(search.content).includes("/zones"))
+        throw Error("Zone API discovery failed");
+      const result = await client.callTool({
+        name: "execute",
+        arguments: { code: cloudflareZoneCode(zone, host) },
+      });
+      if (result.isError) throw Error("Cloudflare zone read failed");
+      const item = z
+        .object({
+          content: z
+            .array(
+              z.object({ type: z.literal("text"), text: z.string().max(2048) }),
+            )
+            .length(1),
+        })
+        .parse(result);
+      return z
+        .object({
+          zone: z.literal(zone),
+          host: z.literal(host),
+          records: z.number().int().nonnegative(),
+        })
+        .parse(JSON.parse(item.content[0]!.text)).records;
+    },
+  );
 }

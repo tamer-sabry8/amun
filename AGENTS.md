@@ -30,7 +30,7 @@ Keep credentials in Amun's protected service-owned storage, never in renderer st
 
 ## Public hosting
 
-Use `https://amun.transfrm.ai` for Amun's public services. The user owns the parent zone in Cloudflare. Use Cloudflare's hosted API MCP with Code Mode for the hosting acceptance test. Inspect existing records, bind each proposed operation to the intended zone and hostname, and verify DNS and HTTPS after deployment. Track the GitHub web callback separately from device sign-in.
+Every workspace owner chooses a hosting provider and hostname before hosted publication. Use `https://amun.transfrm.ai` only for Tamer’s own setup. The user owns the parent zone in Cloudflare. Use Cloudflare's hosted API MCP with Code Mode for the hosting acceptance test. Inspect existing records, bind each proposed operation to the intended zone and hostname, and verify DNS and HTTPS after deployment. Track the GitHub web callback separately from device sign-in.
 
 ## Interface redesign approval
 

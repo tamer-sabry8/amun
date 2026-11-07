@@ -1,3 +1,4 @@
+import { hostingDestination } from "./hosting.ts";
 import { z } from "zod";
 const base = { version: z.literal(1), kind: z.literal("native-pi") };
 const id = z.string().min(1).max(128);
@@ -34,6 +35,10 @@ export const notionApprovalRequest = z.strictObject({
   binding: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("hosting-setup"),
+    destination: hostingDestination.nullable(),
+  }),
   z.strictObject({
     kind: z.literal("github-device"),
     code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/),

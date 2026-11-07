@@ -1,4 +1,8 @@
 import {
+  readHosting,
+  saveHosting,
+} from "../../../packages/data/src/hosting-destination.ts";
+import {
   cloudflareConsentArgs,
   inspectCloudflareHosting,
 } from "../../../packages/auth/src/cloudflare-hosting.ts";
@@ -461,13 +465,40 @@ process.parentPort?.on("message", (event) => {
         });
     } else {
       const nativeRequest = nativePiCommand.safeParse(message.data);
+      if (nativeRequest.success && nativeRequest.data.action === "run") {
+        const request = nativeRequest.data;
+        if (
+          request.command === "hosting-save" ||
+          (request.command === "mcp" &&
+            request.argument === "cloudflare-hosting")
+        ) {
+          try {
+            const destination =
+              request.command === "hosting-save"
+                ? saveHosting(workspace, JSON.parse(request.argument))
+                : readHosting(workspace);
+            sendNative(request.id, { kind: "hosting-setup", destination });
+          } catch {
+            sendNative(request.id, {
+              kind: "message",
+              text: "Hosting destination could not be saved or loaded. Enter a DNS hostname within your selected zone.",
+            });
+          }
+          return;
+        }
+      }
       if (
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
         nativeRequest.data.command === "mcp" &&
-        nativeRequest.data.argument === "cloudflare-hosting"
+        nativeRequest.data.argument === "cloudflare-hosting-check"
       ) {
         const id = nativeRequest.data.id;
+        const target = readHosting(workspace);
+        if (target?.provider !== "cloudflare") {
+          sendNative(id, { kind: "hosting-setup", destination: target });
+          return;
+        }
         if (cloudflareBusy) {
           sendNative(id, {
             kind: "message",
@@ -483,24 +514,32 @@ process.parentPort?.on("message", (event) => {
             .update("https://mcp.cloudflare.com/mcp")
             .digest("hex")
             .slice(0, 32);
-        void inspectCloudflareHosting({
-          read: () => authKeyring().get(account),
-          write: (value) => authKeyring().set(account, value),
-          registerSecret: (value) => redactor.register(value),
-          open: async (url) => {
-            await promisify(execFile)(
-              "/usr/bin/open",
-              cloudflareConsentArgs(url),
-              { timeout: 10000 },
-            );
+        void inspectCloudflareHosting(
+          {
+            read: () => authKeyring().get(account),
+            write: (value) => authKeyring().set(account, value),
+            registerSecret: (value) => redactor.register(value),
+            open: async (url) => {
+              await promisify(execFile)(
+                "/usr/bin/open",
+                cloudflareConsentArgs(url),
+                { timeout: 10000 },
+              );
+            },
           },
-        })
+          target.zone,
+          target.host,
+        )
           .then((records) => {
             if (!closed)
               sendNative(id, {
                 kind: "message",
                 text:
-                  "Cloudflare Code Mode verified transfrm.ai. DNS records for amun.transfrm.ai: " +
+                  "Cloudflare Code Mode verified " +
+                  target.zone +
+                  ". DNS records for " +
+                  target.host +
+                  ": " +
                   records +
                   ".",
               });

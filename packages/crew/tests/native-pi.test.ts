@@ -8,6 +8,7 @@ function fixture() {
     thinkingLevel: "medium",
     model,
     modelRuntime: { getAvailableSnapshot: () => [model] },
+    cycleThinkingLevel: vi.fn(() => undefined as string | undefined),
     getAvailableThinkingLevels: () => ["off", "medium"],
     setThinkingLevel: vi.fn(),
     setModel: vi.fn(async () => {}),
@@ -71,4 +72,24 @@ it("executes valid SDK mutations and rejects unsupported models, levels, oversiz
   await expect(
     actions.run("model", "github-copilot/gpt-test"),
   ).rejects.toThrow();
+});
+it("cycles the active model's SDK thinking levels and reports an unsupported model without mutation", async () => {
+  const { session, actions } = fixture();
+  const cycle = vi
+    .fn()
+    .mockReturnValueOnce("medium")
+    .mockReturnValueOnce(undefined);
+  Object.assign(session, { cycleThinkingLevel: cycle });
+  expect(await actions.run("cycle-thinking", "")).toEqual({
+    kind: "message",
+    text: "Thinking level: medium",
+  });
+  expect(await actions.run("cycle-thinking", "")).toEqual({
+    kind: "message",
+    text: "This model has no thinking levels to cycle.",
+  });
+  await expect(actions.run("cycle-thinking", "invalid")).rejects.toThrow();
+  session.isStreaming = true;
+  await expect(actions.run("cycle-thinking", "")).rejects.toThrow();
+  expect(cycle).toHaveBeenCalledTimes(2);
 });

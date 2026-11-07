@@ -9,6 +9,7 @@ export interface NativePiSession {
   thinkingLevel: string;
   model: Model | undefined;
   modelRuntime: { getAvailableSnapshot(): readonly Model[] };
+  cycleThinkingLevel(): string | undefined;
   getAvailableThinkingLevels(): string[];
   setThinkingLevel(level: string): void;
   setModel(model: Model): Promise<void>;
@@ -49,6 +50,17 @@ export class NativePiActions {
       if (index < 0) throw Error("Model unavailable");
       await s.setModel(models[index]!);
       return { kind: "message", text: "Model selected: " + argument };
+    }
+    if (command === "cycle-thinking") {
+      if (argument) throw Error("Unexpected thinking cycle argument");
+      const level = s.cycleThinkingLevel();
+      return {
+        kind: "message",
+        text:
+          level === undefined
+            ? "This model has no thinking levels to cycle."
+            : "Thinking level: " + bounded(level, 32),
+      };
     }
     if (command === "thinking") {
       const levels = s.getAvailableThinkingLevels();
