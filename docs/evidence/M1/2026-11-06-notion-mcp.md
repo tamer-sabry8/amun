@@ -103,3 +103,5 @@ In a separate in-memory credential fixture, Notion rejected a synthetic invalid 
 After explicit approval, the probe rechecked that the disposable profile and its OAuth registration were distinct from the working acceptance profile. It sent one revocation request for the disposable refresh token to the endpoint in Notion's issuer metadata. Notion returned HTTP 200. The production connector subsequently attempted refresh once, cleared the disposable credentials and returned reconnect-required. A separate read through the working profile still matched the approved Document Hub page receipt.
 
 The packaged disposable window received a connection-check click but the reconnect notice was not observed. The utility process held the refresh lock and its stack showed a blocking macOS Keychain lookup. The renderer gate remains open until this check returns and the reconnect message is visible.
+
+The owner completed the Keychain prompt at 12:51 +04. A read-only inspection of the existing disposable packaged window then clicked Test Notion connection and observed the reconnect guidance (one matching notice). The renderer gate for this revocation trial passed.
