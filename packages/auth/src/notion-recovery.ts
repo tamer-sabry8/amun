@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { notionTargetReference } from "./notion-result.ts";
+import { notionTargetReference, uuidFromReference } from "./notion-result.ts";
 export const markerProperty = "Amun publication ID";
 export type PublicationLookup = {
   marker: string;
@@ -97,14 +97,15 @@ export async function findNotionPublication(
   for (const id of new Set(ids)) {
     const p = z
       .object({
-        id: uuid,
+        id: uuid.optional(),
         url: z.string(),
         metadata: z.object({ type: z.literal("page") }),
         truncated: z.literal(false).optional(),
         text: z.string().max(524288),
       })
       .parse(body(await call("notion-fetch", { id })));
-    if (!same(id, p.id) || !same(notionTargetReference(p.url), p.id)) continue;
+    const pageId = uuidFromReference(notionTargetReference(p.url));
+    if (!same(id, pageId) || (p.id && !same(p.id, pageId))) continue;
     const contentStart = p.text.indexOf("\n<content>\n");
     if (contentStart === -1) continue;
     const header = p.text.slice(0, contentStart);
@@ -144,7 +145,7 @@ export async function findNotionPublication(
       )
         continue;
     }
-    found.add(p.id);
+    found.add(pageId);
   }
   return found.size === 1 ? [...found][0] : undefined;
 }

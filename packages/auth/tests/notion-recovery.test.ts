@@ -76,3 +76,16 @@ it("ignores property-like markup inside a conversation", async () => {
     ),
   ).toBeUndefined();
 });
+it("verifies hosted fetches which identify the page only by canonical URL", async () => {
+  const value = JSON.parse(fetched(page, footer).content[0]!.text);
+  delete value.id;
+  const lookup = () =>
+    findNotionPublication(
+      intent,
+      async () => result(value),
+      "https://www.notion.so/" + page,
+    );
+  expect(await lookup()).toBe(page);
+  value.url = "https://www.notion.so/" + other;
+  expect(await lookup()).toBeUndefined();
+});

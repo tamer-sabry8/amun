@@ -8,6 +8,9 @@ import { nativePiLoginChoice } from "../../../packages/crew/src/native-pi-login.
 import { useEffect, useRef, useState } from "react";
 import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
+function focusReview(heading: HTMLHeadingElement | null) {
+  heading?.focus();
+}
 export function NativePiPanel({
   subscriptionsOnly = false,
   onConnectNotion,
@@ -672,7 +675,9 @@ export function NativePiPanel({
           </dl>
         ) : result?.kind === "notion-preview" ? (
           <>
-            <h4>Review Share to Notion</h4>
+            <h4 key="Review Share to Notion" ref={focusReview} tabIndex={-1}>
+              Review Share to Notion
+            </h4>
             <p>
               Known credentials and detectable secret patterns have been
               removed. Review for confidential information before publishing.
@@ -743,7 +748,9 @@ export function NativePiPanel({
           </>
         ) : result?.kind === "notion-review" ? (
           <>
-            <h4>Approve Share to Notion</h4>
+            <h4 key="Approve Share to Notion" ref={focusReview} tabIndex={-1}>
+              Approve Share to Notion
+            </h4>
             {result.markerPropertyId && (
               <p>Amun publication ID: {result.markerPropertyId}</p>
             )}

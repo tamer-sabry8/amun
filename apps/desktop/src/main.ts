@@ -214,25 +214,39 @@ function openWindow(): void {
     },
   });
 }
-void app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, callback) => callback(false),
-  );
-  session.defaultSession.setPermissionCheckHandler(() => false);
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [shellSecurityPolicy(styleNonce)],
-      },
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (!window) {
+      if (app.isReady()) openWindow();
+      return;
+    }
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  });
+  void app.whenReady().then(() => {
+    session.defaultSession.setPermissionRequestHandler(
+      (_contents, _permission, callback) => callback(false),
+    );
+    session.defaultSession.setPermissionCheckHandler(() => false);
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [shellSecurityPolicy(styleNonce)],
+        },
+      });
+    });
+    startService();
+    openWindow();
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) openWindow();
     });
   });
-  startService();
-  openWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) openWindow();
-  });
-});
+}
 app.on("before-quit", () => {
   quitting = true;
   clearTimeout(restartTimer);

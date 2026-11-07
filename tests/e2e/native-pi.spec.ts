@@ -383,6 +383,9 @@ test("native Pi commands create an owned SDK session and update its real name", 
       .getByRole("button", { name: "Share to Notion", exact: true })
       .click();
     await expect(
+      page.getByRole("heading", { name: "Review Share to Notion" }),
+    ).toBeFocused();
+    await expect(
       page.getByLabel("Redacted Notion conversation preview", { exact: true }),
     ).toHaveValue(/\[REDACTED\]/);
     await expect(

@@ -69,7 +69,7 @@ export interface NotionDestination {
   titleProperty: string;
   markerPropertyAvailable?: boolean;
 }
-function uuidFromReference(id: string) {
+export function uuidFromReference(id: string) {
   const hex = id.replaceAll("-", "").toLowerCase();
   if (!/^[a-f0-9]{32}$/.test(hex)) throw Error("Invalid Notion identity");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
