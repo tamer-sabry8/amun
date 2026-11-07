@@ -105,3 +105,9 @@ After explicit approval, the probe rechecked that the disposable profile and its
 The packaged disposable window received a connection-check click but the reconnect notice was not observed. The utility process held the refresh lock and its stack showed a blocking macOS Keychain lookup. The renderer gate remains open until this check returns and the reconnect message is visible.
 
 The owner completed the Keychain prompt at 12:51 +04. A read-only inspection of the existing disposable packaged window then clicked Test Notion connection and observed the reconnect guidance (one matching notice). The renderer gate for this revocation trial passed.
+
+### T016c source consent and process locking, 7 November
+
+At base revision `4d49582` a fresh source Amun profile initiated official Edge sign-in and reached ready through the production workspace identity read. After closing and reopening that profile, Test Notion connection returned the expected workspace name from the saved grant. There was no publication. The separately revoked packaged test grant was left disconnected.
+
+Five independent Node processes concurrently acquired the production refresh lock on one disposable private directory. Each read a test generation number, waited 50 ms and incremented it. All five increments survived. This exercises process serialization separately from the live single-rotation trial. Together with the packaged consent, persisted registration, disconnect, revoked grant, reconnect guidance, validated callback and publication recovery evidence above, this closes T016c.

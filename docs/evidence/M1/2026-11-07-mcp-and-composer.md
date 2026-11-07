@@ -31,3 +31,7 @@ Google’s documented setup requires an eligible project with the relevant APIs 
 ### Packaged Google Workspace MCP discovery
 
 On 7 November the packaged arm64 app initialized the separate hosted Gmail, Drive and Calendar endpoints in a fresh profile. Each native MCP menu action verified the expected tool and displayed its success status. These were unauthenticated discovery calls. Account reads await the separately tracked Google OAuth follow-up.
+
+### Google Sheets and Maps discovery, 7 November
+
+At base `4d49582` each new connector test first failed because its product lookup returned undefined. Sheets now requires the official server to advertise `get_spreadsheet`; Maps requires `search_places`. Both use the bounded credential-free transport with redirect refusal. From the Conversations MCP chooser, the source build and a separately built arm64 package each initialized both live endpoints and verified the expected tools. The reusable journey is `tests/e2e/google-mcp.spec.ts` with `AMUN_LIVE_GOOGLE_MCP=1`. The full check passed 430 unit tests, lint, types and formatting. No spreadsheet contents, place searches or billed operations were requested. Authenticated use remains open. [Sheets MCP reference](https://developers.google.com/workspace/sheets/api/reference/mcp) and [Maps server setup](https://developers.google.com/maps/ai/grounding-lite).

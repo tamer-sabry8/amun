@@ -3,13 +3,23 @@ import {
   googleMcpProduct,
   googleDiscoveryFetch,
 } from "../src/google-workspace-mcp.ts";
-it("recognizes only the three selected Google product servers", () => {
+it("recognizes only the selected Google product servers", () => {
   expect(googleMcpProduct("gmail")?.endpoint).toBe(
     "https://gmailmcp.googleapis.com/mcp/v1",
   );
   expect(googleMcpProduct("drive")?.tool).toBe("get_file_metadata");
   expect(googleMcpProduct("calendar")?.tool).toBe("list_events");
-  for (const key of ["docker", "__proto__", "https://example.org", "sheets"])
+  expect(googleMcpProduct("sheets")).toEqual({
+    id: "sheets",
+    label: "Google Sheets",
+    endpoint: "https://sheetsmcp.googleapis.com/mcp/v1",
+    tool: "get_spreadsheet",
+  });
+  expect(googleMcpProduct("maps")).toMatchObject({
+    endpoint: "https://mapstools.googleapis.com/mcp",
+    tool: "search_places",
+  });
+  for (const key of ["docker", "__proto__", "https://example.org"])
     expect(googleMcpProduct(key)).toBeUndefined();
 });
 it("binds anonymous discovery to the selected origin and strips ambient authority", async () => {

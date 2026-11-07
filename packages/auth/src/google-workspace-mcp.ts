@@ -20,6 +20,18 @@ const products = [
     endpoint: "https://calendarmcp.googleapis.com/mcp/v1",
     tool: "list_events",
   },
+  {
+    id: "sheets",
+    label: "Google Sheets",
+    endpoint: "https://sheetsmcp.googleapis.com/mcp/v1",
+    tool: "get_spreadsheet",
+  },
+  {
+    id: "maps",
+    label: "Google Maps",
+    endpoint: "https://mapstools.googleapis.com/mcp",
+    tool: "search_places",
+  },
 ] as const;
 type Product = (typeof products)[number];
 export function googleMcpProduct(key: string) {
@@ -43,6 +55,8 @@ export async function discoverGoogleMcp(product: Product) {
     const list = await client.listTools();
     if (!list.tools.some((t) => t.name === product.tool))
       throw Error("Expected product tool unavailable");
+    if (product.id === "maps")
+      return "Google Maps MCP tools verified. Place searches require a configured Google Maps project and credentials.";
     return (
       product.label +
       " MCP tools verified. Access to your account still requires Google authorization."
