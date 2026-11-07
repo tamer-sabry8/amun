@@ -42,14 +42,7 @@ export class ReviewedExtensions {
     const stage = await realpath(
       await mkdtemp(join(tmpdir(), "amun-reviewed-pi-")),
     );
-    const extensions = new ReviewedExtensions(store, stage);
-    try {
-      await extensions.refresh();
-      return extensions;
-    } catch (e) {
-      await extensions.close();
-      throw e;
-    }
+    return new ReviewedExtensions(store, stage);
   }
   get entry() {
     return join(this.stage, "index.ts");

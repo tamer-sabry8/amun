@@ -51,7 +51,7 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
         id: "queue",
         name: "Queue acceptance",
         reasoning: false,
-        input: ["text"],
+        input: ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 8192,
         maxTokens: 100,
@@ -85,11 +85,30 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
     await btn("Run command").click();
     await btn("Queue acceptance").click({ timeout: 18000 });
     await btn("Read active conversation").click();
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+    await p.getByLabel("Conversation message").evaluate((el, encoded) => {
+      const data = new DataTransfer();
+      data.items.add(
+        new File(
+          [Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0))],
+          "pasted.png",
+          { type: "image/png" },
+        ),
+      );
+      el.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, clipboardData: data }),
+      );
+    }, png);
+    await expect(
+      p.getByRole("img", { name: "Image attached to this conversation" }),
+    ).toBeVisible({ timeout: 1800 });
     await p
       .getByLabel("Conversation message")
       .fill("Begin the queue acceptance");
     await p.getByLabel("Conversation message").press("Enter");
     await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toContain("data:image/png;base64,");
     const queued = p.getByLabel("Message during response");
     await queued.fill("Recall this steering message", { timeout: 2400 });
     await btn("Steer response").click();

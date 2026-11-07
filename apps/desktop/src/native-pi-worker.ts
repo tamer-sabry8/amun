@@ -1,3 +1,7 @@
+import {
+  workspaceFileChoices,
+  completeWorkspaceFile,
+} from "../../../packages/crew/src/native-workspace-files.ts";
 import { ReviewedExtensions } from "../../../packages/crew/src/reviewed-extensions.ts";
 import {
   NativeExtensionUI,
@@ -84,8 +88,9 @@ if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
   session: ExtensionSession &
     ResourceSession &
-    NativeTurnSession &
-    CredentialSession &
+    NativeTurnSession & {
+      resourceLoader: { getExtensions(): { errors: unknown[] } };
+    } & CredentialSession &
     NativePiSession &
     PreferenceSession &
     ExportSession &
@@ -145,6 +150,7 @@ async function privateDirectory(path: string) {
 async function initialize() {
   const authPath = await preparePiAuth(root!);
   reviewed ??= await ReviewedExtensions.open(root!);
+  await reviewed.refresh();
   privateAuthPath = authPath;
   const cwd = join(dirname(root!), "pi-workspace");
   await privateDirectory(cwd);
@@ -440,7 +446,10 @@ process.stdin.on("data", (chunk: string) => {
           });
           return;
         }
-        if (!runtime) await initialize();
+        if (command.command.startsWith("extension-") && !reviewed) {
+          await privateDirectory(root!);
+          reviewed = await ReviewedExtensions.open(root!);
+        }
         if (command.command === "extension-review") {
           const { name, source } = JSON.parse(command.argument);
           send(command.id, reviewed!.review(name, source));
@@ -453,7 +462,18 @@ process.stdin.on("data", (chunk: string) => {
           if (command.command === "extension-install")
             await reviewed!.trust(command.argument);
           else await reviewed!.remove(command.argument);
-          await runtime!.session.reload();
+          if (runtime) await runtime.session.reload();
+          else if (command.command === "extension-install") await initialize();
+          if (
+            command.command === "extension-install" &&
+            runtime?.session.resourceLoader.getExtensions().errors.length
+          ) {
+            send(command.id, {
+              kind: "message",
+              text: "Reviewed extension saved, but Pi reported a loading error. Remove it in Manage trusted extensions.",
+            });
+            return;
+          }
           send(command.id, {
             kind: "message",
             text:
@@ -474,6 +494,7 @@ process.stdin.on("data", (chunk: string) => {
           });
           return;
         }
+        if (!runtime) await initialize();
         if (command.command === "reload") {
           await resourceDirectories(root!);
           await reviewed!.refresh();
@@ -518,6 +539,8 @@ process.stdin.on("data", (chunk: string) => {
             "conversation-send",
             "resource-draft",
             "attach-text",
+            "file-complete",
+            "file-attach",
             "captain-shell",
             "extension-command",
             "bug",
@@ -653,6 +676,32 @@ process.stdin.on("data", (chunk: string) => {
             return;
           }
           let resourceDraft: string | undefined;
+          if (
+            command.command === "file-complete" ||
+            command.command === "file-attach"
+          ) {
+            const input = JSON.parse(command.argument);
+            if (
+              input.sessionId !== session.sessionId ||
+              session.isStreaming ||
+              typeof input.draft !== "string" ||
+              input.draft.length > 12000
+            )
+              throw Error("Session changed");
+            const rootDir = join(dirname(root!), "pi-workspace");
+            if (command.command === "file-complete") {
+              send(command.id, {
+                ...view,
+                resources: resourceNames(session),
+                extensionCommands: extensionNames(session),
+                fileOptions: await workspaceFileChoices(rootDir, input.draft),
+              });
+              return;
+            }
+            resourceDraft = redactor.text(
+              await completeWorkspaceFile(rootDir, input.draft, input.pick),
+            );
+          }
           if (command.command === "attach-text") {
             const input = textAttachmentRequest.parse(
               JSON.parse(command.argument),
@@ -692,6 +741,9 @@ process.stdin.on("data", (chunk: string) => {
             ...view,
             resources: resourceNames(session),
             extensionCommands: extensionNames(session),
+            acceptsImage:
+              !session.settingsManager.getBlockImages() &&
+              !!session.model?.input?.includes("image"),
             ...(resourceDraft === undefined ? {} : { resourceDraft }),
           });
           return;
@@ -713,7 +765,7 @@ process.stdin.on("data", (chunk: string) => {
           send(
             command.id,
             nativeDocumentPage(
-              "Native Pi controls currently available:\nCtrl+L — select a model.\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter — submit a conversation draft. Shift+Enter or Control+J — insert a line. During a response, Enter steers, Alt+Enter queues a follow-up, Alt+Up recalls the queue, and Escape stops the response. Control+C clears an unselected draft. Control+D closes an empty composer. Enter / Space activates the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
+              "Native Pi controls currently available:\nCtrl+L — select a model.\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter — submit a conversation draft. Shift+Enter or Control+J — insert a line. During a response, Enter steers, Alt+Enter queues a follow-up, Alt+Up recalls the queue, and Escape stops the response. Control+G opens the multiline draft editor. Tab at an @reference completes a workspace path. Paste an image to review it before sending. Control+C clears an unselected draft. Control+D closes an empty composer. Enter / Space activates the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
               command.argument,
               "Amun native Pi shortcuts",
             ),

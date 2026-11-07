@@ -1,12 +1,17 @@
 import { nativeTurnRequest } from "../../contracts/src/native-pi.ts";
 export interface NativeTurnSession {
   sessionId: string;
-  model: { provider: string; id: string } | undefined;
+  model:
+    { provider: string; id: string; input?: readonly string[] } | undefined;
   isStreaming: boolean;
+  settingsManager?: { getBlockImages(): boolean };
   subscribe(listener: (event: unknown) => void): () => void;
   prompt(
     text: string,
-    options: { expandPromptTemplates: false },
+    options: {
+      expandPromptTemplates: false;
+      images?: { type: "image"; mimeType: "image/png"; data: string }[];
+    },
   ): Promise<void>;
 }
 /** Acknowledgement, an old assistant reply, or a provider error cannot prove this turn completed. */
@@ -19,6 +24,21 @@ export async function nativeTurn(session: NativeTurnSession, input: unknown) {
     request.model !== session.model.provider + "/" + session.model.id
   )
     throw Error("Active conversation or model changed");
+  if (request.image) {
+    const png = Buffer.from(request.image, "base64");
+    if (
+      session.settingsManager?.getBlockImages() !== false ||
+      !session.model.input?.includes("image") ||
+      png.length < 33 ||
+      png.toString("base64") !== request.image ||
+      !png.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) ||
+      png.toString("ascii", 12, 16) !== "IHDR" ||
+      [png.readUInt32BE(16), png.readUInt32BE(20)].some(
+        (n) => n < 1 || n > 1536,
+      )
+    )
+      throw Error("Image unavailable for the active model or settings");
+  }
   let assistantStopped = false,
     unexpectedTool = false,
     settled = false,
@@ -51,7 +71,16 @@ export async function nativeTurn(session: NativeTurnSession, input: unknown) {
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await session.prompt(request.text, { expandPromptTemplates: false });
+    await session.prompt(request.text, {
+      expandPromptTemplates: false,
+      ...(request.image
+        ? {
+            images: [
+              { type: "image", mimeType: "image/png", data: request.image },
+            ],
+          }
+        : {}),
+    });
     if (!settled)
       await Promise.race([
         settlement,

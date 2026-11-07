@@ -1,3 +1,5 @@
+import { DraftEditor } from "./draft-editor.tsx";
+import { pastedImage } from "./pasted-image.ts";
 import {
   composerCommand,
   nativeCommandNames,
@@ -29,6 +31,17 @@ export function NativePiPanel({
     () => new Map(),
   );
   const sessionId = result?.kind === "conversation" ? result.sessionId : null;
+  const [images, setImages] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const image = sessionId ? images.get(sessionId) : undefined;
+  const keepImage = (id: string, data?: string) =>
+    setImages((previous) => {
+      const next = new Map(previous);
+      if (data) next.set(id, data);
+      else next.delete(id);
+      return next;
+    });
   const draft = sessionId ? (drafts.get(sessionId) ?? "") : "";
   function saveDraft(id: string, text: string) {
     setDrafts((previous) => {
@@ -63,6 +76,7 @@ export function NativePiPanel({
       : undefined;
   const draftAction = useRef<HTMLButtonElement>(null);
   const importFile = useRef<HTMLInputElement>(null);
+  const [editingSession, setEditingSession] = useState<string | null>(null);
   const [queueText, renderQueueText] = useState("");
   const queueDraft = useRef({ id: "", text: "" });
   function setQueueText(text: string) {
@@ -672,6 +686,24 @@ export function NativePiPanel({
               <textarea
                 onKeyDown={(event) => {
                   if (event.nativeEvent.isComposing || event.repeat) return;
+                  if (
+                    event.key === "Tab" &&
+                    !event.shiftKey &&
+                    /(?:^|\s)@[^@\s]*$/.test(draft) &&
+                    event.currentTarget.selectionEnd === draft.length
+                  ) {
+                    event.preventDefault();
+                    run(
+                      JSON.stringify({ sessionId: result.sessionId, draft }),
+                      "file-complete",
+                    );
+                    return;
+                  }
+                  if (event.ctrlKey && event.key.toLowerCase() === "g") {
+                    event.preventDefault();
+                    setEditingSession(result.sessionId);
+                    return;
+                  }
                   const el = event.currentTarget;
                   if (
                     event.key === "Enter" &&
@@ -707,6 +739,25 @@ export function NativePiPanel({
                   ) {
                     event.preventDefault();
                     run("", "quit");
+                  }
+                }}
+                onPaste={async (event) => {
+                  const file = Array.from(event.clipboardData.files).find((f) =>
+                    f.type.startsWith("image/"),
+                  );
+                  if (!file || busy) return;
+                  event.preventDefault();
+                  const id = result.sessionId;
+                  setBusy(true);
+                  try {
+                    keepImage(id, await pastedImage(file));
+                    setAttachmentError("");
+                  } catch {
+                    setAttachmentError(
+                      "Choose a smaller PNG, JPEG or WebP image.",
+                    );
+                  } finally {
+                    setBusy(false);
                   }
                 }}
                 aria-label="Conversation message"
@@ -761,6 +812,67 @@ export function NativePiPanel({
                 }
               }}
             />
+            <button
+              disabled={busy}
+              onClick={() => setEditingSession(result.sessionId)}
+            >
+              Edit draft…
+            </button>
+            {editingSession === result.sessionId && (
+              <DraftEditor
+                key={result.sessionId}
+                initial={draft}
+                apply={(value) => saveDraft(result.sessionId, value)}
+                close={() => setEditingSession(null)}
+              />
+            )}
+            {result.fileOptions && (
+              <div aria-label="Workspace files">
+                {result.fileOptions.length ? (
+                  result.fileOptions.map((p) => (
+                    <button
+                      key={p}
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          JSON.stringify({
+                            sessionId: result.sessionId,
+                            draft,
+                            pick: p,
+                          }),
+                          "file-attach",
+                        )
+                      }
+                    >
+                      {(p.endsWith("/") ? "Complete " : "Attach ") + p}
+                    </button>
+                  ))
+                ) : (
+                  <p>No matching workspace files.</p>
+                )}
+              </div>
+            )}
+            {image && (
+              <div>
+                <img
+                  width="96"
+                  alt="Image attached to this conversation"
+                  src={"data:image/png;base64," + image}
+                />
+                {!result.acceptsImage && (
+                  <p role="status">
+                    Choose a model that accepts images and enable images in Pi
+                    settings to send this attachment.
+                  </p>
+                )}
+                <button
+                  disabled={busy}
+                  onClick={() => keepImage(result.sessionId)}
+                >
+                  Remove image
+                </button>
+              </div>
+            )}
             {attachmentError && <p role="status">{attachmentError}</p>}
             {draft.trim() === "/" && (
               <label>
@@ -805,6 +917,7 @@ export function NativePiPanel({
                     !resource &&
                     (!result.model ||
                       !draft.trim() ||
+                      (!!image && !result.acceptsImage) ||
                       /^[!/]/.test(draft.trimStart()) ||
                       JSON.stringify({
                         sessionId: result.sessionId,
@@ -863,9 +976,11 @@ export function NativePiPanel({
                     sessionId: result.sessionId,
                     model: result.model,
                     text: draft,
+                    ...(image ? { image } : {}),
                   }),
                   "conversation-send",
                 );
+                keepImage(result.sessionId);
                 setDraft("");
               }}
             >

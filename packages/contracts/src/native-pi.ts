@@ -13,8 +13,9 @@ export const nativePiCommand = z.discriminatedUnion("action", [
     })
     .refine(
       (value) =>
-        ["import-preview", "extension-review"].includes(value.command) ||
-        value.argument.length <= 16384,
+        ["import-preview", "extension-review", "conversation-send"].includes(
+          value.command,
+        ) || value.argument.length <= 16384,
     ),
   z.strictObject({
     ...base,
@@ -55,6 +56,12 @@ export const textAttachmentRequest = z.strictObject({
     .refine((text) => !/[\p{Cc}]/u.test(text.replace(/[\r\n\t]/g, ""))),
 });
 export const nativeTurnRequest = z.strictObject({
+  image: z
+    .string()
+    .min(44)
+    .max(350000)
+    .regex(/^[a-zA-Z0-9+/]+={0,2}$/)
+    .optional(),
   sessionId: z.uuid(),
   model: z.string().min(1).max(512),
   text: z
@@ -150,6 +157,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("conversation"),
     calm: z.boolean().optional(),
+    fileOptions: z.array(z.string().max(513)).max(100).optional(),
+    acceptsImage: z.boolean().optional(),
     extensionCommands: z.array(z.string().max(64)).max(256).optional(),
     resources: z.array(z.string().min(1).max(128)).max(512).optional(),
     resourceDraft: z.string().max(12000).optional(),

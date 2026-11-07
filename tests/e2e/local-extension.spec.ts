@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,9 +71,25 @@ test("runs only the reviewed Pi extension copy and presents its native dialog", 
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Reviewed extension result",
     );
+    await app.close();
+    const changedMarker = join(root, "unreviewed-executed");
+    await writeFile(
+      join(
+        root,
+        "pi-agent/reviewed-extensions",
+        createHash("sha256").update(code).digest("hex") + ".ts",
+      ),
+      'import {writeFileSync} from "node:fs";export default function(){writeFileSync(' +
+        JSON.stringify(changedMarker) +
+        ',"unexpected")}',
+    );
+    app = await launch();
+    page = await app.firstWindow();
+    await open();
     await button("Manage trusted extensions").click();
     const installed = page.getByRole("button", { name: /^[a-f0-9]{64}$/ });
-    await installed.click();
+    await installed.click({ timeout: 5000 });
+    await expect(access(changedMarker)).rejects.toThrow();
     await expect(page.getByTestId("native-pi-result")).toContainText(
       "Extension removed.",
     );

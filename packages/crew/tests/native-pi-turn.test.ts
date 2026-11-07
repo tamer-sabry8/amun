@@ -58,3 +58,30 @@ it("rejects unknown slash or shell operations, malformed input, stale selection 
   await expect(nativeTurn(session, request)).rejects.toThrow();
   expect(session.prompt).not.toHaveBeenCalled();
 });
+
+it("refuses image content before calling the provider when Pi blocks it or the model is text-only", async () => {
+  const { session } = setup("ok");
+  const data = {
+    sessionId: id,
+    model: "test/m",
+    text: "Inspect",
+    image:
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+  };
+  for (const [blocked, input] of [
+    [true, ["text", "image"]],
+    [false, ["text"]],
+  ] as const) {
+    await expect(
+      nativeTurn(
+        {
+          ...session,
+          model: { ...session.model, input },
+          settingsManager: { getBlockImages: () => blocked },
+        },
+        data,
+      ),
+    ).rejects.toThrow("Image unavailable");
+  }
+  expect(session.prompt).not.toHaveBeenCalled();
+});

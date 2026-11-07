@@ -21,6 +21,12 @@ test("owned Pi template and skill commands expand into an editable draft", async
     "---\nname: summary\ndescription: Acceptance summary\n---\nSummarize the supplied decision.",
     { mode: 0o600 },
   );
+  const workspace = join(root, "pi-workspace");
+  await mkdir(workspace, { mode: 0o700 });
+  await writeFile(
+    join(workspace, "meeting.md"),
+    "Workspace note password=AMUN_PATH_CANARY",
+  );
   const executablePath = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -53,6 +59,21 @@ test("owned Pi template and skill commands expand into an editable draft", async
     await button("Apply /skill:summary").click();
     await expect(draft).toHaveValue(
       /Summarize the supplied decision[.][\s\S]*Keep it short[.]/,
+    );
+    await draft.fill("Draft before editing");
+    await draft.press("Control+g");
+    const editor = page.getByRole("dialog", {
+      name: "Edit conversation draft",
+    });
+    await expect(editor).toBeVisible({ timeout: 1800 });
+    await editor.getByLabel("Draft text").fill("First line\nSecond line");
+    await editor.getByRole("button", { name: "Apply draft" }).click();
+    await expect(draft).toHaveValue("First line\nSecond line");
+    await draft.fill("Read @mee");
+    await draft.press("Tab");
+    await button("Attach meeting.md").click({ timeout: 2500 });
+    await expect(draft).toHaveValue(
+      /Read[\s\S]*meeting.md[\s\S]*Workspace note password=\[REDACTED\]/,
     );
     await draft.fill("Review the decision @");
     const attachment = join(root, "decision.txt");
