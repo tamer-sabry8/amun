@@ -8,6 +8,8 @@ The registered target is `https://amun.transfrm.ai/mcp/callback`. On the accepta
 4. From the Mac, open the callback with no parameters and with an invalid state. Both requests must fail safely without showing a success page or echoing query parameters. Verify unknown routes are not accepted as callbacks.
 5. Start a fresh web authorization in packaged Amun. Complete GitHub consent in Edge. Verify the same initiating Amun session receives the grant, then list MCP tools and read a known file from the selected repository. Verify cancellation and replay rejection. Record the tested deployment revision and result, without codes or tokens.
 
+Run `node scripts/github-callback-proof.ts` from the repository with its pinned Node version after deploying. It checks the exact HTTPS route with missing and synthetic invalid parameters and requires a rejection response with `Cache-Control: no-store`.
+
 Track DNS/TLS, invalid-state handling, and the complete web authorization as separate checks. A working device login does not close this ticket.
 
 References: [GitHub OAuth web and device flows](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Cloudflare Worker custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).

@@ -1,3 +1,9 @@
+import {
+  GithubDeviceLogin,
+  githubDevicePost,
+  githubGrant,
+} from "../../../packages/auth/src/github-device.ts";
+import { checkGithubMcp } from "../../../packages/auth/src/github-mcp.ts";
 import { createHash } from "node:crypto";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
@@ -229,6 +235,28 @@ process.parentPort?.on("message", (event) => {
     port.postMessage(
       nativePiEvent.parse({ version: 1, kind: "native-pi-result", id, result }),
     );
+  const githubAccount =
+    workspaceIdentity(workspace) +
+    "/" +
+    connectionId({ kind: "github", baseUrl: "https://api.githubcopilot.com" });
+  const githubLogin = new GithubDeviceLogin(
+    githubDevicePost,
+    async () => {
+      await promisify(execFile)(
+        "/usr/bin/open",
+        ["-a", "Microsoft Edge", "https://github.com/login/device"],
+        { timeout: 10000 },
+      );
+    },
+    (grant) => {
+      redactor.register(grant.access_token);
+      if (grant.refresh_token) redactor.register(grant.refresh_token);
+      authKeyring().set(
+        githubAccount,
+        JSON.stringify({ grant, savedAt: Date.now() }),
+      );
+    },
+  );
   const nativePi = new NativePiProcess(
     {
       binary: process.env.AMUN_PI_BINARY!,
@@ -425,6 +453,88 @@ process.parentPort?.on("message", (event) => {
         });
     } else {
       const nativeRequest = nativePiCommand.safeParse(message.data);
+      if (
+        nativeRequest.success &&
+        nativeRequest.data.action === "run" &&
+        nativeRequest.data.command === "mcp" &&
+        [
+          "github-connect",
+          "github-finish",
+          "github-cancel",
+          "github-read",
+        ].includes(nativeRequest.data.argument)
+      ) {
+        const cmd = nativeRequest.data;
+        void (async () => {
+          const pending = (title: string) =>
+            sendNative(cmd.id, {
+              kind: "choices",
+              title,
+              choices: [
+                { id: "github-finish", label: "Check GitHub authorization" },
+                { id: "github-cancel", label: "Cancel GitHub sign-in" },
+              ],
+            });
+          if (cmd.argument === "github-connect") {
+            pending(
+              "Enter " + (await githubLogin.start()) + " in Microsoft Edge.",
+            );
+            return;
+          }
+          if (cmd.argument === "github-cancel") {
+            githubLogin.cancel();
+            sendNative(cmd.id, {
+              kind: "message",
+              text: "GitHub sign-in cancelled.",
+            });
+            return;
+          }
+          if (
+            cmd.argument === "github-finish" &&
+            (await githubLogin.check()) === "pending"
+          ) {
+            pending(
+              "Enter " +
+                githubLogin.userCode +
+                " in Microsoft Edge, then check authorization.",
+            );
+            return;
+          }
+          const stored = authKeyring().get(githubAccount);
+          if (!stored) {
+            sendNative(cmd.id, {
+              kind: "message",
+              text: "GitHub is disconnected. Choose Sign in with Microsoft Edge to connect.",
+            });
+            return;
+          }
+          const { grant, savedAt } = JSON.parse(stored);
+          const token = githubGrant.parse(grant);
+          if (
+            typeof savedAt !== "number" ||
+            (token.expires_in &&
+              Date.now() >= savedAt + 1000 * token.expires_in)
+          ) {
+            sendNative(cmd.id, {
+              kind: "message",
+              text: "GitHub sign-in has expired. Reconnect with Microsoft Edge.",
+            });
+            return;
+          }
+          await checkGithubMcp(token.access_token);
+          sendNative(cmd.id, {
+            kind: "message",
+            text: "GitHub MCP connected. Read package.json from tamer-sabry8/amun.",
+          });
+        })().catch(() => {
+          if (!closed)
+            sendNative(cmd.id, {
+              kind: "message",
+              text: "GitHub operation could not be verified. Check the saved connection or start a new sign-in.",
+            });
+        });
+        return;
+      }
       if (
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
@@ -651,6 +761,7 @@ process.parentPort?.on("message", (event) => {
   });
   port.on("close", () => {
     closed = true;
+    githubLogin.cancel();
     nativePi.close();
     auth.close();
     authSessions.delete(auth);

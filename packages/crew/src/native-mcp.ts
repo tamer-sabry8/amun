@@ -1,5 +1,7 @@
 import type { NativePiResult } from "./native-pi.ts";
 const inventory = new Map<string, readonly [string, string]>([
+  ["github-connect", ["GitHub · Sign in with Microsoft Edge", ""]],
+  ["github-read", ["GitHub · Test saved connection", ""]],
   ["github", ["GitHub · Check sign-in endpoint", ""]],
   [
     "gmail",

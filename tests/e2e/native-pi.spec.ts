@@ -75,6 +75,24 @@ test("native Pi commands create an owned SDK session and update its real name", 
     await page
       .getByRole("button", { name: "Run command", exact: true })
       .click();
+    await expect(
+      page.getByRole("button", {
+        name: "GitHub · Sign in with Microsoft Edge",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "GitHub · Test saved connection",
+        exact: true,
+      })
+      .click();
+    await expect(page.getByTestId("native-pi-result")).toContainText(
+      "Sign in with Microsoft Edge",
+    );
+    await page
+      .getByRole("button", { name: "Run command", exact: true })
+      .click();
     await page
       .getByRole("button", { name: "Chrome DevTools", exact: true })
       .click();
