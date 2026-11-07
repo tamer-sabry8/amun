@@ -16,3 +16,7 @@ Tested code revision `d6f4b0e`, including worker recovery at `4a019a5`. Source a
 - The source and packaged UI tests resumed a real Pi 1.4.0 session containing sibling branches, displayed both siblings at the correct level, marked the current entry, navigated the tree and exercised fork. Unit cases reject orphaned, duplicate and cyclic entries.
 - A separate test package originally picked up a previous desktop build directory and failed during packaging. The packaging configuration now excludes prior output. The final package was built in a separate directory and both live suites passed.
 - Lint, type checking, formatting and 412 unit tests passed. Domain line coverage was 97.24%, including 96.72% for governance.
+
+## Persistent crew home
+
+The normal Agents screen now opens one persistent crew home per workspace. It prepares a primary and two linked worker checkouts from the selected verified archive. Opening the home again validates the original Git registrations. A full application restart and a rollback of the revision for new checkouts preserved the original crew. The source and packaged Mac journeys passed in 18.2 and 22.6 seconds after reproducing the missing control. This verifies provisioning and reuse. Initial dispatch and endpoint issuance remain open.

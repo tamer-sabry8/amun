@@ -14,7 +14,9 @@ export function AgentsPanel() {
   const releaseRequest = useRef<string | null>(null);
   const [releaseStatus, setReleaseStatus] = useState("");
   const [releaseBusy, setReleaseBusy] = useState(false);
-  function releaseAction(argument: "status" | "prepare" | "rollback") {
+  function releaseAction(
+    argument: "status" | "prepare" | "rollback" | "crew-home",
+  ) {
     if (releaseRequest.current) return;
     const id = crypto.randomUUID();
     releaseRequest.current = id;
@@ -100,6 +102,12 @@ export function AgentsPanel() {
           Choose the revision for new Amun worktrees. Existing workers keep
           their revision.
         </p>
+        <button
+          disabled={status !== "Connected" || releaseBusy}
+          onClick={() => releaseAction("crew-home")}
+        >
+          Open persistent crew home
+        </button>
         <button
           disabled={status !== "Connected" || releaseBusy}
           onClick={() => releaseAction("prepare")}

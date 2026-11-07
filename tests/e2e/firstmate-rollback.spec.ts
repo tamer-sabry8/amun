@@ -1,5 +1,12 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, rm, realpath, readFile, lstat } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  rm,
+  realpath,
+  readFile,
+  lstat,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -7,12 +14,18 @@ import { catalog } from "../../packages/contracts/src/firstmate-release.ts";
 
 test("one-click rollback survives restart and prepares the retained source without changing existing worktrees", async () => {
   const executablePath = process.env.AMUN_PACKAGED_PATH;
-  test.skip(!executablePath, "Offline archives are staged at packaging.");
   test.setTimeout(180000);
-  const resources = resolve(
-    dirname(executablePath!),
-    "../Resources/firstmate-archives",
-  );
+  const resources = executablePath
+    ? resolve(dirname(executablePath), "../Resources/firstmate-archives")
+    : resolve("apps/desktop/.runtime/firstmate-archives");
+  if (!executablePath) {
+    try {
+      await access(join(resources, "catalog.json"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      test.skip(true, "Run firstmate:stage for source archive acceptance.");
+    }
+  }
   const { current, previous } = catalog.parse(
     JSON.parse(await readFile(join(resources, "catalog.json"), "utf8")),
   );
@@ -22,8 +35,11 @@ test("one-click rollback survives restart and prepares the retained source witho
   );
   const launch = () =>
     electron.launch({
-      executablePath: executablePath!,
-      args: ["--user-data-dir=" + root],
+      ...(executablePath ? { executablePath } : {}),
+      args: [
+        ...(executablePath ? [] : ["apps/desktop"]),
+        "--user-data-dir=" + root,
+      ],
       chromiumSandbox: true,
     });
   let app = await launch();
@@ -54,6 +70,18 @@ test("one-click rollback survives restart and prepares the retained source witho
       return { home, file, source };
     };
     await expect(view.getByRole("status")).toContainText(current.commit);
+    const openCrew = async () => {
+      await view
+        .getByRole("button", { name: "Open persistent crew home" })
+        .click({ timeout: 3000 });
+      const status = view.getByRole("status");
+      await expect(status).toContainText(
+        "Crew home for " + current.commit + " at ",
+        { timeout: 60000 },
+      );
+      return (await status.innerText()).split(" at ")[1]!;
+    };
+    const crew = await openCrew();
     const original = await prepare(current);
     await view
       .getByRole("button", { name: "Roll back to previous Firstmate" })
@@ -67,6 +95,7 @@ test("one-click rollback survives restart and prepares the retained source witho
     await expect(view.getByRole("status")).toContainText(
       "Selected Firstmate revision " + previous!.commit,
     );
+    expect(await openCrew()).toBe(crew);
     const retained = await prepare(previous!);
     expect(retained.home).not.toBe(original.home);
     expect(

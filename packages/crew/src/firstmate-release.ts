@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import {
   lstat,
+  link,
   mkdtemp,
   readFile,
   realpath,
@@ -11,14 +12,17 @@ import {
   writeFile,
   mkdir,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   catalog,
   release,
   type Release,
 } from "../../contracts/src/firstmate-release.ts";
 import { verifyDistributionArchive } from "./distribution.ts";
-import { createFirstmateWorktrees } from "./firstmate-worktree.ts";
+import {
+  createFirstmateWorktrees,
+  ownedWorktreeBranch,
+} from "./firstmate-worktree.ts";
 import { assertRuntimeContained } from "./runtime-links.ts";
 import { patchFirstmatePermissions } from "./firstmate-policy-patch.ts";
 import { readBoundedPrivateFile } from "./endpoint-receipt.ts";
@@ -75,7 +79,54 @@ export class FirstmateReleases {
     }
     return this.previous;
   }
-  async prepare() {
+  async crewHome() {
+    const workspace = dirname(this.selection);
+    const binding = join(workspace, "firstmate-crew-home");
+    const readHome = async () => {
+      const name = await readBoundedPrivateFile(binding, 128);
+      if (!/^firstmate-home-[A-Za-z0-9]{6}$/.test(name))
+        throw Error("Invalid crew home");
+      const owner = join(workspace, name),
+        root = join(owner, "git"),
+        home = join(root, "primary");
+      const revision = await readBoundedPrivateFile(
+        join(owner, "source-revision"),
+        40,
+      );
+      if (!/^[a-f0-9]{40}$/.test(revision))
+        throw Error("Invalid crew revision");
+      for (const harness of ["codex", "claude"]) {
+        if (
+          (await ownedWorktreeBranch(home, join(root, harness + "-worker"))) !==
+          "amun/" + harness + "-worker"
+        )
+          throw Error("Unexpected crew worktree branch");
+      }
+      return { home, revision };
+    };
+    try {
+      await lstat(binding);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const prepared = await this.prepare(true);
+      const owner = dirname(dirname(prepared.home));
+      const staged = join(owner, "crew-binding");
+      await writeFile(staged, basename(owner), {
+        mode: 0o600,
+        flag: "wx",
+        flush: true,
+      });
+      try {
+        await link(staged, binding);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        // Another caller published its newly prepared crew first. This candidate was never visible.
+        await rm(owner, { recursive: true, force: true });
+      }
+    }
+    return readHome();
+  }
+  async prepare(crew = false) {
     const pin = await this.selected();
     const bytes = await this.verifiedBytes(pin);
     const parent = dirname(this.selection);
@@ -104,7 +155,7 @@ export class FirstmateReleases {
       const worktrees = await createFirstmateWorktrees(
         tree,
         join(owner, "git"),
-        ["primary"],
+        crew ? ["primary", "codex-worker", "claude-worker"] : ["primary"],
       );
       await writeFile(join(owner, "source-revision"), pin.commit, {
         mode: 0o600,

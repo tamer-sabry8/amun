@@ -572,6 +572,11 @@ process.parentPort?.on("message", (event) => {
                     "Selected Firstmate revision " +
                     (await releases.selected()).commit;
                   break;
+                case "crew-home": {
+                  const crew = await releases.crewHome();
+                  text = "Crew home for " + crew.revision + " at " + crew.home;
+                  break;
+                }
                 case "rollback":
                   text =
                     "Restored Firstmate revision " +
