@@ -58,12 +58,13 @@ Use Node 24.22.1 and pnpm 11.25.0. Existing toolchain PATH prefix is /tmp/node-v
 Final tested separate package is /private/tmp/amun-review-focus-probe/Amun-darwin-arm64/Amun.app; earlier lifecycle package /private/tmp/amun-owner-probe/Amun-darwin-arm64/Amun.app. The normal apps/desktop/out package may predate latest code. Do not overwrite a package under a running app. One profile should have one owner after the single-instance fix. Older running builds can still have duplicate owners. Do not terminate unknown/personal sessions.
 
 Useful temporary proof files (inspect before running, do not blindly replay)
+
 - /private/tmp/amun-rev-ui.cjs inspects ONLY the disposable profile, checks connection and prints reconnect count.
 - /private/tmp/amun-reconcile-approved.mts calls production read-only lookup for the approved page.
 - /private/tmp/amun-scratch-lost-reply.mts simulates uncertainty in an in-memory DB then uses real MCP reads.
 - /private/tmp/amun-refresh-proof.mts forces the due path for the disposable grant. It has already passed and that grant is now revoked.
 - /private/tmp/amun-revoke-specific.mts already executed approved revocation. Do not repeat.
-Logs include /private/tmp/amun-focus-check.log, amun-focus-all-source.log, amun-focus-packaged.log and amun-google-final-package.log. /private/tmp is not durable storage; canonical evidence is committed.
+  Logs include /private/tmp/amun-focus-check.log, amun-focus-all-source.log, amun-focus-packaged.log and amun-google-final-package.log. /private/tmp is not durable storage; canonical evidence is committed.
 
 TDD is explicit user scope. Demonstrate meaningful failure, implement, rerun, record tested revision and limitations. Domain/governance requires >=90% lines. Mocks do not establish live acceptance. Do not rerun expensive unrelated suites without reason.
 
@@ -72,6 +73,7 @@ TDD is explicit user scope. Demonstrate meaningful failure, implement, rerun, re
 Revised local M0 passed and merged. Release R001 is still open by explicit owner deferral: Apple Developer setup, signing/notarization (including native modules), notarized DMG and clean macOS-account install belong to later release acceptance, T057/M6. There is no notarized DMG claim. T010 scope was revised to secure preview/external handoff plus direct-login persistence; Google rejects embedded authentication and should use the external browser. Larger file/annotation/attachment features were deferred.
 
 Full release map is in product-and-r1-plan.md section 2 and docs/TASKS.md.
+
 - R1 is milestones M0–M6.
 - M2 LOCKED until M1 gate resolved. Ordered tasks T023 products/source isolation; T024 file ingestion/provenance; T025 Firstmate product interview; T026 editable understanding and approval; T027 PRD editor/autosave/history/roundtrip; T028 generated PRD, modes, proposal review and version-bound approval; T029 RICE prioritization. Dependencies and exact acceptance are in TASKS. M2 exit is a real product objective to approved sourced PRD v1. Do not implement during M1.
 - M3 backlog/sprint/ADO; M4 crew/PR/merge acceptance (T037 moved earlier); M5 memory/Notion sync/skills/portfolio/reminders; M6 chaos/accessibility/performance/signing/release report.
