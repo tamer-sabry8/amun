@@ -256,6 +256,15 @@ process.parentPort?.on("message", (event) => {
               .digest("hex"),
           },
         });
+      } else if (event.result.kind === "conversation") {
+        port.postMessage({
+          ...event,
+          result: {
+            ...event.result,
+            title: redactor.text(event.result.title),
+            text: redactor.text(event.result.text),
+          },
+        });
       } else port.postMessage(event);
     },
   );
@@ -419,7 +428,9 @@ process.parentPort?.on("message", (event) => {
       if (
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
-        ["notion-review", "notion-publish"].includes(nativeRequest.data.command)
+        ["notion-review", "notion-publish", "notion-receipts"].includes(
+          nativeRequest.data.command,
+        )
       ) {
         const command = nativeRequest.data;
         if (notionReviewBusy) {
@@ -431,7 +442,14 @@ process.parentPort?.on("message", (event) => {
         }
         notionReviewBusy = true;
         void (async () => {
-          if (command.command === "notion-publish") {
+          if (command.command === "notion-receipts") {
+            sendNative(command.id, {
+              kind: "publication-receipts",
+              pages: notionReviews
+                .receipts()
+                .map((page) => ({ ...page, title: redactor.text(page.title) })),
+            });
+          } else if (command.command === "notion-publish") {
             const approval = notionApprovalRequest.parse(
               JSON.parse(command.argument),
             );
@@ -509,6 +527,7 @@ process.parentPort?.on("message", (event) => {
           "notion-connect",
           "notion-check",
           "notion-cancel",
+          "notion-disconnect",
           "notion-target",
         ].includes(parsedAuth.data.action)
       ) {
@@ -538,6 +557,37 @@ process.parentPort?.on("message", (event) => {
                   "Amun could not verify this Notion destination. Check its link and workspace access. Nothing was published.",
               }),
             );
+        } else if (command.action === "notion-disconnect") {
+          notionPreview = undefined;
+          void notionConnection
+            .disconnect()
+            .then(() => {
+              workspace
+                .prepare(
+                  "DELETE FROM workspace_settings WHERE id='notion.destination'",
+                )
+                .run();
+              port.postMessage({
+                version: 1,
+                kind: "auth-status",
+                id: "notion-mcp",
+                status: "missing",
+              });
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message:
+                  "Notion disconnected from this Amun workspace. Saved credentials and destination were removed. Existing Notion pages are unchanged. Manage server-side access in Notion if you also want to revoke the grant.",
+              });
+            })
+            .catch(() => {
+              port.postMessage({
+                version: 1,
+                kind: "auth-notice",
+                message:
+                  "Notion disconnect could not be completed. Your connection status has not been confirmed.",
+              });
+            });
         } else if (command.action === "notion-cancel")
           notionConnection.cancelLogin();
         else if (

@@ -75,3 +75,49 @@ it("accepts only a bounded exact Notion review and approval identity", () => {
     }).success,
   ).toBe(false);
 });
+
+it("bounds transcript and receipt projections and refuses foreign or executable links", () => {
+  const envelope = (result: unknown) => ({
+    version: 1,
+    kind: "native-pi-result",
+    id: "test",
+    result,
+  });
+  const page = {
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Reviewed page",
+    url: "https://www.notion.so/11111111111141118111111111111111",
+  };
+  expect(
+    nativePiEvent.safeParse(
+      envelope({ kind: "publication-receipts", pages: [page] }),
+    ).success,
+  ).toBe(true);
+  for (const url of [
+    "javascript:alert(1)",
+    "https://evil.test/",
+    page.url + "?token=secret",
+  ]) {
+    expect(
+      nativePiEvent.safeParse(
+        envelope({ kind: "publication-receipts", pages: [{ ...page, url }] }),
+      ).success,
+    ).toBe(false);
+  }
+  expect(
+    nativePiEvent.safeParse(
+      envelope({ kind: "publication-receipts", pages: Array(51).fill(page) }),
+    ).success,
+  ).toBe(false);
+  expect(
+    nativePiEvent.safeParse(
+      envelope({
+        kind: "conversation",
+        sessionId: page.id,
+        title: "Session",
+        text: "x".repeat(262145),
+        omittedItems: 0,
+      }),
+    ).success,
+  ).toBe(false);
+});

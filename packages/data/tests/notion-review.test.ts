@@ -68,3 +68,37 @@ it("keeps an uncertain result unknown and never repeats it after a lost response
     db.close();
   }
 });
+
+it("restores only verified publication receipts without executing another write", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const create = vi.fn(async () => ({
+    state: "created" as const,
+    pageId: "22222222-2222-4222-8222-222222222222",
+  }));
+  try {
+    const reviews = new NotionConversationReview(db, { create });
+    const item = reviews.prepare(
+      { title: "Published fixture", text: "Exact reviewed content" },
+      target,
+      "workspace-id",
+    );
+    expect(reviews.receipts()).toEqual([]);
+    await reviews.publish(item.id, item.binding);
+    expect(new NotionConversationReview(db, { create }).receipts()).toEqual([
+      {
+        id: item.id,
+        title: "Published fixture",
+        url: "https://www.notion.so/22222222222242228222222222222222",
+      },
+    ]);
+    expect(create).toHaveBeenCalledTimes(1);
+    db.prepare(
+      "UPDATE workspace_settings SET value_json='{}' WHERE id LIKE 'notion.receipt.%'",
+    ).run();
+    expect(reviews.receipts()).toEqual([]);
+    expect(create).toHaveBeenCalledTimes(1);
+  } finally {
+    db.close();
+  }
+});

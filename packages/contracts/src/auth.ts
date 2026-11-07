@@ -25,7 +25,7 @@ export const authCommand = z.discriminatedUnion("action", [
   }),
   z.strictObject({
     ...base,
-    action: z.enum(["notion-check", "notion-cancel"]),
+    action: z.enum(["notion-check", "notion-cancel", "notion-disconnect"]),
   }),
   z.strictObject({ ...base, action: z.literal("readiness"), provider }),
   z.strictObject({ ...base, action: z.literal("list") }),

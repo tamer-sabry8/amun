@@ -130,6 +130,7 @@ async function verifyMcp(
 export class NotionConnection {
   identity: NotionIdentity | undefined;
   private busy = false;
+  private disconnecting = false;
   private job: Promise<void> | undefined;
   private cancel: (() => void) | undefined;
   private readonly account: string;
@@ -227,6 +228,7 @@ export class NotionConnection {
     );
   }
   async connect(browser: NotionBrowser, interactive = true): Promise<void> {
+    if (this.disconnecting) throw Error("Notion disconnect in progress");
     if (this.busy) {
       if (!interactive && this.job) return this.job;
       throw Error("Notion sign-in already active");
@@ -291,6 +293,20 @@ export class NotionConnection {
     } finally {
       this.job = undefined;
       this.busy = false;
+    }
+  }
+  async disconnect(): Promise<void> {
+    if (this.disconnecting) throw Error("Notion disconnect in progress");
+    this.disconnecting = true;
+    try {
+      this.cancelLogin();
+      await this.job?.catch(() => undefined);
+      await withRefreshLock(this.options.root, async () => {
+        this.options.keyring.delete(this.account);
+        this.identity = undefined;
+      });
+    } finally {
+      this.disconnecting = false;
     }
   }
   cancelLogin() {

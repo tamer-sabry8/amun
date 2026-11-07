@@ -32,6 +32,27 @@ test("Notion offers hosted browser sign-in without token entry or publication", 
     await expect(page.getByRole("alert")).toContainText(
       "no content was published",
     );
+    await page
+      .getByRole("button", { name: "Disconnect Notion", exact: true })
+      .click();
+    await expect(
+      page.getByRole("group", { name: "Confirm Notion disconnect" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Keep connection", exact: true })
+      .click();
+    await expect(
+      page.getByRole("group", { name: "Confirm Notion disconnect" }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Disconnect Notion", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirm disconnect", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Notion disconnected from this Amun workspace",
+    );
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

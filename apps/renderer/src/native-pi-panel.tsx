@@ -221,11 +221,25 @@ export function NativePiPanel({
       }}
     >
       <h3>Pi session commands</h3>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => run("", "notion-receipts")}
+      >
+        Published conversations
+      </button>
       <p className="muted">
         This session belongs to Amun. Personal Pi sessions are separate. Empty
         sessions are saved after their first message.
       </p>
       <div className="button-row">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run("", "conversation")}
+        >
+          Read active conversation
+        </button>
         <button
           type="button"
           disabled={busy}
@@ -351,7 +365,51 @@ export function NativePiPanel({
       </div>
       <div data-testid="native-pi-result" aria-live="polite">
         {busy ? "Working…" : null}
-        {result?.kind === "choices" ? (
+        {result?.kind === "publication-receipts" ? (
+          <section aria-label="Published conversations">
+            <h4>Published conversations</h4>
+            <p>
+              Latest 50 verified receipts from this workspace. Reading receipts
+              does not publish again.
+            </p>
+            {result.pages.length === 0 ? (
+              <p>No verified publication receipts yet.</p>
+            ) : (
+              result.pages.map((page) => (
+                <article key={page.id}>
+                  <h5>{page.title}</h5>
+                  <label>
+                    Notion page URL
+                    <input
+                      aria-label={"Notion page URL for " + page.title}
+                      value={page.url}
+                      readOnly
+                    />
+                  </label>
+                </article>
+              ))
+            )}
+          </section>
+        ) : result?.kind === "conversation" ? (
+          <section aria-label="Active conversation">
+            <h4>{result.title}</h4>
+            <p>Session: {result.sessionId}</p>
+            {result.text ? (
+              <textarea
+                className="native-pi-review-content"
+                aria-label="Active conversation text"
+                value={result.text}
+                readOnly
+              />
+            ) : (
+              <p>No conversation messages yet.</p>
+            )}
+            <p>
+              Text view only. {result.omittedItems} non-text or internal entries
+              omitted. Secrets are redacted.
+            </p>
+          </section>
+        ) : result?.kind === "choices" ? (
           <>
             <h4>{result.title}</h4>
             <ul className="plain-list">

@@ -156,3 +156,139 @@ it("completes real SDK discovery/PKCE flow, reuses registration and never retrie
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it("disconnect removes only this workspace grant and identity, with no network request", async () => {
+  const root = await mkdtemp(join(tmpdir(), "amun-notion-disconnect-"));
+  await chmod(root, 0o700);
+  const records = new Map<string, string>([
+    ["personal/credential", "untouched"],
+  ]);
+  let account = "";
+  const connection = new NotionConnection({
+    workspace: "owned",
+    root,
+    keyring: {
+      get: (key) => {
+        account = key;
+        return records.get(key);
+      },
+      set: (key, value) => {
+        records.set(key, value);
+      },
+      delete: (key) => {
+        records.delete(key);
+      },
+    },
+    registerSecret: () => {},
+    open: async () => {
+      throw Error("No browser expected");
+    },
+    fetcher: async () => {
+      throw Error("No network expected");
+    },
+    verify: async () => {},
+  });
+  try {
+    expect(connection.configured()).toBe(false);
+    records.set(
+      account,
+      JSON.stringify({
+        redirectUrl: "http://127.0.0.1:34567/callback",
+        client: { client_id: "test", issuer: "https://mcp.notion.com" },
+        tokens: {
+          access_token: "fixture",
+          token_type: "Bearer",
+          issuer: "https://mcp.notion.com",
+        },
+        expiresAt: Date.now() + 3600000,
+      }),
+    );
+    expect(connection.configured()).toBe(true);
+    await connection.disconnect();
+    expect(connection.configured()).toBe(false);
+    expect(connection.identity).toBeUndefined();
+    expect(records.size).toBe(1);
+    expect(records.get("personal/credential")).toBe("untouched");
+    await connection.disconnect();
+    await expect(connection.connect("edge", false)).rejects.toThrow(
+      "Connect Notion first",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("disconnect waits for credential operations and refuses a racing connect", async () => {
+  const { withRefreshLock } = await import("../src/broker.ts");
+  const root = await mkdtemp(join(tmpdir(), "amun-notion-disconnect-lock-"));
+  await chmod(root, 0o700);
+  let release!: () => void;
+  let entered!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let deleted = false;
+  const connection = new NotionConnection({
+    workspace: "owned",
+    root,
+    keyring: {
+      get: () => undefined,
+      set: () => {},
+      delete: () => {
+        deleted = true;
+      },
+    },
+    registerSecret: () => {},
+    open: async () => {
+      throw Error("No browser");
+    },
+  });
+  const operation = withRefreshLock(root, async () => {
+    entered();
+    await hold;
+  });
+  await ready;
+  try {
+    const disconnect = connection.disconnect();
+    await expect(connection.connect("edge")).rejects.toThrow(
+      "disconnect in progress",
+    );
+    expect(deleted).toBe(false);
+    release();
+    await operation;
+    await disconnect;
+    expect(deleted).toBe(true);
+  } finally {
+    release();
+    await operation;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("does not report disconnection when protected storage refuses deletion", async () => {
+  const root = await mkdtemp(join(tmpdir(), "amun-notion-disconnect-error-"));
+  await chmod(root, 0o700);
+  const connection = new NotionConnection({
+    workspace: "owned",
+    root,
+    keyring: {
+      get: () => undefined,
+      set: () => {},
+      delete: () => {
+        throw Error("Storage unavailable");
+      },
+    },
+    registerSecret: () => {},
+    open: async () => {},
+  });
+  try {
+    await expect(connection.disconnect()).rejects.toThrow(
+      "Storage unavailable",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

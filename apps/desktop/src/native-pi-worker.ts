@@ -1,3 +1,4 @@
+import { nativeConversationView } from "../../../packages/crew/src/native-pi-conversation.ts";
 import { NativePiImport } from "../../../packages/crew/src/native-pi-import.ts";
 import {
   NativePiCredentials,
@@ -57,6 +58,7 @@ type Runtime = NativeSessionRuntime & {
     SettingsSession & {
       modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
       sessionManager: { getBranch(): unknown[] };
+      sessionId: string;
     };
   importFromJsonl(
     path: string,
@@ -251,7 +253,7 @@ process.stdin.on("data", (chunk: string) => {
           send(command.id, await credentialActions!.run(command.argument));
           return;
         }
-        if (command.command === "share-notion") {
+        if (["share-notion", "conversation"].includes(command.command)) {
           const redactor = new Redactor();
           const credentials =
             await runtime!.session.modelRuntime.listCredentials();
@@ -264,11 +266,18 @@ process.stdin.on("data", (chunk: string) => {
             );
           send(
             command.id,
-            conversationSharePreview(
-              runtime!.session.sessionName ?? "Amun conversation",
-              runtime!.session.sessionManager.getBranch(),
-              redactor,
-            ),
+            command.command === "conversation"
+              ? nativeConversationView(
+                  runtime!.session.sessionId,
+                  runtime!.session.sessionName ?? "Unnamed conversation",
+                  runtime!.session.sessionManager.getBranch(),
+                  redactor,
+                )
+              : conversationSharePreview(
+                  runtime!.session.sessionName ?? "Amun conversation",
+                  runtime!.session.sessionManager.getBranch(),
+                  redactor,
+                ),
           );
           return;
         }

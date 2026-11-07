@@ -13,7 +13,7 @@ export class NotionConversationReview {
   private readonly store: ActionStore;
   private readonly connector: NotionOutboxConnector;
   constructor(
-    db: Database.Database,
+    private readonly db: Database.Database,
     publisher: {
       create(
         input: NotionPublication,
@@ -23,6 +23,27 @@ export class NotionConversationReview {
   ) {
     this.store = new ActionStore(db);
     this.connector = new NotionOutboxConnector(db, publisher);
+  }
+  receipts() {
+    const rows = this.db
+      .prepare(
+        "SELECT id FROM actions WHERE kind='notion_publish' AND state='succeeded' ORDER BY rowid DESC LIMIT 50",
+      )
+      .all() as { id: string }[];
+    return rows.flatMap(({ id }) => {
+      const action = this.store.read(id);
+      const receipt = this.connector.receipt(action.operationMarker);
+      const title = (action.payload as { title?: unknown }).title;
+      if (!receipt || typeof title !== "string" || title.length > 256)
+        return [];
+      return [
+        {
+          id,
+          title,
+          url: "https://www.notion.so/" + receipt.pageId.replaceAll("-", ""),
+        },
+      ];
+    });
   }
   prepare(
     preview: { title: string; text: string },

@@ -53,3 +53,17 @@ Root cause of the screenshot banner: workspace-level Notion actions have a null 
 Source test evidence: `/tmp/amun-workspace-publication-red.log`; full checks after status fix: `/tmp/amun-publication-status-check.log` (369 tests). No signing/release gate or broader M1 completion is inferred from this success.
 
 Final validation for the status and placement fix: 369 unit tests plus lint/types/format passed (`/tmp/amun-journey-check.log`). Seven source journey tests passed (`/tmp/amun-journey-e2e.log`) and the same seven passed against the packaged app (`/tmp/amun-journey-packaged.log`). The new journey assertion first failed because native conversation tools were inside Models (`/tmp/amun-conversation-route-red.log`). The first packaged status probe was attempted before packaging completed and could not find the executable; after final packaging the complete suite passed. No external publication is performed by these disposable-profile tests.
+
+## 2026-11-07 disconnect, receipt and reading journeys
+
+A confirmed local Disconnect Notion action now serializes against refresh/credential work, cancels pending login, deletes only this workspace's protected credential record and saved destination, and clears the cached identity. Concurrent connects are refused while deletion is pending. Protected-storage deletion failures are not represented as successful disconnect. This is local credential removal, not a claim of server-side grant revocation; the UI states that distinction and preserves existing pages. Unit isolation/locking/failure tests and source/packaged confirmation/cancel tests pass. RED: `/tmp/amun-disconnect-red.log`.
+
+Conversations now provides a bounded, redacted text view with the active session ID and explicit counts for omitted internal/non-text entries. Empty sessions are shown honestly. No tools, inference or publication are triggered by reading. Source/package acceptance reads the actual owned SDK session and excludes the credential canary. RED: `/tmp/amun-conversation-view-red.log`. This is not a claim that the still-open composer/streaming/resource command families are complete.
+
+Published conversations restores up to 50 verified durable receipts with copyable Notion URLs. It validates each receipt against its stored approved action and excludes corrupted or non-successful records; viewing receipts never executes a write. The packaged live acceptance profile restored the exact existing fixture receipt. RED: `/tmp/amun-receipts-red.log`. URL projection tests reject foreign hosts, scripts, queries and oversized lists.
+
+Validation: full checks passed 375 tests before one additional contract test; the final contract suite passed all three tests. Coverage thresholds passed (domain 97.24% lines; Notion review 96%). Four relevant source journeys passed and the same four packaged journeys passed. Logs: `/tmp/amun-m1-followups-check.log`, `/tmp/amun-m1-followups-coverage.log`, `/tmp/amun-m1-followups-source.log`, `/tmp/amun-m1-followups-packaged.log`.
+
+Live packaged disconnect then succeeded in the isolated M1 profile; a subsequent Test connection refused access. The user completed official Edge consent and packaged Amun then verified reconnection successfully. No new external publication or personal configuration change occurred. Remaining real refresh/error/lifecycle acceptance is not silently waived.
+
+Final pre-commit checks passed 376 tests, lint, types and formatting (`/tmp/amun-m1-followups-final-check.log`).

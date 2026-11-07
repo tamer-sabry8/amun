@@ -89,6 +89,16 @@ test("conversation sharing is outside model settings", async () => {
     await expect(
       page.getByRole("button", { name: "Share to Notion", exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Published conversations", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", {
+        name: "Published conversations",
+        exact: true,
+      }),
+    ).toContainText("No verified publication receipts yet.");
+
     await expect(
       page.getByRole("button", { name: "Sign in to Codex CLI", exact: true }),
     ).toHaveCount(0);

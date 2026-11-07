@@ -200,6 +200,15 @@ test("native Pi commands create an owned SDK session and update its real name", 
       ).toBeVisible();
     }
     await page
+      .getByRole("button", { name: "Read active conversation", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Active conversation text", { exact: true }),
+    ).toHaveValue(/Native clipboard acceptance/);
+    await expect(
+      page.getByLabel("Active conversation text", { exact: true }),
+    ).not.toHaveValue(/AMUN_TEST_SECRET/);
+    await page
       .getByRole("button", { name: "Share to Notion", exact: true })
       .click();
     await expect(

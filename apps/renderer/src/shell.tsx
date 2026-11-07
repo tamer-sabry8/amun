@@ -249,6 +249,7 @@ function Settings({
   const [baseUrl, setBaseUrl] = useState("https://github.com");
   const [secret, setSecret] = useState("");
   const [notionTarget, setNotionTarget] = useState("");
+  const [confirmNotionDisconnect, setConfirmNotionDisconnect] = useState(false);
   const [notionBrowser, setNotionBrowser] = useState<"edge" | "dia">("edge");
   const [model, setModel] = useState("github-copilot:oauth");
   const modelBusy = Object.values(state.modelStatus).includes("checking");
@@ -426,6 +427,40 @@ function Settings({
                 >
                   Cancel Notion sign-in
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmNotionDisconnect(true)}
+                >
+                  Disconnect Notion
+                </button>
+                {confirmNotionDisconnect && (
+                  <div role="group" aria-label="Confirm Notion disconnect">
+                    <p>
+                      Remove this workspace’s saved Notion sign-in and
+                      destination? Published pages will remain in Notion.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmNotionDisconnect(false);
+                        setNotionTarget("");
+                        bridge.send({
+                          version: 1,
+                          kind: "auth",
+                          action: "notion-disconnect",
+                        });
+                      }}
+                    >
+                      Confirm disconnect
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmNotionDisconnect(false)}
+                    >
+                      Keep connection
+                    </button>
+                  </div>
+                )}
                 <label>
                   Notion destination link
                   <input

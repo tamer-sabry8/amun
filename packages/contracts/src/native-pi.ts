@@ -22,6 +22,25 @@ export const notionApprovalRequest = z.strictObject({
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("publication-receipts"),
+    pages: z
+      .array(
+        z.strictObject({
+          id: z.uuid(),
+          title: z.string().max(256),
+          url: z.string().regex(/^https:\/\/www\.notion\.so\/[a-f0-9]{32}$/i),
+        }),
+      )
+      .max(50),
+  }),
+  z.strictObject({
+    kind: z.literal("conversation"),
+    sessionId: z.uuid(),
+    title: z.string().max(256),
+    text: z.string().max(262144),
+    omittedItems: z.number().int().min(0).max(10000),
+  }),
+  z.strictObject({
     kind: z.literal("import-review"),
     token: z.uuid(),
     sessionId: z.uuid(),

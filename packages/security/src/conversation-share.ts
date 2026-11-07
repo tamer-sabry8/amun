@@ -40,6 +40,7 @@ export function conversationSharePreview(
   title: string,
   entries: unknown,
   redactor: Redactor,
+  allowEmpty = false,
 ) {
   if (title.length > 256 || !Array.isArray(entries) || entries.length > 1000)
     throw Error("Conversation exceeds review limits");
@@ -87,7 +88,8 @@ export function conversationSharePreview(
         "## " + (role === "user" ? "User" : "Assistant") + "\n\n" + text,
       );
   }
-  if (!parts.length) throw Error("No conversation text to share");
+  if (!parts.length && !allowEmpty)
+    throw Error("No conversation text to share");
   const text = parts.join("\n\n"),
     safeTitle = redactor.text(title || "Amun conversation");
   if (text.length > 262144) throw Error("Conversation exceeds review limits");
