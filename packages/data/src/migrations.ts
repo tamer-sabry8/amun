@@ -299,4 +299,21 @@ INSERT INTO search_index(product_id,entity_id,kind,title,body) SELECT product_id
 INSERT INTO actions_workspace_upgrade SELECT * FROM actions;
 DROP TABLE actions;
 ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
+  `CREATE TABLE actions_workspace_upgrade (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  payload_hash TEXT NOT NULL,
+  target_revisions_json TEXT NOT NULL DEFAULT '{}',
+  state TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  operation_marker TEXT NOT NULL UNIQUE,
+  CONSTRAINT actions_payload_json_valid CHECK (json_valid(payload_json)),
+  CONSTRAINT actions_target_revisions_json_valid CHECK (json_valid(target_revisions_json)),
+  CONSTRAINT actions_workspace_kind CHECK (product_id IS NOT NULL OR kind IN ('notion_publish','github_issue'))
+);
+INSERT INTO actions_workspace_upgrade SELECT * FROM actions;
+DROP TABLE actions;
+ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
 ] as const;

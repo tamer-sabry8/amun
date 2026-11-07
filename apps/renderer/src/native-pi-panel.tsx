@@ -506,6 +506,30 @@ export function NativePiPanel({
             save={(v) => run(JSON.stringify(v), "hosting-save")}
             inspect={() => run("cloudflare-hosting-check", "mcp")}
           />
+        ) : result?.kind === "github-issue-review" ? (
+          <section>
+            <h3>Review GitHub issue</h3>
+            <p>
+              Repository: {result.owner}/{result.repo}
+            </p>
+            <h4>{result.title}</h4>
+            <p>{result.body}</p>
+            <button
+              disabled={busy}
+              onClick={() =>
+                run(
+                  JSON.stringify({
+                    reviewId: result.id,
+                    binding: result.binding,
+                  }),
+                  "github-issue-publish",
+                )
+              }
+            >
+              Approve and create this issue
+            </button>
+            <button onClick={() => setResult(null)}>Close review</button>
+          </section>
         ) : result?.kind === "github-device" ? (
           <section aria-label="GitHub device sign-in">
             <h3>GitHub device code</h3>

@@ -40,6 +40,15 @@ export const nativePiResult = z.discriminatedUnion("kind", [
     destination: hostingDestination.nullable(),
   }),
   z.strictObject({
+    kind: z.literal("github-issue-review"),
+    id: z.uuid(),
+    binding: z.string().regex(/^[a-f0-9]{64}$/),
+    owner: z.string().max(100),
+    repo: z.string().max(100),
+    title: z.string().max(256),
+    body: z.string().max(4096),
+  }),
+  z.strictObject({
     kind: z.literal("github-device"),
     code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/),
   }),

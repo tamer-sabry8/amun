@@ -20,8 +20,11 @@ export function migrate(
   db.pragma("busy_timeout = 5000");
   // SQLite table rebuilds require foreign_keys off outside the transaction.
   // Validate every reference before commit, and always restore enforcement.
-  const rebuildingActions =
-    (db.pragma("user_version", { simple: true }) as number) < 4 && target >= 4;
+  const rebuildingActions = [4, 5].some(
+    (version) =>
+      (db.pragma("user_version", { simple: true }) as number) < version &&
+      target >= version,
+  );
   if (rebuildingActions) db.pragma("foreign_keys = OFF");
   try {
     db.transaction(() => {

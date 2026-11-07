@@ -8,6 +8,7 @@ const inventory = new Map<string, readonly [string, string]>([
       "",
     ],
   ],
+  ["github-issue-review", ["GitHub · Review test issue", ""]],
   ["github-read", ["GitHub · Test saved connection", ""]],
   ["github", ["GitHub · Check sign-in endpoint", ""]],
   [

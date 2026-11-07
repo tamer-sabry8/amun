@@ -254,7 +254,7 @@ export const actions = sqliteTable(
   () => [
     check(
       "actions_workspace_kind",
-      sql`product_id IS NOT NULL OR kind = 'notion_publish'`,
+      sql`product_id IS NOT NULL OR kind IN ('notion_publish','github_issue')`,
     ),
     check("actions_payload_json_valid", sql`json_valid(payload_json)`),
     check(

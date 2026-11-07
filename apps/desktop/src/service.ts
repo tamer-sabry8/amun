@@ -14,7 +14,9 @@ import {
 import {
   GithubReadFailure,
   checkGithubMcp,
+  createGithubIssue,
 } from "../../../packages/auth/src/github-mcp.ts";
+import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
 import { createHash } from "node:crypto";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
@@ -559,6 +561,48 @@ process.parentPort?.on("message", (event) => {
       if (
         nativeRequest.success &&
         nativeRequest.data.action === "run" &&
+        nativeRequest.data.command === "github-issue-publish"
+      ) {
+        const cmd = nativeRequest.data;
+        void (async () => {
+          const approval = notionApprovalRequest.parse(
+            JSON.parse(cmd.argument),
+          );
+          const stored = JSON.parse(authKeyring().get(githubAccount) ?? "null");
+          const token = githubGrant.parse(stored?.grant);
+          if (
+            !Number.isFinite(stored.savedAt) ||
+            (token.expires_in &&
+              Date.now() >= stored.savedAt + token.expires_in * 1000)
+          )
+            throw Error("Expired");
+          const review = new GithubIssueReview(workspace);
+          const outcome = await review.publish(
+            approval.reviewId,
+            approval.binding,
+            (issue) => createGithubIssue(token.access_token, issue),
+          );
+          if (!closed)
+            sendNative(cmd.id, {
+              kind: "message",
+              text:
+                outcome === "succeeded"
+                  ? "GitHub issue created: https://github.com/tamer-sabry8/amun/issues/" +
+                    review.receipt(approval.reviewId)
+                  : "Issue creation is unconfirmed. Check GitHub before any further write.",
+            });
+        })().catch(() => {
+          if (!closed)
+            sendNative(cmd.id, {
+              kind: "message",
+              text: "GitHub approval could not be used. Check the issue and saved connection.",
+            });
+        });
+        return;
+      }
+      if (
+        nativeRequest.success &&
+        nativeRequest.data.action === "run" &&
         nativeRequest.data.command === "mcp" &&
         [
           "github-repo-connect",
@@ -567,6 +611,7 @@ process.parentPort?.on("message", (event) => {
           "github-finish",
           "github-cancel",
           "github-read",
+          "github-issue-review",
         ].includes(nativeRequest.data.argument)
       ) {
         const cmd = nativeRequest.data;
@@ -625,6 +670,21 @@ process.parentPort?.on("message", (event) => {
               kind: "message",
               text: "GitHub sign-in has expired. Reconnect with Microsoft Edge.",
             });
+            return;
+          }
+          if (cmd.argument === "github-issue-review") {
+            const review = new GithubIssueReview(workspace);
+            try {
+              sendNative(cmd.id, {
+                kind: "github-issue-review",
+                ...review.prepare(),
+              });
+            } catch {
+              sendNative(cmd.id, {
+                kind: "message",
+                text: "This workspace already submitted or changed this issue. Inspect GitHub before any further write.",
+              });
+            }
             return;
           }
           await checkGithubMcp(token.access_token);

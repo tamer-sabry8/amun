@@ -5,6 +5,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { boundedMcpResponse } from "./notion-response.ts";
 export async function checkGithubMcp(token: string) {
+  await useGithubClient(token, "repos", readManifest);
+}
+async function useGithubClient<T>(
+  token: string,
+  toolset: "repos" | "issues",
+  use: (client: Client, stage: (name: string) => void) => Promise<T>,
+) {
   const endpoint = "https://api.githubcopilot.com/mcp/";
   const client = new Client({ name: "amun", version: "0.1.0" });
   let stage = "server initialization";
@@ -14,8 +21,8 @@ export async function checkGithubMcp(token: string) {
         requestInit: {
           headers: {
             Authorization: "Bearer " + token,
-            "X-MCP-Toolsets": "repos",
-            "X-MCP-Readonly": "true",
+            "X-MCP-Toolsets": toolset,
+            ...(toolset === "repos" ? { "X-MCP-Readonly": "true" } : {}),
           },
         },
         fetch: async (input, init) => {
@@ -77,34 +84,9 @@ export async function checkGithubMcp(token: string) {
         },
       }),
     );
-    stage = "tool listing";
-    const tools = await client.listTools();
-    if (!tools.tools.some((t) => t.name === "get_file_contents"))
-      throw Error("Repository tool unavailable");
-    stage = "get_file_contents on main";
-    const result = await client.request(
-      {
-        method: "tools/call",
-        params: {
-          name: "get_file_contents",
-          arguments: {
-            owner: "tamer-sabry8",
-            repo: "amun",
-            path: "package.json",
-            ref: "refs/heads/main",
-          },
-        },
-      },
-      CallToolResultSchema,
-    );
-    if (result.isError)
-      throw new GithubReadFailure(
-        "GitHub returned a tool error reading package.json.",
-      );
-    if (!verifyAmunManifest(result))
-      throw new GithubReadFailure(
-        "GitHub replied, but the Amun package manifest could not be verified.",
-      );
+    return await use(client, (name) => {
+      stage = name;
+    });
   } catch (error) {
     if (error instanceof GithubReadFailure) throw error;
     const code =
@@ -124,4 +106,67 @@ export async function checkGithubMcp(token: string) {
   } finally {
     await client.close();
   }
+}
+
+async function readManifest(client: Client, stage: (s: string) => void) {
+  stage("tool listing");
+  const tools = await client.listTools();
+  if (!tools.tools.some((t) => t.name === "get_file_contents"))
+    throw Error("Repository tool unavailable");
+  stage("get_file_contents on main");
+  const result = await client.request(
+    {
+      method: "tools/call",
+      params: {
+        name: "get_file_contents",
+        arguments: {
+          owner: "tamer-sabry8",
+          repo: "amun",
+          path: "package.json",
+          ref: "refs/heads/main",
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  if (result.isError)
+    throw new GithubReadFailure(
+      "GitHub returned a tool error reading package.json.",
+    );
+  if (!verifyAmunManifest(result))
+    throw new GithubReadFailure(
+      "GitHub replied, but the Amun package manifest could not be verified.",
+    );
+}
+export async function createGithubIssue(
+  token: string,
+  issue: { owner: string; repo: string; title: string; body: string },
+) {
+  return useGithubClient(token, "issues", async (client, stage) => {
+    stage("issue tool discovery");
+    const listed = await client.listTools();
+    if (!listed.tools.some((tool) => tool.name === "issue_write"))
+      throw Error("Issue creation unavailable");
+    stage("issue creation");
+    const r = await client.callTool({
+      name: "issue_write",
+      arguments: { method: "create", ...issue },
+    });
+    if (r.isError || !Array.isArray(r.content))
+      throw Error("Issue creation unconfirmed");
+    for (const item of r.content) {
+      if (item.type !== "text" || typeof item.text !== "string") continue;
+      const value = JSON.parse(item.text);
+      if (typeof value.url !== "string") continue;
+      const url = new URL(value.url);
+      const prefix = "/" + issue.owner + "/" + issue.repo + "/issues/";
+      if (
+        url.origin === "https://github.com" &&
+        url.pathname.startsWith(prefix) &&
+        /^\d+$/.test(url.pathname.slice(prefix.length))
+      )
+        return Number(url.pathname.slice(prefix.length));
+    }
+    throw Error("Issue receipt missing");
+  });
 }

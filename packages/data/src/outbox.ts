@@ -54,7 +54,7 @@ export class ActionStore {
       if (typeof value !== "string" || !value.trim() || value.length > 256)
         throw new Error("Invalid action identity");
     if (input.productId === null) {
-      if (input.kind !== "notion_publish")
+      if (input.kind !== "notion_publish" && input.kind !== "github_issue")
         throw Error("Product scope required");
     } else if (
       typeof input.productId !== "string" ||
