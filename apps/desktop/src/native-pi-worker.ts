@@ -94,6 +94,11 @@ type Runtime = NativeSessionRuntime & {
       sessionManager: { getBranch(): unknown[] };
       sessionId: string;
       getActiveToolNames(): string[];
+      steer(text: string): Promise<string>;
+      followUp(text: string): Promise<string>;
+      clearQueue(): { steering: string[]; followUp: string[] };
+      getSteeringMessages(): readonly string[];
+      getFollowUpMessages(): readonly string[];
       recordBashResult(
         command: string,
         result: ShellResult,
@@ -121,6 +126,8 @@ let readCredential: ((provider: string, path: string) => unknown) | undefined;
 let privateAuthPath: string | undefined;
 let busy = false;
 let activeTurnId: string | undefined;
+let queueBusy = false;
+const queueRequests = new Set<string>();
 let stopping = false;
 const workerOperation = new ScopedOperation();
 async function privateDirectory(path: string) {
@@ -272,6 +279,71 @@ process.stdin.on("data", (chunk: string) => {
   try {
     for (const frame of decoder.push(chunk)) {
       const command = nativePiCommand.parse(frame);
+      if (command.action === "queue-input") {
+        const s = runtime?.session;
+        const report = (status: string, accepted = false, recalled?: string) =>
+          activeTurnId === command.id &&
+          send(command.id, {
+            kind: "turn-queue",
+            sequence: command.sequence,
+            status,
+            accepted,
+            ...(recalled === undefined ? {} : { recalled }),
+          });
+        if (!s || command.id !== activeTurnId) continue;
+        if (
+          !s.isStreaming ||
+          s.sessionId !== command.sessionId ||
+          queueBusy ||
+          queueRequests.size >= 64 ||
+          queueRequests.has(command.sequence)
+        ) {
+          report("Queue request unavailable.");
+          continue;
+        }
+        queueBusy = true;
+        queueRequests.add(command.sequence);
+        void (async () => {
+          const existing = [
+            ...s.getSteeringMessages(),
+            ...s.getFollowUpMessages(),
+          ];
+          if (command.mode === "recall") {
+            if (command.text || existing.join("\n\n").length > 12000)
+              throw Error();
+            const recalled = s.clearQueue();
+            report(
+              "Queue recalled.",
+              true,
+              [...recalled.steering, ...recalled.followUp].join("\n\n"),
+            );
+            return;
+          }
+          if (
+            !command.text.trim() ||
+            /^[!\/]/.test(command.text.trimStart()) ||
+            command.text.includes("\0") ||
+            existing.length >= 16 ||
+            [...existing, command.text].join("\n\n").length > 12000
+          )
+            throw Error();
+          const result = await (command.mode === "steer"
+            ? s.steer(command.text)
+            : s.followUp(command.text));
+          if (result !== "queued") throw Error();
+          report(
+            command.mode === "steer"
+              ? "Steering message queued"
+              : "Follow-up queued",
+            true,
+          );
+        })()
+          .catch(() => report("Queue request could not be verified."))
+          .finally(() => {
+            queueBusy = false;
+          });
+        continue;
+      }
       if (command.action === "answer-extension") {
         extensionUI.answer(command.id, command.dialog, command.answer);
         continue;
@@ -409,6 +481,7 @@ process.stdin.on("data", (chunk: string) => {
         if (command.command === "conversation-send") {
           if (runtime!.session.getActiveToolNames().length)
             throw Error("Native model turn has unexpected tools");
+          queueRequests.clear();
           activeTurnId = command.id;
           try {
             const outcome = await nativeTurn(
@@ -640,7 +713,7 @@ process.stdin.on("data", (chunk: string) => {
           send(
             command.id,
             nativeDocumentPage(
-              "Native Pi controls currently available:\nCtrl+L — select a model.\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter / Space — activate the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
+              "Native Pi controls currently available:\nCtrl+L — select a model.\nCtrl+P — next model while focus is inside Pi commands.\nCtrl+Shift+P — previous model.\nTab / Shift+Tab — move between native controls.\nEnter — submit a conversation draft. Shift+Enter or Control+J — insert a line. During a response, Enter steers, Alt+Enter queues a follow-up, Alt+Up recalls the queue, and Escape stops the response. Control+C clears an unselected draft. Control+D closes an empty composer. Enter / Space activates the focused button.\nCommand+K — Amun command palette.\nOther Pi terminal shortcuts require native equivalents and are not yet available.",
               command.argument,
               "Amun native Pi shortcuts",
             ),

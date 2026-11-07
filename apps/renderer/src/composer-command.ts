@@ -2,6 +2,7 @@ export const nativeCommandNames = [
   "mcp",
   "bearings",
   "calm",
+  "supervision-model",
   "updatefirstmate",
   "session",
   "settings",

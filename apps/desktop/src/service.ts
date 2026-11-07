@@ -1,3 +1,4 @@
+import { FirstmateModelPicker } from "../../service/src/firstmate-model-picker.ts";
 import {
   crewCalmEnabled,
   toggleFirstmateCalm,
@@ -305,6 +306,8 @@ process.parentPort?.on("message", (event) => {
       );
     },
   );
+  const branchPicker = new FirstmateModelPicker();
+  port.once("close", () => branchPicker.close());
   const nativePi = new NativePiProcess(
     {
       binary: process.env.AMUN_PI_BINARY!,
@@ -535,6 +538,12 @@ process.parentPort?.on("message", (event) => {
         });
     } else {
       const nativeRequest = nativePiCommand.safeParse(message.data);
+      if (
+        nativeRequest.success &&
+        nativeRequest.data.action === "answer-extension" &&
+        branchPicker.answer(nativeRequest.data)
+      )
+        return;
       if (nativeRequest.success && nativeRequest.data.action === "run") {
         const request = nativeRequest.data;
         if (request.command === "mcp" && request.argument === "obsidian") {
@@ -565,6 +574,32 @@ process.parentPort?.on("message", (event) => {
               sendNative(request.id, {
                 kind: "message",
                 text: "Obsidian connection unavailable.",
+              }),
+            );
+          return;
+        }
+        if (request.command === "supervision-model") {
+          if (request.argument.trim()) {
+            sendNative(request.id, {
+              kind: "message",
+              text: "Run /supervision-model without arguments.",
+            });
+            return;
+          }
+          void branchPicker
+            .open(
+              request.id,
+              workspaceRoot!,
+              process.env.AMUN_FIRSTMATE_ARCHIVES!,
+              process.env.AMUN_PI_BINARY!,
+              process.env.AMUN_PI_ENTRY!,
+              process.env.AMUN_AUTH_ROOT!,
+              (result) => sendNative(request.id, result),
+            )
+            .catch(() =>
+              sendNative(request.id, {
+                kind: "message",
+                text: "Could not verify the Firstmate supervision model selection.",
               }),
             );
           return;

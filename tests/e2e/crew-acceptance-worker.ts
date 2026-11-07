@@ -69,7 +69,12 @@ export async function verifyDisposableWorker(
   let state = "starting";
   for (let attempt = 0; attempt < 155; attempt++) {
     const paneText = await tmux(["capture-pane", "-p", "-t", pane]);
-    const screen = paneText.toLowerCase().replace(/\s+/g, " ");
+    const screen = paneText
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[‐‑‒–—]/g, "-")
+      .replace(/[*_]/g, "")
+      .replace(/\s+/g, " ");
     if (submitted && /seven hundred(?: and)? thirty[- ]four/.test(screen))
       return;
     if (

@@ -115,8 +115,10 @@ test("Firstmate dispatches both persistent subscription workers and publishes th
         await workerIdentities(receipt.identity.panePid, harness),
       );
     }
-    for (const harness of ["codex", "claude"] as const)
-      await verifyDisposableWorker(root, harness);
+    if (process.env.AMUN_LIVE_CREW_INFERENCE === "1") {
+      for (const harness of ["codex", "claude"] as const)
+        await verifyDisposableWorker(root, harness);
+    }
     await app.close();
     app = await launch();
     const page = await app.firstWindow();

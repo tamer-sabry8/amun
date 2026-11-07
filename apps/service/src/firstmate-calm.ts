@@ -26,6 +26,22 @@ export async function toggleFirstmateCalm(
     },
   );
   const expected = ["max", "on"].includes(before.trim()) ? "off" : "on";
+  await runFirstmateCommand(home, binary, entry, "calm", {});
+  if ((await readBoundedPrivateFile(preference, 64)).trim() !== expected)
+    throw Error("Calm change unverified");
+  return "Firstmate Calm is " + expected + ".";
+}
+export async function runFirstmateCommand(
+  home: string,
+  binary: string,
+  entry: string,
+  name: "calm" | "supervision-model",
+  options: {
+    authRoot?: string;
+    signal?: AbortSignal;
+    onFrame?: (frame: Record<string, unknown>, client: PiRpcClient) => void;
+  },
+) {
   const temp = await realpath(
     await mkdtemp(join(tmpdir(), "amun-pi-service-")),
   );
@@ -50,7 +66,11 @@ export async function toggleFirstmateCalm(
         "--no-prompt-templates",
         "--no-context-files",
         "--extension",
-        join(home, ".pi/extensions/fm-calm.ts"),
+        join(
+          home,
+          ".pi/extensions",
+          name === "calm" ? "fm-calm.ts" : "fm-branch-supervision.ts",
+        ),
         "--extension",
         cleanup,
       ],
@@ -59,7 +79,7 @@ export async function toggleFirstmateCalm(
         env: {
           HOME: temp,
           PATH: "/usr/bin:/bin",
-          PI_CODING_AGENT_DIR: temp,
+          PI_CODING_AGENT_DIR: options.authRoot ?? temp,
           PI_SKIP_VERSION_CHECK: "1",
           PI_OFFLINE: "1",
           FM_HOME: home,
@@ -75,6 +95,7 @@ export async function toggleFirstmateCalm(
       },
       (frame) => {
         if (frame.type === "agent_start") client.close();
+        else options.onFrame?.(frame, client);
       },
     );
     child.stdout.setEncoding("utf8");
@@ -88,22 +109,26 @@ export async function toggleFirstmateCalm(
       });
       child.once("error", () => client.close());
     });
+    const abort = () => client.close();
+    options.signal?.addEventListener("abort", abort, { once: true });
     try {
+      options.signal?.throwIfAborted();
       const commands = (await client.request("get_commands")) as {
         commands?: { name?: string }[];
       };
-      if (!commands.commands?.some((c) => c.name === "calm"))
+      if (!commands.commands?.some((c) => c.name === name))
         throw Error("Pinned command unavailable");
-      const result = (await client.request("prompt", { message: "/calm" })) as {
+      const result = (await client.request(
+        "prompt",
+        { message: "/" + name },
+        120000,
+      )) as {
         disposition?: string;
       };
-      if (
-        result.disposition !== "handled" ||
-        (await readBoundedPrivateFile(preference, 64)).trim() !== expected
-      )
-        throw Error("Calm change unverified");
-      return "Firstmate Calm is " + expected + ".";
+      if (result.disposition !== "handled")
+        throw Error("Firstmate command unavailable");
     } finally {
+      options.signal?.removeEventListener("abort", abort);
       client.close();
       child.stdin.end();
       const force = setTimeout(() => child.kill("SIGKILL"), 3000);

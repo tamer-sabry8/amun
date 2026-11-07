@@ -61,7 +61,17 @@ export function NativePiPanel({
     result.extensionCommands?.includes(resourceMatch[1]!)
       ? resourceMatch[1]
       : undefined;
+  const draftAction = useRef<HTMLButtonElement>(null);
   const importFile = useRef<HTMLInputElement>(null);
+  const [queueText, renderQueueText] = useState("");
+  const queueDraft = useRef({ id: "", text: "" });
+  function setQueueText(text: string) {
+    queueDraft.current.text = text;
+    renderQueueText(text);
+  }
+  const [queueStatus, setQueueStatus] = useState("");
+  const queueSequence = useRef<string | null>(null);
+  const [queueWaiting, setQueueWaiting] = useState(false);
   const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   useEffect(() => {
@@ -151,6 +161,22 @@ export function NativePiPanel({
       bridge.onEvent((value) => {
         const event = nativePiEvent.safeParse(value);
         if (event.success && event.data.id === pending.current) {
+          if (event.data.result.kind === "turn-queue") {
+            const q = event.data.result;
+            if (q.sequence !== queueSequence.current) return;
+            queueSequence.current = null;
+            setQueueWaiting(false);
+            setQueueStatus(q.status);
+            if (q.accepted) setQueueText(q.recalled ?? "");
+            return;
+          }
+          queueSequence.current = null;
+          setQueueWaiting(false);
+          if (queueDraft.current.id && queueDraft.current.text) {
+            saveDraft(queueDraft.current.id, queueDraft.current.text);
+            queueDraft.current = { id: "", text: "" };
+            renderQueueText("");
+          }
           if (event.data.result.kind === "extension-dialog") {
             setExtensionAnswer(
               event.data.result.method === "editor"
@@ -229,6 +255,11 @@ export function NativePiPanel({
       return;
     }
     const id = crypto.randomUUID();
+    if (selectedCommand === "conversation-send") {
+      queueDraft.current.id = sessionId ?? "";
+      setQueueStatus("");
+      setQueueText("");
+    }
     pending.current = id;
     setBusy(true);
     setSending(selectedCommand === "conversation-send");
@@ -258,6 +289,23 @@ export function NativePiPanel({
       argument: value,
     });
   };
+  function queue(mode: "steer" | "follow-up" | "recall") {
+    if (!sessionId || !pending.current || !sending || queueSequence.current)
+      return;
+    const sequence = crypto.randomUUID();
+    queueSequence.current = sequence;
+    setQueueWaiting(true);
+    bridge.send({
+      version: 1,
+      kind: "native-pi",
+      action: "queue-input",
+      id: pending.current,
+      sessionId,
+      sequence,
+      mode,
+      text: mode === "recall" ? "" : queueText,
+    });
+  }
   function answerDialog(answer: string | boolean | null) {
     if (pending.current && result?.kind === "extension-dialog")
       bridge.send({
@@ -326,6 +374,21 @@ export function NativePiPanel({
     <section
       aria-label="Pi commands"
       onKeyDown={(event) => {
+        if (
+          sending &&
+          event.key === "Escape" &&
+          !event.nativeEvent.isComposing &&
+          pending.current
+        ) {
+          event.preventDefault();
+          bridge.send({
+            version: 1,
+            kind: "native-pi",
+            action: "abort-turn",
+            id: pending.current,
+          });
+          return;
+        }
         const shortcut = piModelShortcut(event.nativeEvent);
         if (!shortcut) return;
         event.preventDefault();
@@ -607,6 +670,45 @@ export function NativePiPanel({
             <label>
               Message this conversation
               <textarea
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing || event.repeat) return;
+                  const el = event.currentTarget;
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey &&
+                    !event.altKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !shellPrefix
+                  ) {
+                    event.preventDefault();
+                    draftAction.current?.click();
+                  } else if (event.ctrlKey && event.key.toLowerCase() === "j") {
+                    event.preventDefault();
+                    el.setRangeText(
+                      "\n",
+                      el.selectionStart,
+                      el.selectionEnd,
+                      "end",
+                    );
+                    setDraft(el.value);
+                  } else if (
+                    event.ctrlKey &&
+                    event.key.toLowerCase() === "c" &&
+                    el.selectionStart === el.selectionEnd &&
+                    draft
+                  ) {
+                    event.preventDefault();
+                    setDraft("");
+                  } else if (
+                    event.ctrlKey &&
+                    event.key.toLowerCase() === "d" &&
+                    !draft
+                  ) {
+                    event.preventDefault();
+                    run("", "quit");
+                  }
+                }}
                 aria-label="Conversation message"
                 value={draft}
                 maxLength={12000}
@@ -693,6 +795,7 @@ export function NativePiPanel({
               )}
             <button
               type="button"
+              ref={draftAction}
               disabled={
                 busy ||
                 (shellPrefix
@@ -778,6 +881,52 @@ export function NativePiPanel({
                       ? "Run /" + slash.name
                       : "Send message"}
             </button>
+            {sending && (
+              <fieldset disabled={queueWaiting}>
+                <label>
+                  Message during response
+                  <textarea
+                    onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing || event.repeat) return;
+                      if (
+                        event.altKey &&
+                        event.key === "ArrowUp" &&
+                        !queueText
+                      ) {
+                        event.preventDefault();
+                        queue("recall");
+                      } else if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        queueText.trim()
+                      ) {
+                        event.preventDefault();
+                        queue(event.altKey ? "follow-up" : "steer");
+                      }
+                    }}
+                    value={queueText}
+                    maxLength={12000}
+                    onChange={(e) => setQueueText(e.target.value)}
+                  />
+                </label>
+                <button
+                  disabled={!queueText.trim()}
+                  onClick={() => queue("steer")}
+                >
+                  Steer response
+                </button>
+                <button
+                  disabled={!queueText.trim()}
+                  onClick={() => queue("follow-up")}
+                >
+                  Queue follow-up
+                </button>
+                <button disabled={!!queueText} onClick={() => queue("recall")}>
+                  Recall queued messages
+                </button>
+                {queueStatus && <p role="status">{queueStatus}</p>}
+              </fieldset>
+            )}
             {sending && (
               <button
                 type="button"
@@ -1168,7 +1317,7 @@ export function NativePiPanel({
             </button>
             <p role="status">{exportStatus}</p>
           </>
-        ) : result ? (
+        ) : result?.kind === "message" || result?.kind === "copy" ? (
           <>
             <p>
               {result.text ||

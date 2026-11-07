@@ -16,6 +16,15 @@ export const nativePiCommand = z.discriminatedUnion("action", [
         ["import-preview", "extension-review"].includes(value.command) ||
         value.argument.length <= 16384,
     ),
+  z.strictObject({
+    ...base,
+    action: z.literal("queue-input"),
+    id,
+    sessionId: z.uuid(),
+    sequence: z.uuid(),
+    mode: z.enum(["steer", "follow-up", "recall"]),
+    text: z.string().max(12000),
+  }),
   z.strictObject({ ...base, action: z.literal("abort-turn"), id }),
   z.strictObject({
     ...base,
@@ -63,6 +72,13 @@ export const notionApprovalRequest = z.strictObject({
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
+    kind: z.literal("turn-queue"),
+    sequence: z.uuid(),
+    status: z.string().max(256),
+    accepted: z.boolean(),
+    recalled: z.string().max(12000).optional(),
+  }),
+  z.strictObject({
     kind: z.literal("extension-review"),
     id: z.uuid(),
     name: z.string().max(200),
@@ -75,7 +91,7 @@ export const nativePiResult = z.discriminatedUnion("kind", [
     method: z.enum(["confirm", "select", "input", "editor"]),
     title: z.string().max(256),
     message: z.string().max(4096),
-    options: z.array(z.string().max(256)).max(128),
+    options: z.array(z.string().max(256)).max(2048),
   }),
   z.strictObject({
     kind: z.literal("session-tree"),
