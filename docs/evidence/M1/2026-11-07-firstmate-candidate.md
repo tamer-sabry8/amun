@@ -24,3 +24,11 @@ The owner authorized folder trust and verified Firstmate hooks in disposable Amu
 Ten actual Electron service restarts rediscovered both original Herdr endpoints. An independent observer verified the same process IDs and start times and exactly one matching CLI per worktree. Missing receipts returned unknown. This used the proof-only Herdr adapter and a source Electron build. Worker completion is recorded separately from endpoint identity.
 
 The [Pi bridge matrix](2026-11-07-pi-bridge.md) passed alongside the candidate watcher. The earlier missing-bridge and trust blockers are resolved.
+
+## Final subscription and packaged recovery trial
+
+A controlled comparison of the same Claude launcher and isolated profile returned signed out in the stripped lab environment and signed in when the macOS account fields and temporary directory were supplied. The shared worker environment now provides these fields for all callers. A regression test first failed on their absence. The disposable login shell selected the Amun launcher explicitly.
+
+Both workers dispatched from the exact candidate and returned the requested sum in independent assistant messages. Claude returned “Six hundred fifty-one.” Codex returned “Six hundred and fifty-one.” Both original process IDs, start times, scoped terminal identities and one-worker counts survived all ten service restarts in packaged Amun. Missing receipts returned unknown. No promotion or personal fleet restart was performed. The proof-only Herdr reader is separate from normal persistent crew dispatch.
+
+The packaged suite passed 22 tests and skipped its development-only test. The unit suite passed 423 tests. Line coverage was 97.27% in the domain package and 96.72% in governance. The bridge and recovery implementation was committed in `18a7ddd`.

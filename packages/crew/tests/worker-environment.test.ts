@@ -1,3 +1,4 @@
+import { userInfo, tmpdir } from "node:os";
 import { it, expect } from "vitest";
 import { workerEnvironment } from "../src/worker-environment.ts";
 it("allows supported tool updates and keeps Claude profile separate while retaining macOS Keychain discovery", () => {
@@ -8,6 +9,9 @@ it("allows supported tool updates and keeps Claude profile separate while retain
     "/tools/node",
   );
   expect(env).toMatchObject({
+    USER: userInfo().username,
+    LOGNAME: userInfo().username,
+    TMPDIR: tmpdir(),
     HOME: "/Users/test",
     CLAUDE_CONFIG_DIR: "/Users/test/Amun/claude/state",
   });

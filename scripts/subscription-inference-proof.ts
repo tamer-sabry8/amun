@@ -1,4 +1,4 @@
-import { homedir, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { workerEnvironment } from "../packages/crew/src/worker-environment.ts";
 import { runClosedInput } from "../packages/crew/src/closed-input.ts";
@@ -43,9 +43,6 @@ try {
       cwd: join(profile, "work"),
       env: {
         ...workerEnvironment(tool, homedir(), profile, process.execPath),
-        USER: userInfo().username,
-        LOGNAME: userInfo().username,
-        TMPDIR: process.env.TMPDIR ?? "/tmp",
       },
       timeout: 90000,
       maxBuffer: 524288,

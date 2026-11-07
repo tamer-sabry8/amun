@@ -1,7 +1,7 @@
 import { workerEnvironment } from "../packages/crew/src/worker-environment.ts";
 /** Run in a visible local Terminal. Never redirect login output into evidence/chat. */
 import { spawn, execFile } from "node:child_process";
-import { homedir, userInfo } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { prepareWorkerProfile } from "../packages/crew/src/worker-profile.ts";
 import { WorkerLoginBrowser } from "../packages/crew/src/worker-login-url.ts";
@@ -54,9 +54,6 @@ async function main() {
     const env = {
       ...workerEnvironment(tool, homedir(), root, process.execPath),
       ...(tool === "codex" ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
-      USER: userInfo().username,
-      LOGNAME: userInfo().username,
-      TMPDIR: process.env.TMPDIR ?? "/tmp",
     };
 
     const child = spawn(

@@ -1,7 +1,6 @@
 import { workerProfileName } from "./worker-profile.ts";
 import { join } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
-import { userInfo } from "node:os";
 import { workerEnvironment } from "./worker-environment.ts";
 import { runClosedInput } from "./closed-input.ts";
 async function validateProfile(root: string) {
@@ -56,9 +55,6 @@ export class SubscriptionWorker {
         env: {
           ...workerEnvironment(tool, home, this.root, binary),
           ...(tool === "codex" ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
-          USER: userInfo().username,
-          LOGNAME: userInfo().username,
-          TMPDIR: process.env.TMPDIR ?? "/tmp",
         },
         ...(this.config.signal ? { signal: this.config.signal } : {}),
         timeout: 90000,
