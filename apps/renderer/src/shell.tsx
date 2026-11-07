@@ -704,6 +704,7 @@ export function App() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const snapshot = state.workspace;
   const preferences = snapshot?.preferences ?? emptyPreferences;
+  const [terminalTask, setTerminalTask] = useState<string | null>(null);
   const [layout, dispatch] = useReducer(layoutReducer, initialLayout);
   const [route, setRoute] = useState("overview");
   const [returnToConversation, setReturnToConversation] = useState(false);
@@ -989,8 +990,10 @@ export function App() {
   );
   const tool = (id: string) => {
     if (id === "browser") dispatch({ type: "inspect", tab: "web" });
-    else if (id === "terminal") dispatch({ type: "terminal" });
-    else setRoute(id);
+    else if (id === "terminal") {
+      setTerminalTask(null);
+      dispatch({ type: "terminal" });
+    } else setRoute(id);
   };
   const routeLabel =
     [
@@ -1463,7 +1466,12 @@ export function App() {
                 </div>
               </>
             ) : route === "agents" ? (
-              <AgentsPanel />
+              <AgentsPanel
+                onOpenWorker={(id) => {
+                  setTerminalTask(id);
+                  if (!layout.terminal) dispatch({ type: "terminal" });
+                }}
+              />
             ) : (
               <div className="empty-state">
                 <Icon name={route} />
@@ -1675,7 +1683,14 @@ export function App() {
           </button>
         </footer>
         {layout.terminal && (
-          <TerminalPane onClose={() => dispatch({ type: "terminal" })} />
+          <TerminalPane
+            key={terminalTask ?? "workspace"}
+            taskId={terminalTask}
+            onClose={() => {
+              setTerminalTask(null);
+              dispatch({ type: "terminal" });
+            }}
+          />
         )}
       </div>
       <aside className="status-rail" aria-label="Status rail">

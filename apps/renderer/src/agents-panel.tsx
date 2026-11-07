@@ -6,7 +6,11 @@ import {
   crewObservation,
 } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
-export function AgentsPanel() {
+export function AgentsPanel({
+  onOpenWorker,
+}: {
+  onOpenWorker: (taskId: string) => void;
+}) {
   const { generation, status } = useSyncExternalStore(
     bridge.subscribe,
     bridge.getSnapshot,
@@ -14,6 +18,22 @@ export function AgentsPanel() {
   const releaseRequest = useRef<string | null>(null);
   const [releaseStatus, setReleaseStatus] = useState("");
   const [releaseBusy, setReleaseBusy] = useState(false);
+  const [harness, setHarness] = useState("codex");
+  const [charter, setCharter] = useState("");
+  function dispatch() {
+    if (releaseRequest.current || !charter.trim()) return;
+    const id = crypto.randomUUID();
+    releaseRequest.current = id;
+    setReleaseBusy(true);
+    bridge.send({
+      version: 1,
+      kind: "native-pi",
+      action: "run",
+      command: "crew-dispatch",
+      id,
+      argument: JSON.stringify({ harness, charter }),
+    });
+  }
   function releaseAction(
     argument: "status" | "prepare" | "rollback" | "crew-home",
   ) {
@@ -46,6 +66,8 @@ export function AgentsPanel() {
         releaseRequest.current = null;
         setReleaseBusy(false);
         setReleaseStatus(event.data.result.text);
+        if (/^Firstmate (dispatched|recovered)/.test(event.data.result.text))
+          bridge.send({ version: 1, kind: "crew-list" });
       }
     });
     releaseAction("status");
@@ -120,6 +142,32 @@ export function AgentsPanel() {
         >
           Roll back to previous Firstmate
         </button>
+        <label>
+          Persistent worker harness
+          <select
+            value={harness}
+            disabled={releaseBusy}
+            onChange={(e) => setHarness(e.target.value)}
+          >
+            <option value="codex">Codex CLI · restricted</option>
+            <option value="claude">Claude Code · auto</option>
+          </select>
+        </label>
+        <label>
+          Worker charter
+          <textarea
+            value={charter}
+            maxLength={2000}
+            disabled={releaseBusy}
+            onChange={(e) => setCharter(e.target.value)}
+          />
+        </label>
+        <button
+          disabled={status !== "Connected" || releaseBusy || !charter.trim()}
+          onClick={dispatch}
+        >
+          Dispatch through Firstmate
+        </button>
         <p role="status" aria-live="polite">
           {releaseBusy ? "Checking Firstmate runtime…" : releaseStatus}
         </p>
@@ -185,6 +233,11 @@ export function AgentsPanel() {
             <p>
               {result.run.harness} · {result.run.branch}
             </p>
+          )}
+          {result?.endpoint === "verified" && taskId && (
+            <button onClick={() => onOpenWorker(taskId)}>
+              Open verified worker terminal
+            </button>
           )}
           <p>Worker task status: unknown</p>
         </>

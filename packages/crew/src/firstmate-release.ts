@@ -126,8 +126,75 @@ export class FirstmateReleases {
     }
     return readHome();
   }
+  async verifyHomes(revision: string, homes: readonly string[]) {
+    const pin = [this.current, this.previous].find(
+      (release) => release?.commit === revision,
+    );
+    if (!pin) throw Error("Crew release unavailable");
+    const reference = await this.preparePin(pin, false);
+    const git = async (home: string, args: string[]) =>
+      (
+        await promisify(execFile)(
+          "/usr/bin/git",
+          [
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-C",
+            home,
+            ...args,
+          ],
+          {
+            env: {
+              PATH: "/usr/bin:/bin",
+              GIT_CONFIG_NOSYSTEM: "1",
+              GIT_CONFIG_GLOBAL: "/dev/null",
+            },
+            timeout: 15000,
+            maxBuffer: 65536,
+          },
+        )
+      ).stdout.trim();
+    try {
+      const tree = await git(reference.home, ["rev-parse", "HEAD^{tree}"]);
+      for (const home of homes) {
+        if ((await git(home, ["rev-parse", "HEAD^{tree}"])) !== tree)
+          throw Error("Crew source changed");
+        await git(home, [
+          "diff",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--quiet",
+          tree,
+          "--",
+        ]);
+        if (
+          await git(home, [
+            "ls-files",
+            "--others",
+            "--",
+            "bin",
+            "skills",
+            ".pi",
+            ".claude",
+            ".codex",
+            ".agents",
+          ])
+        )
+          throw Error("Unreviewed crew resources");
+      }
+    } finally {
+      await rm(dirname(dirname(reference.home)), {
+        recursive: true,
+        force: true,
+      });
+    }
+  }
   async prepare(crew = false) {
-    const pin = await this.selected();
+    return this.preparePin(await this.selected(), crew);
+  }
+  private async preparePin(pin: Release, crew: boolean) {
     const bytes = await this.verifiedBytes(pin);
     const parent = dirname(this.selection);
     if ((await realpath(parent)) !== parent) throw Error("Unsafe workspace");

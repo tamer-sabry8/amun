@@ -4,7 +4,13 @@ import { Terminal } from "@xterm/xterm";
 import { terminalEvent } from "@amun/contracts";
 import "@xterm/xterm/css/xterm.css";
 import { bridge } from "./bridge.ts";
-export function TerminalPane({ onClose }: { onClose(): void }) {
+export function TerminalPane({
+  onClose,
+  taskId,
+}: {
+  onClose(): void;
+  taskId: string | null;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState("closed");
   useEffect(() => {
@@ -63,7 +69,11 @@ export function TerminalPane({ onClose }: { onClose(): void }) {
         rows,
       });
     };
-    bridge.send({ version: 1, kind: "terminal", action: "open" });
+    bridge.send(
+      taskId
+        ? { version: 1, kind: "terminal", action: "attach-backend", taskId }
+        : { version: 1, kind: "terminal", action: "open" },
+    );
     const observer = new ResizeObserver(resize);
     observer.observe(container.current);
     const timer = setTimeout(resize, 100);
@@ -75,15 +85,17 @@ export function TerminalPane({ onClose }: { onClose(): void }) {
       bridge.send({ version: 1, kind: "terminal", action: "close" });
       terminal.dispose();
     };
-  }, []);
+  }, [taskId]);
   return (
     <section className="terminal-pane" aria-label="Terminal dock">
       <div className="terminal-toolbar">
         <strong>Terminal</strong>
         <span>{state}</span>
-        <span className="muted">Isolated workspace shell</span>
+        <span className="muted">
+          {taskId ? "Firstmate worker · " + taskId : "Isolated workspace shell"}
+        </span>
         <button
-          disabled={state === "unavailable"}
+          disabled={state !== "readonly" && state !== "control"}
           onClick={() =>
             bridge.send({
               version: 1,

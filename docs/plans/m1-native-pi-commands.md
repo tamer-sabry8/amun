@@ -74,3 +74,7 @@ Source and packaged Pi sessions discovered private prompt templates and skills a
 ## Native diagnostics
 
 The pinned terminal implementation of `/debug` writes terminal render lines and raw session messages. The native command opens a local JSONL export review containing the active session identity, Pi version, model, streaming state, redacted conversation text and count of omitted entries. Saving uses the existing native file chooser. The source and arm64 package passed the real-session journey after the original missing-command regression.
+
+## Native crew bearings
+
+The Conversations picker and typed `/bearings` or `/skill:bearings` use the current workspace's persistent primary worktree and the retained revision. The native digest projects the pinned snapshot into Captain’s Call, Recently Landed, Underway, and Charted Next. Plain mode leaves the dated report alone. File mode atomically replaces the daily report in that worktree. Explicit `include PRs` requests upstream discovery and displays its coverage. The real disposable crew used for acceptance had no associated GitHub repositories. Interactive board mode is still open.

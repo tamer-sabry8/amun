@@ -62,3 +62,21 @@ export const crewInventory = z.strictObject({
     .max(512)
     .nullable(),
 });
+
+export const dispatchRequest = z.strictObject({
+  harness: z.enum(["codex", "claude"]),
+  charter: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .refine((text) =>
+      Array.from(text).every(
+        (c) => c === "\n" || c === "\t" || c.charCodeAt(0) >= 32,
+      ),
+    ),
+});
+export const dispatchScope = z.strictObject({
+  scope: z.string().regex(/^\/private\/tmp\/amun-tmux-[A-Za-z0-9]{6}$/),
+  token: z.string().regex(/^[a-f0-9]{32}$/),
+});

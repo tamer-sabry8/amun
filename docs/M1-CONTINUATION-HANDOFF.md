@@ -27,7 +27,7 @@ docs/plans/product-and-r1-plan.md is the full product and R1 plan. docs/TASKS.md
 ## M1 tasks still needing completion/audit
 
 - T016c passed. New source consent and restart confirmed the workspace after the earlier packaged lifecycle tests. See docs/TASKS.md.
-- T016b CLI subscription access remains open for normal persistent Firstmate crew dispatch and initial endpoint receipt issuance. Native sign-ins, fresh onboarding and real subscription inference for both Codex and Claude passed. Existing-worker permissions and ten service-restart reattachment trials pass. They do not prove normal persistent launch. See 2026-11-07-agents-and-native-tree.md and 2026-11-07-native-journeys.md.
+- T016b passed. Normal Agents launch, subscription inference, lost receipt recovery and full-quit reattachment passed in source and package for both workers. See docs/evidence/M1/2026-11-07-agents-and-native-tree.md.
 - T022a native UI for ALL requested Pi commands remains open. Use pinned Pi 1.4.0 interfaces and actual loaded resources. Many session/model/settings/auth/import/export/trust/tree/compose paths pass. Amun-owned prompt templates and skill drafts passed real source and packaged acceptance. Executable extensions, operational Firstmate commands and remaining composer actions are still open. Do not forward unsupported built-ins as model prompts.
 - Native /llama live acceptance is explicitly BLOCKED because the owner has no llama.cpp router. Keep it tracked, continue independent work.
 - T022d now includes all eight official Workspace servers and Maps tool discovery, folder-scoped read-only filesystem, and blank Chrome sessions through Playwright, Chrome DevTools and the archived Puppeteer adapter. Source and packaged acceptance passed. Obsidian loopback MCP setup is implemented and the owner deferred live vault testing. Account-specific Google reads and physical external-media acceptance remain open. See docs/evidence/M1/2026-11-07-mcp-and-composer.md.
@@ -96,7 +96,7 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
 2. Read the current task ledger and incremental acceptance evidence. The package at /private/tmp/amun-m1-native-debug/Amun-darwin-arm64/Amun.app passed 29 end-to-end tests at code checkpoint 358215f with live Google and browser checks enabled. The development-only gallery was skipped. The source suite and all 439 unit tests also passed.
-3. Finish normal persistent crew dispatch/receipt path and native dynamic command/resource coverage with safe real worktree acceptance.
+3. Continue native dynamic command/resource coverage with safe real worktree acceptance.
 4. Complete unblocked remaining MCP gates; keep explicit non-gating/deferred items honest.
 5. Keep redesign and M2 gated. Once independent M1 work is done, obtain explicit redesign approval with a concrete reviewable plan.
 6. Update evidence/tasks and PR after tested increments. Final handoff and final M1 acceptance are later steps.

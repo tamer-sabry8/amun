@@ -1,3 +1,5 @@
+import { firstmateBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
+import { dispatchFirstmate } from "../../../packages/crew/src/firstmate-dispatch.ts";
 import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.ts";
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
 import { crewList } from "../../../packages/contracts/src/crew.ts";
@@ -168,6 +170,7 @@ const authMetadata = {
 };
 const authSessions = new Set<AuthSession>();
 const sessions = new Set<TerminalSession>();
+let crewDispatchBusy = false;
 let backupBusy = false;
 process.parentPort?.on("message", (event) => {
   if (event.data?.kind === "backup") {
@@ -369,7 +372,7 @@ process.parentPort?.on("message", (event) => {
   let closed = false;
   let backendOpening = false;
   let backendEpoch = 0;
-  let terminal = new TerminalSession(
+  const localTerminal = new TerminalSession(
     () => {
       const modulePath = process.env.AMUN_TERMINAL_MODULE;
       if (!modulePath) throw new Error("Terminal runtime unavailable");
@@ -393,6 +396,7 @@ process.parentPort?.on("message", (event) => {
     },
     (message) => port.postMessage(message),
   );
+  let terminal = localTerminal;
   sessions.add(terminal);
   let listingCrew = false;
   const crew = new CrewObserver(
@@ -427,7 +431,6 @@ process.parentPort?.on("message", (event) => {
       const reply = workspaceService.handle(message.data);
       if (reply) port.postMessage(reply);
     } else if (backendTerminalOpen.safeParse(message.data).success) {
-      if (backendOpening) return;
       const request = backendTerminalOpen.parse(message.data);
       backendOpening = true;
       const epoch = ++backendEpoch;
@@ -466,7 +469,7 @@ process.parentPort?.on("message", (event) => {
           terminal.handle({ version: 1, kind: "terminal", action: "open" });
         })
         .catch(() => {
-          if (!closed)
+          if (!closed && epoch === backendEpoch)
             port.postMessage({
               version: 1,
               kind: "terminal-state",
@@ -474,7 +477,7 @@ process.parentPort?.on("message", (event) => {
             });
         })
         .finally(() => {
-          backendOpening = false;
+          if (epoch === backendEpoch) backendOpening = false;
         });
     } else if (piOpen.safeParse(message.data).success) {
       if (opening || pi) return;
@@ -548,6 +551,54 @@ process.parentPort?.on("message", (event) => {
                 text: "Obsidian connection unavailable.",
               }),
             );
+          return;
+        }
+        if (request.command === "bearings") {
+          void FirstmateReleases.open(
+            workspaceRoot!,
+            process.env.AMUN_FIRSTMATE_ARCHIVES!,
+          )
+            .then((releases) => firstmateBearings(releases, request.argument))
+            .then((text) => sendNative(request.id, { kind: "message", text }))
+            .catch(() =>
+              sendNative(request.id, {
+                kind: "message",
+                text: "Crew snapshot unavailable. Check the crew worktree and runtime dependencies.",
+              }),
+            );
+          return;
+        }
+        if (request.command === "crew-dispatch") {
+          if (crewDispatchBusy) {
+            sendNative(request.id, {
+              kind: "message",
+              text: "A crew dispatch is in progress.",
+            });
+            return;
+          }
+          crewDispatchBusy = true;
+          void (async () => {
+            try {
+              const releases = await FirstmateReleases.open(
+                workspaceRoot!,
+                process.env.AMUN_FIRSTMATE_ARCHIVES!,
+              );
+              const text = await dispatchFirstmate(
+                releases,
+                process.env.AMUN_CREW_RECEIPTS!,
+                process.env.AMUN_TMUX_BINARY!,
+                JSON.parse(request.argument),
+              );
+              sendNative(request.id, { kind: "message", text });
+            } catch {
+              sendNative(request.id, {
+                kind: "message",
+                text: "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
+              });
+            } finally {
+              crewDispatchBusy = false;
+            }
+          })();
           return;
         }
         if (request.command === "firstmate-release") {
@@ -1107,11 +1158,18 @@ process.parentPort?.on("message", (event) => {
       } else void auth.handle(message.data);
       void crew.handle(message.data);
       if (
-        backendOpening &&
         message.data?.kind === "terminal" &&
-        message.data?.action === "close"
-      )
+        ["close", "open"].includes(message.data.action)
+      ) {
         backendEpoch++;
+        backendOpening = false;
+        if (message.data.action === "open" && terminal !== localTerminal) {
+          terminal.close();
+          sessions.delete(terminal);
+          terminal = localTerminal;
+          sessions.add(terminal);
+        }
+      }
       if (!backendOpening) terminal.handle(message.data);
       void pi?.handle(message.data);
       if (message.data?.kind === "pi" && message.data?.action === "close")
