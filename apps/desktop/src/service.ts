@@ -1,3 +1,7 @@
+import {
+  crewCalmEnabled,
+  toggleFirstmateCalm,
+} from "../../service/src/firstmate-calm.ts";
 import { firstmateBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
 import { dispatchFirstmate } from "../../../packages/crew/src/firstmate-dispatch.ts";
 import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.ts";
@@ -171,6 +175,7 @@ const authMetadata = {
 const authSessions = new Set<AuthSession>();
 const sessions = new Set<TerminalSession>();
 let crewDispatchBusy = false;
+let togglingCalm = false;
 let backupBusy = false;
 process.parentPort?.on("message", (event) => {
   if (event.data?.kind === "backup") {
@@ -329,14 +334,25 @@ process.parentPort?.on("message", (event) => {
           },
         });
       } else if (event.result.kind === "conversation") {
-        port.postMessage({
-          ...event,
-          result: {
-            ...event.result,
-            title: redactor.text(event.result.title),
-            text: redactor.text(event.result.text),
-          },
-        });
+        const conversation = event.result;
+        void crewCalmEnabled(
+          workspaceRoot!,
+          process.env.AMUN_FIRSTMATE_ARCHIVES!,
+        )
+          .then((calm) =>
+            port.postMessage({
+              ...event,
+              result: {
+                ...conversation,
+                calm,
+                title: redactor.text(conversation.title),
+                text: redactor.text(conversation.text),
+              },
+            }),
+          )
+          .catch(() => {
+            /* The window closed during the preference read. */
+          });
       } else port.postMessage(event);
     },
   );
@@ -551,6 +567,40 @@ process.parentPort?.on("message", (event) => {
                 text: "Obsidian connection unavailable.",
               }),
             );
+          return;
+        }
+        if (request.command === "calm") {
+          if (togglingCalm || request.argument.trim()) {
+            sendNative(request.id, {
+              kind: "message",
+              text: togglingCalm
+                ? "Calm change already in progress."
+                : "Run /calm without arguments.",
+            });
+            return;
+          }
+          togglingCalm = true;
+          void FirstmateReleases.open(
+            workspaceRoot!,
+            process.env.AMUN_FIRSTMATE_ARCHIVES!,
+          )
+            .then((releases) =>
+              toggleFirstmateCalm(
+                releases,
+                process.env.AMUN_PI_BINARY!,
+                process.env.AMUN_PI_ENTRY!,
+              ),
+            )
+            .then((text) => sendNative(request.id, { kind: "message", text }))
+            .catch(() =>
+              sendNative(request.id, {
+                kind: "message",
+                text: "Firstmate Calm could not be verified. Check the crew worktree and runtime.",
+              }),
+            )
+            .finally(() => {
+              togglingCalm = false;
+            });
           return;
         }
         if (request.command === "bearings") {

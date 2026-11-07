@@ -52,6 +52,15 @@ export function NativePiPanel({
       : undefined;
   const attachmentPicker = useRef<HTMLInputElement>(null);
   const [attachmentError, setAttachmentError] = useState("");
+  const extensionPicker = useRef<HTMLInputElement>(null);
+  const [extensionAnswer, setExtensionAnswer] = useState("");
+  const extensionCommand =
+    !slash &&
+    resourceMatch &&
+    result?.kind === "conversation" &&
+    result.extensionCommands?.includes(resourceMatch[1]!)
+      ? resourceMatch[1]
+      : undefined;
   const importFile = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
@@ -142,6 +151,15 @@ export function NativePiPanel({
       bridge.onEvent((value) => {
         const event = nativePiEvent.safeParse(value);
         if (event.success && event.data.id === pending.current) {
+          if (event.data.result.kind === "extension-dialog") {
+            setExtensionAnswer(
+              event.data.result.method === "editor"
+                ? event.data.result.message
+                : "",
+            );
+            setResult(event.data.result);
+            return;
+          }
           pending.current = null;
           setSending(false);
           setBusy(false);
@@ -233,10 +251,24 @@ export function NativePiPanel({
       kind: "native-pi",
       action: "run",
       id,
-      command: selectedCommand,
+      command:
+        selectedCommand === "extension-list" && value
+          ? "extension-remove"
+          : selectedCommand,
       argument: value,
     });
   };
+  function answerDialog(answer: string | boolean | null) {
+    if (pending.current && result?.kind === "extension-dialog")
+      bridge.send({
+        version: 1,
+        kind: "native-pi",
+        action: "answer-extension",
+        id: pending.current,
+        dialog: result.dialog,
+        answer,
+      });
+  }
   const subscriptions = (
     <>
       <h4>CLI subscriptions</h4>
@@ -439,6 +471,49 @@ export function NativePiPanel({
           Close Pi commands
         </button>
       </div>
+      <input
+        hidden
+        type="file"
+        accept=".js,.ts"
+        ref={extensionPicker}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file || busy) return;
+          try {
+            if (file.size > 65536) throw Error();
+            const source = new TextDecoder("utf-8", { fatal: true }).decode(
+              await file.arrayBuffer(),
+            );
+            run(
+              JSON.stringify({ name: file.name, source }),
+              "extension-review",
+            );
+          } catch {
+            setResult({
+              kind: "message",
+              text: "Choose a UTF-8 JavaScript or TypeScript file of 64 KiB or less.",
+            });
+          }
+        }}
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => extensionPicker.current?.click()}
+      >
+        Review local Pi extension
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setCommand("extension-list");
+          run("", "extension-list");
+        }}
+      >
+        Manage trusted extensions
+      </button>
       <div data-testid="native-pi-result" aria-live="polite">
         {busy ? "Working…" : null}
         {result?.kind === "publication-receipts" ? (
@@ -593,7 +668,13 @@ export function NativePiPanel({
                   onChange={(e) => setDraft("/" + e.target.value)}
                 >
                   <option value="">Choose a command</option>
-                  {[...nativeCommandNames, ...resources].map((name) => (
+                  {[
+                    ...new Set([
+                      ...nativeCommandNames,
+                      ...resources,
+                      ...(result.extensionCommands ?? []),
+                    ]),
+                  ].map((name) => (
                     <option key={name} value={name}>
                       /{name}
                     </option>
@@ -603,6 +684,7 @@ export function NativePiPanel({
             )}
             {draft.trim().startsWith("/") &&
               !slash &&
+              !extensionCommand &&
               !resource &&
               draft.trim() !== "/" && (
                 <p role="status">
@@ -616,6 +698,7 @@ export function NativePiPanel({
                 (shellPrefix
                   ? !shellPrefix[2]!.trim() || shellPrefix[2]!.length > 8192
                   : !slash &&
+                    !extensionCommand &&
                     !resource &&
                     (!result.model ||
                       !draft.trim() ||
@@ -637,6 +720,17 @@ export function NativePiPanel({
                     "captain-shell",
                   );
                   setDraft("");
+                  return;
+                }
+                if (extensionCommand) {
+                  run(
+                    JSON.stringify({
+                      sessionId: result.sessionId,
+                      name: extensionCommand,
+                      argument: resourceMatch?.[2] ?? "",
+                    }),
+                    "extension-command",
+                  );
                   return;
                 }
                 if (resource) {
@@ -676,11 +770,13 @@ export function NativePiPanel({
                 ? shellPrefix[1] === "!!"
                   ? "Run shell without model context"
                   : "Run shell with model context"
-                : resource
-                  ? "Apply /" + resource
-                  : slash
-                    ? "Run /" + slash.name
-                    : "Send message"}
+                : extensionCommand
+                  ? "Run /" + extensionCommand
+                  : resource
+                    ? "Apply /" + resource
+                    : slash
+                      ? "Run /" + slash.name
+                      : "Send message"}
             </button>
             {sending && (
               <button
@@ -702,10 +798,12 @@ export function NativePiPanel({
               Send uses the displayed model. Use the command selector for slash
               commands. Shell commands run with your Mac account permissions.
             </p>
-            <p>
-              Text view only. {result.omittedItems} non-text or internal entries
-              omitted. Secrets are redacted.
-            </p>
+            {!result.calm && (
+              <p>
+                Text view only. {result.omittedItems} non-text or internal
+                entries omitted. Secrets are redacted.
+              </p>
+            )}
           </section>
         ) : result?.kind === "hosting-setup" ? (
           <HostingForm
@@ -789,6 +887,57 @@ export function NativePiPanel({
                 </li>
               ))}
             </ol>
+          </section>
+        ) : result?.kind === "extension-review" ? (
+          <section>
+            <h4>Review {result.name}</h4>
+            <p>
+              Trust lets this code execute as your Mac account when Pi loads it.
+              Amun installs the displayed copy.
+            </p>
+            <p>SHA-256 {result.digest}</p>
+            <textarea
+              aria-label="Extension source to trust"
+              value={result.source}
+              readOnly
+            />
+            <button
+              disabled={busy}
+              onClick={() => run(result.id, "extension-install")}
+            >
+              Trust this exact extension
+            </button>
+            <button onClick={() => setResult(null)}>Cancel review</button>
+          </section>
+        ) : result?.kind === "extension-dialog" ? (
+          <section>
+            <h4>{result.title}</h4>
+            <p>{result.message}</p>
+            {result.method === "select" ? (
+              result.options.map((option) => (
+                <button key={option} onClick={() => answerDialog(option)}>
+                  {option}
+                </button>
+              ))
+            ) : result.method === "confirm" ? (
+              <button onClick={() => answerDialog(true)}>
+                Confirm extension request
+              </button>
+            ) : (
+              <>
+                <textarea
+                  aria-label="Extension answer"
+                  value={extensionAnswer}
+                  onChange={(e) => setExtensionAnswer(e.target.value)}
+                />
+                <button onClick={() => answerDialog(extensionAnswer)}>
+                  Submit extension answer
+                </button>
+              </>
+            )}
+            <button onClick={() => answerDialog(null)}>
+              Cancel extension request
+            </button>
           </section>
         ) : result?.kind === "choices" ? (
           <>

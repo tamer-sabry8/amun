@@ -82,3 +82,9 @@ The Conversations picker and typed `/bearings` or `/skill:bearings` use the curr
 ## Native conversation files and shell
 
 The captain can use the system file picker to add bounded UTF-8 text to the active session's editable draft. The service checks session identity and redacts the draft before display. Native `!` and `!!` run only after the captain clicks the labeled shell action. The owner selected ordinary Mac account permissions. The shell starts in the Pi workspace with the account's login shell and home. Amun bounds the captured output and redacts both command and output before calling Pi's session history API. A real external-file acceptance test checked the two recorded bash entries with the pinned SDK's model-context conversion. Only the `!` entry reached that conversion's output.
+
+## Reviewed local extensions and Calm
+
+The owner chose support for individually reviewed local JavaScript and TypeScript extensions. The native source review shows the exact code and SHA-256. Acceptance proved that choosing a file does not execute it, trusting it loads the reviewed copy into the pinned Pi runtime, replacing the original file does not change the installed command after restart, and revoking trust removes it from the active command list. The command showed a native confirmation and returned its notification after the captain answered. The adapter supports bounded confirmation, selection, text input, editor and notification surfaces. Arbitrary third-party terminal widgets remain outside the native adapter.
+
+The native Calm command loads the retained Firstmate extension in an offline Pi RPC process. Actual command discovery, handled disposition and a verified worktree preference are required for success. Source and packaged tests toggled Calm across restarts and observed the native transcript’s operational detail change. Terminal animations and a full terminal rendering of tool rows were outside this test.

@@ -1,3 +1,9 @@
+import { ReviewedExtensions } from "../../../packages/crew/src/reviewed-extensions.ts";
+import {
+  NativeExtensionUI,
+  extensionNames,
+  type ExtensionSession,
+} from "../../../packages/crew/src/native-extension-ui.ts";
 import {
   runCaptainShell,
   type ShellResult,
@@ -76,7 +82,8 @@ const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
 type Runtime = NativeSessionRuntime & {
-  session: ResourceSession &
+  session: ExtensionSession &
+    ResourceSession &
     NativeTurnSession &
     CredentialSession &
     NativePiSession &
@@ -86,6 +93,7 @@ type Runtime = NativeSessionRuntime & {
       modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
       sessionManager: { getBranch(): unknown[] };
       sessionId: string;
+      getActiveToolNames(): string[];
       recordBashResult(
         command: string,
         result: ShellResult,
@@ -99,6 +107,8 @@ type Runtime = NativeSessionRuntime & {
   dispose(): Promise<void>;
 };
 let runtime: Runtime | undefined;
+let reviewed: ReviewedExtensions | undefined;
+const extensionUI = new NativeExtensionUI();
 let expandPiTemplate: Parameters<typeof expandResource>[4];
 let stripPiFrontmatter: Parameters<typeof expandResource>[5];
 let sessionActions: NativePiSessions | undefined;
@@ -127,6 +137,7 @@ async function privateDirectory(path: string) {
 }
 async function initialize() {
   const authPath = await preparePiAuth(root!);
+  reviewed ??= await ReviewedExtensions.open(root!);
   privateAuthPath = authPath;
   const cwd = join(dirname(root!), "pi-workspace");
   await privateDirectory(cwd);
@@ -184,6 +195,7 @@ async function initialize() {
         modelRuntime,
         resourceLoaderOptions: {
           noExtensions: true,
+          additionalExtensionPaths: [reviewed!.entry],
           disabledBuiltinExtensions: ["mcp"],
           additionalSkillPaths: [dirs.skills],
           additionalPromptTemplatePaths: [dirs.prompts],
@@ -245,10 +257,14 @@ function stop() {
   if (stopping) return;
   stopping = true;
   process.stdin.pause();
+  extensionUI.close();
   void Promise.allSettled([
     workerOperation.close(),
     runtime?.dispose() ?? Promise.resolve(),
-  ]).finally(() => process.exit(0));
+  ]).finally(async () => {
+    await reviewed?.close();
+    process.exit(0);
+  });
 }
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk: string) => {
@@ -256,6 +272,10 @@ process.stdin.on("data", (chunk: string) => {
   try {
     for (const frame of decoder.push(chunk)) {
       const command = nativePiCommand.parse(frame);
+      if (command.action === "answer-extension") {
+        extensionUI.answer(command.id, command.dialog, command.answer);
+        continue;
+      }
       if (command.action === "abort-turn") {
         if (activeTurnId === command.id)
           void runtime?.session.abort().catch(() => {});
@@ -349,8 +369,46 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
-        if (command.command === "reload") await resourceDirectories(root!);
+        if (command.command === "extension-review") {
+          const { name, source } = JSON.parse(command.argument);
+          send(command.id, reviewed!.review(name, source));
+          return;
+        }
+        if (
+          command.command === "extension-install" ||
+          command.command === "extension-remove"
+        ) {
+          if (command.command === "extension-install")
+            await reviewed!.trust(command.argument);
+          else await reviewed!.remove(command.argument);
+          await runtime!.session.reload();
+          send(command.id, {
+            kind: "message",
+            text:
+              command.command === "extension-install"
+                ? "Extension installed."
+                : "Extension removed.",
+          });
+          return;
+        }
+        if (command.command === "extension-list") {
+          send(command.id, {
+            kind: "choices",
+            title: "Remove an installed extension by its reviewed SHA-256",
+            choices: (await reviewed!.installed()).map((id) => ({
+              id,
+              label: id,
+            })),
+          });
+          return;
+        }
+        if (command.command === "reload") {
+          await resourceDirectories(root!);
+          await reviewed!.refresh();
+        }
         if (command.command === "conversation-send") {
+          if (runtime!.session.getActiveToolNames().length)
+            throw Error("Native model turn has unexpected tools");
           activeTurnId = command.id;
           try {
             const outcome = await nativeTurn(
@@ -388,6 +446,7 @@ process.stdin.on("data", (chunk: string) => {
             "resource-draft",
             "attach-text",
             "captain-shell",
+            "extension-command",
             "bug",
             "debug",
           ].includes(command.command)
@@ -402,6 +461,26 @@ process.stdin.on("data", (chunk: string) => {
               redactor,
               readCredential!(info.providerId, privateAuthPath!),
             );
+          if (command.command === "extension-command") {
+            const i = JSON.parse(command.argument),
+              s = runtime!.session;
+            if (
+              s.sessionId !== i.sessionId ||
+              s.isStreaming ||
+              typeof i.argument !== "string"
+            )
+              throw Error("Session changed");
+            const text = await extensionUI.run(
+              s,
+              command.id,
+              i.name,
+              i.argument,
+              (dialog) => send(command.id, dialog),
+              (t) => redactor.text(t),
+            );
+            send(command.id, { kind: "message", text });
+            return;
+          }
           if (command.command === "captain-shell") {
             const input = captainShellRequest.parse(
               JSON.parse(command.argument),
@@ -539,6 +618,7 @@ process.stdin.on("data", (chunk: string) => {
           send(command.id, {
             ...view,
             resources: resourceNames(session),
+            extensionCommands: extensionNames(session),
             ...(resourceDraft === undefined ? {} : { resourceDraft }),
           });
           return;

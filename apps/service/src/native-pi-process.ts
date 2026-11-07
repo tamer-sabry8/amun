@@ -40,6 +40,11 @@ export class NativePiProcess {
     const parsed = nativePiCommand.safeParse(input);
     if (!parsed.success) return;
     const command = parsed.data;
+    if (command.action === "answer-extension") {
+      if (this.pending === command.id)
+        this.child?.stdin.write(JSON.stringify(command) + "\n");
+      return;
+    }
     if (command.action === "abort-turn") {
       if (this.pendingTurn && this.pending === command.id)
         this.child?.stdin.write(JSON.stringify(command) + "\n");
@@ -90,6 +95,10 @@ export class NativePiProcess {
             const event = nativePiEvent.parse(frame);
             if (event.id !== this.pending)
               throw Error("Unexpected native reply");
+            if (event.result.kind === "extension-dialog") {
+              this.send(event);
+              continue;
+            }
             clearTimeout(this.timer);
             this.pending = undefined;
             this.send(event);

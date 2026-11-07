@@ -13,9 +13,17 @@ export const nativePiCommand = z.discriminatedUnion("action", [
     })
     .refine(
       (value) =>
-        value.command === "import-preview" || value.argument.length <= 16384,
+        ["import-preview", "extension-review"].includes(value.command) ||
+        value.argument.length <= 16384,
     ),
   z.strictObject({ ...base, action: z.literal("abort-turn"), id }),
+  z.strictObject({
+    ...base,
+    action: z.literal("answer-extension"),
+    id,
+    dialog: z.uuid(),
+    answer: z.union([z.string().max(4096), z.boolean(), z.null()]),
+  }),
   z.strictObject({ ...base, action: z.literal("close") }),
 ]);
 export const captainShellRequest = z.strictObject({
@@ -54,6 +62,21 @@ export const notionApprovalRequest = z.strictObject({
   binding: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export const nativePiResult = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("extension-review"),
+    id: z.uuid(),
+    name: z.string().max(200),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    source: z.string().max(65536),
+  }),
+  z.strictObject({
+    kind: z.literal("extension-dialog"),
+    dialog: z.uuid(),
+    method: z.enum(["confirm", "select", "input", "editor"]),
+    title: z.string().max(256),
+    message: z.string().max(4096),
+    options: z.array(z.string().max(256)).max(128),
+  }),
   z.strictObject({
     kind: z.literal("session-tree"),
     rows: z
@@ -110,6 +133,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("conversation"),
+    calm: z.boolean().optional(),
+    extensionCommands: z.array(z.string().max(64)).max(256).optional(),
     resources: z.array(z.string().min(1).max(128)).max(512).optional(),
     resourceDraft: z.string().max(12000).optional(),
     model: z.string().min(1).max(512).nullable(),
