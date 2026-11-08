@@ -43,3 +43,7 @@ Every workspace owner chooses a hosting provider and hostname before hosted publ
 ## Interface redesign approval
 
 The user requires explicit approval before starting T022c (neumorphic interface redesign). Keep the task recorded but do not begin design or implementation until asking and receiving approval. The provided HTML is reference only; its colors are not selected. Continue independent M1 work while this task awaits approval.
+
+## Local Firstmate memory
+
+Amun runs `/stow` entirely on the Mac. It may read the selected conversation, crew memory files, local backlog and per-home budget. Apply ordinary edits automatically. Show each proposed change to a pinned entry for individual review. Retain the decision in the owned home and reuse it across restarts. Use the existing Firstmate memory files and tier markers. A prior decision settles the same question until its underlying rule or evidence changes.

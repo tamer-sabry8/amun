@@ -133,7 +133,9 @@ export class NativePiProcess {
         this.failure();
         this.close();
       },
-      ["worker-inference", "conversation-send"].includes(command.command)
+      ["worker-inference", "conversation-send", "llama"].includes(
+        command.command,
+      )
         ? 120000
         : 60000,
     );

@@ -107,4 +107,14 @@ The packaged primary acquires the pinned Firstmate lock and starts its watcher i
 
 The unattended branch acceptance uses an isolated loopback model. It drains a genuine worker wake, rejects an unrelated shell command, records the outcome and acknowledges the exact wake sequence. This tests the real Pi branch and local scripts without a paid provider call. The interactive Bearings test sends a captain’s answer through the local Lavish form in the isolated preview and verifies the durable item closes.
 
-Native Stow measures the private primary’s startup memory before and after a local sweep and writes a receipt. The acceptance test covers a new home and a home with a seeded memory entry. The receipt excludes the entry’s contents. Nonempty conversations and registered workers can still need curation. The owner approved automatic ordinary edits and individual approval for pinned entries. Model-assisted curation awaits a decision about the data and processing destination. The current accounting path makes no model request.
+Native Stow measures the private primary’s startup memory before and after a local sweep and writes a receipt. The acceptance test covers a new home and a home with a seeded memory entry. The receipt excludes the entry’s contents. Nonempty conversations and registered workers can still need curation. The owner approved automatic ordinary edits and individual approval for pinned entries. The owner selected on-device processing for the selected conversation, crew memory, backlog and budget.
+
+### On-device Stow
+
+The service invokes the installed Homebrew llama-completion executable with a local LM Studio GGUF. macOS denies network access to that process. The disposable input file and process home use a private temporary directory. Only reviewed text from the selected branch can supply new entries. The model proposes bounded indices; the local service owns validation, exact-line changes and recoverable age-based archival. Missing inference or a context overflow appears in the receipt.
+
+Ordinary entries update automatically. A proposed change to a default or explicitly pinned entry appears with its existing and proposed text, and individual Apply and Keep actions. Decisions persist in the crew home. An unchanged sweep reuses the previous review. `/stow review` reopens pending items. The pinned cascade resolves transport for registered Amun workers. Inactive local workers get a separate retention pass and before/after budget. Their shared captain file stays primary-owned. Live subscription workers are deferred to preserve local-only processing.
+
+### Local router
+
+The native `/llama` catalog accepts a loopback router URL and remembers it in the private Amun profile after verifying the catalog. Load and unload bind to the displayed model identity and refresh its state. The real acceptance launches an offline router with a disposable preset for an already-installed GGUF, clicks both actions and verifies the router’s state independently. Stow uses a separate network-denied process.

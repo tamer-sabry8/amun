@@ -1526,6 +1526,64 @@ export function NativePiPanel({
             </button>
             <p role="status">{exportStatus}</p>
           </>
+        ) : result?.kind === "llama-router" ? (
+          <section aria-label="Local llama.cpp router">
+            <h4>Router models</h4>
+            <p>{result.url}</p>
+            {!result.models.length && (
+              <p>No models are installed in this router.</p>
+            )}
+            {result.models.map((model, index) => (
+              <div key={model.id}>
+                <span>
+                  {model.id} · {model.status}
+                </span>
+                {["loaded", "sleeping", "unloaded"].includes(model.status) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      run(
+                        (model.status === "unloaded" ? "load" : "unload") +
+                          " " +
+                          result.ticket +
+                          " " +
+                          index,
+                        "llama",
+                      )
+                    }
+                  >
+                    {model.status === "unloaded" ? "Load" : "Unload"} {model.id}
+                  </button>
+                )}
+              </div>
+            ))}
+          </section>
+        ) : result?.kind === "stow-review" ? (
+          <section aria-label="Pinned memory changes">
+            <pre>{result.text}</pre>
+            {result.pins.map((pin) => (
+              <section key={pin.id} role="group" aria-label={pin.proposed}>
+                <h4>{pin.file}</h4>
+                <p>{pin.previous}</p>
+                <p>{pin.proposed}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run("approve " + pin.id, "stow")}
+                >
+                  Apply this pinned change
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run("keep " + pin.id, "stow")}
+                >
+                  Keep existing entry
+                </button>
+              </section>
+            ))}
+          </section>
         ) : result?.kind === "bearings-board" ? (
           <>
             <p>{result.text}</p>

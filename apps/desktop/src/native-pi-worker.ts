@@ -1,3 +1,5 @@
+import { stowConversation } from "../../../packages/crew/src/stow-conversation.ts";
+import { NativeLlamaRouter } from "../../../packages/crew/src/llama-router.ts";
 import { ahoyRecap } from "../../../packages/crew/src/ahoy.ts";
 import {
   workspaceFileChoices,
@@ -119,6 +121,7 @@ type Runtime = NativeSessionRuntime & {
 };
 let runtime: Runtime | undefined;
 let reviewed: ReviewedExtensions | undefined;
+const llamaRouter = new NativeLlamaRouter(root);
 const extensionUI = new NativeExtensionUI();
 let expandPiTemplate: Parameters<typeof expandResource>[4];
 let stripPiFrontmatter: Parameters<typeof expandResource>[5];
@@ -496,19 +499,42 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (!runtime) await initialize();
+        if (command.command === "llama") {
+          try {
+            send(command.id, await llamaRouter.run(command.argument.trim()));
+          } catch {
+            send(command.id, {
+              kind: "message",
+              text: "Could not verify the local llama.cpp router or apply the model change. Enter the router’s loopback URL, refresh its catalog and unload another active model before loading one.",
+            });
+          }
+          return;
+        }
         if (command.command === "stow") {
-          if (command.argument.trim()) throw Error("Unexpected Stow argument");
+          const action = command.argument.trim();
+          if (action && !/^(review|(approve|keep) [a-f0-9]{64})$/.test(action))
+            throw Error("Use /stow review, approve or keep");
+          if (action) {
+            send(command.id, {
+              kind: "stow-history-status",
+              messages: [],
+              action,
+            });
+            return;
+          }
           const entries = runtime!.session.sessionManager.getBranch();
-          send(command.id, {
-            kind: "stow-history-status",
-            hasConversation: entries.some(
-              (e) =>
-                e &&
-                typeof e === "object" &&
-                "type" in e &&
-                e.type === "message",
-            ),
-          });
+          const redactor = new Redactor();
+          const credentials =
+            await runtime!.session.modelRuntime.listCredentials();
+          if (credentials.length > 100)
+            throw Error("Credential catalog too large");
+          for (const info of credentials)
+            registerCredentialSecrets(
+              redactor,
+              readCredential!(info.providerId, privateAuthPath!),
+            );
+          const messages = stowConversation(entries, redactor);
+          send(command.id, { kind: "stow-history-status", messages, action });
           return;
         }
         if (command.command === "reload") {

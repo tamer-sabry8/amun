@@ -10,6 +10,7 @@ export const nativeCommandNames = [
   "updatefirstmate",
   "session",
   "settings",
+  "llama",
   "login",
   "logout",
   "new",

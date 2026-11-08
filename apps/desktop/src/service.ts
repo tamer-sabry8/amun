@@ -332,13 +332,27 @@ process.parentPort?.on("message", (event) => {
     },
     (event) => {
       if (event.result.kind === "stow-history-status") {
-        const hasConversation = event.result.hasConversation;
+        const { messages, action } = event.result;
         void FirstmateReleases.open(
           workspaceRoot!,
           process.env.AMUN_FIRSTMATE_ARCHIVES!,
         )
-          .then((r) => localStow(r, hasConversation))
-          .then((text) => sendNative(event.id, { kind: "message", text }))
+          .then((r) => localStow(r, messages, action))
+          .then((result) =>
+            sendNative(
+              event.id,
+              typeof result === "string"
+                ? { kind: "message", text: redactor.text(result) }
+                : {
+                    ...result,
+                    pins: result.pins.map((pin) => ({
+                      ...pin,
+                      previous: redactor.text(pin.previous),
+                      proposed: redactor.text(pin.proposed),
+                    })),
+                  },
+            ),
+          )
           .catch(() =>
             sendNative(event.id, {
               kind: "message",

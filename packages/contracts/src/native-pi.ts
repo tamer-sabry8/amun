@@ -1,3 +1,4 @@
+import { stowMessage } from "./stow.ts";
 import { hostingDestination } from "./hosting.ts";
 import { z } from "zod";
 const base = { version: z.literal(1), kind: z.literal("native-pi") };
@@ -77,10 +78,51 @@ export const notionApprovalRequest = z.strictObject({
   reviewId: z.uuid(),
   binding: z.string().regex(/^[a-f0-9]{64}$/),
 });
+const llamaId = z
+  .string()
+  .min(1)
+  .max(512)
+  .regex(/^[^\p{Cc}\p{Cf}]+$/u);
+const llamaStatus = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z_-]+$/);
+export const llamaCatalog = z.object({
+  data: z
+    .array(z.object({ id: llamaId, status: z.object({ value: llamaStatus }) }))
+    .max(256),
+});
 export const nativePiResult = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("stow-history-status"),
-    hasConversation: z.boolean(),
+    messages: z
+      .array(stowMessage)
+      .max(1000)
+      .refine((v) => v.reduce((n, m) => n + m.text.length, 0) <= 262144),
+    action: z.string().regex(/^(|review|(approve|keep) [a-f0-9]{64})$/),
+  }),
+  z.strictObject({
+    kind: z.literal("stow-review"),
+    text: z.string().max(240000),
+    pins: z
+      .array(
+        z.strictObject({
+          id: z.string().regex(/^[a-f0-9]{64}$/),
+          file: z.enum(["captain.md", "captain-shared.md", "learnings.md"]),
+          previous: z.string().max(65536),
+          proposed: z.string().max(1200),
+        }),
+      )
+      .max(32),
+  }),
+  z.strictObject({
+    kind: z.literal("llama-router"),
+    url: z.string().max(2048),
+    ticket: z.uuid(),
+    models: z
+      .array(z.strictObject({ id: llamaId, status: llamaStatus }))
+      .max(256),
   }),
   z.strictObject({ kind: z.literal("first-captain-message") }),
   z.strictObject({
