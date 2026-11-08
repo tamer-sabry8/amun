@@ -8,7 +8,9 @@ Pinned Pi 1.4.0 ships `docs/slash-commands.md`, `docs/rpc-commands.md`, and publ
 
 The supplied Paseo comparison is reference, not Amun compatibility evidence. No additional session backend is enabled. Internal CLI flags and Firstmate's roughly 150 toolbelt scripts are implementation references, not 150 new UI controls. Personal sessions/configurations remain out of scope.
 
-## Acceptance ledger (all rows remain open until UI and live acceptance exist)
+## M1 acceptance ledger — verified 8 November
+
+T022a is complete for the M1 native command scope. The catalog audit matched all 35 required commands in both source and package. The behavior tests and their limits are recorded below. Earlier implementation checkpoints describe the state at the time of each test.
 
 | Native surface           | Commands and behavior                                                                                                   | Implementation boundary                                                                                                                                                                 |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,7 +23,7 @@ The supplied Paseo comparison is reference, not Amun compatibility evidence. No 
 | Presentation/shortcuts   | multiline, editor, tool/thinking visibility, model/thinking cycling, copy/paste image, clear, quit/suspend semantics    | Native controls and keyboard bindings; do not suspend Amun or unrelated workers for a terminal-only shortcut                                                                            |
 | Firstmate                | afk, quiet/off, ahoy, bearings variants, updatefirstmate, stow, calm, supervision-model                                 | Loaded pinned skills/extensions in managed worktree; native equivalents for custom TUI presentation; update requires reviewed pinned-runtime workflow and cannot restart personal mates |
 
-Current foundations: tested command router distinguishes native built-ins from loaded resource commands and validates bounded input/catalog. Initial typed SDK adapters cover model/thinking/name/stats/copy/compact/reload with bounded projections and busy-state refusal. They are not yet a complete native UI or a completed T022a gate.
+At the initial foundation checkpoint, the tested command router distinguishes native built-ins from loaded resource commands and validates bounded input/catalog. Initial typed SDK adapters cover model/thinking/name/stats/copy/compact/reload with bounded projections and busy-state refusal. They are not yet a complete native UI or a completed T022a gate.
 
 Verification must include invalid input/security tests, source and packaged native UI acceptance, current runtime command discovery, real model and session behavior, and Firstmate permission/ownership preservation. Unavailable APIs or custom TUI components must be reported explicitly, never simulated as successful operations.
 

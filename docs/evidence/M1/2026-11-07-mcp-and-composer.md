@@ -53,3 +53,7 @@ The composer initially failed to list a private Pi resource. Source and package 
 The source app and arm64 package also passed the scoped folder journey on a separately mounted HFS+ disk image under /Volumes. Each listed the chosen directory, excluded its sibling and handled picker cancellation. The disposable volume was ejected after both tests. Physical USB hardware was not exercised.
 
 A native session switch reproduced an unsent draft appearing in a different conversation. Composer drafts are now keyed by the actual Pi session ID, including drafts expanded from resources. The regression passed in source and package. The full updated package passed 29 journeys with live Google and browser checks enabled, skipping only the development gallery.
+
+## 8 November · Mac internal-drive smoke test
+
+The packaged app at `679867d` ran `tests/e2e/filesystem-mcp.spec.ts` using a disposable fixture on `/System/Volumes/Data`. macOS reported APFS, Apple Fabric and an internal device. The test supplied the selected folder through the native picker test hook. The real filesystem MCP listed `within-selection.txt`, excluded its sibling `outside-selection.txt`, and cleared the previous listing after picker cancellation. One test passed in 2.4 seconds. This verifies directory listing and selection scope. File-content reads, writes and a physical USB device were outside this test. Authenticated Google and live Obsidian checks are tracked in R3.

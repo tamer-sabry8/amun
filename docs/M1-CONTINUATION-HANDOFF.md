@@ -1,6 +1,6 @@
 # Amun interim M1 continuation handoff
 
-Prepared 7 November 2026, Asia/Dubai, at the owner's explicit request for a fresh chat. This is an interim checkpoint. M1 and its final handoff task T022g remain incomplete.
+Updated 8 November 2026, Asia/Dubai, at the owner's explicit request for a fresh chat. This is an interim checkpoint. M1 and its final handoff task T022g remain incomplete.
 
 ## Start here
 
@@ -16,24 +16,25 @@ Read this file, AGENTS.md, docs/TASKS.md and the referenced evidence before chan
 - M0 PR https://github.com/tamer-sabry8/amun/pull/1 is MERGED, 6 November 2026 at 11:59:19 UTC.
 - Verified remote main is 0b8b3bd90284b7b5ae12f6de32a592bcd311c61e.
 - Code checkpoint 04102e9 includes Notion recovery and single-profile window ownership. b222fbb records refresh evidence. 415df550f47a5c2b850b44db06300c1565118b23 records revocation.
-- This handoff is committed immediately after those checkpoints. Use git log -1 and git ls-remote to get its exact latest hash. Do not assume 415df55 is the head.
-- Last observed CI was pending. Recheck it. Never infer real Mac acceptance from CI.
+- The accepted app revision is 679867d. Subsequent documentation commits may advance the draft PR head.
+- Foundation checks passed for 679867d on push and PR. The packaged suite independently passed 42 journeys with one development-only skip.
 - Checkout was clean before this handoff edit. Inspect status/remotes before fetch/pull. Preserve later local work. No reset, clean or force-push.
 
 ## Full plan and source precedence
 
 docs/plans/product-and-r1-plan.md is the full product and R1 plan. docs/TASKS.md owns current milestones, scope changes and exit gates. Later explicit user decisions override original attachments and dated evidence. Read docs/decisions/ (particularly ADR-001, 004–011), docs/plans/m1-native-pi-commands.md and docs/plans/m1-user-journey-audit.md. docs/MAC-ACCEPTANCE-HANDOFF.md is historical M0 context. docs/evidence/M0-final-audit.md owns revised M0 acceptance. Old incremental notes below the task lists can be superseded.
 
-## M1 tasks still needing completion/audit
+## M1 task audit — 8 November
 
-- T016c passed. New source consent and restart confirmed the workspace after the earlier packaged lifecycle tests. See docs/TASKS.md.
-- T016b passed. Normal Agents launch, subscription inference, lost receipt recovery and full-quit reattachment passed in source and package for both workers. See docs/evidence/M1/2026-11-07-agents-and-native-tree.md.
-- T022a native UI for ALL requested Pi commands remains open. Use pinned Pi 1.4.0 interfaces and actual loaded resources. Many session/model/settings/auth/import/export/trust/tree/compose paths pass. Amun-owned prompt templates and skill drafts passed real source and packaged acceptance. The owner approved individually reviewed local executable extensions and normal Mac account permissions for explicit shell commands. Native text attachments, both shell prefixes, reviewed local extension commands, plain/file bearings and the pinned Calm toggle now have acceptance coverage. The native streaming queue and branch-only model/effort selection also passed source acceptance. Native away/return, attended quiet, Ahoy and interactive Bearings now have real acceptance tests. Stow has local accounting, on-device memory curation and individual pinned-entry review. See the native command ledger for coverage and remaining limits. The source and packaged catalog audits matched all 35 command entries. Command coverage and the original private-router limitation are distinguished in the ledger. Do not forward unsupported built-ins as model prompts.
-- A disposable loopback llama.cpp router loaded and unloaded an installed GGUF through the native Conversations UI on 8 November. Personal router setup and online model downloads were outside this local test.
-- T022d now includes all eight official Workspace servers and Maps tool discovery, folder-scoped read-only filesystem, and blank Chrome sessions through Playwright, Chrome DevTools and the archived Puppeteer adapter. Source and packaged acceptance passed. Obsidian loopback MCP setup is implemented and the owner deferred live vault testing. A separate mounted HFS+ filesystem passed folder acceptance. Account-specific Google reads and a physical external drive remain unverified. See docs/evidence/M1/2026-11-07-mcp-and-composer.md.
-- T022c redesign awaits explicit approval. Appendix A dark theme is the chosen default. User's HTML reference supplies depth/layout ideas, not colors. Never start redesign just because it is on M1's list.
-- T022g final handoff comes last after the separately approved redesign and actual gates. This interim file does not complete it.
-- T022b sharing, T022f hosting, T037 amun-bridge (moved into M1), T022h staged Firstmate updates/rollback are checked. T013–T022 foundation tasks have recorded acceptance. Re-audit changing behavior and current CI.
+The canonical checklist is [TASKS.md](TASKS.md). The completed entries cover T013–T022 foundations and auth, T022a native commands, T022b sharing, T022f hosting, T022h Firstmate updates and T037 bridge governance. T022a includes the 35-command catalog audit and the separate real behavioral tests documented in the [native command ledger](plans/m1-native-pi-commands.md).
+
+| Open M1 entry                                | Next action                                                                                                                                                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T022d · Physical external-drive verification | When a physical drive is available, use a disposable selected folder for the same short listing and cancellation check. The internal APFS Data volume passed on 8 November in 2.4 seconds. A mounted HFS+ disk image passed earlier. |
+| T022c · Redesign                             | Paused by the owner.                                                                                                                                                                                                                 |
+| T022g · Final handoff                        | Prepare after T022c and remaining M1 gates. This file is the interim handoff.                                                                                                                                                        |
+
+The owner moved authenticated Google checks (including Sheets and Maps) and live Obsidian vault acceptance to **R3-GOOGLE** and **R3-OBSIDIAN**. Existing connector setup and discovery evidence stays with M1. M2 remains locked.
 
 ## Most recent Notion result and safety rules
 
@@ -53,9 +54,7 @@ Read AGENTS.md. Preserve personal Herdr/Pi/Firstmate workers, homes, locks and i
 
 Bundled Pi is 1.4.0. Current Firstmate pin is bf05a4f, retained rollback is 4a67799. Staged update procedure and approval rules are in AGENTS.md and docs/evidence/M1/2026-11-07-firstmate-candidate.md. Trust and verified Firstmate hooks can be automatically accepted only in disposable Amun-owned worktrees.
 
-Use Node 24.22.1 and pnpm 11.25.0. Existing toolchain PATH prefix is /tmp/node-v24.22.1-darwin-arm64/bin:/tmp/amun-toolchain/node_modules/.bin. Verify availability. Read package.json and scripts first. pnpm check passed 430 unit tests plus lint/types/format. Source E2E passed 25 with one packaged-only skip. Five targeted final package tests passed (native Pi, Notion status/recovery, same-profile ownership). Packaged Google discovery also passed. A broader earlier package run used an intermediate build and failed the subsequently fixed focus assertion, so do not claim that run fully passed.
-
-Final tested separate package is /private/tmp/amun-review-focus-probe/Amun-darwin-arm64/Amun.app; earlier lifecycle package /private/tmp/amun-owner-probe/Amun-darwin-arm64/Amun.app. The normal apps/desktop/out package may predate latest code. Do not overwrite a package under a running app. One profile should have one owner after the single-instance fix. Older running builds can still have duplicate owners. Do not terminate unknown/personal sessions.
+Use Node 24.22.1 and pnpm 11.25.0. Existing toolchain PATH prefix is /tmp/node-v24.22.1-darwin-arm64/bin:/tmp/amun-toolchain/node_modules/.bin. Verify availability. Read package.json and scripts first. At 679867d, lint, types, formatting, coverage and 452 unit tests passed. The accepted arm64 build is /private/tmp/amun-m1-verified-local-stow/Amun-darwin-arm64/Amun.app. Use disposable profiles and preserve personal sessions.
 
 Useful temporary proof files (inspect before running, do not blindly replay)
 
@@ -78,7 +77,7 @@ Full release map is in product-and-r1-plan.md section 2 and docs/TASKS.md.
 - M2 LOCKED until M1 gate resolved. Ordered tasks T023 products/source isolation; T024 file ingestion/provenance; T025 Firstmate product interview; T026 editable understanding and approval; T027 PRD editor/autosave/history/roundtrip; T028 generated PRD, modes, proposal review and version-bound approval; T029 RICE prioritization. Dependencies and exact acceptance are in TASKS. M2 exit is a real product objective to approved sourced PRD v1. Do not implement during M1.
 - M3 backlog/sprint/ADO; M4 crew/PR/merge acceptance (T037 moved earlier); M5 memory/Notion sync/skills/portfolio/reminders; M6 chaos/accessibility/performance/signing/release report.
 - R2 visual roadmap, Decision Room, RFP/proposals; owner's Transfrm.ai document hosting also later. Do not show these as working in R1.
-- R3 personalization/team foundations/discovery; Docker MCP Registry explicitly deferred to R3-DOCKER.
+- R3 personalization/team foundations/discovery; Docker MCP Registry, authenticated Google and live Obsidian acceptance are tracked under R3-DOCKER, R3-GOOGLE and R3-OBSIDIAN.
 - Optional R4 T022e web OAuth callback, https://amun.transfrm.ai/mcp/callback. Existing GitHub device sign-in is sufficient for M1. No Worker client secret is needed now. Follow docs/evidence/M1/github-oauth-callback.md only when later authorized.
 - R4/R5 broader teams/Windows/prerequisite installation and parity per full plan.
 
@@ -95,9 +94,6 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 ## Resume sequence
 
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
-2. Read docs/TASKS.md and docs/plans/m1-native-pi-commands.md for current coverage. The arm64 acceptance build with acknowledged primary shutdown is /private/tmp/amun-m1-verified-local-stow/Amun-darwin-arm64/Amun.app. The earlier 3af8f5d package exposed a primary shutdown race. Earlier package /private/tmp/amun-m1-native-shortcuts/Amun-darwin-arm64/Amun.app was built from e440584. It includes reviewed extensions, workspace references and image drafts, public provider summaries, and native park/resume. The unit and coverage gates passed with 442 tests. A packaged live test confirmed the same subscription worker root PIDs and start times after app restart. The acceptance check ignores transient same-executable helper children while checking for new independent workers.
-3. The owner approved applying ordinary Stow edits automatically and reviewing pinned entries individually. The selected conversation, crew memory, backlog and per-home budget may be processed entirely on the Mac. Reuse this decision. Continue the remaining Firstmate commands and native primary supervision in verified disposable Git worktrees. The owner's decision is to pause primary supervision on app quit and reattach surviving workers on reopen. Explicit captain shell commands use normal Mac account permissions. Each local executable extension requires individual review and trust.
-   On 7 November the owner selected the local Lavish board inside Amun’s isolated preview and automatic verified local maintenance. The real embedded board closed a disposable captain-held item after the answer was queued and sent. Unattended branches are restricted to the verified drain, its bounded acknowledgement and the upstream branch report. Explicit shell commands in the captain’s conversation retain ordinary terminal permissions.
-4. Complete unblocked remaining MCP gates; keep explicit non-gating/deferred items honest.
-5. Keep redesign and M2 gated. Once independent M1 work is done, obtain explicit redesign approval with a concrete reviewable plan.
-6. Update evidence/tasks and PR after tested increments. Final handoff and final M1 acceptance are later steps.
+2. Use the open-entry table above and docs/TASKS.md. Keep Google and Obsidian live checks in R3.
+3. Preserve the established Firstmate rules in AGENTS.md. Stow processes the selected conversation, crew memory, backlog and budget on-device. Ordinary edits apply automatically and individual pinned decisions persist. Primary supervision pauses on quit and reattaches surviving workers on reopen.
+4. Keep the draft PR unmerged, M2 locked and redesign paused pending a new owner instruction.
