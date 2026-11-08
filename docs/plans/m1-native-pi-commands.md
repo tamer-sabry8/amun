@@ -47,9 +47,9 @@ Native `/login` now opens the supported provider selection and existing private 
 
 Native file selection and explicit import review now use pinned Pi's `AgentSessionRuntime.importFromJsonl`. Source and packaged tests prove a real SDK session is imported, its ID retained and name readable, with duplicate IDs refused. Only the imported copy's working directory changes to Amun's private workspace after explicit review; an external parent-session link is removed and disclosed. The source file remains untouched. No tool or model request runs during import. Bounds: 512 KiB and 4096 records, Pi session version 3; unsupported formats fail explicitly. Single-use/expired confirmations, busy sessions, malformed trees and oversized input have unit coverage. This completes the tested import path, not the remaining MCP/router/resource/composer/Firstmate command families.
 
-## Explicit blocked gate — llama router (2026-11-07)
+## Historical router gate (2026-11-07)
 
-The user confirmed there is no llama.cpp router available. Keep `/llama` live acceptance blocked; do not invent an endpoint, install a server, download models or treat fixtures as a live pass. Future acceptance needs an authorized router URL and permitted model operations. This does not block the independent native command and journey work.
+The user confirmed there is no llama.cpp router available. Keep `/llama` live acceptance blocked; do not invent an endpoint, install a server, download models or treat fixtures as a live pass. The 8 November disposable router test below covers actual loopback catalog, load and unload operations. A separately managed personal router still needs its own authorized URL before any test there. This does not block the independent native command and journey work.
 
 ## Conversation reading and receipt follow-up
 
@@ -118,3 +118,5 @@ Ordinary entries update automatically. A proposed change to a default or explici
 ### Local router
 
 The native `/llama` catalog accepts a loopback router URL and remembers it in the private Amun profile after verifying the catalog. Load and unload bind to the displayed model identity and refresh its state. The real acceptance launches an offline router with a disposable preset for an already-installed GGUF, clicks both actions and verifies the router’s state independently. Stow uses a separate network-denied process.
+
+The source and packaged catalog audit reads Pi’s actual installed `BUILTIN_SLASH_COMMANDS` and compares it with the Conversations picker, including Amun’s three extra Pi commands and eight Firstmate commands. All 35 entries matched. Individual command behavior is covered by the separate live tests above.
