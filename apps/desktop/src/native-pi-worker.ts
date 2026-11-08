@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { stowConversation } from "../../../packages/crew/src/stow-conversation.ts";
 import { NativeLlamaRouter } from "../../../packages/crew/src/llama-router.ts";
 import { ahoyRecap } from "../../../packages/crew/src/ahoy.ts";
@@ -151,12 +152,22 @@ async function privateDirectory(path: string) {
   )
     throw Error("Unsafe native workspace");
 }
+function conversationDirectory() {
+  const product = process.env.AMUN_NATIVE_PRODUCT;
+  return product
+    ? join(
+        dirname(root!),
+        "product-sessions",
+        createHash("sha256").update(product).digest("hex"),
+      )
+    : join(dirname(root!), "pi-workspace");
+}
 async function initialize() {
   const authPath = await preparePiAuth(root!);
   reviewed ??= await ReviewedExtensions.open(root!);
   await reviewed.refresh();
   privateAuthPath = authPath;
-  const cwd = join(dirname(root!), "pi-workspace");
+  const cwd = conversationDirectory();
   await privateDirectory(cwd);
   const sessions = join(cwd, "sessions");
   await privateDirectory(sessions);
@@ -511,9 +522,15 @@ process.stdin.on("data", (chunk: string) => {
           return;
         }
         if (command.command === "stow") {
-          const action = command.argument.trim();
+          const argument = command.argument.trim();
+          const sharedNote = argument.startsWith("shared ")
+            ? argument.slice(7).trim()
+            : undefined;
+          const action = sharedNote === undefined ? argument : "";
           if (action && !/^(review|(approve|keep) [a-f0-9]{64})$/.test(action))
-            throw Error("Use /stow review, approve or keep");
+            throw Error(
+              "Use /stow, /stow shared <working preference or general lesson>, review, approve or keep",
+            );
           if (action) {
             send(command.id, {
               kind: "stow-history-status",
@@ -533,7 +550,12 @@ process.stdin.on("data", (chunk: string) => {
               redactor,
               readCredential!(info.providerId, privateAuthPath!),
             );
-          const messages = stowConversation(entries, redactor);
+          const messages = stowConversation(
+            entries,
+            redactor,
+            process.env.AMUN_NATIVE_PRODUCT,
+            sharedNote,
+          );
           send(command.id, { kind: "stow-history-status", messages, action });
           return;
         }
@@ -640,7 +662,7 @@ process.stdin.on("data", (chunk: string) => {
             const session = runtime!.session;
             if (session.isStreaming || input.sessionId !== session.sessionId)
               throw Error("Shell session changed");
-            const cwd = join(dirname(root!), "pi-workspace");
+            const cwd = conversationDirectory();
             await privateDirectory(cwd);
             const shell = await workerOperation.run((signal) =>
               runCaptainShell(input.command, cwd, signal),
@@ -744,7 +766,7 @@ process.stdin.on("data", (chunk: string) => {
               input.draft.length > 12000
             )
               throw Error("Session changed");
-            const rootDir = join(dirname(root!), "pi-workspace");
+            const rootDir = conversationDirectory();
             if (command.command === "file-complete") {
               send(command.id, {
                 ...view,

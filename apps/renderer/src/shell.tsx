@@ -1,3 +1,6 @@
+import { Priorities } from "./priorities.tsx";
+import { PrdWorkspace } from "./prd-workspace.tsx";
+import { ProductContext } from "./product-context.tsx";
 import { AgentsPanel } from "./agents-panel.tsx";
 import { NativePiPanel } from "./native-pi-panel.tsx";
 import { canSubmitAuthPrompt } from "./auth-prompt.ts";
@@ -706,6 +709,7 @@ export function App() {
   const preferences = snapshot?.preferences ?? emptyPreferences;
   const [terminalTask, setTerminalTask] = useState<string | null>(null);
   const [layout, dispatch] = useReducer(layoutReducer, initialLayout);
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const [route, setRoute] = useState("overview");
   const [returnToConversation, setReturnToConversation] = useState(false);
   const [mode, setMode] = useState("Write");
@@ -734,6 +738,9 @@ export function App() {
   const previewRef = useRef<HTMLDivElement>(null);
   const paletteRef = useRef<HTMLDialogElement>(null);
   const savedSelection = useRef<string | null>(null);
+  useEffect(() => {
+    setCreatingProduct(false);
+  }, [preferences.productId]);
   const products = snapshot?.products ?? [];
   const product = products.find(
     (product) => product.id === preferences.productId,
@@ -1102,6 +1109,12 @@ export function App() {
           <select
             value={preferences.productId ?? ""}
             onChange={(event) => {
+              if (event.target.value === "__new__") {
+                setCreatingProduct(true);
+                setRoute("overview");
+                return;
+              }
+              setCreatingProduct(false);
               savePreferences({
                 ...preferences,
                 productId: event.target.value || null,
@@ -1114,6 +1127,7 @@ export function App() {
             <option value="">
               {products.length ? "Portfolio" : "Workspace"}
             </option>
+            <option value="__new__">New product…</option>
             {products.map((product) => (
               <option key={product.id} value={product.id}>
                 {product.name}
@@ -1309,6 +1323,7 @@ export function App() {
               </>
             ) : route === "conversations" ? (
               <NativePiPanel
+                key={preferences.productId ?? ""}
                 onBoard={(url) => {
                   setPreviewURL(url);
                   dispatch({ type: "inspect", tab: "web" });
@@ -1412,6 +1427,12 @@ export function App() {
               </div>
             ) : route === "overview" ? (
               <>
+                <ProductContext
+                  key={preferences.productId ?? ""}
+                  context={snapshot?.productContext ?? null}
+                  creating={creatingProduct}
+                  onCancel={() => setCreatingProduct(false)}
+                />
                 <section className="welcome-surface">
                   <div className="welcome-mark" aria-hidden="true">
                     A
@@ -1470,6 +1491,18 @@ export function App() {
                   </section>
                 </div>
               </>
+            ) : route === "priorities" && snapshot?.productContext ? (
+              <Priorities
+                key={snapshot.productContext.productId}
+                context={snapshot.productContext}
+              />
+            ) : route === "prd" && snapshot?.productContext ? (
+              <PrdWorkspace
+                key={snapshot.productContext.productId}
+                context={snapshot.productContext}
+                mode={mode}
+                setMode={setMode}
+              />
             ) : route === "agents" ? (
               <AgentsPanel
                 onOpenWorker={(id) => {

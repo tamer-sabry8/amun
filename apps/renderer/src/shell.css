@@ -1277,3 +1277,41 @@ input[aria-invalid="true"] {
   max-width: 740px;
   min-height: 280px;
 }
+
+.prd-workflow section,
+.workspace section[aria-label="Product context"] {
+  display: grid;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+.prd-workflow label,
+.workspace section[aria-label="Product context"] label {
+  display: grid;
+  gap: 0.3rem;
+  margin-block: 0.45rem;
+}
+.prd-workflow pre,
+.prd-workflow .tiptap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prd-workflow textarea,
+.prd-workflow select {
+  width: 100%;
+  max-width: 100%;
+}
+.prd-body,
+.prd-workflow .tiptap {
+  min-height: 14rem;
+}
+.prd-workflow .tiptap {
+  padding: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+}
+.prd-diff ins {
+  text-decoration: underline;
+}
+.prd-diff del {
+  opacity: 0.8;
+}

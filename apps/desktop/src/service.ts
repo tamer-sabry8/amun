@@ -103,7 +103,7 @@ const redactor = new Redactor();
 const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
-const workspaceService = new WorkspaceService(workspace);
+const workspaceService = new WorkspaceService(workspace, redactor);
 const actions = new ActionStore(workspace);
 actions.recover();
 const authKeyring = () => {
@@ -437,6 +437,7 @@ process.parentPort?.on("message", (event) => {
       } else port.postMessage(event);
     },
   );
+  nativePi.selectProduct(workspaceService.snapshot().preferences.productId);
   const auth = new AuthSession(
     authBroker,
     authMetadata,
@@ -524,8 +525,22 @@ process.parentPort?.on("message", (event) => {
         .finally(() => {
           listingCrew = false;
         });
+    } else if (message.data?.kind === "product-authoring") {
+      void workspaceService
+        .author(message.data, (model, instruction, context) =>
+          supervisor.productTurn(model, instruction, context),
+        )
+        .then((reply) => {
+          if (!closed) port.postMessage(reply);
+        });
+    } else if (message.data?.kind === "document-import") {
+      void workspaceService.importDocument(message.data).then((reply) => {
+        if (!closed) port.postMessage(reply);
+      });
     } else if (message.data?.kind === "workspace") {
       const reply = workspaceService.handle(message.data);
+      if (reply?.kind === "workspace-snapshot")
+        nativePi.selectProduct(reply.preferences.productId);
       if (reply) port.postMessage(reply);
     } else if (backendTerminalOpen.safeParse(message.data).success) {
       const request = backendTerminalOpen.parse(message.data);

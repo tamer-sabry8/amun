@@ -124,7 +124,16 @@ export class AttentionStore {
               item.ask,
               answer,
               "Answer recorded from request",
-              JSON.stringify([item.id]),
+              JSON.stringify([
+                item.id,
+                ...(this.db
+                  .prepare(
+                    "SELECT 1 FROM product_interviews WHERE request_id=?",
+                  )
+                  .get(item.id)
+                  ? item.blocking
+                  : []),
+              ]),
               "pm",
               new Date().toISOString(),
             );

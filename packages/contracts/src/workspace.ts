@@ -21,9 +21,166 @@ export const uiPreferences = z.strictObject({
     .max(100)
     .default([]),
 });
+export const interviewQuestion = z.strictObject({
+  question: z.string().trim().min(4).max(1500),
+  sourceIds: z.array(z.string()).min(1).max(50),
+});
+const md = z.string().min(1).max(100000);
+const docVersion = z.int().nonnegative();
+const docTarget = {
+  productId: id,
+  objectiveId: id,
+  expectedVersion: docVersion,
+};
+const modelBase = {
+  version: z.literal(1),
+  kind: z.literal("product-authoring"),
+  productId: id,
+  model: id,
+};
+export const productAuthoring = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...modelBase,
+    action: z.literal("interview"),
+    objective: z.string().trim().min(1).max(4096),
+  }),
+  z.strictObject({
+    ...modelBase,
+    ...docTarget,
+    action: z.enum(["draft", "critique"]),
+    understandingVersion: z.int().positive(),
+    selection: z.string().max(4096),
+  }),
+]);
+export const documentProposal = z.strictObject({
+  markdown: md,
+  sourceIds: z.array(id).min(1).max(50),
+  rationale: z.string().min(1).max(4096),
+});
+export const prdRecord = z.strictObject({
+  version: docVersion,
+  markdown: md,
+  approved: z.boolean(),
+  invalidated: z.string().nullable(),
+  history: z.array(z.strictObject({ version: docVersion, markdown: md })),
+});
+export const pendingProposal = z.strictObject({
+  id,
+  markdown: md,
+  rationale: z.string(),
+  baseVersion: docVersion,
+});
+
+export const documentImport = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("document-import"),
+  productId: id,
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[^/\\\x00-\x1f]+$/),
+  bytes: z
+    .instanceof(Uint8Array)
+    .refine((bytes) => bytes.byteLength <= 8 * 1024 * 1024),
+});
+const reviewText = z.string().trim().max(12000);
+const understandingFields = {
+  facts: reviewText.min(1),
+  assumptions: reviewText,
+  questions: reviewText,
+};
+export const understandingRecord = z.strictObject({
+  ...understandingFields,
+  version: z.int().positive(),
+  approved: z.boolean(),
+});
+const revision = z.int().nonnegative();
+const riceInputs = {
+  reach: z.number().nullable(),
+  impact: z.number().nullable(),
+  confidence: z.number().nullable(),
+  effort: z.number().nullable(),
+};
+const priorityFields = {
+  objective: z.string().trim().min(1).max(512),
+  release: z.string().trim().max(128),
+  status: z.enum(["Proposed", "Planned", "In progress", "Done"]),
+  evidence: z.string().trim().max(2048),
+  ...riceInputs,
+};
+const modelList = z.array(z.string().trim().min(1).max(256)).max(100);
 const base = { version: z.literal(1), kind: z.literal("workspace") };
 export const workspaceCommand = z.discriminatedUnion("action", [
   z.strictObject({ ...base, action: z.literal("snapshot") }),
+  z.strictObject({
+    ...base,
+    ...docTarget,
+    action: z.literal("prd-selection"),
+    selection: z.string().trim().min(1).max(4096),
+    intent: z.enum(["link", "story", "source", "assumption"]),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("product-models"),
+    productId: id,
+    allowedModels: modelList,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("save-priority"),
+    productId: id,
+    priorityId: id,
+    ...priorityFields,
+  }),
+  z.strictObject({
+    ...base,
+    ...docTarget,
+    action: z.enum(["save-prd", "approve-prd"]),
+    markdown: md,
+  }),
+  z.strictObject({
+    ...base,
+    ...docTarget,
+    action: z.enum(["apply-proposal", "dismiss-proposal"]),
+    proposalId: id,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("save-understanding"),
+    productId: id,
+    objectiveId: id,
+    expectedVersion: revision,
+    ...understandingFields,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("approve-understanding"),
+    productId: id,
+    objectiveId: id,
+    expectedVersion: revision,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("pin-decision"),
+    productId: id,
+    sourceId: id,
+    text: z.string().trim().min(1).max(4096),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("create-product"),
+    name: z.string().trim().min(1).max(256),
+    allowedModels: modelList,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("map-source"),
+    productId: id,
+    title: z.string().trim().min(1).max(512),
+    reference: z.string().trim().min(1).max(2048),
+    sourceKind: z.enum(["document", "repo", "ado", "notion"]),
+  }),
   z.strictObject({
     ...base,
     action: z.literal("preferences"),
@@ -56,6 +213,48 @@ export const workspaceSnapshot = z.strictObject({
   products: z
     .array(z.strictObject({ id, name: z.string().min(1).max(4096) }))
     .max(1000),
+  productContext: z
+    .strictObject({
+      productId: id,
+      allowedModels: z.array(id),
+      priorities: z.array(
+        z.strictObject({ id, ...priorityFields, score: z.number().nullable() }),
+      ),
+      objectives: z.array(
+        z.strictObject({
+          id,
+          statement: z.string(),
+          question: z.string(),
+          answer: z.string().nullable(),
+          understanding: understandingRecord.nullable(),
+          prd: prdRecord.nullable(),
+          proposal: pendingProposal.nullable(),
+          sourceIds: z.array(id),
+          links: z.array(
+            z.strictObject({
+              id,
+              version: docVersion,
+              intent: z.string(),
+              selection: z.string(),
+              target: id,
+            }),
+          ),
+        }),
+      ),
+      sources: z.array(
+        z.strictObject({
+          id,
+          title: z.string(),
+          kind: z.string(),
+          reference: z.string().nullable(),
+        }),
+      ),
+      memory: z.array(
+        z.strictObject({ id, sourceId: id, type: z.string(), data: z.json() }),
+      ),
+    })
+    .nullable()
+    .default(null),
   attention: z.array(attentionItem).max(10000),
   activities: z.array(statusActivity).max(10000),
   notifications: z.array(notification).max(10000),
