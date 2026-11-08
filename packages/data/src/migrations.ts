@@ -329,4 +329,14 @@ ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
   CREATE TRIGGER notion_confirm_after_update AFTER UPDATE OF state ON actions WHEN NEW.kind='notion_publish' AND NEW.state='succeeded'
     BEGIN UPDATE notion_delivery SET state='confirmed' WHERE action_id=NEW.id; END;
   CREATE INDEX notion_delivery_due ON notion_delivery(state, check_after);`,
+  `CREATE TABLE source_documents (
+    source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+    body TEXT NOT NULL, image BLOB
+  );`,
+  `CREATE TABLE product_interviews(request_id TEXT PRIMARY KEY REFERENCES attention_items(id), objective_id TEXT NOT NULL REFERENCES objectives(id), model TEXT NOT NULL, context_json TEXT NOT NULL CHECK(json_valid(context_json)));`,
+  `CREATE TABLE product_understandings(objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,facts TEXT NOT NULL,assumptions TEXT NOT NULL,questions TEXT NOT NULL,approved INTEGER NOT NULL CHECK(approved IN (0,1)),PRIMARY KEY(objective_id,version));`,
+  `CREATE TABLE prd_proposals(id TEXT PRIMARY KEY,objective_id TEXT NOT NULL REFERENCES objectives(id),base_version INTEGER NOT NULL,understanding_version INTEGER NOT NULL,model TEXT NOT NULL,context_json TEXT NOT NULL,markdown TEXT NOT NULL,rationale TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('pending','applied','dismissed','stale')));
+  CREATE UNIQUE INDEX one_pending_prd_proposal ON prd_proposals(objective_id) WHERE state='pending';`,
+  `CREATE TABLE priorities(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),objective TEXT NOT NULL,release TEXT NOT NULL,status TEXT NOT NULL,evidence TEXT NOT NULL,reach INTEGER,impact REAL,confidence REAL,effort REAL);`,
+  `CREATE TABLE prd_selections(id TEXT PRIMARY KEY,objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,intent TEXT NOT NULL,selection TEXT NOT NULL,target TEXT NOT NULL,UNIQUE(objective_id,version,intent,selection));`,
 ] as const;

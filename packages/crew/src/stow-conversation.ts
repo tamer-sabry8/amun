@@ -7,7 +7,15 @@ import type { StowMessage } from "../../contracts/src/stow.ts";
 export function stowConversation(
   entries: unknown[],
   redactor: Redactor,
+  productId?: string,
+  sharedNote?: string,
 ): StowMessage[] {
+  if (sharedNote !== undefined) {
+    if (!sharedNote.trim() || sharedNote.length > 1200)
+      throw Error("Enter a shared working note of up to 1,200 characters.");
+    return [{ role: "user", text: redactor.text(sharedNote.trim()) }];
+  }
+  if (productId) return [];
   const messages: StowMessage[] = [];
   let size = 0;
   for (const entry of entries) {

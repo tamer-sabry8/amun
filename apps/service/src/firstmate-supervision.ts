@@ -24,6 +24,17 @@ const controls = `export default function(pi) {
     const r=await pi.exec("/bin/bash",[process.env.FM_HOME+"/bin/fm-lock.sh"],{timeout:10000});
     if(r.code!==0) throw Error("Firstmate lock unavailable");
   }});
+  pi.registerCommand("amun-product-turn",{description:"Review selected product sources",handler:async(encoded,ctx)=>{
+    const {model,instruction,context}=JSON.parse(Buffer.from(encoded,"base64url").toString("utf8"));
+    const cut=model.indexOf("/");
+    const selected=ctx.modelRegistry.find(model.slice(0,cut),model.slice(cut+1));
+    if(cut<1 || !selected)throw Error("Selected product model unavailable");
+    const answer=await ctx.modelRegistry.complete(selected,{systemPrompt:instruction,messages:[{role:"user",content:[{type:"text",text:context}],timestamp:Date.now()}]},{signal:AbortSignal.timeout(90000)});
+    if(answer.stopReason!=="stop")throw Error("Incomplete product response");
+    const text=answer.content.filter(block=>block.type==="text").map(block=>block.text).join("\\n");
+    if(!text || text.length>30000)throw Error("Invalid product response");
+    ctx.ui.notify("AMUN_PRODUCT "+text,"info");
+  }});
   pi.registerCommand("amun-posture",{description:"Captain posture",handler:async(encoded,ctx)=>{
     const {name,argument}=JSON.parse(Buffer.from(encoded,"base64url").toString("utf8"));
     const run=(script,args,timeout=25000)=>pi.exec("/bin/bash",[process.env.FM_HOME+"/bin/"+script,...args],{timeout});
@@ -154,11 +165,19 @@ export class FirstmateSupervision {
           stdio: ["pipe", "pipe", "ignore"],
         },
       );
+      let productReply = "";
       let reply = "",
         exited = false;
       const client = new PiRpcClient(
         (line) => child.stdin.write(line),
         (frame) => {
+          if (
+            frame.type === "extension_ui_request" &&
+            frame.method === "notify" &&
+            typeof frame.message === "string" &&
+            frame.message.startsWith("AMUN_PRODUCT ")
+          )
+            productReply = this.redactor.text(frame.message.slice(13));
           if (
             frame.type === "extension_ui_request" &&
             frame.method === "notify" &&
@@ -240,6 +259,21 @@ export class FirstmateSupervision {
       );
       return {
         stop,
+        productTurn: async (
+          model: string,
+          instruction: string,
+          context: string,
+        ) => {
+          productReply = "";
+          await command(
+            "/amun-product-turn " +
+              Buffer.from(
+                JSON.stringify({ model, instruction, context }),
+              ).toString("base64url"),
+          );
+          if (!productReply) throw Error("No verified product response");
+          return productReply;
+        },
         run: async (name: string, argument: string) => {
           reply = "";
           await command(
@@ -256,6 +290,17 @@ export class FirstmateSupervision {
       stop();
       await rm(temp, { recursive: true, force: true });
       throw e;
+    }
+  }
+  async productTurn(model: string, instruction: string, context: string) {
+    if (this.busy) throw Error("Primary supervision busy");
+    this.busy = true;
+    try {
+      return await (
+        await this.owner()
+      ).productTurn(model, instruction, context);
+    } finally {
+      this.busy = false;
     }
   }
   async run(name: string, argument: string) {

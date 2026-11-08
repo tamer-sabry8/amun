@@ -11,6 +11,12 @@ export class NativePiProcess {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending: string | undefined;
   private pendingTurn = false;
+  private productId: string | null = null;
+  selectProduct(productId: string | null) {
+    if (this.productId === productId) return;
+    this.close();
+    this.productId = productId;
+  }
   constructor(
     private readonly config: {
       binary: string;
@@ -76,6 +82,7 @@ export class NativePiProcess {
       const child = spawn(binary, [worker], {
         env: {
           HOME: root,
+          ...(this.productId ? { AMUN_NATIVE_PRODUCT: this.productId } : {}),
           PATH: "/usr/bin:/bin",
           ELECTRON_RUN_AS_NODE: "1",
           PI_CODING_AGENT_DIR: root,

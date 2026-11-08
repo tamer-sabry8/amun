@@ -1,6 +1,6 @@
 # R1 milestone tracker
 
-M0 is merged. The owner requested an M2 kickoff prompt for a new session on 8 November. Begin M2 when that prompt is submitted. T022c and T022g remain paused in M1. Later milestone exit gates still apply. A checked task means its tests and full Definition of Done passed, not merely that code exists.
+The M0 and M1 foundations are merged. M2 passed Mac acceptance on 8 November. T022c and T022g remain paused in M1. Later milestone exit gates still apply. A checked task means its tests and full Definition of Done passed, not merely that code exists.
 
 The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. The user confirmed Electron/TypeScript; see ADR-001-desktop-stack.md. Product scope and task IDs remain traceable.
 
@@ -149,16 +149,16 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
 
 - [ ] **T022g — Final handoff to a new chat** · Last M1 task, after the separately approved T022c redesign. Include verified branch and PR heads, acceptance evidence, outstanding M0 release gates, each unresolved M1 gate and its next action, local profile/worktree instructions, and the ordered M2 plan (T023–T029) with dependencies and exit criteria. Prepare the handoff against the actual final state. The owner requested an interim fresh-chat handoff before completing M1 on 7 November. See M1-CONTINUATION-HANDOFF.md. This interim checkpoint does not complete T022g.
 
-## M2 — Product context and PRD — Ready for new-session kickoff
+## M2 — Product context and PRD — Mac exit verified
 
-- [ ] **T023 — Products and source mapping** · P0 · TS · Dep T013, T020 — DoD: two products with isolated sources, models and memory.
-- [ ] **T024 — Document ingestion** · P0 · TS · Dep T023 — Build: TXT, MD, text PDF, DOCX, PNG/JPEG; others fail with clear message; provenance rows. DoD: supported-format matrix published in docs.
-- [ ] **T025 — Product interview via Firstmate** · P0 · TS · Dep T006, T024 — Build: Firstmate questions surfaced as Requests; answers stored with provenance. DoD: live interview on a real product.
-- [ ] **T026 — Product understanding review** · P0 · TS · Dep T025 — DoD: facts/assumptions/questions editable; approved version used by later prompts (verified by prompt log).
-- [ ] **T027 — PRD editor** · P0 · TS/React · Dep T020 — Build: Tiptap schema, Markdown mode via remark, autosave, history, stale-edit detection, import/export. Tests: round-trip corpus (headings, lists, tables, checklists, links, inline marks); unsupported formatting warns. DoD: round-trip suite green.
-- [ ] **T028 — PRD generation, modes, review and approval** · P0 · TS · Dep T014, T026, T027 — Build: draft from objective; Write/Research/Review modes; selection HUD; inline proposal diffs; approval bound to version; invalidation explains affected work. DoD: live PRD approved; edit after approval invalidates.
-- [ ] **T029 — RICE prioritisation** · P1 · TS · Dep T023 — Tests: formula, units, empty/zero/negative handling. DoD: "Priorities" tile shows ordered table.
-      **M2 exit:** Live demo: objective → approved PRD v1 with sources in a real product.
+- [x] **T023 — Products and source mapping** · P0 · TS · Dep T013, T020 — DoD: two products with isolated sources, models and memory.
+- [x] **T024 — Document ingestion** · P0 · TS · Dep T023 — Build: TXT, MD, text PDF, DOCX, PNG/JPEG; others fail with clear message; provenance rows. DoD: supported-format matrix published in docs.
+- [x] **T025 — Product interview via Firstmate** · P0 · TS · Dep T006, T024 — Build: Firstmate questions surfaced as Requests; answers stored with provenance. DoD: live interview on a real product.
+- [x] **T026 — Product understanding review** · P0 · TS · Dep T025 — DoD: facts/assumptions/questions editable; approved version used by later prompts (verified by prompt log).
+- [x] **T027 — PRD editor** · P0 · TS/React · Dep T020 — Build: Tiptap schema, Markdown mode via remark, autosave, history, stale-edit detection, import/export. Tests: round-trip corpus (headings, lists, tables, checklists, links, inline marks); unsupported formatting warns. DoD: round-trip suite green.
+- [x] **T028 — PRD generation, modes, review and approval** · P0 · TS · Dep T014, T026, T027 — Build: draft from objective; Write/Research/Review modes; selection HUD; inline proposal diffs; approval bound to version; invalidation explains affected work. DoD: live PRD approved; edit after approval invalidates.
+- [x] **T029 — RICE prioritisation** · P1 · TS · Dep T023 — Tests: formula, units, empty/zero/negative handling. DoD: "Priorities" tile shows ordered table.
+      **M2 exit verified.** The Mac app generated a sourced PRD, recorded approval on v1 and invalidated the approval after an edit. [Sanitized acceptance evidence](evidence/M2-verification.md).
 
 ## M3 — Backlog and sprint on Azure DevOps — LOCKED
 
