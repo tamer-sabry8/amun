@@ -4,7 +4,7 @@ Updated 8 November 2026, Asia/Dubai, at the owner's explicit request for a fresh
 
 ## Start here
 
-Read this file, AGENTS.md, docs/TASKS.md and the referenced evidence before changing code. Continue all unblocked M1 work with TDD until its gates pass or real user input is required. Keep the task tracker and draft PR current and push tested logical increments. Do not begin M2 or the neumorphic redesign. Ask for explicit design approval when other work is ready. Do not merge the M1 PR without a new authorization.
+Read this handoff, AGENTS.md, docs/TASKS.md and docs/plans/product-and-r1-plan.md. The owner requested M2 kickoff in a new session using the prompt below. The M1 redesign and dependent final handoff stay paused. PR #2 remains a draft pending separate merge authorization.
 
 ## Checkout and GitHub
 
@@ -28,13 +28,14 @@ docs/plans/product-and-r1-plan.md is the full product and R1 plan. docs/TASKS.md
 
 The canonical checklist is [TASKS.md](TASKS.md). The completed entries cover T013–T022 foundations and auth, T022a native commands, T022b sharing, T022f hosting, T022h Firstmate updates and T037 bridge governance. T022a includes the 35-command catalog audit and the separate real behavioral tests documented in the [native command ledger](plans/m1-native-pi-commands.md).
 
-| Open M1 entry                                | Next action                                                                                                                                                                                                                          |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T022d · Physical external-drive verification | When a physical drive is available, use a disposable selected folder for the same short listing and cancellation check. The internal APFS Data volume passed on 8 November in 2.4 seconds. A mounted HFS+ disk image passed earlier. |
-| T022c · Redesign                             | Paused by the owner.                                                                                                                                                                                                                 |
-| T022g · Final handoff                        | Prepare after T022c and remaining M1 gates. This file is the interim handoff.                                                                                                                                                        |
+T022d is complete. The disk requirement covers a user-selected folder on the local Mac where Amun is installed. The packaged internal APFS folder-listing and picker-cancellation test passed in 2.4 seconds.
 
-The owner moved authenticated Google checks (including Sheets and Maps) and live Obsidian vault acceptance to **R3-GOOGLE** and **R3-OBSIDIAN**. Existing connector setup and discovery evidence stays with M1. M2 remains locked.
+| Open M1 entry            | Next action          |
+| ------------------------ | -------------------- |
+| T022c · Redesign         | Paused by the owner. |
+| T022g · Final M1 handoff | Prepare after T022c. |
+
+The owner moved authenticated Google checks (including Sheets and Maps) and live Obsidian vault acceptance to **R3-GOOGLE** and **R3-OBSIDIAN**. Existing connector setup and discovery evidence stays with M1. The new session may begin M2 when the owner sends the kickoff prompt.
 
 ## Most recent Notion result and safety rules
 
@@ -74,7 +75,7 @@ Revised local M0 passed and merged. Release R001 is still open by explicit owner
 Full release map is in product-and-r1-plan.md section 2 and docs/TASKS.md.
 
 - R1 is milestones M0–M6.
-- M2 LOCKED until M1 gate resolved. Ordered tasks T023 products/source isolation; T024 file ingestion/provenance; T025 Firstmate product interview; T026 editable understanding and approval; T027 PRD editor/autosave/history/roundtrip; T028 generated PRD, modes, proposal review and version-bound approval; T029 RICE prioritization. Dependencies and exact acceptance are in TASKS. M2 exit is a real product objective to approved sourced PRD v1. Do not implement during M1.
+- M2 begins in the new session on the owner’s kickoff. Ordered tasks T023 products/source isolation; T024 file ingestion/provenance; T025 Firstmate product interview; T026 editable understanding and approval; T027 PRD editor/autosave/history/roundtrip; T028 generated PRD, modes, proposal review and version-bound approval; T029 RICE prioritization. Dependencies and exact acceptance are in TASKS. M2 exit is a real product objective to approved sourced PRD v1. Do not implement during M1.
 - M3 backlog/sprint/ADO; M4 crew/PR/merge acceptance (T037 moved earlier); M5 memory/Notion sync/skills/portfolio/reminders; M6 chaos/accessibility/performance/signing/release report.
 - R2 visual roadmap, Decision Room, RFP/proposals; owner's Transfrm.ai document hosting also later. Do not show these as working in R1.
 - R3 personalization/team foundations/discovery; Docker MCP Registry, authenticated Google and live Obsidian acceptance are tracked under R3-DOCKER, R3-GOOGLE and R3-OBSIDIAN.
@@ -96,4 +97,14 @@ Amun is Electron/TypeScript. Firstmate upstream is kunchenguid/firstmate, Pi @ea
 1. Verify macOS, real checkout, clean/preserved state, current branch/remote/PR heads and CI.
 2. Use the open-entry table above and docs/TASKS.md. Keep Google and Obsidian live checks in R3.
 3. Preserve the established Firstmate rules in AGENTS.md. Stow processes the selected conversation, crew memory, backlog and budget on-device. Ordinary edits apply automatically and individual pinned decisions persist. Primary supervision pauses on quit and reattaches surviving workers on reopen.
-4. Keep the draft PR unmerged, M2 locked and redesign paused pending a new owner instruction.
+4. Use the kickoff below for M2 in its own branch. Keep PR #2 unmerged and the redesign paused.
+
+## Prompt for a new M2 session
+
+> Start M2 for Amun. Work from the real checkout at `/Users/tamersabry/Projects/amun`. First read `/Users/tamersabry/Projects/amun/docs/M1-CONTINUATION-HANDOFF.md`, then the repository’s `AGENTS.md`, `docs/TASKS.md` and `docs/plans/product-and-r1-plan.md`.
+>
+> Verify the branch, working tree and draft PR #2 head. The accepted M1 app revision is `679867d`. Create a separate M2 branch/worktree based on the verified M1 branch so M2 has the required foundations. Keep PR #2 unmerged and keep the M1 redesign paused.
+>
+> Begin T023 by proving that two products keep their sources, models and memory isolated. Continue through T024–T029 with test-driven development and real Mac acceptance. Record evidence and update the tracker as each task meets its definition of done. Demonstrate the M2 exit journey from a real product objective and its sources to approved PRD v1, including approval invalidation after an edit.
+>
+> Reuse the standing Firstmate decisions in the handoff and agent files. Local folder access has passed. Live Google and Obsidian checks belong to R3. Continue until M2 is verified or a new decision genuinely requires my input.

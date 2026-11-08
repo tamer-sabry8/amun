@@ -6,7 +6,7 @@ Provider sign-in now opens Microsoft Edge, distinguishes Copilot cloud tenants f
 
 The native Pi command screen provides model/thinking/name/statistics, new/resume/clone/fork/tree-entry navigation, clipboard copy, scoped-model selection/cycling, compact/reload, and session-only quit. Native export review/save, runtime settings, scoped trust and paged changelog are also connected. Native CLI subscription sign-in/status/inference controls use official isolated profiles; packaged login helpers recognize existing subscriptions and open Edge for fresh authorization. The 8 November audit covers the expanded native command scope.
 
-The accepted app revision is `679867d`. Its Foundation checks and 452 unit tests passed. The Apple Silicon package passed 42 journeys with one development-only skip. The 8 November internal-drive smoke test passed in 2.4 seconds. Physical external-drive verification, the owner-paused redesign and the dependent final handoff remain open in M1. Live Google and Obsidian checks are scheduled in R3. See the [task tracker](TASKS.md) and [current handoff](M1-CONTINUATION-HANDOFF.md).
+The accepted app revision is `679867d`. Its Foundation checks and 452 unit tests passed. The Apple Silicon package passed 42 journeys with one development-only skip. The 8 November internal-drive smoke test passed in 2.4 seconds. T022d is complete for scoped local Mac disk access. The owner-paused redesign and its dependent final handoff remain open in M1. Live Google and Obsidian checks are scheduled in R3. See the [task tracker](TASKS.md) and [current handoff](M1-CONTINUATION-HANDOFF.md).
 
 ## Staged update and bridge acceptance
 
