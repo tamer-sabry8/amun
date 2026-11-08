@@ -120,3 +120,5 @@ Ordinary entries update automatically. A proposed change to a default or explici
 The native `/llama` catalog accepts a loopback router URL and remembers it in the private Amun profile after verifying the catalog. Load and unload bind to the displayed model identity and refresh its state. The real acceptance launches an offline router with a disposable preset for an already-installed GGUF, clicks both actions and verifies the router’s state independently. Stow uses a separate network-denied process.
 
 The source and packaged catalog audit reads Pi’s actual installed `BUILTIN_SLASH_COMMANDS` and compares it with the Conversations picker, including Amun’s three extra Pi commands and eight Firstmate commands. All 35 entries matched. Individual command behavior is covered by the separate live tests above.
+
+The source and packaged queue acceptance also runs manual `/compact` on the real selected SDK branch. The test checks that its custom instruction reached the disposable local provider and reads back the persisted Pi compaction record with the returned summary.

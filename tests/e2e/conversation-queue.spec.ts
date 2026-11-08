@@ -1,6 +1,14 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createServer } from "node:http";
-import { mkdtemp, realpath, mkdir, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  realpath,
+  mkdir,
+  rm,
+  writeFile,
+  readFile,
+  readdir,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReviewedExtensions } from "../../packages/crew/src/reviewed-extensions.ts";
@@ -39,6 +47,10 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
   if (!addr || typeof addr === "string") throw Error();
   const agent = join(root, "pi-agent");
   await mkdir(agent, { mode: 0o700 });
+  await writeFile(
+    join(agent, "settings.json"),
+    JSON.stringify({ compaction: { enabled: false, keepRecentTokens: 1 } }),
+  );
   const checked = await ReviewedExtensions.open(agent);
   const provider = {
     name: "Queue fixture",
@@ -129,6 +141,35 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
     await expect(p.getByLabel("Active conversation text")).toHaveValue(
       /Queue verified/,
     );
+    await p.getByLabel("Native Pi command").selectOption("compact");
+    await p
+      .getByLabel("Command argument", { exact: true })
+      .fill("Retain the queue acceptance decision.");
+    await btn("Run command").click();
+    await expect(p.getByTestId("native-pi-result")).toContainText(
+      "Context compacted",
+      { timeout: 30000 },
+    );
+    const directory = join(root, "pi-workspace", "sessions");
+    const session = (await readdir(directory, { recursive: true })).find(
+      (name) => name.endsWith(".jsonl"),
+    );
+    expect(session).toBeTruthy();
+    const records = (await readFile(join(directory, session!), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { type: string; summary?: string });
+    expect(
+      records.some(
+        (row) =>
+          row.type === "compaction" && row.summary?.includes("Queue verified"),
+      ),
+    ).toBe(true);
+    expect(
+      requests
+        .slice(2)
+        .some((body) => body.includes("Retain the queue acceptance decision.")),
+    ).toBe(true);
   } finally {
     release();
     await app.close();
