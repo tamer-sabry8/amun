@@ -14,7 +14,10 @@ test("known IdP redirect is blocked, then user restarts auth externally from ori
   if (!addr || typeof addr === "string") throw Error();
   const url = `http://127.0.0.1:${addr.port}/`;
   const app = await electron.launch({
-    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--amun-proof",
+    ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),

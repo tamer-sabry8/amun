@@ -1,0 +1,11 @@
+# Native CLI subscription sign-in entry points
+
+Native buttons now launch a bundled official Codex/Claude login helper in Terminal. Recognized provider authorization URLs open explicitly in Microsoft Edge. No credential/code crosses renderer IPC or is copied from personal stores. Shell-frame validation, strict tool-only requests and overlapping-launch suppression are unit-tested. The helper serializes login per private Amun profile using the existing supported lock adapter.
+
+Missing private directories are created with 0700 permissions beneath an owned canonical parent; existing files/permissions are never overwritten. Symlinks, foreign owners and unsafe directories are refused. Codex runs its installed launcher through Electron's Node runtime, avoiding interactive PATH assumptions. Claude keeps normal HOME for Keychain discovery and its separate Amun config directory.
+
+Existing subscriptions are checked using official CLI status before launching authentication. Both actual source and packaged helpers recognized the existing Codex and Claude subscription profiles with PATH limited to `/usr/bin:/bin`; no reauthentication was needed. One packaged native Codex button opened the official Terminal helper successfully. Opening Terminal is explicitly not presented as completed authentication. A fresh missing-profile OAuth flow still requires user interaction and is not claimed by this reuse test.
+
+TDD: missing launcher module RED `/tmp/amun-worker-login-boundary-red.log`; GREEN `/tmp/amun-worker-login-boundary-green.log`. Missing profile provisioner RED `/tmp/amun-worker-profile-red.log`; preservation/link/permission tests GREEN `/tmp/amun-worker-profile-green.log`. Full check `/tmp/amun-worker-login-final-check.log`: 321 tests plus lint/types/format. Source native UI regression: 8.7 seconds; packaged native UI regression: 8.4 seconds. Final profile provisioning was then verified in both actual packaged helpers. Initial manual helper invocation used an incorrect unpacked `Resources/app` path and failed; corrected actual `app.asar` invocation passed. This was a probe-path error, not a hidden waived gate.
+
+No personal CLI session was restarted. Existing subscription inference remains separately evidenced in the M1 subscription report. Current worker permission/reattachment acceptance and full native command coverage remain open.

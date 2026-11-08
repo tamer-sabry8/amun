@@ -20,9 +20,7 @@ export function cleanupExtension(root: string): string {
   return `import {rmSync} from "node:fs";
 const root=${JSON.stringify(root)};
 const cleanup=()=>{try{rmSync(root,{recursive:true,force:true});}catch{}};
-export default function(pi){
- process.stdin.once("end",()=>{cleanup();process.exit(0);});
+export default function(){
  process.once("exit",cleanup);
- pi.on("session_shutdown",cleanup);
 }`;
 }

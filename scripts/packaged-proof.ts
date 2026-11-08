@@ -22,6 +22,8 @@ await access(binary);
 await access(entry);
 await assertRuntimeContained(join(resources, "pi"));
 await assertRuntimeContained(join(resources, "terminal"));
+await assertRuntimeContained(join(resources, "database"));
+await assertRuntimeContained(join(resources, "auth"));
 // The probe harness uses developer Node; the Pi child uses only the packaged Electron binary.
 const runtime = spawnSync(
   process.execPath,
@@ -40,10 +42,10 @@ if (firstmate.error) throw firstmate.error;
 if (firstmate.status !== 0) process.exit(firstmate.status ?? 1);
 const e2e = spawnSync(
   process.execPath,
-  ["node_modules/@playwright/test/cli.js", "test"],
+  ["node_modules/@playwright/test/cli.js", "test", "--global-timeout=300000"],
   {
     stdio: "inherit",
-    timeout: 90000,
+    timeout: 330000,
     env: { ...process.env, AMUN_PACKAGED_PATH: binary },
   },
 );

@@ -1,0 +1,35 @@
+{
+  "font": {
+    "ui": {
+      "$type": "fontFamily",
+      "$value": ["Inter", "sans-serif"]
+    },
+    "code": {
+      "$type": "fontFamily",
+      "$value": ["JetBrains Mono", "monospace"]
+    }
+  },
+  "size": {
+    "sidebar": {
+      "$type": "dimension",
+      "$value": {
+        "value": 264,
+        "unit": "px"
+      }
+    },
+    "rail": {
+      "$type": "dimension",
+      "$value": {
+        "value": 44,
+        "unit": "px"
+      }
+    },
+    "inspector": {
+      "$type": "dimension",
+      "$value": {
+        "value": 360,
+        "unit": "px"
+      }
+    }
+  }
+}

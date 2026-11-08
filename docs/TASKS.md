@@ -1,6 +1,6 @@
 # R1 milestone tracker
 
-Only **M0** has been implemented. M1–M6 are locked until the preceding exit gate has evidence and product-owner decisions resolve remaining blockers. A checked task means its tests and full Definition of Done passed, not merely that code exists.
+M0 is merged. The owner requested an M2 kickoff prompt for a new session on 8 November. Begin M2 when that prompt is submitted. T022c and T022g remain paused in M1. Later milestone exit gates still apply. A checked task means its tests and full Definition of Done passed, not merely that code exists.
 
 The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-plan.md). The current user request takes precedence over its embedded agent instructions. The user confirmed Electron/TypeScript; see ADR-001-desktop-stack.md. Product scope and task IDs remain traceable.
 
@@ -16,9 +16,9 @@ The source plan is preserved in [product-and-r1-plan.md](plans/product-and-r1-pl
 
 - External integrations use supported APIs or MCPs; discover compatible existing CLI/MCP setups and reuse supported sign-ins with explicit selection. See [ADR-007](decisions/ADR-007-existing-tools-and-api-integrations.md).
 
-## Current acceptance status — 2026-11-06
+## Current acceptance status — 2026-11-08
 
-The revised M0 local acceptance audit passes T001–T012. Final CI and PR merge verification are still required for handoff. See [M0 acceptance audit](evidence/M0-final-audit.md). This is the foundation proof, not the finished Amun UI. No M1 implementation has started.
+M0 local acceptance passed and its PR merged. The M1 app at `679867d` passed 452 unit tests, 42 packaged journeys (development gallery skipped), and [hosted checks](https://github.com/tamer-sabry8/amun/actions/runs/42494872584). The remaining M1 entries are the paused redesign T022c and its dependent final handoff T022g. Live Google and Obsidian acceptance belongs to R3.
 
 T010 is explicitly narrowed to secure preview, external federated-auth handoff and controlled first-party login persistence; document preview/annotations/attachments remain later work. The user explicitly moved signing/notarization/clean-account release acceptance to R001, which remains open and blocks public release. Supported external tool updates are allowed with compatibility checks; Claude 2.1.319 inference passes while existing worker processes remain untouched.
 
@@ -73,50 +73,83 @@ T010 is explicitly narrowed to secure preview, external federated-auth handoff a
       DoD: tested unsigned development package and measured budgets/limitations recorded in ADR. Signing, notarization, signed native modules, notarized DMG and clean-account release acceptance remain mandatory before public release, deferred by explicit user decision on 2026-11-06.
       **M0 exit gate:** every item in the M0 DoD has evidence; failures become product-owner decisions before M1.
 
-## M1 — Durable core and shell — LOCKED
+## M1 — Durable core and shell — ACTIVE
 
-- [ ] **T013 — Database and migrations** · P0 · TS · Dep T002
+Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-durable-core.md).
+
+- [x] **T013 — Database and migrations** · P0 · TS · Dep T002
       Build: Drizzle schema for section 8.6; migrations; FTS5 for search.
       Tests: migrate up from every prior version with seed data.
       DoD: data survives app upgrade test.
-- [ ] **T014 — Governance engine** · P0 · TS · Dep T013
+- [x] **T014 — Governance engine** · P0 · TS · Dep T013
       Build: action and approval state machines (8.4); payload hash (canonical JSON); target-revision binding; invalidation triggers; separate approval kinds (publish, commit, merge, notion_publish, file_destructive, skill_install, model_outside_allowlist).
       Tests: exhaustive state-transition tests; property tests for hash stability.
       DoD: ≥ 90% coverage; mutating a payload after approval always invalidates.
-- [ ] **T015 — Outbox and reconciliation framework** · P0 · TS · Dep T014
+- [x] **T015 — Outbox and reconciliation framework** · P0 · TS · Dep T014
       Build: outbox table written in the same transaction as the action; worker (liteque or in-house); per-connector `reconcile(operationMarker)`; never auto-retry `unknown` merges/creates without reconciliation.
       Tests: crash between write and ack; duplicate-suppression tests.
       DoD: chaos test "kill after remote write, before local ack" produces no duplicate.
-- [ ] **T016 — Auth broker** · P0 · TS · Dep T006, T013
-      Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion (internal integration token in R1 unless public OAuth is confirmed safe); refresh lock (proper-lockfile).
+      Foundation history: [initial evidence](evidence/M1/2026-11-06-foundations.md). Current T017–T022 acceptance: [source and packaged shell evidence](evidence/M1/2026-11-06-shell-acceptance.md). T016 live Copilot/OpenRouter authorization and packaged inference now pass; T016b and T022a have since passed their M1 gates. PR CI at a87fe2e passed; later changes require their own verification.
+
+- [x] **T016 — Auth broker** · P0 · TS · Dep T006, T013
+      Build: Keychain storage (@napi-rs/keyring); Pi provider sign-in UI (Copilot, OpenRouter, OpenAI/Codex, API keys) driven through Pi (pi-ai login via bridge/CLI) into the Amun-scoped Pi dir; readiness via `pi auth check --json`; ADO PAT; GitHub (device flow / PAT; GHES host); Notion hosted MCP browser OAuth (replacement tracked in T016c; prior token foundation is not current acceptance); refresh lock (proper-lockfile).
       Tests: unit with fake keyring; live sign-in for Copilot and OpenRouter; Claude subscription option absent.
       DoD: all connections show independent status; secrets only in Keychain or the 0600 Pi dir.
-- [ ] **T017 — Audit and redaction** · P0 · TS · Dep T013
+- [x] **T016a — Reliable provider sign-in feedback** · P0 · TS · Dep T016
+      User-reported 2026-11-06: successful Copilot sign-in shows configured while an old connection-error banner remains. Clear stale errors/device codes on success or a fresh attempt; preserve current failure feedback; prevent duplicate login/readiness while an attempt is active. Force Microsoft Edge for provider authorization; explain Copilot cloud host versus GitHub repository host. Tests: meaningful failing regressions, source and packaged acceptance, real company Copilot sign-in and inference. Status: implementation, unit/source checks and final packaged auth tests pass; see [auth evidence](evidence/M1/2026-11-06-copilot-tenant-fix.md). Copilot authorization and packaged gpt-5.4-nano inference passed in the separate M1 profile.
+
+- [x] **T016c — Notion hosted MCP browser connection** · P0 · TS · Dep T016
+      User decision: external-browser OAuth through official hosted MCP, no manual-token onboarding. Implement pinned SDK discovery/registration/PKCE, validated loopback callback, durable registration reuse, Keychain-only credentials, cross-process refresh serialization, terminal invalid_grant, disconnect and safe status. Test source and packaged real-workspace consent/read; do not equate this chat's connector with Amun's connection. Unknown tools blocked, uncertain writes never retried automatically. [Stress-tested decision](decisions/ADR-011-hosted-mcp-auth.md). Packaged Edge consent in a disposable profile passed. Twenty simultaneous checks at the refresh threshold produced one live refresh, one rotated credential save and verified workspace identity. A synthetic invalid credential produced a real invalid_grant response without retry or browser launch. The owner approved revocation of the separately registered disposable grant. Notion accepted it, one real refresh failed and Amun returned reconnect-required and cleared the disposable credentials. A read confirmed the working profile still reaches Document Hub. After the owner allowed the Keychain prompt, the packaged disposable window displayed the reconnect message. A fresh source profile completed sign-in, then read the expected workspace identity after relaunch. Five independent processes exercised the production refresh lock. [Connection acceptance and audit](evidence/M1/2026-11-06-notion-mcp.md). T037 is in M1. T048/T049 remain later work.
+
+- [x] **T016b — Subscription-backed Codex and Claude CLI access in M1** · P0 · TS · Dep T016, T020
+      Explicit user requirement 2026-11-06: use Codex CLI through the user's ChatGPT/Codex subscription and Claude Code CLI through the user's Claude subscription; do not substitute API keys. Discover installed capabilities/versions and reuse the existing isolated Amun worker profiles through official CLI mechanisms, preserving personal sessions and Keychain behavior. Provide native Amun sign-in/status/launch controls with Microsoft Edge for company-required browser flows. Distinguish Pi's supported OpenAI/Codex OAuth model provider from actual Codex CLI worker execution; do not invent Claude subscription OAuth in Pi where the pinned provider does not support it. Tests: real CLI authentication status and bounded no-tool inference for both subscriptions, native UI behavior, worker ownership/permission propagation and reconnect; no credential values in logs/IPC. Earlier M0 CLI evidence is reference, not automatic M1 acceptance. Native sign-in entry points and actual packaged existing-subscription reuse now pass; fresh missing-profile OAuth and real inference now pass for both CLI subscriptions using the packaged helper and separate UUID-scoped profiles. Normal Agents reattachment, propagated launch permissions and ten restart trials per build pass with the two real workers. The owner selected pause-on-quit for primary supervision. Full quit must stop primary model activity while preserving worker homes and endpoints for relaunch. Normal Agents dispatch, initial receipt creation, verified recovery of a missing receipt, confirmed operator control and subsequent full-quit reattachment passed with real Codex and Claude CLI processes. Both newly dispatched workers returned the expected bounded inference in source and package. [M1 reattachment evidence](evidence/M1/2026-11-07-agents-and-native-tree.md). [Fresh onboarding and journey evidence](evidence/M1/2026-11-07-native-journeys.md). See [native CLI evidence](evidence/M1/2026-11-06-native-cli-login.md).
+
+- [x] **T017 — Audit and redaction** · P0 · TS · Dep T013
       Build: audit_log writer; pino redaction; export redaction.
       Tests: canary-secret test across logs, exports, memory, updates.
       DoD: canary never found.
-- [ ] **T018 — Backup and restore** · P1 · TS · Dep T013
+- [x] **T018 — Backup and restore** · P1 · TS · Dep T013
       DoD: encrypted export/import of a workspace; secrets excluded; restore test passes.
-- [ ] **T019 — Design tokens and themes** · P0 · TS/JSON · Dep T001
+- [x] **T019 — Design tokens and themes** · P0 · TS/JSON · Dep T001
       Build: DTCG tokens for Tamer Sabry default, Navy Gold, Navy Cyan (values from the brand table in Appendix A); Style Dictionary → `--amun-*` CSS variables; locked safety tokens; contrast validator.
       Tests: contrast unit tests (≥ 4.5:1 text, ≥ 3:1 UI); theme switch persists.
       DoD: all component states render in three themes.
-- [ ] **T020 — App shell layout** · P0 · TS/React · Dep T005, T019
+- [x] **T020 — App shell layout** · P0 · TS/React · Dep T005, T019
       Build: sidebar (switcher, ⌘K, 6 fixed tiles, nav, pinned tabs, artifacts), top bar with mode tabs, Focus and the status pill slot, workspace router, right edge in fixed order (status rail, drawer layer, single-slot inspector with Issue/Web tabs), composer, terminal dock, Focus mode with exact restore.
       Tests: Playwright layout + keyboard navigation; axe.
       DoD: no auto-reordering of tiles; inspector and drawers never open without user action; drawers overlay without layout shift.
-- [ ] **T021a — Firstmate Island (action queue)** · P0 · TS/React · Dep T002, T013, T020
+- [x] **T021a — Firstmate Island (action queue)** · P0 · TS/React · Dep T002, T013, T020
       Build: attention-item store and contract (5.3); item types; origin labels (Firstmate / Secondmate / Crewmate / Amun); ordering; Rail, Pill, Card, Expanded sizes; "+N more"; snooze; navigate vs inline modes; governed items always navigate; removal only on resolution or snooze; live region; ⌘⇧J; reduced motion; empty state.
       Tests: unit for ordering, resolution and snooze rules; test that a governed item can never resolve from the Island; visual baselines for every type × size × theme; a11y.
       DoD: gallery page in the dev build shows all combinations; clicking an item and navigating away leaves it open.
-- [ ] **T021b — Status pill, status rail and drawers** · P0 · TS/React · Dep T002, T020
+- [x] **T021b — Status pill, status rail and drawers** · P0 · TS/React · Dep T002, T020
       Build: top-bar status pill (counts, colour states, click pins Activity); right rail with Notifications, Activity, Artifacts, Downloads, Skills and extensions; drawer layer with 150 ms hover intent, 250 ms close grace, click to pin, ⌥⌘1–5, Esc, focus management; one drawer at a time; overlay without layout shift; tap = pin.
       Tests: Playwright hover-intent and pin tests; keyboard-only test; one-drawer rule; a11y; visual baselines per drawer × theme.
       DoD: run and publication progress appear only in the pill and Activity drawer, never in the Island.
-- [ ] **T022 — Requests and command palette** · P1 · TS · Dep T020
+- [x] **T022 — Requests and command palette** · P1 · TS · Dep T020
       DoD: Requests history (open and resolved, filters) whose badge equals the Island count from the same query; ⌘K searches entities and runs commands.
 
-## M2 — Product context and PRD — LOCKED
+- [x] **T022a — Native Pi commands and Firstmate controls** · P0 · TS · Dep T006, T016, T020. The source and packaged Conversations picker matched all 35 required commands against pinned Pi 1.4.0 and the required additions. Separate acceptance exercised session navigation, real compaction, scoped model selection, local router load/unload, native inputs, reviewed extensions, resource drafts, Firstmate supervision, interactive Bearings and on-device Stow with individual pinned decisions. Native share follows ADR-010. Bug reports use local review/save. See the [command evidence and supported limits](plans/m1-native-pi-commands.md) and [session evidence](evidence/M1/2026-11-06-subscription-and-native-sessions.md).
+
+- [x] **T022d — Native MCP connections** · M1 · The disk requirement covers a user-selected folder on the Mac where Amun is installed. GitHub authenticated read/reviewed write, Cloudflare documentation discovery, isolated browser adapters, Google public tool discovery, Obsidian loopback setup and scoped filesystem listing have recorded acceptance. On 8 November the packaged app listed only the selected fixture on the Mac’s internal APFS Data volume and handled picker cancellation (one test, 2.4 seconds). Private Google operations and live Obsidian vault access now have separate R3 tasks. [Connector and disk evidence](evidence/M1/2026-11-07-mcp-and-composer.md).
+
+- [x] **T022b — Conversation Share to Notion** · P0 · TS · Dep T014, T015, T016, T022a
+      User decision 2026-11-06: Notion is the R1 sharing default. Disable native Pi share server-side; no gist/Radius fallback. Provide selected-conversation secret removal, exact final-content preview, user-chosen Notion parent section, approval bound to content/destination, and new-page publication through the supported API/MCP boundary. No uncertain-write automatic retry. Keep publishing blocked until an Amun Notion connection and parent are configured. Native refusal, redacted preview, verified parent selection and durable exact-review approval are implemented and tested. Hosted MCP sign-in, saved-grant reuse and Document Hub schema verification pass in the packaged app. Live publication is now verified: the user approved the exact fixture at 05:04 +04 on 2026-11-07, Amun stored a succeeded action and receipt, and read-back confirmed its title, content and Document Hub destination. A workspace-scoped activity validation bug caused a misleading banner during publication; its regression and journey fixes are recorded in the evidence. Startup reconciles interrupted writes with a matching saved receipt. Conversations lists unconfirmed publications separately. Amun persists a unique publication ID before sending and tracks not sent, sent-unknown and confirmed. Unknown sends are reconciled by read-only lookup with backoff or a PM-supplied page URL. A verified searchable text property takes precedence over a visible footer in the exact review. Duplicate titles and edited or missing references cannot establish identity. The second approved, same-title Document Hub fixture passed live recovery by ID through Amun’s own hosted MCP connection. A disposable sent-unknown ledger restored its receipt with zero external writes. The remaining Notion connection lifecycle checks belong to T016c. Later PRD/decision/update sharing remains in its own milestone; Transfrm.ai is R2 reference only. [ADR-010](decisions/ADR-010-notion-sharing.md).
+
+- [x] **T022f — Set up Amun hosting with Cloudflare Code Mode** · M1 · Use Cloudflare’s hosted API MCP with browser consent. Discover the zone and existing routing for `amun.transfrm.ai`. Review the exact proposed deployment and DNS changes, apply them through Code Mode, and verify DNS, TLS, and the intended route from the Mac. This hostname belongs exclusively to Tamer’s setup. Each other workspace chooses its own hosting provider and hostname. Record the deployed revision and rollback steps. GitHub MCP uses the verified device sign-in in M1.
+
+- [x] **T037 — amun-bridge Pi extension** · P0 · TS · Dep T006, T014 — Build: Unix-socket client with token; `tool_call` hook: classify tool by Amun's own registry; governed/unknown → create action, return block with action id; handler errors block; Amun tools (`amun_get_context`, `amun_propose_backlog_publication`, `amun_propose_sprint_commitment`, `amun_request_merge`, `amun_raise_decision`, `amun_report_blocker`); event forwarding. Tests: direct and codemode-nested MCP write attempts are blocked; a tool claiming `readOnlyHint` but registered as governed is blocked; extension that replaces `/mcp` detected and reported. DoD: test matrix green on live Pi.
+
+      [Live bridge matrix](evidence/M1/2026-11-07-pi-bridge.md).
+
+- [x] **T022h — Staged Firstmate updates and rollback** · M1 · Native candidate discovery, disposable Git worktree, selected overlay, Pi replay, amun-bridge approval tests, and real Codex/Claude dispatch through isolated Herdr with restart recovery. Require exact revision and checksum, a human-readable report and explicit promotion approval. Preserve the previous verified pin for one-click rollback. T037 passed. The owner approved the exact candidate after a real packaged rollback trial. The active pin is `bf05a4f` and the retained offline pin is `4a67799`. The native rollback action applies to newly prepared worktrees. [Candidate evidence](evidence/M1/2026-11-07-firstmate-candidate.md).
+
+- [ ] **T022c — Accessible neumorphic interface redesign — AWAITING USER APPROVAL** · P1 · TS/React · Dep T017–T022, T022a, T022b
+      User correction 2026-11-06 22:51 +04: do not begin design or implementation until explicitly asking and receiving approval. The initial uncommitted styling experiment was reverted; no redesign is enabled. After approval, redesign the M1 interface using the supplied neumorphic HTML as a reference for raised controls, recessed fields, rounded surfaces and restrained depth. Ignore its colors; preserve the approved Appendix A dark default and existing theme alternatives. Apply consistently to navigation, settings, native Pi commands, review sheets, Firstmate Island and utility rail/drawers. Preserve actual application behavior, native window controls, keyboard focus, contrast, selected/disabled/error states, reduced motion and overlay drawers without layout shifts. Do not import mock data, inline handlers, CDN scripts or fake connection statuses from the reference. Tests: source and packaged keyboard/a11y checks, all theme states, resize/overflow, and reviewed visual evidence. Remains open until implementation and acceptance pass.
+
+- [ ] **T022g — Final handoff to a new chat** · Last M1 task, after the separately approved T022c redesign. Include verified branch and PR heads, acceptance evidence, outstanding M0 release gates, each unresolved M1 gate and its next action, local profile/worktree instructions, and the ordered M2 plan (T023–T029) with dependencies and exit criteria. Prepare the handoff against the actual final state. The owner requested an interim fresh-chat handoff before completing M1 on 7 November. See M1-CONTINUATION-HANDOFF.md. This interim checkpoint does not complete T022g.
+
+## M2 — Product context and PRD — Ready for new-session kickoff
 
 - [ ] **T023 — Products and source mapping** · P0 · TS · Dep T013, T020 — DoD: two products with isolated sources, models and memory.
 - [ ] **T024 — Document ingestion** · P0 · TS · Dep T023 — Build: TXT, MD, text PDF, DOCX, PNG/JPEG; others fail with clear message; provenance rows. DoD: supported-format matrix published in docs.
@@ -140,7 +173,6 @@ T010 is explicitly narrowed to secure preview, external federated-auth handoff a
 
 ## M4 — Firstmate, crew, PRs, acceptance — LOCKED
 
-- [ ] **T037 — amun-bridge Pi extension** · P0 · TS · Dep T006, T014 — Build: Unix-socket client with token; `tool_call` hook: classify tool by Amun's own registry; governed/unknown → create action, return block with action id; handler errors block; Amun tools (`amun_get_context`, `amun_propose_backlog_publication`, `amun_propose_sprint_commitment`, `amun_request_merge`, `amun_raise_decision`, `amun_report_blocker`); event forwarding. Tests: direct and codemode-nested MCP write attempts are blocked; a tool claiming `readOnlyHint` but registered as governed is blocked; extension that replaces `/mcp` detected and reported. DoD: test matrix green on live Pi.
 - [ ] **T038 — Firstmate conversation and composer** · P0 · TS · Dep T006, T037 — DoD: composer sends with selected-item context; streaming; steer/follow-up; never approves anything.
 - [ ] **T039 — Model routing matrix** · P1 · TS · Dep T016, T038 — Build: per-product allowlist; task/difficulty matrix; actual model recorded per run; switching outside allowlist requires approval. DoD: Copilot and OpenRouter routes exercised live.
 - [ ] **T040 — Crew view** · P0 · TS/React · Dep T008 — Build: hierarchy and list; status counts; selected agent panel (current task, needs decision, up next, recent work, access scope, history). DoD: matches Firstmate and Amun-managed backend state live.
@@ -169,6 +201,17 @@ T010 is explicitly narrowed to secure preview, external federated-auth handoff a
 - [ ] **T056 — Performance** · P1 — budgets from T012 met.
 - [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex.
 - [ ] **T058 — R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off.
+
+## R3 — Expansion backlog
+
+- [ ] **R3-GOOGLE — Live Google connector acceptance** · Exercise the official Gmail, Drive, Docs, Sheets, Slides, Calendar, Chat, People and Maps connectors from packaged Amun using the applicable user authorization and scoped test data. Verify real read results, including a spreadsheet and a Maps operation. Preserve the existing public discovery evidence and record any service-specific access limits.
+- [ ] **R3-OBSIDIAN — Live Obsidian vault acceptance** · Use a disposable vault with the Local REST API with MCP plugin, its loopback endpoint and its bearer key in Keychain. Verify a read or search returns a known fixture through packaged Amun. Keep vault content and credentials out of evidence.
+
+- [ ] **R3-DOCKER — Docker MCP Registry integration** · Select a catalog server for a concrete use case, review its permissions, pin the tested version and verify a scoped operation in an isolated Amun profile. Schedule selection and testing in R3.
+
+## R4 — Optional improvements
+
+- [ ] **T022e — Provision and verify the registered GitHub web callback** · Optional R4 follow-up by owner decision on 7 November 2026. M1 uses GitHub device sign-in. No hosted callback or Worker client secret is required for M1. Target `https://amun.transfrm.ai/mcp/callback`. The approved initial origin now resolves and rejects invalid callbacks over HTTPS. The owner confirmed disabling wildcard matching on 7 November. Deploy a transaction-bound callback, verify public DNS/TLS, complete web authorization from packaged Amun, and test invalid state, cancellation and replay. Device-flow acceptance is tracked separately in T022d. [Setup and acceptance steps](evidence/M1/github-oauth-callback.md).
 
 ## Local acceptance continuation
 

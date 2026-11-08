@@ -5,13 +5,17 @@ import {
   ipcMain,
   shell,
 } from "electron";
-import { browserCommand, browserPartition } from "./browser-policy.js";
-import { randomUUID } from "node:crypto";
+import {
+  browserCommand,
+  browserPartition,
+  browserLayout,
+} from "./browser-policy.js";
+import { randomUUID, createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { previewDecision, HandoffSlot } from "./preview-navigation.js";
 import { windowPreferences } from "./security.js";
 
-/** M0 proof surface only. Web pages receive neither preload nor service ports. */
+/** Isolated preview surface. Web pages receive neither preload nor service ports. */
 export function installBrowser(window: BrowserWindow, product: string): void {
   const handoff = new HandoffSlot(Date.now, randomUUID);
   let handoffEpoch = 0;
@@ -23,18 +27,38 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       window.webContents.send("amun-browser-handoff", null);
   };
   let view: WebContentsView | undefined;
-  const partition = browserPartition(product);
-  const browserSession = session.fromPartition(partition);
-  browserSession.setPermissionRequestHandler((_contents, _permission, answer) =>
-    answer(false),
-  );
-  browserSession.setPermissionCheckHandler(() => false);
-  browserSession.setDevicePermissionHandler(() => false);
+  let partition = browserPartition(product);
+  let browserSession = session.fromPartition(partition);
   const denyDownload = (event: Electron.Event) => event.preventDefault();
-  browserSession.on("will-download", denyDownload);
+  const secureSession = () => {
+    browserSession.setPermissionRequestHandler(
+      (_contents, _permission, answer) => answer(false),
+    );
+    browserSession.setPermissionCheckHandler(() => false);
+    browserSession.setDevicePermissionHandler(() => false);
+    browserSession.on("will-download", denyDownload);
+  };
+  secureSession();
+  let viewport: ReturnType<typeof browserLayout> = null;
   const layout = () => {
     const [width = 0, height = 0] = window.getContentSize();
-    view?.setBounds({ x: 0, y: 240, width, height: Math.max(0, height - 240) });
+    if (viewport) {
+      const valid = browserLayout(
+        { action: "layout", ...viewport },
+        width,
+        height,
+      );
+      if (valid) {
+        view?.setBounds(valid.bounds);
+        view?.setVisible(valid.visible);
+      } else view?.setVisible(false);
+    } else
+      view?.setBounds({
+        x: 0,
+        y: 240,
+        width,
+        height: Math.max(0, height - 240),
+      });
   };
   const close = () => {
     clearHandoff();
@@ -80,6 +104,26 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       },
     });
     const contents = view.webContents;
+    contents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown") return;
+      const supported =
+        input.key === "Escape" ||
+        (input.meta && input.key.toLowerCase() === "k") ||
+        (input.meta && input.shift && input.key.toLowerCase() === "j") ||
+        (input.meta && input.alt && /^Digit[1-5]$/.test(input.code));
+      if (supported) {
+        event.preventDefault();
+        window.webContents.focus();
+        window.webContents.send("amun-shell-shortcut", {
+          key: input.key,
+          code: input.code,
+          metaKey: input.meta,
+          altKey: input.alt,
+          shiftKey: input.shift,
+        });
+      }
+    });
+
     // Popups never gain an opener or a privileged window; redirect-based SSO is supported.
     contents.setWindowOpenHandler(({ url }) => {
       if (previewDecision(url, true) === "handoff") {
@@ -118,6 +162,13 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       event.senderFrame !== window.webContents.mainFrame
     )
       return;
+    const [contentWidth = 0, contentHeight = 0] = window.getContentSize();
+    const requestedLayout = browserLayout(input, contentWidth, contentHeight);
+    if (requestedLayout) {
+      viewport = requestedLayout;
+      layout();
+      return;
+    }
     if (
       input &&
       typeof input === "object" &&
@@ -155,6 +206,20 @@ export function installBrowser(window: BrowserWindow, product: string): void {
     const command = browserCommand(input);
     if (!command) {
       notify("Navigation refused");
+      return;
+    }
+    if (command.action === "scope") {
+      const next = browserPartition(
+        createHash("sha256").update(command.product!).digest("hex"),
+      );
+      if (next !== partition) {
+        close();
+        browserSession.removeListener("will-download", denyDownload);
+        partition = next;
+        browserSession = session.fromPartition(partition);
+        secureSession();
+        notify("Preview closed for selected product");
+      }
       return;
     }
     if (command.action === "close") {

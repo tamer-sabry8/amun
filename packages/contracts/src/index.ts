@@ -21,3 +21,6 @@ export * from "./terminal.js";
 export * from "./pi.js";
 
 export * from "./crew.js";
+export * from "./auth.js";
+export * from "./workspace.js";
+export * from "./native-pi.js";

@@ -46,3 +46,52 @@ describe("isolated browser policy", () => {
       expect(browserCommand(value)).toBeNull();
   });
 });
+
+it("validates native preview bounds and visibility without permitting out-of-window overlays", async () => {
+  const { browserLayout } = await import("../src/browser-policy.ts");
+  expect(
+    browserLayout(
+      {
+        action: "layout",
+        visible: true,
+        bounds: { x: 400, y: 150, width: 300, height: 400 },
+      },
+      1200,
+      800,
+    ),
+  ).toEqual({
+    visible: true,
+    bounds: { x: 400, y: 150, width: 300, height: 400 },
+  });
+  for (const bounds of [
+    { x: -1, y: 0, width: 100, height: 100 },
+    { x: 1100, y: 0, width: 300, height: 100 },
+    { x: 0, y: 0, width: NaN, height: 100 },
+  ])
+    expect(
+      browserLayout({ action: "layout", visible: true, bounds }, 1200, 800),
+    ).toBeNull();
+  expect(
+    browserLayout(
+      {
+        action: "layout",
+        visible: "yes",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+      },
+      1200,
+      800,
+    ),
+  ).toBeNull();
+});
+it("accepts only bounded explicit scope changes, rejecting renderer session names and extra fields", () => {
+  expect(browserCommand({ action: "scope", product: "product-1" })).toEqual({
+    action: "scope",
+    product: "product-1",
+  });
+  for (const value of [
+    { action: "scope", product: "" },
+    { action: "scope", product: "x".repeat(257) },
+    { action: "scope", product: "p", partition: "persist:personal" },
+  ])
+    expect(browserCommand(value)).toBeNull();
+});

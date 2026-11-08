@@ -1,0 +1,13 @@
+# M1: durable core and application shell
+
+Build the durable core and working application shell from merged main `0b8b3bd`. SQLite persistence, approval binding/invalidation and an atomic outbox sit behind the isolated service. The dark React shell provides persisted themes, Requests/Island queue, entity search, Focus restoration, bounded terminal, encrypted backup/restore, a single inspector and accessible overlay drawers.
+
+Provider sign-in now opens Microsoft Edge, distinguishes Copilot cloud tenants from repository hosts, prevents duplicate attempts and clears obsolete error notices. Copilot, OpenRouter and Pi OpenAI/Codex subscription inference have passed on the actual Mac using packaged Pi and Amun-private state. The separate Codex CLI and Claude Code CLI subscriptions also pass real inference. Closing unused stdin fixed the Codex one-shot probe; regression tests cover EOF, bounded output, timeouts and sanitized failures.
+
+The native Pi command screen provides model/thinking/name/statistics, new/resume/clone/fork/tree-entry navigation, clipboard copy, scoped-model selection/cycling, compact/reload, and session-only quit. Native export review/save, runtime settings, scoped trust and paged changelog are also connected. Native CLI subscription sign-in/status/inference controls use official isolated profiles; packaged login helpers recognize existing subscriptions and open Edge for fresh authorization. The 8 November audit covers the expanded native command scope.
+
+The accepted app revision is `679867d`. Its Foundation checks and 452 unit tests passed. The Apple Silicon package passed 42 journeys with one development-only skip. The 8 November internal-drive smoke test passed in 2.4 seconds. T022d is complete for scoped local Mac disk access. The owner-paused redesign and its dependent final handoff remain open in M1. Live Google and Obsidian checks are scheduled in R3. See the [task tracker](TASKS.md) and [current handoff](M1-CONTINUATION-HANDOFF.md).
+
+## Staged update and bridge acceptance
+
+T037 passed on pinned Pi with direct and Code Mode nested governed calls, handler failure, conflicting MCP registration, lifecycle forwarding and scoped persistence. Firstmate candidate `bf05a4f` dispatched both real CLI subscriptions in disposable Git worktrees. Both replied and kept their original identities across ten packaged service restarts. The approved bundled pin is `bf05a4f` after a successful packaged rollback trial. Agents can select the retained `4a67799` offline for new Git worktrees. [Candidate acceptance](evidence/M1/2026-11-07-firstmate-candidate.md) · [Bridge matrix](evidence/M1/2026-11-07-pi-bridge.md).

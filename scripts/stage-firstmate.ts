@@ -12,20 +12,38 @@ import { resolve, join } from "node:path";
 import { verifyDistributionArchive } from "../packages/crew/src/distribution.ts";
 import { assertRuntimeContained } from "../packages/crew/src/runtime-links.ts";
 
-const manifest = JSON.parse(
-  await readFile("runtime/firstmate/manifest.json", "utf8"),
-) as { archiveUrl: string; sha256: string; commit: string };
-if (
-  !/^[a-f0-9]{40}$/.test(manifest.commit) ||
-  manifest.archiveUrl !==
-    `https://codeload.github.com/kunchenguid/firstmate/tar.gz/${manifest.commit}`
-)
-  throw new Error("Invalid pinned Firstmate source");
+type Pin = { archiveUrl: string; sha256: string; commit: string };
+const readPin = async (name: string): Promise<Pin> => {
+  const pin = JSON.parse(
+    await readFile(join("runtime/firstmate", name), "utf8"),
+  ) as Pin;
+  if (
+    !/^[a-f0-9]{40}$/.test(pin.commit) ||
+    !/^[a-f0-9]{64}$/.test(pin.sha256) ||
+    pin.archiveUrl !==
+      `https://codeload.github.com/kunchenguid/firstmate/tar.gz/${pin.commit}`
+  )
+    throw Error("Invalid pinned Firstmate source");
+  return pin;
+};
+const manifest = await readPin("manifest.json");
+const previous = await readPin("previous.json");
+if (previous.commit === manifest.commit)
+  throw Error("Duplicate Firstmate release pins");
 const parent = resolve("apps/desktop/.runtime");
 await mkdir(parent, { recursive: true });
+const archives = join(parent, "firstmate-archives");
+await mkdir(archives, { recursive: true });
 const temporary = await mkdtemp(join(parent, "firstmate-stage-"));
-try {
-  const archive = join(temporary, "source.tar.gz");
+async function retain(pin: Pin) {
+  const path = join(archives, pin.commit + ".tgz");
+  try {
+    verifyDistributionArchive(await readFile(path), pin.sha256);
+    return path;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const download = join(temporary, pin.commit + ".tgz");
   execFileSync(
     "curl",
     [
@@ -35,13 +53,19 @@ try {
       "--location",
       "--max-time",
       "60",
-      manifest.archiveUrl,
+      pin.archiveUrl,
       "--output",
-      archive,
+      download,
     ],
     { stdio: "inherit" },
   );
-  verifyDistributionArchive(await readFile(archive), manifest.sha256);
+  verifyDistributionArchive(await readFile(download), pin.sha256);
+  await rename(download, path);
+  return path;
+}
+try {
+  const archive = await retain(manifest);
+  await retain(previous);
   const distribution = join(temporary, "distribution");
   await mkdir(distribution);
   execFileSync("tar", [
@@ -65,6 +89,9 @@ try {
   const destination = join(parent, "firstmate");
   await rm(destination, { recursive: true, force: true });
   await rename(distribution, destination);
+  const catalog = join(temporary, "catalog.json");
+  await writeFile(catalog, JSON.stringify({ current: manifest, previous }));
+  await rename(catalog, join(archives, "catalog.json"));
   console.log(
     `Firstmate ${manifest.commit}: archive checksum, extracted link containment and Amun permission patch verified`,
   );

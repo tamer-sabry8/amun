@@ -19,7 +19,10 @@ test("browser isolates a local prototype, redirects, popups, permissions and ser
     throw new Error("No local server");
   const url = `http://127.0.0.1:${address.port}/redirect`;
   const app = await electron.launch({
-    args: process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"],
+    args: [
+      ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      "--amun-proof",
+    ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),

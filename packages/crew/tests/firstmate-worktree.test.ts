@@ -11,7 +11,10 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { createFirstmateWorktrees } from "../src/firstmate-worktree.ts";
+import {
+  createFirstmateWorktrees,
+  ownedWorktreeBranch,
+} from "../src/firstmate-worktree.ts";
 it("provisions genuine separate worktrees from a snapshot without adopting an ancestor repository", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "amun-worktree-test-")),
@@ -47,6 +50,30 @@ it("provisions genuine separate worktrees from a snapshot without adopting an an
     ).toContain(result.homes.worker);
     await expect(
       createFirstmateWorktrees(source, target, ["other"]),
+    ).rejects.toThrow();
+    expect(
+      await ownedWorktreeBranch(result.homes.primary!, result.homes.worker!),
+    ).toBe("amun/worker");
+    const marker = await readFile(join(result.homes.worker!, ".git"));
+    const foreign = await createFirstmateWorktrees(
+      source,
+      join(root, "foreign"),
+      ["primary", "worker"],
+    );
+    await writeFile(
+      join(result.homes.worker!, ".git"),
+      await readFile(join(foreign.homes.worker!, ".git")),
+    );
+    await expect(
+      ownedWorktreeBranch(result.homes.primary!, result.homes.worker!),
+    ).rejects.toThrow();
+    await writeFile(join(result.homes.worker!, ".git"), marker);
+    await writeFile(
+      join(result.repository, "worktrees", "worker", "gitdir"),
+      join(foreign.homes.worker!, ".git"),
+    );
+    await expect(
+      ownedWorktreeBranch(result.homes.primary!, result.homes.worker!),
     ).rejects.toThrow();
     expect(await readFile(join(source, "AGENTS.md"), "utf8")).toBe(
       "Fixture only",

@@ -1,0 +1,10 @@
+{
+  "name": "@amun/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/governance.ts",
+  "dependencies": {
+    "@amun/contracts": "workspace:*"
+  }
+}
