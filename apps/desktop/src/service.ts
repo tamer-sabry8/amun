@@ -178,10 +178,20 @@ const authMetadata = {
 };
 const authSessions = new Set<AuthSession>();
 const sessions = new Set<TerminalSession>();
+const supervisors = new Set<FirstmateSupervision>();
+let stopping = false;
 let crewDispatchBusy = false;
 let togglingCalm = false;
 let backupBusy = false;
 process.parentPort?.on("message", (event) => {
+  if (event.data?.kind === "pause-before-quit") {
+    stopping = true;
+    void Promise.all([...supervisors].map((s) => s.close())).then(() =>
+      process.parentPort?.postMessage({ kind: "primary-paused" }),
+    );
+    return;
+  }
+  if (stopping) return;
   if (event.data?.kind === "backup") {
     const job = event.data;
     const request = backupRequest({
@@ -317,8 +327,11 @@ process.parentPort?.on("message", (event) => {
     process.env.AMUN_AUTH_ROOT!,
     redactor,
   );
+  supervisors.add(supervisor);
   void supervisor.resume();
-  port.once("close", () => supervisor.close());
+  port.once("close", () => {
+    void supervisor.close().then(() => supervisors.delete(supervisor));
+  });
   const branchPicker = new FirstmateModelPicker();
   port.once("close", () => branchPicker.close());
   const ahoyPending = new Set<string>();

@@ -255,11 +255,41 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 }
-app.on("before-quit", () => {
+let readyToQuit = false;
+app.on("before-quit", (event) => {
+  const child = service;
+  if (readyToQuit || !child) return;
+  event.preventDefault();
+  if (quitting) return;
   quitting = true;
   clearTimeout(restartTimer);
   clearTimeout(stableTimer);
-  service?.kill();
+  const finish = () => {
+    if (readyToQuit) return;
+    readyToQuit = true;
+    clearTimeout(timer);
+    child.removeListener("message", acknowledge);
+    child.removeListener("exit", finish);
+    child.kill();
+    app.quit();
+  };
+  const acknowledge = (message: unknown) => {
+    if (
+      message &&
+      typeof message === "object" &&
+      "kind" in message &&
+      message.kind === "primary-paused"
+    )
+      finish();
+  };
+  const timer = setTimeout(finish, 9000);
+  child.on("message", acknowledge);
+  child.once("exit", finish);
+  try {
+    child.postMessage({ kind: "pause-before-quit" });
+  } catch {
+    finish();
+  }
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

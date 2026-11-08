@@ -53,6 +53,7 @@ const controls = `export default function(pi) {
 export class FirstmateSupervision {
   private active: ReturnType<FirstmateSupervision["start"]> | undefined;
   private disposed = false;
+  private stopChild: (() => Promise<void>) | undefined;
   private busy = false;
   constructor(
     private workspace: string,
@@ -172,20 +173,35 @@ export class FirstmateSupervision {
         .on("data", (data) => client.receive(data));
       child.stdin.on("error", () => client.close());
       child.on("error", () => client.close());
-      child.once("close", () => {
-        exited = true;
-        client.close();
-        this.active = undefined;
-        void rm(temp, { force: true, recursive: true }).catch(() => {});
-      });
+      const closed = new Promise<void>((resolve) =>
+        child.once("close", () => {
+          exited = true;
+          client.close();
+          if (this.stopChild === stopOwned) {
+            this.stopChild = undefined;
+            this.active = undefined;
+          }
+          void rm(temp, { force: true, recursive: true }).catch(() => {});
+          resolve();
+        }),
+      );
+      let stopping = false;
+      const stopOwned = () => {
+        if (!stopping && !exited) {
+          stopping = true;
+          client.close();
+          child.stdin.end();
+          const timer = setTimeout(() => {
+            if (!exited) child.kill("SIGKILL");
+          }, 4000);
+          timer.unref();
+          void closed.then(() => clearTimeout(timer));
+        }
+        return closed;
+      };
+      this.stopChild = stopOwned;
       stop = () => {
-        if (exited) return;
-        client.close();
-        child.stdin.end();
-        const timer = setTimeout(() => {
-          if (!exited) child.kill("SIGKILL");
-        }, 5000);
-        timer.unref();
+        void stopOwned();
       };
       const command = async (message: string) => {
         if (this.disposed) throw Error("Closed");
@@ -252,11 +268,8 @@ export class FirstmateSupervision {
       this.busy = false;
     }
   }
-  close() {
+  close(): Promise<void> {
     this.disposed = true;
-    void this.active?.then(
-      (live) => live.stop(),
-      () => {},
-    );
+    return this.stopChild?.() ?? Promise.resolve();
   }
 }
