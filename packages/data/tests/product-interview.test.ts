@@ -131,7 +131,7 @@ it("turns a source-grounded Firstmate question into a Request and retains the an
           markdown: "# Sourced requirements\n\nShow the original brief [S1].",
           sourceIds: [sourceId],
           rationale: "Traceability",
-        });
+        }).replaceAll("\\n", "\n");
       }),
     ).toMatchObject({ kind: "workspace-snapshot" });
     const current = () => s.snapshot().productContext!.objectives[0]!;
