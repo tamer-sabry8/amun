@@ -18,3 +18,5 @@ The fixed synthetic credential is for this fixture only.
 Tests exercise the HTTP dashboard response and its DELETE endpoint, recipient
 invalidation, unauthorized access, repeat revocation, and unknown routes/methods.
 They do not claim a browser automation run or product invitation implementation.
+
+TEST head-change acceptance marker. The PR reviewer must reject an approval bound to the earlier source commit.
