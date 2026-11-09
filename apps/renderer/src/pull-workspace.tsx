@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { editor } from "monaco-editor/editor/editor.api.js";
 import {
   deliveryChecklist,
   prResult,
@@ -17,24 +16,33 @@ function Diff({ value }: { value: { before: string; after: string } }) {
         new Worker(new URL("./diff-worker.js", document.baseURI)),
     };
     count(null);
-    const before = editor.createModel(value.before, "plaintext"),
-      after = editor.createModel(value.after, "plaintext");
-    const view = editor.createDiffEditor(host.current, {
-      readOnly: true,
-      originalEditable: false,
-      automaticLayout: true,
-      minimap: { enabled: false },
-      renderSideBySide: true,
+    let disposed = false;
+    let release: (() => void) | undefined;
+    void import("monaco-editor/editor/editor.api.js").then(({ editor }) => {
+      if (disposed) return;
+      const before = editor.createModel(value.before, "plaintext"),
+        after = editor.createModel(value.after, "plaintext");
+      const view = editor.createDiffEditor(host.current!, {
+        readOnly: true,
+        originalEditable: false,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        renderSideBySide: true,
+      });
+      const observer = view.onDidUpdateDiff(() =>
+        count(view.getLineChanges()?.length ?? null),
+      );
+      view.setModel({ original: before, modified: after });
+      release = () => {
+        observer.dispose();
+        view.dispose();
+        before.dispose();
+        after.dispose();
+      };
     });
-    const observer = view.onDidUpdateDiff(() =>
-      count(view.getLineChanges()?.length ?? null),
-    );
-    view.setModel({ original: before, modified: after });
     return () => {
-      observer.dispose();
-      view.dispose();
-      before.dispose();
-      after.dispose();
+      disposed = true;
+      release?.();
     };
   }, [value]);
   return (

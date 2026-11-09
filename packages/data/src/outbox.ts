@@ -109,6 +109,25 @@ export class ActionStore {
             bindAction(action.kind, action.payload, action.revisions)
         )
           throw Error("Review changed before approval");
+        if (
+          ["approved", "executing", "unknown", "succeeded"].includes(
+            action.state,
+          )
+        ) {
+          const approved = this.db
+            .prepare(
+              "SELECT 1 FROM approvals WHERE action_id=? AND kind=? AND payload_hash=? AND target_revisions_json=? AND invalidated_reason IS NULL",
+            )
+            .get(
+              id,
+              action.kind,
+              bindAction(action.kind, action.payload, action.revisions),
+              canonicalJson(action.revisions),
+            );
+          if (!actor.trim() || !approved)
+            throw Error("Review the current action before approval");
+          return;
+        }
         const { approval } = approveAction(
           action,
           actor,

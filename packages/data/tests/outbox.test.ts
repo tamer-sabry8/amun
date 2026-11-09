@@ -134,3 +134,33 @@ it("does not route an action to a connector registered for another approval kind
   expect(store.read("action").state).toBe("approved");
   db.close();
 });
+
+it("reuses the same durable owner approval across repeated requests and restart", () => {
+  const { db, store } = setup();
+  store.propose(draft);
+  store.approve("action", "pm");
+  const resumed = new ActionStore(db);
+  expect(() => resumed.approve("action", "pm")).not.toThrow();
+  resumed.claim();
+  expect(() => resumed.approve("action", "pm")).not.toThrow();
+  resumed.recover();
+  expect(() => new ActionStore(db).approve("action", "pm")).not.toThrow();
+  resumed.finish("action", "succeeded");
+  expect(() => resumed.approve("action", "pm")).not.toThrow();
+  expect(db.prepare("SELECT count(*) FROM approvals").pluck().get()).toBe(1);
+  expect(db.prepare("SELECT attempt FROM outbox").pluck().get()).toBe(1);
+  expect(resumed.read("action").state).toBe("succeeded");
+  db.close();
+});
+
+it("refuses reuse when a stored approval's target changed", () => {
+  const { db, store } = setup();
+  store.propose(draft);
+  store.approve("action", "pm");
+  db.prepare(
+    "UPDATE actions SET target_revisions_json=? WHERE id='action'",
+  ).run('{"rev":2}');
+  expect(() => new ActionStore(db).approve("action", "pm")).toThrow();
+  expect(db.prepare("SELECT count(*) FROM approvals").pluck().get()).toBe(1);
+  db.close();
+});

@@ -47,3 +47,9 @@ The user requires explicit approval before starting T022c (neumorphic interface 
 ## Local Firstmate memory
 
 Amun runs `/stow` entirely on the Mac. It may read the selected conversation, crew memory files, local backlog and per-home budget. Apply ordinary edits automatically. Show each proposed change to a pinned entry for individual review. Retain the decision in the owned home and reuse it across restarts. Use the existing Firstmate memory files and tier markers. A prior decision settles the same question until its underlying rule or evidence changes.
+
+## Reuse owner approvals
+
+Carry the owner's approval through Firstmate, secondmates, retries and restarts for the same authorized scope. Consult recorded decisions and approval bindings before asking again. Continue routine implementation, recovery and verification within that scope autonomously. A changed payload, destination or source head must pass the corresponding exact review. Describe the changed decision when owner input is required.
+
+For the M6 synthetic keyboard acceptance journey, the owner approved the Firstmate and secondmates, captain-account TEST publication in tamer-sabry8/amun, and continued Mac acceptance through completion or a new owner decision. Use the isolated TEST branches and worktree for the synthetic story. Preserve the recorded M4 worker-check waiver.
