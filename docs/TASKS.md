@@ -201,7 +201,7 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 ## M6 — Hardening and release — active
 
 - [x] **T053 — Chaos suite** · P0 — all scenarios in section 12. [Mac chaos evidence and physical wake result](evidence/T053/README.md).
-- [ ] **T054 — Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path. Six reviewed stories published once on the Mac. Approved sprint commitment verified on the Mac, six Azure fixtures deleted and deletion verified. Keyboard reached implementation setup, awaiting owner repository and checkout selection. [Keyboard journey coverage and open steps](evidence/T054/README.md).
+- [ ] **T054 — Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path. Six reviewed stories published once on the Mac. Approved sprint commitment verified on the Mac, six Azure fixtures deleted and deletion verified. Packaged keyboard TEST scope prepared, isolated worktree verified, awaiting reviewed implementation start. [Keyboard journey coverage and open steps](evidence/T054/README.md).
 - [x] **T055 — Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens. [Approved visual baselines](evidence/T055/README.md).
 - [ ] **T056 — Performance** · P1 — budgets from T012 met.
 - [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex.
