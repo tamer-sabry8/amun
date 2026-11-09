@@ -1565,25 +1565,23 @@ export function App() {
           </main>
           {layout.inspector && (
             <aside className="inspector" aria-label="Inspector">
-              <div
-                className="inspector-tabs"
-                role="tablist"
-                aria-label="Inspector tabs"
-              >
-                <button
-                  role="tab"
-                  aria-selected={layout.inspector === "issue"}
-                  onClick={() => dispatch({ type: "inspect", tab: "issue" })}
-                >
-                  Issue
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={layout.inspector === "web"}
-                  onClick={() => dispatch({ type: "inspect", tab: "web" })}
-                >
-                  Web
-                </button>
+              <div className="inspector-tabs">
+                <div role="tablist" aria-label="Inspector tabs">
+                  <button
+                    role="tab"
+                    aria-selected={layout.inspector === "issue"}
+                    onClick={() => dispatch({ type: "inspect", tab: "issue" })}
+                  >
+                    Issue
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={layout.inspector === "web"}
+                    onClick={() => dispatch({ type: "inspect", tab: "web" })}
+                  >
+                    Web
+                  </button>
+                </div>
                 <button
                   className="icon-button"
                   aria-label="Close inspector"
