@@ -84,6 +84,15 @@ it("retains offline edits and conflict choices through reopen, distinguishes los
       local: "Local",
       baseline: "Draft",
     });
+    for (const failure of ["HTTP 403: access revoked", "Network offline"]) {
+      provider.memoryField.mockRejectedValueOnce(new Error(failure));
+      await review("refresh");
+      expect(link()).toMatchObject({
+        state: "unavailable",
+        local: "Local",
+        baseline: "Draft",
+      });
+    }
     remote = { kind: "value", value: "Remote" };
     await review("refresh");
     expect(link()).toMatchObject({
@@ -111,7 +120,24 @@ it("retains offline edits and conflict choices through reopen, distinguishes los
       provider,
     );
     await review("refresh");
+    provider.memoryField.mockImplementationOnce(async (request) => {
+      request.edit!.assertCurrent();
+      writes.push(request.edit!.after);
+      remote = { kind: "value", value: request.edit!.after };
+      throw Error("Connection lost after applying the edit");
+    });
     await review("publish-local");
+    expect(link().state).toBe("unconfirmed");
+    await expect(review("publish-local")).rejects.toThrow();
+    sync = new MemorySync(db, () => selected);
+    await review("refresh");
+    expect(link()).toMatchObject({ state: "synced", baseline: "Reviewed" });
+    expect(
+      db
+        .prepare("SELECT state FROM actions WHERE kind='publish'")
+        .pluck()
+        .all(),
+    ).toEqual(["succeeded"]);
     expect(writes).toEqual(["Reviewed"]);
     remote = { kind: "deleted" };
     await review("refresh");
