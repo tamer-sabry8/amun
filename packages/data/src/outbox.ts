@@ -99,11 +99,18 @@ export class ActionStore {
       })
       .immediate();
   }
-  approve(id: string, actor: string): void {
+  approve(id: string, actor: string, expectedBinding?: string): void {
     this.db
       .transaction(() => {
+        const action = this.read(id);
+        if (
+          expectedBinding !== undefined &&
+          expectedBinding !==
+            bindAction(action.kind, action.payload, action.revisions)
+        )
+          throw Error("Review changed before approval");
         const { approval } = approveAction(
-          this.read(id),
+          action,
           actor,
           new Date().toISOString(),
         );
@@ -117,7 +124,7 @@ export class ActionStore {
             "approve",
             approval.kind,
             approval.binding,
-            canonicalJson(this.read(id).revisions),
+            canonicalJson(action.revisions),
             actor,
             approval.approvedAt,
           );

@@ -98,7 +98,7 @@ export class StakeholderUpdates {
       throw Error("Export review changed");
     this.db
       .transaction(() => {
-        store.approve(id, "pm");
+        store.approve(id, "pm", binding);
         if (!store.claim("publish", id)) throw Error("Missing approval");
       })
       .immediate();

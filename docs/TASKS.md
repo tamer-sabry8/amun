@@ -198,9 +198,9 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 
 [M5 verification and M6 handoff](M5-TO-M6-HANDOFF.md).
 
-## M6 — Hardening and release — next after M5 integration
+## M6 — Hardening and release — active
 
-- [ ] **T053 — Chaos suite** · P0 — all scenarios in section 12.
+- [ ] **T053 — Chaos suite** · P0 — all scenarios in section 12. [Mac chaos evidence and open physical wake check](evidence/T053/README.md).
 - [ ] **T054 — Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path.
 - [ ] **T055 — Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens.
 - [ ] **T056 — Performance** · P1 — budgets from T012 met.

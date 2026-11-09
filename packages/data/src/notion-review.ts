@@ -193,7 +193,7 @@ export class NotionConversationReview {
       binding !== bindAction(action.kind, action.payload, action.revisions)
     )
       throw Error("Review is stale or already submitted");
-    this.store.approve(id, "user");
+    this.store.approve(id, "user", binding);
     await dispatchOne(this.store, this.connector, id);
     return this.store.read(id).state;
   }

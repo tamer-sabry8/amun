@@ -73,7 +73,7 @@ export class DeliveryReview {
     const saved = this.bound(target, id, binding);
     if (saved.head !== current.head) throw Error("PR head changed.");
     this.ready(target, current);
-    this.store.approve(id, "pm");
+    this.store.approve(id, "pm", binding);
   }
   async execute(
     target: MergeTarget,

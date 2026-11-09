@@ -1,3 +1,4 @@
+import { ActionStore } from "../src/outbox.ts";
 import { it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { migrate } from "../src/database.ts";
@@ -172,6 +173,41 @@ it("distinguishes offline preflight from disconnection during send and preserves
       );
     }
   } finally {
+    db.close();
+  }
+});
+
+it("refuses a payload changed after the preview check but before durable approval", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const create = vi.fn(async () => ({ state: "unknown" as const }));
+  const reviews = new NotionConversationReview(db, { create });
+  const item = reviews.prepare(
+    { title: "Original", text: "Reviewed" },
+    target,
+    "workspace",
+  );
+  const store = new ActionStore(db);
+  const original = ActionStore.prototype.approve;
+  const interleave = vi
+    .spyOn(ActionStore.prototype, "approve")
+    .mockImplementationOnce(function (this: ActionStore, ...args) {
+      const current = store.read(item.id);
+      store.edit(
+        item.id,
+        { ...(current.payload as object), title: "Changed" },
+        current.revisions,
+      );
+      return original.apply(this, args);
+    });
+  try {
+    await expect(reviews.publish(item.id, item.binding)).rejects.toThrow(
+      /review/i,
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(db.prepare("SELECT count(*) FROM approvals").pluck().get()).toBe(0);
+  } finally {
+    interleave.mockRestore();
     db.close();
   }
 });
