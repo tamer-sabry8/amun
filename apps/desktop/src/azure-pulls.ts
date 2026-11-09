@@ -43,10 +43,15 @@ export function azurePulls(
     method: string,
     path: string,
     body?: unknown,
+    version = "7.0",
   ): Promise<T> {
     const response = await tx(
       method,
-      collection + path + (path.includes("?") ? "&" : "?") + "api-version=7.0",
+      collection +
+        path +
+        (path.includes("?") ? "&" : "?") +
+        "api-version=" +
+        version,
       body,
     );
     if (response.status < 200 || response.status >= 300)
@@ -54,8 +59,8 @@ export function azurePulls(
     return response.data as T;
   }
   const read = (n: number) => call<Pr>("GET", pr(n));
-  const get = async <T>(path: string) =>
-    (await call<{ value: T[] }>("GET", path)).value;
+  const get = async <T>(path: string, version?: string) =>
+    (await call<{ value: T[] }>("GET", path, undefined, version)).value;
   async function changes(n: number) {
     const its = await get<{ id: number }>(pr(n) + "/iterations");
     const last = Math.max(...its.map((i) => i.id));
@@ -147,6 +152,7 @@ export function azurePulls(
             "policy/evaluations?artifactId=" +
             e(artifact) +
             "&$top=1000",
+          "7.0-preview.1",
         ),
         changes(n),
         get<{ status: string; comments: { content?: string }[] }>(
