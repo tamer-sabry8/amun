@@ -66,7 +66,7 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
       for (const ch of name)
         await page.keyboard.press(ch === " " ? "Space" : ch);
       await page.keyboard.press("Tab");
-      await expect(l).toHaveValue(id!);
+      await expect(l).toHaveValue(id ?? name);
     };
     const enter = async (l: Locator, value: string) => {
       await reach(page, l);
@@ -98,6 +98,77 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
       const current = new AdoBatch(db).preview(prior.id);
       expect(current.id).toBe(saved.id);
       expect(current.binding).toBe(saved.binding);
+      const sprint = process.env.AMUN_T054_SPRINT;
+      if (sprint) {
+        const assignee = process.env.AMUN_T054_ASSIGNEE;
+        expect(assignee).toBeTruthy();
+        expect(process.env.AMUN_APPROVED_BINDING).toBeUndefined();
+        expect(current.entries).toHaveLength(6);
+        expect(current.entries.every((e) => e.state === "succeeded")).toBe(
+          true,
+        );
+        const ids = current.entries.map((e) => e.remoteId).sort();
+        await activate(btn("Load sprint targets and latest review"));
+        const preview = page.getByLabel("Exact Azure preview");
+        await expect(preview).toBeVisible();
+        if (JSON.parse(await preview.innerText()).intent === "publish") {
+          await activate(btn("Close review"));
+          const operation = review.getByRole("combobox", {
+            name: "Operation",
+            exact: true,
+          });
+          await reach(page, operation);
+          await page.keyboard.press("c");
+          await expect(operation).toHaveValue("commit");
+          const iteration = page.getByLabel("Sprint iteration");
+          await select(iteration, sprint);
+          await enter(page.getByLabel("Manual assignee (optional)"), assignee!);
+          for (const step of current.steps) {
+            await reach(
+              page,
+              review.locator('input[name="select-' + step.itemId + '"]'),
+            );
+            await page.keyboard.press("Space");
+          }
+          await activate(btn("Preview commitment"));
+        }
+        await expect(
+          btn("Approve and execute reviewed commitment"),
+        ).toBeVisible({ timeout: 30000 });
+        const exact = JSON.parse(await preview.innerText());
+        const id = db
+          .prepare(
+            "SELECT id FROM ado_batches WHERE kind='commit' ORDER BY rowid DESC LIMIT 1",
+          )
+          .pluck()
+          .get() as string;
+        const held = new AdoBatch(db).preview(id);
+        expect(exact).toEqual({
+          intent: "commit",
+          destination: current.destination,
+          steps: held.steps,
+        });
+        expect(held.steps.map((s) => s.remoteId).sort()).toEqual(ids);
+        expect(held.entries.every((e) => e.state === "pending_approval")).toBe(
+          true,
+        );
+        for (const step of held.steps) {
+          expect(step.revision).toBe(
+            current.entries.find((e) => e.remoteId === step.remoteId)
+              ?.remoteRev,
+          );
+          expect(step.fields).toEqual({
+            "System.IterationPath": sprint,
+            "System.AssignedTo": assignee,
+          });
+        }
+        await writeFile(
+          join(root, "commitment-" + held.binding + ".json"),
+          JSON.stringify({ binding: held.binding, ...exact }, null, 2),
+          { mode: 0o600 },
+        );
+        return;
+      }
       expect(current.entries.every((e) => e.state === "pending_approval")).toBe(
         true,
       );
