@@ -206,19 +206,26 @@ test("Mac PR review displays a diff and refuses execution after the approved Azu
         "Test evidence reviewed",
       ])
         await page.getByLabel(v, { exact: true }).check();
-      await page.getByLabel("Acceptance decision").selectOption("Blocked");
-      await page
-        .getByLabel("Acceptance rationale")
-        .fill("Customer validation pending");
-      await button("Record delivery decision").click();
-      await expect(
-        page.getByText(
-          "Review example · Blocked · Customer validation pending",
-        ),
-      ).toBeVisible();
+      for (const [decision, rationale] of [
+        ["Blocked", "Customer validation pending"],
+        ["Rejected", "The acceptance example needs revision"],
+        ["Accepted", "The revised example passed review"],
+      ] as const) {
+        await page.getByLabel("Acceptance decision").selectOption(decision);
+        await page.getByLabel("Acceptance rationale").fill(rationale);
+        await button("Record delivery decision").click();
+        await expect(
+          page.getByText("Review example · " + decision + " · " + rationale),
+        ).toBeVisible();
+      }
       expect(
-        db.prepare("SELECT verdict FROM delivery_acceptance").all(),
-      ).toEqual([{ verdict: "Blocked" }]);
+        db
+          .prepare("SELECT verdict FROM delivery_acceptance ORDER BY rowid")
+          .all(),
+      ).toEqual(
+        ["Blocked", "Rejected", "Accepted"].map((verdict) => ({ verdict })),
+      );
+      expect(writes).toBe(1);
     } finally {
       db.close();
     }

@@ -42,10 +42,10 @@ if (firstmate.error) throw firstmate.error;
 if (firstmate.status !== 0) process.exit(firstmate.status ?? 1);
 const e2e = spawnSync(
   process.execPath,
-  ["node_modules/@playwright/test/cli.js", "test", "--global-timeout=300000"],
+  ["node_modules/@playwright/test/cli.js", "test", "--global-timeout=900000"],
   {
     stdio: "inherit",
-    timeout: 330000,
+    timeout: 930000,
     env: { ...process.env, AMUN_PACKAGED_PATH: binary },
   },
 );

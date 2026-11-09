@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { openPrototypePreview } from "../src/prototype-preview.ts";
 it("serves only the scoped prototype, escapes designer content and refuses feedback on unknown elements", async () => {
+  let active = true;
   const page = await openPrototypePreview(
     {
       title: "Review <example>",
@@ -12,7 +13,7 @@ it("serves only the scoped prototype, escapes designer content and refuses feedb
         },
       ],
     },
-    () => true,
+    () => active,
   );
   try {
     const response = await fetch(page.url);
@@ -36,6 +37,18 @@ it("serves only the scoped prototype, escapes designer content and refuses feedb
         })
       ).status,
     ).toBe(400);
+    expect(
+      (
+        await fetch(page.url, {
+          method: "POST",
+          body: new URLSearchParams({
+            element: "confirm",
+            feedback: "Outside",
+          }),
+          headers: { Origin: "https://example.test" },
+        })
+      ).status,
+    ).toBe(403);
     const pin = await fetch(page.url, {
       method: "POST",
       body: new URLSearchParams({
@@ -48,6 +61,8 @@ it("serves only the scoped prototype, escapes designer content and refuses feedb
     expect(page.pins()).toEqual([
       { element: "confirm", feedback: "Show confirmation" },
     ]);
+    active = false;
+    expect((await fetch(page.url)).status).toBe(404);
   } finally {
     await page.close();
   }

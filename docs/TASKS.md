@@ -177,13 +177,13 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
 - [x] **T039 — Model routing matrix** · P1 · TS · Dep T016, T038 — Build: per-product allowlist; task/difficulty matrix; actual model recorded per run; switching outside allowlist requires approval. DoD: Copilot and OpenRouter routes exercised live. [Mac evidence](evidence/M4/T039.md).
 - [x] **T040 — Crew view** · P0 · TS/React · Dep T008 — Build: hierarchy and list; status counts; selected agent panel (current task, needs decision, up next, recent work, access scope, history). DoD: matches Firstmate and Amun-managed backend state live.
 - [ ] **T041 — Delegation and run tracker** · P0 · TS · Dep T037, T040 — Build: "Ask Firstmate to implement" with scope approval; run tracker activity; blocked → decision → resume. DoD: live run from story to PR link.
-- [ ] **T042 — Prototype path** · P1 · TS · Dep T010, T041 — Build: bounded prototype run; preview in browser; feedback bar → PRD change proposals. DoD: feedback becomes accepted PRD change.
+- [x] **T042 — Prototype path** · P1 · TS · Dep T010, T041 — Build: bounded prototype run; preview in browser; feedback bar → PRD change proposals. DoD: feedback becomes accepted PRD change.
 - [x] **T043 — Terminal attach** · P2 · TS · Dep T011, T040 — DoD: read-only attach to a worker pane; take-control logged as user activity.
 - [ ] **T044 — PR workspace** · P0 · TS · Dep T009, T016 — Build: Azure Repos (node-api) and GitHub/GHE (Octokit) adapters; cross-repo list; summary; Monaco diff; checks; reviews; threads; review actions with provider semantics. DoD: required workflow executed on each pilot provider; unsupported actions hidden, not faked.
 - [ ] **T045 — Merge approval and execution** · P0 · TS · Dep T014, T044 — Build: approval bound to repo, PR, head SHA, merge method; execution re-checks SHA, policy, checks, permission; GitHub `expectedHeadOid`/`sha`; ADO completion with last merge source commit. Tests: change head after approval → refused. Live: worker identity cannot merge or force-push (server rejects). DoD: evidence for both.
-- [ ] **T046 — Acceptance** · P0 · TS · Dep T045 — DoD: checklist + recorded Accepted/Rejected/Blocked; acceptance separate from merge.
+- [x] **T046 — Acceptance** · P0 · TS · Dep T045 — DoD: checklist + recorded Accepted/Rejected/Blocked; acceptance separate from merge.
 
-Mac evidence for the implementation worktree, GitHub read, packaged PR diff, stale-head refusal and separate acceptance decision is recorded in [delivery verification](evidence/M4/delivery-verification.md). Live pilot write and worker-permission tests remain open.
+Mac evidence for the implementation worktree, GitHub read, packaged PR diff, stale-head refusal and separate acceptance decision is recorded in [delivery verification](evidence/M4/delivery-verification.md). The packaged reviewer completed a live GitHub TEST PR. On a second live GitHub PR, the Mac review service invalidated the saved approval after the source commit changed. Live Azure review, the restricted-worker story-to-PR run and server rejection of worker merges and force-pushes remain open.
 
       **M4 exit:** golden path (section 6) passes live, including restart-reattach and changed-head refusal.
 
