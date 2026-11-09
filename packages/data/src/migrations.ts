@@ -352,4 +352,5 @@ CREATE INDEX chat_product ON firstmate_chat(product_id);`,
 CREATE INDEX delivery_pull_identity ON delivery_pull_requests(repo,number,head);
 CREATE UNIQUE INDEX delivery_acceptance_submission ON delivery_acceptance(action_id,story_id,verdict,rationale,checklist);`,
   `CREATE TABLE prototype_runs(run_id TEXT PRIMARY KEY REFERENCES runs(id),objective TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,UNIQUE(objective,version));`,
+  `CREATE TABLE portfolio_confirmations(evidence_key TEXT PRIMARY KEY NOT NULL);`,
 ] as const;

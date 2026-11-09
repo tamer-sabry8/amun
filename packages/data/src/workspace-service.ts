@@ -1,3 +1,4 @@
+import { portfolio, dependencies } from "./portfolio.ts";
 import { ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
 import { riceScore, type RiceInputs } from "../../domain/src/rice.ts";
@@ -202,6 +203,7 @@ export class WorkspaceService {
       version: 1,
       kind: "workspace-snapshot",
       preferences,
+      portfolio: preferences.productId ? null : portfolio(this.db),
       productContext: this.productContext(preferences.productId),
       products: this.db
         .prepare("SELECT id,name FROM products ORDER BY created_at,id")
@@ -332,6 +334,23 @@ export class WorkspaceService {
         )
           throw Error("Unknown product");
         this.savePreferences(command.preferences);
+      } else if (command.action === "confirm-dependency") {
+        this.db
+          .transaction(() => {
+            if (
+              this.preferences().productId ||
+              !dependencies(this.db).some((d) => d.key === command.key)
+            )
+              throw new AuthoringError(
+                "Select a current dependency in Portfolio.",
+              );
+            this.db
+              .prepare(
+                "INSERT INTO portfolio_confirmations(evidence_key) VALUES(?) ON CONFLICT DO NOTHING",
+              )
+              .run(command.key);
+          })
+          .immediate();
       } else if (command.action === "create-product") {
         this.db
           .transaction(() => {

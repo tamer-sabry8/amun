@@ -187,9 +187,9 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 
       **M4 exit accepted with the waiver above.** Restart and reattach, reviewer merges and changed-head refusal have live evidence.
 
-## M5 — Memory, Notion, skills, portfolio, reminders — ready to start
+## M5 — Memory, Notion, skills, portfolio, reminders — active
 
-- [ ] **T047 — Portfolio** · P1 · TS · Dep T023, T036 — DoD: progress, blockers, decisions across ≥ 2 products; inferred dependencies labelled until confirmed.
+- [x] **T047 — Portfolio** · P1 · TS · Dep T023, T036 — DoD: progress, blockers, decisions across ≥ 2 products; inferred dependencies labelled until confirmed. [Mac acceptance](evidence/T047/README.md).
 - [ ] **T048 — Notion connector and publish** · P0 · TS · Dep T016, T015 — Build: notion-sdk-js; native Markdown endpoints; rate-limit handling; 503-after-commit reconciliation via `committed_resource_id`. DoD: approved publish to a test page; no duplicate on simulated 503.
 - [ ] **T049 — Notion two-way memory sync** · P0 · TS · Dep T048 — Build: sync_links baseline; field mapping UI; conflict side-by-side; delete/unlink/keep prompt; offline edits retained. DoD: simultaneous edit, deletion, revoked access and offline tests pass.
 - [ ] **T050 — Tasks and reminders** · P1 · TS · Dep T013, T021a, T021b — DoD: reminders during sleep appear on resume; consequential work awaits approval.

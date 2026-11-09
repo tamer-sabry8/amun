@@ -162,6 +162,7 @@ const priorityFields = {
 const modelList = z.array(z.string().trim().min(1).max(256)).max(100);
 const base = { version: z.literal(1), kind: z.literal("workspace") };
 export const workspaceCommand = z.discriminatedUnion("action", [
+  z.strictObject({ ...base, action: z.literal("confirm-dependency"), key: id }),
   modelRoute.extend({
     ...base,
     action: z.literal("save-model-route"),
@@ -284,6 +285,29 @@ export const workspaceSnapshot = z.strictObject({
   products: z
     .array(z.strictObject({ id, name: z.string().min(1).max(4096) }))
     .max(1000),
+  portfolio: z
+    .object({
+      products: z.array(
+        z.object({
+          id,
+          name: z.string(),
+          progress: z.array(z.object({ status: z.string(), count: z.int() })),
+          blockers: z.array(z.string()),
+          decisions: z.array(z.string()),
+        }),
+      ),
+      dependencies: z.array(
+        z.object({
+          key: id,
+          left: z.string(),
+          right: z.string(),
+          reference: z.string(),
+          confirmed: z.boolean(),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
   productContext: z
     .strictObject({
       productId: id,

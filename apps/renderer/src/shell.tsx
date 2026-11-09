@@ -1,3 +1,4 @@
+import { Portfolio } from "./portfolio.tsx";
 import { PullWorkspace } from "./pull-workspace.tsx";
 import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
@@ -1437,6 +1438,9 @@ export function App() {
                   creating={creatingProduct}
                   onCancel={() => setCreatingProduct(false)}
                 />
+                {!creatingProduct && snapshot?.portfolio?.products.length ? (
+                  <Portfolio summary={snapshot.portfolio} />
+                ) : null}
                 <section className="welcome-surface">
                   <div className="welcome-mark" aria-hidden="true">
                     A
