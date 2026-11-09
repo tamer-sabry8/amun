@@ -1,3 +1,6 @@
+import { StakeholderEditor } from "./stakeholder-editor.tsx";
+import { SkillsLibrary } from "./skills-library.tsx";
+import { Portfolio } from "./portfolio.tsx";
 import { PullWorkspace } from "./pull-workspace.tsx";
 import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
@@ -796,6 +799,15 @@ export function App() {
     dispatch({ type: "focus" });
   };
   const navigate = (item: AttentionItem) => {
+    if (
+      (item.type === "resolve_conflict" && item.id.startsWith("sync-")) ||
+      item.id.startsWith("task-")
+    ) {
+      savePreferences({ ...preferences, productId: item.productId });
+      setRoute("overview");
+      dispatch({ type: "close" });
+      return;
+    }
     setSelected(item.id);
     setArtifact(null);
     setAnswer("");
@@ -1053,6 +1065,12 @@ export function App() {
           Agent skills and extensions require approval. Third-party interface
           plugins are not enabled.
         </p>
+        {snapshot?.productContext && (
+          <SkillsLibrary
+            key={snapshot.productContext.productId}
+            context={snapshot.productContext}
+          />
+        )}
         {snapshot?.skills.length ? (
           <ul className="plain-list">
             {snapshot.skills.map((skill) => (
@@ -1062,7 +1080,7 @@ export function App() {
               </li>
             ))}
           </ul>
-        ) : (
+        ) : snapshot?.productContext ? null : (
           <p className="empty-copy">No skills installed in this workspace.</p>
         )}
       </>
@@ -1437,6 +1455,12 @@ export function App() {
                   creating={creatingProduct}
                   onCancel={() => setCreatingProduct(false)}
                 />
+                {!creatingProduct && snapshot?.portfolio?.products.length ? (
+                  <>
+                    <Portfolio summary={snapshot.portfolio} />
+                    <StakeholderEditor context={null} />
+                  </>
+                ) : null}
                 <section className="welcome-surface">
                   <div className="welcome-mark" aria-hidden="true">
                     A

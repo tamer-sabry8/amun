@@ -89,3 +89,13 @@ it("verifies hosted fetches which identify the page only by canonical URL", asyn
   value.url = "https://www.notion.so/" + other;
   expect(await lookup()).toBeUndefined();
 });
+
+it("recognizes a final publication marker following a hosted soft line break", async () => {
+  expect(
+    await findNotionPublication(
+      intent,
+      async () => fetched(page, "Reviewed<br />" + footer),
+      "https://www.notion.so/" + page,
+    ),
+  ).toBe(page);
+});

@@ -1,3 +1,12 @@
+import { readNotionField } from "./notion-memory-field.ts";
+import type { RemoteField } from "../../domain/src/memory-sync.ts";
+type MemoryExchange = {
+  page: string;
+  label: string;
+  expectedWorkspace: string | null;
+  edit?: { before: string; after: string; assertCurrent(): void };
+  done: (remote: RemoteField, workspace: string) => void;
+};
 import {
   findNotionPublication,
   propertyRows,
@@ -68,8 +77,11 @@ async function verifyMcp(
     url?: string;
     done(id: string | undefined): void;
   },
+  memory?: MemoryExchange,
 ): Promise<void> {
   const client = new Client({ name: "amun", version: "0.1.0" });
+  let creating = false;
+  let committedHint: unknown;
   const transport = new StreamableHTTPClientTransport(new URL(NOTION_MCP), {
     requestInit: {
       headers: { Authorization: `Bearer ${token}` },
@@ -84,7 +96,7 @@ async function verifyMcp(
     fetch: async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.href !== NOTION_MCP) throw Error("Unsafe Notion MCP endpoint");
-      return boundedMcpResponse(
+      const response = boundedMcpResponse(
         await fetch(input, {
           ...init,
           redirect: "error",
@@ -94,6 +106,26 @@ async function verifyMcp(
           ]),
         }),
       );
+      if (creating && response.status === 503) {
+        try {
+          const error = await response.clone().json();
+          committedHint = {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  status: 503,
+                  committed_resource_id: error?.committed_resource_id,
+                }),
+              },
+            ],
+          };
+        } catch {
+          /* Reconcile by marker if the response is incomplete. */
+        }
+      }
+      return response;
     },
   });
   try {
@@ -121,6 +153,56 @@ async function verifyMcp(
         throw Error("Required Notion read unavailable");
       return client.callTool({ name, arguments: args });
     };
+    if (memory) {
+      if (
+        memory.expectedWorkspace &&
+        memory.expectedWorkspace !== identity.workspaceId
+      )
+        throw Error("Workspace changed");
+      const fetchField = async () =>
+        readNotionField(
+          await notionRead("notion-fetch", () =>
+            read("notion-fetch", { id: memory.page }),
+          ),
+          memory.page,
+          memory.label,
+        );
+      let remote = await fetchField();
+      if (
+        memory.edit &&
+        remote.kind === "value" &&
+        remote.value === memory.edit.before
+      ) {
+        const tool = tools.tools.find((t) => t.name === "notion-update-page");
+        if (!tool) throw Error("Notion update unavailable");
+        if (!remote.boundary)
+          throw Error(
+            "The mapped field needs a following line for a conditional update",
+          );
+        const prefix = memory.label + ": ";
+        const patch = {
+          page_id: memory.page,
+          command: "update_content",
+          content_updates: [
+            {
+              old_str: prefix + remote.value + remote.boundary,
+              new_str: prefix + memory.edit.after + remote.boundary,
+            },
+          ],
+          allow_async: false,
+        };
+        memory.edit.assertCurrent();
+        const reply = await client.callTool({
+          name: tool.name,
+          arguments: tool.inputSchema.properties?.data
+            ? { data: patch }
+            : patch,
+        });
+        if (reply.isError) throw Error("Notion update unconfirmed");
+        remote = await fetchField();
+      }
+      memory.done(remote, identity.workspaceId);
+    }
     if (recovery) {
       if (identity.workspaceId !== recovery.workspaceId)
         throw Error("Workspace changed");
@@ -140,10 +222,39 @@ async function verifyMcp(
       )
         throw Error("Notion creation tool unavailable");
       publication.done(
-        await new NotionMcpPublisher((request) => {
-          publication.beforeSend();
-          return client.callTool(request);
-        }).create(publication.input),
+        await new NotionMcpPublisher(
+          async (request) => {
+            publication.beforeSend();
+            creating = true;
+            try {
+              return await client.callTool(request);
+            } catch (error) {
+              if (committedHint) return committedHint;
+              throw error;
+            } finally {
+              creating = false;
+            }
+          },
+          async (candidate) => {
+            const input = publication.input;
+            const marker =
+              input.markerPropertyId ??
+              /(?:^|\n)Amun publication ID: ([a-f0-9-]{36})$/i.exec(
+                input.text,
+              )?.[1];
+            if (!marker) return;
+            return findNotionPublication(
+              {
+                marker,
+                parentId: input.parentId,
+                parentType: input.parentType ?? "page_id",
+                property: !!input.markerPropertyId,
+              },
+              read,
+              "https://www.notion.so/" + candidate,
+            );
+          },
+        ).create(publication.input),
       );
     }
     if (target) {
@@ -205,6 +316,37 @@ export class NotionConnection {
     if (this.options.verify) return this.options.verify(token);
     await verifyMcp(token, (identity) => {
       this.identity = identity;
+    });
+  }
+  async memoryField(request: Omit<MemoryExchange, "done">) {
+    await this.connect("edge", false);
+    return withRefreshLock(this.options.root, async () => {
+      const record = readNotionOAuthRecord(
+        this.options.keyring.get(this.account),
+      );
+      if (
+        !record?.tokens ||
+        !record.expiresAt ||
+        record.expiresAt <= Date.now()
+      )
+        throw Error("Reconnect Notion");
+      let result: { remote: RemoteField; workspace: string } | undefined;
+      await verifyMcp(
+        record.tokens.access_token,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          ...request,
+          done: (remote, workspace) => {
+            result = { remote, workspace };
+          },
+        },
+      );
+      if (!result) throw Error("Notion field unavailable");
+      return result;
     });
   }
   async inspectTarget(target: string): Promise<NotionDestination> {

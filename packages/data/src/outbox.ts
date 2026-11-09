@@ -55,7 +55,16 @@ export class ActionStore {
       if (typeof value !== "string" || !value.trim() || value.length > 256)
         throw new Error("Invalid action identity");
     if (input.productId === null) {
-      if (input.kind !== "notion_publish" && input.kind !== "github_issue")
+      if (
+        input.kind !== "notion_publish" &&
+        input.kind !== "github_issue" &&
+        !(
+          input.kind === "publish" &&
+          (input.payload as { destination?: unknown } | null)?.destination ===
+            "exports/" + input.id + ".pdf" &&
+          (input.revisions as { product?: unknown } | null)?.product === null
+        )
+      )
         throw Error("Product scope required");
     } else if (
       typeof input.productId !== "string" ||

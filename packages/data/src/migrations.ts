@@ -352,4 +352,35 @@ CREATE INDEX chat_product ON firstmate_chat(product_id);`,
 CREATE INDEX delivery_pull_identity ON delivery_pull_requests(repo,number,head);
 CREATE UNIQUE INDEX delivery_acceptance_submission ON delivery_acceptance(action_id,story_id,verdict,rationale,checklist);`,
   `CREATE TABLE prototype_runs(run_id TEXT PRIMARY KEY REFERENCES runs(id),objective TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,UNIQUE(objective,version));`,
+  `CREATE TABLE portfolio_confirmations(evidence_key TEXT PRIMARY KEY NOT NULL);`,
+  `CREATE TABLE notion_memory_fields(link_id TEXT PRIMARY KEY REFERENCES sync_links(id) ON DELETE CASCADE,product_id TEXT NOT NULL REFERENCES products(id),field TEXT NOT NULL,label TEXT NOT NULL,workspace_id TEXT,baseline TEXT,remote TEXT);
+  CREATE UNIQUE INDEX notion_memory_field_mapping ON sync_links(local_ref, remote_id) WHERE remote_system='notion-memory';`,
+  `ALTER TABLE personal_tasks ADD COLUMN product_id TEXT REFERENCES products(id);
+  ALTER TABLE personal_tasks ADD COLUMN title TEXT;
+  ALTER TABLE personal_tasks ADD COLUMN category TEXT;
+  ALTER TABLE personal_tasks ADD COLUMN consequential INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX due_personal_tasks ON personal_tasks(state,due_at);`,
+  `CREATE TABLE installed_skill_text(skill_id TEXT PRIMARY KEY REFERENCES skills(id),product_id TEXT NOT NULL REFERENCES products(id),source TEXT NOT NULL);`,
+  `CREATE TABLE actions_portfolio_upgrade (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  payload_hash TEXT NOT NULL,
+  target_revisions_json TEXT NOT NULL DEFAULT '{}',
+  state TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  operation_marker TEXT NOT NULL UNIQUE,
+  CONSTRAINT actions_payload_json_valid CHECK (json_valid(payload_json)),
+  CONSTRAINT actions_target_revisions_json_valid CHECK (json_valid(target_revisions_json)),
+  CONSTRAINT actions_workspace_kind CHECK (product_id IS NOT NULL OR kind IN ('notion_publish','github_issue','publish'))
+);
+INSERT INTO actions_portfolio_upgrade SELECT * FROM actions;
+DROP TABLE actions;
+ALTER TABLE actions_portfolio_upgrade RENAME TO actions;
+  CREATE TRIGGER notion_intent_after_insert AFTER INSERT ON actions WHEN NEW.kind='notion_publish'
+    BEGIN INSERT INTO notion_delivery(action_id,state) VALUES(NEW.id,'not sent'); END;
+  CREATE TRIGGER notion_confirm_after_update AFTER UPDATE OF state ON actions WHEN NEW.kind='notion_publish' AND NEW.state='succeeded'
+    BEGIN UPDATE notion_delivery SET state='confirmed' WHERE action_id=NEW.id; END;
+CREATE TABLE portfolio_exports(id TEXT PRIMARY KEY REFERENCES actions(id),path TEXT NOT NULL);`,
 ] as const;

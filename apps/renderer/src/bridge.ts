@@ -1,3 +1,4 @@
+import { updateResult } from "../../../packages/contracts/src/stakeholder.ts";
 import {
   chatResult,
   backlogResult,
@@ -107,7 +108,9 @@ export function initializeBridge() {
         if (event.kind === "workspace-snapshot") update({ workspace: event });
         else if (event.kind === "workspace-search")
           update({ search: event.results, searchQuery: event.query });
-        else update({ notice: event.message });
+        else if (event.kind === "workspace-skill-draft") {
+          for (const listener of eventListeners) listener(event);
+        } else update({ notice: event.message });
         return;
       }
       const auth = authEvent.safeParse(message.data);
@@ -130,6 +133,11 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const updateEvent = updateResult.safeParse(message.data);
+      if (updateEvent.success) {
+        for (const f of eventListeners) f(updateEvent.data);
         return;
       }
       const pull = deliveryResult

@@ -22,14 +22,14 @@ git worktree add -b feat/m5-memory-portfolio "$HOME/Documents/ChatGPT/Amun/m5" o
 
 ## M5 acceptance
 
-| Task | Evidence to collect |
-| --- | --- |
-| T047 Portfolio | Show progress, blockers and decisions across two products in the Mac app. Show an inferred dependency and its transition to confirmed. Preserve product context isolation. |
-| T048 Notion publish | Review the exact content and destination, publish to a designated test page, and reconcile a simulated 503 after commit without creating a duplicate. Reuse the existing connection and publication flow. |
-| T049 Two-way sync | Exercise simultaneous edits, deletion and unlink choices, revoked access and offline edits. Verify the chosen resolution survives restart. |
-| T050 Tasks and reminders | Show a missed reminder after sleep and verify consequential work waits for approval. |
-| T051 Skills library | Verify source preview, pinned hash, approved install and update, and refusal to execute a rejected install. |
-| T052 Stakeholder updates | Show citations and explicit unknowns in a draft. Verify exact-content approval before publish or export. |
+| Task                     | Evidence to collect                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T047 Portfolio           | Show progress, blockers and decisions across two products in the Mac app. Show an inferred dependency and its transition to confirmed. Preserve product context isolation.                                |
+| T048 Notion publish      | Review the exact content and destination, publish to a designated test page, and reconcile a simulated 503 after commit without creating a duplicate. Reuse the existing connection and publication flow. |
+| T049 Two-way sync        | Exercise simultaneous edits, deletion and unlink choices, revoked access and offline edits. Verify the chosen resolution survives restart.                                                                |
+| T050 Tasks and reminders | Show a missed reminder after sleep and verify consequential work waits for approval.                                                                                                                      |
+| T051 Skills library      | Verify source preview, pinned hash, approved install and update, and refusal to execute a rejected install.                                                                                               |
+| T052 Stakeholder updates | Show citations and explicit unknowns in a draft. Verify exact-content approval before publish or export.                                                                                                  |
 
 Use TDD, run real Mac acceptance, and update the tracker with sanitized evidence as each task passes. Reuse one Firstmate and crew and one shared operational memory for working preferences and general lessons. Keep sources, conversations, product facts, models and pinned product decisions scoped to their product. Follow the existing Notion OAuth, destination and review decisions. Keep the M1 redesign paused. Google and Obsidian live acceptance belongs to R3.
 

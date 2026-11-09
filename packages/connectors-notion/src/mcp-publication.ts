@@ -16,6 +16,9 @@ function object(value: unknown): Record<string, unknown> | undefined {
 export class NotionMcpPublisher {
   constructor(
     private readonly call: (request: NotionCreateCall) => Promise<unknown>,
+    private readonly verifyCommitted?: (
+      pageId: string,
+    ) => Promise<string | undefined>,
   ) {}
   async create(input: NotionPublication): Promise<NotionResult> {
     const type = input.parentType ?? "page_id";
@@ -65,7 +68,6 @@ export class NotionMcpPublisher {
       const response = object(await this.call(request));
       if (
         !response ||
-        response.isError ||
         !Array.isArray(response.content) ||
         response.content.length !== 1
       )
@@ -78,6 +80,17 @@ export class NotionMcpPublisher {
       )
         return { state: "unknown" };
       const result = object(JSON.parse(item.text));
+      if (response.isError) {
+        const candidate = result?.committed_resource_id;
+        if (
+          result?.status === 503 &&
+          typeof candidate === "string" &&
+          uuid.test(candidate) &&
+          (await this.verifyCommitted?.(candidate)) === candidate
+        )
+          return { state: "created", pageId: candidate };
+        return { state: "unknown" };
+      }
       if (
         !result ||
         result.async_task ||

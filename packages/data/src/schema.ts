@@ -254,7 +254,7 @@ export const actions = sqliteTable(
   () => [
     check(
       "actions_workspace_kind",
-      sql`product_id IS NOT NULL OR kind IN ('notion_publish','github_issue')`,
+      sql`product_id IS NOT NULL OR kind IN ('notion_publish','github_issue','publish')`,
     ),
     check("actions_payload_json_valid", sql`json_valid(payload_json)`),
     check(
@@ -364,6 +364,10 @@ export const personal_tasks = sqliteTable("personal_tasks", {
   recurrence: text("recurrence"),
   state: text("state").notNull(),
   notion_ref: text("notion_ref"),
+  product_id: text("product_id").references(() => products.id),
+  title: text("title"),
+  category: text("category"),
+  consequential: integer("consequential").notNull().default(0),
 });
 
 export const skills = sqliteTable("skills", {

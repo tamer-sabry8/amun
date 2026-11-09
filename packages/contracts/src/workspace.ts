@@ -1,3 +1,4 @@
+import { memoryLink, syncCommand } from "./memory-sync.ts";
 import { modelRoute, routingReview, difficulty } from "./model-routing.ts";
 import { z } from "zod";
 import { attentionItem, notification, statusActivity } from "./entities.ts";
@@ -162,6 +163,49 @@ const priorityFields = {
 const modelList = z.array(z.string().trim().min(1).max(256)).max(100);
 const base = { version: z.literal(1), kind: z.literal("workspace") };
 export const workspaceCommand = z.discriminatedUnion("action", [
+  ...syncCommand.options,
+  z.strictObject({
+    ...base,
+    action: z.literal("review-skill"),
+    productId: id,
+    name: id,
+    origin: z.string().max(512),
+    source: z.string().max(12000),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("decide-skill"),
+    productId: id,
+    review: id,
+    digest: z.hash("sha256"),
+    approve: z.boolean(),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("use-skill"),
+    productId: id,
+    name: id,
+    digest: z.hash("sha256"),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("save-task"),
+    productId: id,
+    title: z.string().trim().min(1).max(512),
+    category: z.enum(["personal", "work"]),
+    due: z.iso.datetime(),
+    consequential: z.boolean(),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("complete-task"),
+    productId: id,
+    task: id,
+    title: z.string().max(512),
+    due: z.iso.datetime(),
+    confirm: z.boolean(),
+  }),
+  z.strictObject({ ...base, action: z.literal("confirm-dependency"), key: id }),
   modelRoute.extend({
     ...base,
     action: z.literal("save-model-route"),
@@ -284,9 +328,65 @@ export const workspaceSnapshot = z.strictObject({
   products: z
     .array(z.strictObject({ id, name: z.string().min(1).max(4096) }))
     .max(1000),
+  portfolio: z
+    .object({
+      products: z.array(
+        z.object({
+          id,
+          name: z.string(),
+          progress: z.array(z.object({ status: z.string(), count: z.int() })),
+          blockers: z.array(z.string()),
+          decisions: z.array(z.string()),
+        }),
+      ),
+      dependencies: z.array(
+        z.object({
+          key: id,
+          left: z.string(),
+          right: z.string(),
+          reference: z.string(),
+          confirmed: z.boolean(),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
   productContext: z
     .strictObject({
       productId: id,
+      tasks: z
+        .array(
+          z.object({
+            id,
+            title: z.string(),
+            category: z.enum(["personal", "work"]),
+            due: z.iso.datetime(),
+            state: z.enum(["scheduled", "due", "awaiting review", "completed"]),
+            consequential: z.boolean(),
+          }),
+        )
+        .optional(),
+      skillLibrary: z
+        .object({
+          installed: z.array(
+            z.object({
+              name: id,
+              digest: z.hash("sha256"),
+              origin: z.string(),
+            }),
+          ),
+          reviews: z.array(
+            z.object({
+              id,
+              name: id,
+              source: z.string(),
+              origin: z.string(),
+              digest: z.hash("sha256"),
+            }),
+          ),
+        })
+        .optional(),
+      memoryLinks: z.array(memoryLink).optional(),
       allowedModels: z.array(id),
       routes: z.array(modelRoute).default([]),
       modelRuns: z.array(z.object({ id, task: id, model: id })).default([]),
@@ -338,7 +438,7 @@ export const workspaceSnapshot = z.strictObject({
     .array(
       z.strictObject({
         id,
-        productId: id,
+        productId: id.nullable(),
         kind: z.string().max(128),
         ref: z.string().max(4096),
       }),
@@ -357,6 +457,12 @@ export const workspaceSnapshot = z.strictObject({
 });
 export const workspaceEvent = z.discriminatedUnion("kind", [
   workspaceSnapshot,
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("workspace-skill-draft"),
+    productId: id,
+    text: z.string().max(12000),
+  }),
   z.strictObject({
     version: z.literal(1),
     kind: z.literal("workspace-search"),
