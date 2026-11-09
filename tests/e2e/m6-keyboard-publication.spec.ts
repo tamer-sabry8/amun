@@ -42,9 +42,10 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
   let app: Awaited<ReturnType<typeof launchMacWorkspace>> | undefined;
   let stored = false;
   try {
-    if (await entry.getPassword())
-      throw Error("Disposable credential already present");
-    await entry.setPassword(secret);
+    const existing = await entry.getPassword();
+    if (existing && existing !== secret)
+      throw Error("Unexpected acceptance credential");
+    if (!existing) await entry.setPassword(secret);
     stored = true;
     db.prepare(
       "INSERT OR REPLACE INTO workspace_settings(id,value_json) VALUES('connections',?)",
@@ -322,7 +323,8 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
       await app?.close();
     } finally {
       db.close();
-      if (stored) await entry.deletePassword();
+      if (stored && process.env.AMUN_T054_CLEANUP_CREDENTIAL === "1")
+        await entry.deletePassword();
     }
   }
 });

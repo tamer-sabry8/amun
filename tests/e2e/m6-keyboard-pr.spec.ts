@@ -55,6 +55,7 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
     ],
   });
   let erase: (() => Promise<unknown>) | undefined;
+  let completed = false;
   try {
     const page = await app.firstWindow(),
       button = (name: string) =>
@@ -83,8 +84,7 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
       if (existing && existing !== token)
         throw Error("Unexpected existing acceptance credential");
       if (!existing) await entry.setPassword(token);
-      if (!process.env.AMUN_T054_KEEP_CREDENTIAL)
-        erase = () => entry.deletePassword();
+      erase = () => entry.deletePassword();
       db.prepare(
         "INSERT OR REPLACE INTO workspace_settings(id,value_json) VALUES('connections',?)",
       ).run(JSON.stringify([conn]));
@@ -272,11 +272,12 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
     } finally {
       evidence.close();
     }
+    completed = true;
   } finally {
     try {
       await app.close();
     } finally {
-      await erase?.();
+      if (completed) await erase?.();
     }
   }
 });

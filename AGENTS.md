@@ -53,3 +53,9 @@ Amun runs `/stow` entirely on the Mac. It may read the selected conversation, cr
 Carry the owner's approval through Firstmate, secondmates, retries and restarts for the same authorized scope. Consult recorded decisions and approval bindings before asking again. Continue routine implementation, recovery and verification within that scope autonomously. A changed payload, destination or source head must pass the corresponding exact review. Describe the changed decision when owner input is required.
 
 For the M6 synthetic keyboard acceptance journey, the owner approved the Firstmate and secondmates, captain-account TEST publication in tamer-sabry8/amun, and continued Mac acceptance through completion or a new owner decision. Use the isolated TEST branches and worktree for the synthetic story. Preserve the recorded M4 worker-check waiver.
+
+## Keychain access lifetime
+
+Normal Amun use should require Keychain authorization once per Mac user and installation. Keep credentials in persistent app-owned entries with stable workspace/connection identities. Update an existing entry during credential rotation. Reuse the same entry across reads, service recovery and app restarts. Preserve a stable signed app/helper identity for release acceptance. Delete credentials when the user explicitly disconnects or removes them.
+
+Acceptance harnesses must retain a temporary real-provider entry throughout the entire reviewed journey, including retries and failures. Remove it after the final verified workflow cleanup. Exercise ordinary persistence with a synthetic credential created by the packaged Amun service, so a Node-created test entry cannot be mistaken for normal app behavior.
