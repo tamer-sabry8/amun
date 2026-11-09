@@ -178,6 +178,90 @@ it("turns a source-grounded Firstmate question into a Request and retains the an
       }),
     ).toMatchObject({ kind: "workspace-snapshot" });
     expect(current().prd).toMatchObject({ approved: true });
+    const stories = {
+      version: 1,
+      kind: "product-authoring",
+      action: "stories",
+      model: request.model,
+      productId,
+      objectiveId,
+      expectedVersion: 1,
+    };
+    const make = (quote: string) =>
+      JSON.stringify({
+        stories: [
+          {
+            title: "Read the brief",
+            requirement: quote,
+            acceptance: ["The brief is visible."],
+            tasks: ["Render the brief"],
+          },
+        ],
+      });
+    expect(
+      await s.author(stories, async () => make("Invented requirement")),
+    ).toMatchObject({ kind: "workspace-error" });
+    expect(
+      await s.author(stories, async () => make("Show the original brief")),
+    ).toMatchObject({ kind: "workspace-snapshot" });
+    const generated = () => s.snapshot().productContext!.storyDrafts;
+    expect(generated()).toHaveLength(2);
+    expect(generated()[0]).toMatchObject({
+      title: "Read the brief",
+      version: 1,
+      requirement: "Show the original brief",
+    });
+    expect(generated()[1]!.parentId).toBe(generated()[0]!.id);
+    expect(
+      await s.author(stories, async () => {
+        throw Error("duplicate model call");
+      }),
+    ).toMatchObject({ kind: "workspace-snapshot" });
+
+    const itemId = generated()[0]!.id;
+    const storyDecision = {
+      question: "Which review duration?",
+      options: ["7 days", "14 days"],
+      proposed: "7 days",
+      missing: "Confirm the review policy.",
+    };
+    expect(
+      await s.author(
+        {
+          version: 1,
+          kind: "product-authoring",
+          action: "story-decision",
+          productId,
+          itemId,
+          model: request.model,
+        },
+        async () => JSON.stringify(storyDecision),
+      ),
+    ).toMatchObject({ kind: "workspace-snapshot" });
+    const storyRequestId = s.snapshot().productContext!.storyDecisions[0]!.id;
+    const review = (action: string, choice = "7 days", confirmation = "") =>
+      send("review-story-decision", {
+        productId,
+        requestId: storyRequestId,
+        operation: action,
+        choice,
+        confirmation,
+      });
+    expect(review("resolve")).toMatchObject({ kind: "workspace-error" });
+    expect(review("save")).toMatchObject({ kind: "workspace-snapshot" });
+    expect(review("request")).toMatchObject({ kind: "workspace-snapshot" });
+    expect(review("later")).toMatchObject({ kind: "workspace-snapshot" });
+    expect(review("resolve", "14 days", "PM confirmed policy")).toMatchObject({
+      kind: "workspace-snapshot",
+    });
+    expect(s.snapshot().productContext!.storyDecisions[0]).toMatchObject({
+      state: "resolved",
+      choice: "14 days",
+      requirementId: generated()[0]!.requirementId,
+    });
+    expect(
+      db.prepare("SELECT body FROM work_items WHERE id=?").get(itemId),
+    ).toMatchObject({ body: expect.stringContaining("14 days") });
     expect(
       send("save-prd", {
         productId,

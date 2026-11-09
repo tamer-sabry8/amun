@@ -339,4 +339,9 @@ ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
   CREATE UNIQUE INDEX one_pending_prd_proposal ON prd_proposals(objective_id) WHERE state='pending';`,
   `CREATE TABLE priorities(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),objective TEXT NOT NULL,release TEXT NOT NULL,status TEXT NOT NULL,evidence TEXT NOT NULL,reach INTEGER,impact REAL,confidence REAL,effort REAL);`,
   `CREATE TABLE prd_selections(id TEXT PRIMARY KEY,objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,intent TEXT NOT NULL,selection TEXT NOT NULL,target TEXT NOT NULL,UNIQUE(objective_id,version,intent,selection));`,
+  `CREATE TABLE story_drafts(item_id TEXT PRIMARY KEY REFERENCES work_items(id), objective_id TEXT NOT NULL REFERENCES objectives(id), prd_version INTEGER NOT NULL, requirement_id TEXT NOT NULL, requirement_text TEXT NOT NULL);
+ CREATE INDEX story_drafts_revision ON story_drafts(objective_id,prd_version);`,
+  `CREATE TABLE story_decisions(request_id TEXT PRIMARY KEY REFERENCES attention_items(id),item_id TEXT NOT NULL REFERENCES work_items(id),requirement_id TEXT NOT NULL,options_json TEXT NOT NULL,proposed TEXT NOT NULL,missing TEXT NOT NULL,choice TEXT NOT NULL DEFAULT '',confirmation TEXT NOT NULL DEFAULT '',requested INTEGER NOT NULL DEFAULT 0);`,
+  `CREATE TABLE ado_batches(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),kind TEXT NOT NULL,destination_json TEXT NOT NULL,binding TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE ado_steps(batch_id TEXT NOT NULL REFERENCES ado_batches(id),ordinal INTEGER NOT NULL,item_id TEXT NOT NULL,action_id TEXT NOT NULL UNIQUE REFERENCES actions(id),remote_id INTEGER,remote_rev INTEGER,PRIMARY KEY(batch_id,ordinal));`,
 ] as const;

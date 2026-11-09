@@ -1315,3 +1315,11 @@ input[aria-invalid="true"] {
 .prd-diff del {
   opacity: 0.8;
 }
+.backlog-columns {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+}
+.backlog-columns > section {
+  min-width: 12rem;
+}

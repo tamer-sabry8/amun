@@ -38,7 +38,55 @@ const modelBase = {
   productId: id,
   model: id,
 };
+export const decisionOptions = z.strictObject({
+  question: z.string().trim().min(1).max(1024),
+  options: z.array(z.string().trim().min(1).max(512)).min(2).max(8),
+  proposed: z.string().min(1).max(512),
+  missing: z.string().max(2048),
+});
+export const storyDecision = decisionOptions.extend({
+  id,
+  itemId: id,
+  requirementId: id,
+  state: z.enum(["open", "snoozed", "resolved"]),
+  createdAt: z.string(),
+  choice: z.string(),
+  confirmation: z.string(),
+  requested: z.boolean(),
+});
+export type StoryDecision = z.infer<typeof storyDecision>;
+export const storyBundle = z.object({
+  stories: z
+    .array(
+      z.strictObject({
+        title: z.string().trim().min(1).max(256),
+        requirement: z.string().trim().min(1).max(4096),
+        acceptance: z.array(z.string().trim().min(1).max(2048)).min(1).max(20),
+        tasks: z.array(z.string().trim().min(1).max(256)).max(20),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+export const storyDraft = z.object({
+  id,
+  title: z.string(),
+  type: z.string(),
+  parentId: id.nullable(),
+  objectiveId: id,
+  version: docVersion,
+  requirement: z.string(),
+  requirementId: id,
+  status: z.string(),
+  acceptance: z.array(z.string()),
+});
 export const productAuthoring = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...modelBase,
+    action: z.literal("story-decision"),
+    itemId: id,
+  }),
+  z.strictObject({ ...modelBase, ...docTarget, action: z.literal("stories") }),
   z.strictObject({
     ...modelBase,
     action: z.literal("interview"),
@@ -112,6 +160,15 @@ const priorityFields = {
 const modelList = z.array(z.string().trim().min(1).max(256)).max(100);
 const base = { version: z.literal(1), kind: z.literal("workspace") };
 export const workspaceCommand = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...base,
+    action: z.literal("review-story-decision"),
+    operation: z.enum(["save", "request", "later", "resolve"]),
+    productId: id,
+    requestId: id,
+    choice: z.string().max(512),
+    confirmation: z.string().max(2048),
+  }),
   z.strictObject({ ...base, action: z.literal("snapshot") }),
   z.strictObject({
     ...base,
@@ -217,6 +274,8 @@ export const workspaceSnapshot = z.strictObject({
     .strictObject({
       productId: id,
       allowedModels: z.array(id),
+      storyDecisions: z.array(storyDecision).default([]),
+      storyDrafts: z.array(storyDraft).default([]),
       priorities: z.array(
         z.strictObject({ id, ...priorityFields, score: z.number().nullable() }),
       ),

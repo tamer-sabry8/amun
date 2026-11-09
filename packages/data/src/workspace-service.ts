@@ -1,3 +1,4 @@
+import { StoryDecisions } from "./story-decisions.ts";
 import { riceScore, type RiceInputs } from "../../domain/src/rice.ts";
 import { ProductDocuments, AuthoringError } from "./product-documents.ts";
 import { ProductAuthoring, type ProductModel } from "./product-authoring.ts";
@@ -74,6 +75,16 @@ export class WorkspaceService {
     return {
       productId,
       sources,
+      storyDecisions: new StoryDecisions(this.db).list(productId),
+      storyDrafts: this.db
+        .prepare(
+          `SELECT w.id,w.title,w.type,w.parent_id AS parentId,w.status,w.acceptance_json,s.objective_id AS objectiveId,s.prd_version AS version,s.requirement_text AS requirement,s.requirement_id AS requirementId FROM work_items w JOIN story_drafts s ON s.item_id=w.id WHERE w.product_id=? ORDER BY w.rowid`,
+        )
+        .all(productId)
+        .map((raw) => {
+          const { acceptance_json, ...fields } = raw as Record<string, string>;
+          return { ...fields, acceptance: JSON.parse(acceptance_json!) };
+        }),
       priorities: (
         this.db
           .prepare(
@@ -146,6 +157,40 @@ export class WorkspaceService {
               : "waiting",
         ref: action.id,
         text: action.kind.replaceAll("_", " "),
+      });
+    const batches = this.db
+      .prepare(
+        `SELECT b.id,b.kind,b.product_id,count(*) AS total,sum(a.state='succeeded') AS done,sum(a.state='unknown') AS uncertain,sum(a.state IN ('executing','approved')) AS working FROM ado_batches b JOIN ado_steps s ON s.batch_id=b.id JOIN actions a ON a.id=s.action_id GROUP BY b.id ORDER BY b.rowid DESC LIMIT 50`,
+      )
+      .all() as {
+      id: string;
+      kind: string;
+      product_id: string;
+      total: number;
+      done: number;
+      uncertain: number;
+      working: number;
+    }[];
+    for (const b of batches)
+      activities.push({
+        id: "azure-" + b.id,
+        productId: b.product_id,
+        kind: b.kind === "publish" ? "publication" : "action",
+        state:
+          b.done === b.total
+            ? "completed"
+            : b.working && !b.uncertain
+              ? "working"
+              : "waiting",
+        ref: b.id,
+        text:
+          (b.kind === "publish" ? "Publication" : "Sprint commitment") +
+          " · " +
+          b.done +
+          "/" +
+          b.total +
+          " verified" +
+          (b.uncertain ? " · reconciliation needed" : ""),
       });
     const preferences = this.preferences();
     return workspaceSnapshot.parse({
@@ -416,10 +461,29 @@ export class WorkspaceService {
             command.productId,
           );
         if (!stored.changes) throw Error("Invalid source");
+      } else if (command.action === "review-story-decision") {
+        if (this.preferences().productId !== command.productId)
+          throw new AuthoringError("Product selection changed.");
+        new StoryDecisions(this.db).review(
+          command.productId,
+          command.requestId,
+          command.operation,
+          this.redactor.text(command.choice),
+          this.redactor.text(command.confirmation),
+        );
       } else if (command.action === "snooze" || command.action === "resolve") {
         const selected = this.preferences().productId;
         if (selected && this.attention.read(command.id).productId !== selected)
           throw new AuthoringError("Request belongs to a different product.");
+        if (
+          command.action === "resolve" &&
+          this.db
+            .prepare("SELECT 1 FROM story_decisions WHERE request_id=?")
+            .get(command.id)
+        )
+          throw new AuthoringError(
+            "Review the story decision in Backlog before resolving.",
+          );
         if (command.action === "snooze")
           this.attention.snooze(command.id, Date.parse(command.until));
         else

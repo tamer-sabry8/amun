@@ -13,7 +13,11 @@ export function azureTransport(base: string, pat: string): Transport {
       throw new Error("Scope mismatch");
     try {
       const options = {
-        additionalHeaders: { "Content-Type": "application/json-patch+json" },
+        additionalHeaders: {
+          "Content-Type": Array.isArray(body)
+            ? "application/json-patch+json"
+            : "application/json",
+        },
       };
       const result =
         method === "GET"
@@ -24,7 +28,17 @@ export function azureTransport(base: string, pat: string): Transport {
               ? await api.rest.update(url, body, options)
               : null;
       if (!result) throw new Error("Unsupported method");
-      return { status: result.statusCode, data: result.result };
+      const token =
+        "x-ms-continuationtoken" in result.headers
+          ? result.headers["x-ms-continuationtoken"]
+          : undefined;
+      return {
+        status: result.statusCode,
+        data: result.result,
+        ...(typeof token === "string" && token
+          ? { continuationToken: token }
+          : {}),
+      };
     } catch (error) {
       // Never propagate SDK response bodies, request headers, or credentials.
       const status =
