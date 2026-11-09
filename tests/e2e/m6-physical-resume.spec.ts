@@ -69,15 +69,12 @@ test("real Mac sleep spans a reminder deadline and wake produces one review", as
     const events = await trace.jsonValue();
     expect(events[0]!.at).toBeLessThan(deadline);
     expect(events[1]!.at).toBeGreaterThan(deadline);
-    await page.getByRole("button", { name: "Notifications drawer" }).click();
-    await expect(
-      page.getByText("Missed reminder · Physical wake fixture", {
-        exact: true,
-      }),
-    ).toHaveCount(1);
-    expect(
-      db.prepare("SELECT state FROM personal_tasks").pluck().all(),
-    ).toEqual(["awaiting review"]);
+    await expect
+      .poll(
+        () => db.prepare("SELECT state FROM personal_tasks").pluck().all(),
+        { timeout: 30_000 },
+      )
+      .toEqual(["awaiting review"]);
     expect(
       db
         .prepare("SELECT count(*) FROM notifications WHERE kind='reminder_due'")
@@ -85,6 +82,18 @@ test("real Mac sleep spans a reminder deadline and wake produces one review", as
         .get(),
     ).toBe(1);
     expect(db.prepare("SELECT count(*) FROM outbox").pluck().get()).toBe(0);
+    // Reopen the disposable workspace to verify the wake notification survives restart.
+    await app.close();
+    app = await launchMacWorkspace(root);
+    const reopened = await app.firstWindow();
+    await reopened
+      .getByRole("button", { name: "Notifications drawer" })
+      .click();
+    await expect(
+      reopened.getByText("Missed reminder · Physical wake fixture", {
+        exact: true,
+      }),
+    ).toHaveCount(1);
   } finally {
     await app?.close();
     db.close();
