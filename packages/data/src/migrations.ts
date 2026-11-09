@@ -344,4 +344,12 @@ ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
   `CREATE TABLE story_decisions(request_id TEXT PRIMARY KEY REFERENCES attention_items(id),item_id TEXT NOT NULL REFERENCES work_items(id),requirement_id TEXT NOT NULL,options_json TEXT NOT NULL,proposed TEXT NOT NULL,missing TEXT NOT NULL,choice TEXT NOT NULL DEFAULT '',confirmation TEXT NOT NULL DEFAULT '',requested INTEGER NOT NULL DEFAULT 0);`,
   `CREATE TABLE ado_batches(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),kind TEXT NOT NULL,destination_json TEXT NOT NULL,binding TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE ado_steps(batch_id TEXT NOT NULL REFERENCES ado_batches(id),ordinal INTEGER NOT NULL,item_id TEXT NOT NULL,action_id TEXT NOT NULL UNIQUE REFERENCES actions(id),remote_id INTEGER,remote_rev INTEGER,PRIMARY KEY(batch_id,ordinal));`,
+  `CREATE TABLE firstmate_chat(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),model TEXT NOT NULL,selection TEXT,text TEXT NOT NULL,reply TEXT,state TEXT NOT NULL CHECK(state IN ('working','answered','interrupted')));
+CREATE INDEX chat_product ON firstmate_chat(product_id);`,
+  `CREATE TABLE model_routes(product_id TEXT NOT NULL REFERENCES products(id),task TEXT NOT NULL,difficulty TEXT NOT NULL,model TEXT NOT NULL,PRIMARY KEY(product_id,task,difficulty));`,
+  `CREATE TABLE delivery_acceptance(id TEXT PRIMARY KEY,action_id TEXT NOT NULL REFERENCES actions(id),story_id TEXT NOT NULL REFERENCES work_items(id),verdict TEXT NOT NULL CHECK(verdict IN ('Accepted','Rejected','Blocked')),rationale TEXT NOT NULL,checklist TEXT NOT NULL,at TEXT NOT NULL);`,
+  `CREATE TABLE delivery_pull_requests(run_id TEXT PRIMARY KEY REFERENCES runs(id),repo TEXT NOT NULL,number INTEGER NOT NULL,head TEXT NOT NULL);
+CREATE INDEX delivery_pull_identity ON delivery_pull_requests(repo,number,head);
+CREATE UNIQUE INDEX delivery_acceptance_submission ON delivery_acceptance(action_id,story_id,verdict,rationale,checklist);`,
+  `CREATE TABLE prototype_runs(run_id TEXT PRIMARY KEY REFERENCES runs(id),objective TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,UNIQUE(objective,version));`,
 ] as const;

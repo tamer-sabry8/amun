@@ -1,3 +1,4 @@
+import { acceptanceDb } from "../support/ado-acceptance-drafts.ts";
 import { verifyDisposableWorker } from "./crew-acceptance-worker.ts";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { chmod, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -152,6 +153,25 @@ test("Firstmate dispatches both persistent subscription workers and publishes th
         identities.get(harness),
       );
     }
+    const roster = page.getByRole("region", { name: "Crew roster" });
+    await roster.getByRole("button", { name: "Refresh crew" }).click();
+    await roster
+      .getByRole("button", { name: "amun-codex", exact: true })
+      .click();
+    const panel = roster.getByRole("region", { name: "Selected agent" });
+    const codexReceipt = await loadEndpointReceipt(
+      join(root, "crew/receipts"),
+      "amun-codex",
+    );
+    await expect(panel).toContainText(codexReceipt.identity.worktree);
+    await expect(roster.getByLabel("Firstmate’s crew")).toContainText(
+      "amun-claude",
+    );
+    await roster.getByLabel("Crew view").selectOption("list");
+    await expect(roster.getByLabel("Worker list")).toContainText(
+      "Endpoint verified",
+    );
+    await expect(roster.getByLabel("Crew status counts")).not.toBeEmpty();
     const receipts = join(root, "crew/receipts");
     const original = await loadEndpointReceipt(receipts, "amun-codex");
     await rm(join(receipts, "amun-codex.json"));
@@ -196,6 +216,18 @@ test("Firstmate dispatches both persistent subscription workers and publishes th
         exact: true,
       }),
     ).toBeVisible();
+    const journal = acceptanceDb(root);
+    try {
+      expect(
+        journal
+          .prepare(
+            "SELECT actor,ref FROM audit_log WHERE event='terminal.take-control'",
+          )
+          .all(),
+      ).toEqual([{ actor: "pm", ref: "amun-codex" }]);
+    } finally {
+      journal.close();
+    }
     await terminal
       .getByRole("button", { name: "Return to read only", exact: true })
       .click();

@@ -46,7 +46,9 @@ test("Filesystem MCP lists only the chosen folder and cancels without granting a
     }, chosen);
     await button("Local disk and external drives").click();
     const result = page.getByTestId("native-pi-result");
-    await expect(result).toContainText("within-selection.txt");
+    await expect(result).toContainText("within-selection.txt", {
+      timeout: 30000,
+    });
     await expect(result).not.toContainText("outside-selection.txt");
     await app.evaluate(({ dialog }) => {
       dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });

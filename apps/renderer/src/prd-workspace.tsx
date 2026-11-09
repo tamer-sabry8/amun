@@ -1,3 +1,4 @@
+import { PrototypeControls } from "./prototype-controls.tsx";
 import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
@@ -323,14 +324,17 @@ function PrdEditor({
 }
 export function PrdWorkspace({
   context,
+  openPreview,
   mode,
   setMode,
 }: {
   context: Context;
   mode: string;
   setMode: (s: string) => void;
+  openPreview: (url: string) => void;
 }) {
-  const [chosen, choose] = useState(""),
+  const [difficulty, level] = useState("standard"),
+    [chosen, choose] = useState(""),
     [selection, select] = useState(""),
     [model, chooseModel] = useState(context.allowedModels[0] ?? "");
   const objective =
@@ -355,6 +359,7 @@ export function PrdWorkspace({
       ...target,
       action,
       model,
+      difficulty,
       understandingVersion: u?.version,
       selection: passage,
     });
@@ -388,6 +393,13 @@ export function PrdWorkspace({
         </select>
       </label>
       <label>
+        Authoring difficulty
+        <select value={difficulty} onChange={(e) => level(e.target.value)}>
+          <option>standard</option>
+          <option>complex</option>
+        </select>
+      </label>
+      <label>
         Firstmate model
         <select value={model} onChange={(e) => chooseModel(e.target.value)}>
           {context.allowedModels.map((m) => (
@@ -402,6 +414,16 @@ export function PrdWorkspace({
             : "Draft PRD v" + prd.version}
           {prd.invalidated ? " · " + prd.invalidated : ""}
         </p>
+      )}
+      {prd?.approved && (
+        <PrototypeControls
+          key={objective.id + prd.version}
+          product={context.productId}
+          objective={objective.id}
+          revision={prd.version}
+          open={openPreview}
+          review={() => setMode("Review")}
+        />
       )}
       {mode === "Research" ? (
         <>
@@ -460,6 +482,7 @@ export function PrdWorkspace({
                     ...target,
                     action: "stories",
                     model,
+                    difficulty,
                   })
                 }
               >

@@ -14,7 +14,11 @@ export class TerminalSession {
   private outputSize = 0;
   private spawn: () => Pty;
   private send: (event: TerminalEvent) => void;
-  constructor(spawn: () => Pty, send: (event: TerminalEvent) => void) {
+  constructor(
+    spawn: () => Pty,
+    send: (event: TerminalEvent) => void,
+    private granted?: () => void,
+  ) {
     this.spawn = spawn;
     this.send = send;
   }
@@ -68,6 +72,7 @@ export class TerminalSession {
         this.control = false;
         const grant = () => {
           if (this.pty === pty && this.controlEpoch === epoch) {
+            this.granted?.();
             this.control = true;
             this.state("control");
           }

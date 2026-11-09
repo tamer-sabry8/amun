@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/forge.config.cjs",
       "apps/desktop/renderer/renderer.js",
+      "apps/desktop/renderer/diff-worker.js",
     ],
   },
   ...tseslint.configs.recommended,

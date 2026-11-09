@@ -112,3 +112,25 @@ it("waits for backend control authorization and never re-enables after a later r
   session.handle(command("input", { data: "still blocked" }));
   expect(pty.write).not.toHaveBeenCalled();
 });
+it("records the user control handoff only after the backend verifies its grant", async () => {
+  const { pty } = setup();
+  const audit = vi.fn();
+  let grant = () => {};
+  const session = new TerminalSession(
+    () => ({
+      ...pty,
+      setControl: () =>
+        new Promise<void>((r) => {
+          grant = r;
+        }),
+    }),
+    () => {},
+    audit,
+  );
+  session.handle(command("open"));
+  session.handle(command("take-control"));
+  expect(audit).not.toHaveBeenCalled();
+  grant();
+  await Promise.resolve();
+  expect(audit).toHaveBeenCalledTimes(1);
+});

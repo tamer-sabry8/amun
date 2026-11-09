@@ -1,3 +1,12 @@
+import { PrototypeSession } from "./prototype-session.ts";
+import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
+import { implementationRun } from "./implementation-run.ts";
+import { sendDelivery } from "../../../packages/crew/src/send-delivery.ts";
+import { deliveryCommand } from "../../../packages/contracts/src/crew.ts";
+import { readPullWorkspace } from "./pr-workspace.ts";
+import { prCommand } from "../../../packages/contracts/src/pr-workspace.ts";
+import { ChatSession } from "./firstmate-chat.ts";
+import { FirstmateChat } from "../../../packages/data/src/firstmate-chat.ts";
 import { runAdoOperation } from "./ado-operations.ts";
 import { AdoWriteClient } from "../../../packages/connectors-ado/src/governed-writes.ts";
 import {
@@ -19,6 +28,8 @@ import { firstmateBearings } from "../../../packages/crew/src/firstmate-bearings
 import { dispatchFirstmate } from "../../../packages/crew/src/firstmate-dispatch.ts";
 import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.ts";
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
+import { crewProfile } from "../../../packages/crew/src/crew-profile.ts";
+import { readCrewBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
 import { crewList } from "../../../packages/contracts/src/crew.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
@@ -113,6 +124,8 @@ const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 const workspaceService = new WorkspaceService(workspace, redactor);
+const chats = new FirstmateChat(workspace);
+chats.recover();
 const actions = new ActionStore(workspace);
 actions.recover();
 const authKeyring = () => {
@@ -477,6 +490,63 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
+  const repositoryCredential = (kind: "ado" | "github", url: string) => {
+    const conn = authMetadata
+      .list()
+      .find(
+        (c) =>
+          c.kind === kind &&
+          new URL(c.baseUrl).href.replace(/\/$/, "") ===
+            new URL(url).href.replace(/\/$/, ""),
+      );
+    if (conn) {
+      const secret = authKeyring().get(
+        workspaceIdentity(workspace) + "/" + connectionId(conn),
+      );
+      if (secret) {
+        redactor.register(secret);
+        return secret;
+      }
+    }
+    if (kind === "github" && url === "https://github.com") {
+      const stored = JSON.parse(authKeyring().get(githubAccount) ?? "null");
+      const grant = githubGrant.parse(stored?.grant);
+      if (
+        grant.expires_in &&
+        Date.now() >= stored.savedAt + grant.expires_in * 1000
+      )
+        throw Error("GitHub connection expired.");
+      return grant.access_token;
+    }
+    throw Error("Connect the mapped repository host in Settings.");
+  };
+  const prototypes = new PrototypeSession(
+    workspace,
+    workspaceRoot!,
+    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    async (id, text) => {
+      const releases = await FirstmateReleases.open(
+        workspaceRoot!,
+        process.env.AMUN_FIRSTMATE_ARCHIVES!,
+      );
+      await supervisor.ensureRunning();
+      return sendDelivery(
+        releases,
+        process.env.AMUN_CREW_RECEIPTS!,
+        process.env.AMUN_TMUX_BINARY!,
+        "claude",
+        id,
+        text,
+      );
+    },
+  );
+  port.once("close", () => void prototypes.close());
+  const chatSession = new ChatSession(
+    chats,
+    supervisor,
+    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    (event) => port.postMessage(event),
+  );
   let backendOpening = false;
   let backendEpoch = 0;
   const localTerminal = new TerminalSession(
@@ -517,12 +587,55 @@ process.parentPort?.on("message", (event) => {
     },
     (event) => port.postMessage(event),
   );
+  let rosterBusy = false;
   let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
-    else if (crewList.safeParse(message.data).success) {
+    else if (
+      message.data?.kind === "refresh-crew" &&
+      message.data.version === 1
+    ) {
+      if (rosterBusy) return;
+      rosterBusy = true;
+      void (async () => {
+        const root = process.env.AMUN_CREW_RECEIPTS!,
+          binary = process.env.AMUN_TMUX_BINARY!;
+        const releases = await FirstmateReleases.open(
+          workspaceRoot!,
+          process.env.AMUN_FIRSTMATE_ARCHIVES!,
+        );
+        const { snapshot } = await readCrewBearings(releases);
+        const keys = new Set([
+          ...((await listReceiptTasks(root)) ?? []),
+          ...[...snapshot.secondmates, ...snapshot.in_flight]
+            .map((r) => r.id)
+            .filter(
+              (id): id is string =>
+                typeof id === "string" && /^[-a-zA-Z0-9_]{1,64}$/.test(id),
+            ),
+        ]);
+        const members = [];
+        for (const id of keys)
+          members.push(
+            crewProfile(
+              id,
+              snapshot,
+              await observeOwnedTmux(root, id, binary, "workspace"),
+              redactor,
+            ),
+          );
+        return members;
+      })()
+        .catch(() => null)
+        .then((members) => {
+          if (!closed) port.postMessage({ kind: "crew-roster", members });
+        })
+        .finally(() => {
+          rosterBusy = false;
+        });
+    } else if (crewList.safeParse(message.data).success) {
       if (listingCrew) return;
       listingCrew = true;
       const root = process.env.AMUN_CREW_RECEIPTS;
@@ -662,6 +775,126 @@ process.parentPort?.on("message", (event) => {
           )
             port.postMessage(reply);
         });
+    } else if (message.data?.kind === "prototype") {
+      const parsed = prototypeCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      void prototypes
+        .handle(cmd)
+        .catch((e: unknown) => ({
+          kind: "prototype-result",
+          id: cmd.id,
+          product: cmd.product,
+          objective: cmd.objective,
+          message:
+            e instanceof Error &&
+            /^(Review|Pin |Open |Start |Prototype delivery)/.test(e.message)
+              ? e.message
+              : "Prototype output is unavailable. Check the Designer run and try again.",
+        }))
+        .then((r) => {
+          if (
+            !closed &&
+            workspaceService.snapshot().preferences.productId === cmd.product
+          ) {
+            port.postMessage(r);
+            port.postMessage(workspaceService.snapshot());
+          }
+        });
+    } else if (message.data?.kind === "crew-delivery") {
+      const parsed = deliveryCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data,
+        current = () =>
+          closed ? null : workspaceService.snapshot().preferences.productId;
+      void implementationRun(
+        cmd,
+        workspace,
+        workspaceRoot!,
+        current,
+        async (id, text) => {
+          const releases = await FirstmateReleases.open(
+            workspaceRoot!,
+            process.env.AMUN_FIRSTMATE_ARCHIVES!,
+          );
+          await supervisor.ensureRunning();
+          return sendDelivery(
+            releases,
+            process.env.AMUN_CREW_RECEIPTS!,
+            process.env.AMUN_TMUX_BINARY!,
+            "codex",
+            id,
+            text,
+          );
+        },
+        async (source, number) => {
+          const r = await readPullWorkspace(
+            {
+              version: 1,
+              kind: "pr-workspace",
+              id: cmd.id,
+              action: "details",
+              product: cmd.product,
+              source,
+              number,
+            },
+            workspace,
+            workspaceService.snapshot().productContext?.sources ?? [],
+            current,
+            repositoryCredential,
+          );
+          if (!r.detail) throw Error("Pull request unavailable.");
+          return r.detail;
+        },
+      )
+        .catch((error: unknown) => ({
+          kind: "delivery-result",
+          id: cmd.id,
+          product: cmd.product,
+          story: cmd.story,
+          message:
+            error instanceof Error &&
+            /^(Select|Review|Check|Approve|Source commit|Local checkout|Repository mapping|Story changed)/.test(
+              error.message,
+            )
+              ? redactor.text(error.message)
+              : "Unable to prepare delivery. Verify the selected checkout and crew connection.",
+        }))
+        .then((r) => {
+          if (current() === cmd.product) {
+            port.postMessage(r);
+            port.postMessage(workspaceService.snapshot());
+          }
+        });
+    } else if (message.data?.kind === "pr-workspace") {
+      const parsed = prCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const product = () =>
+        closed ? null : workspaceService.snapshot().preferences.productId;
+      void readPullWorkspace(
+        parsed.data,
+        workspace,
+        workspaceService.snapshot().productContext?.sources ?? [],
+        product,
+        repositoryCredential,
+      )
+        .catch((e: unknown) => ({
+          kind: "pr-result",
+          id: parsed.data.id,
+          product: parsed.data.product,
+          message:
+            e instanceof Error &&
+            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file)/.test(
+              e.message,
+            )
+              ? redactor.text(e.message).slice(0, 512)
+              : "Pull request operation unconfirmed. Refresh and check the repository connection.",
+        }))
+        .then((r) => {
+          if (product() === parsed.data.product) port.postMessage(r);
+        });
+    } else if (message.data?.kind === "firstmate-chat") {
+      void chatSession.handle(message.data);
     } else if (message.data?.kind === "product-authoring") {
       void workspaceService
         .author(message.data, (model, instruction, context) =>
@@ -713,6 +946,10 @@ process.parentPort?.on("message", (event) => {
           terminal = new TerminalSession(
             () => pty,
             (event) => port.postMessage(event),
+            () =>
+              outputs.audit("pm", "terminal.take-control", request.taskId, {
+                backend: "tmux",
+              }),
           );
           sessions.add(terminal);
           terminal.handle({ version: 1, kind: "terminal", action: "open" });

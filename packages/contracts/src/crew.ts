@@ -54,6 +54,20 @@ export const crewList = z.strictObject({
   version: z.literal(1),
   kind: z.literal("crew-list"),
 });
+export const crewMember = z.object({
+  id: z.string(),
+  state: z.string(),
+  current: z.string().nullable(),
+  endpoint: z.enum(["verified", "unknown"]),
+  access: z.string().nullable(),
+  decisions: z.array(z.string()),
+  next: z.array(z.string()),
+  history: z.array(z.string()),
+});
+export const crewRoster = z.strictObject({
+  kind: z.literal("crew-roster"),
+  members: z.array(crewMember).nullable(),
+});
 export const crewInventory = z.strictObject({
   version: z.literal(1),
   kind: z.literal("crew-inventory"),
@@ -80,3 +94,58 @@ export const dispatchScope = z.strictObject({
   scope: z.string().regex(/^\/private\/tmp\/amun-tmux-[A-Za-z0-9]{6}$/),
   token: z.string().regex(/^[a-f0-9]{32}$/),
 });
+
+const deliveryBase = {
+  version: z.literal(1),
+  kind: z.literal("crew-delivery"),
+  id: z.uuid(),
+  product: z.string().min(1),
+  story: z.string().min(1),
+};
+export const deliveryCommand = z.discriminatedUnion("action", [
+  z.strictObject({ ...deliveryBase, action: z.literal("status") }),
+  z.strictObject({
+    ...deliveryBase,
+    action: z.literal("prepare"),
+    source: z.string().min(1),
+    checkout: path,
+    prefix: z.enum(["delivery", "test"]).default("delivery"),
+  }),
+  z.strictObject({
+    ...deliveryBase,
+    action: z.enum(["start", "refresh"]),
+    run: z.uuid(),
+    binding: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+]);
+export const deliveryScope = z.strictObject({
+  id: z.uuid(),
+  source: path,
+  remote: z.url({ protocol: /^https$/ }),
+  head: z.string().regex(/^[a-f0-9]{40}$/),
+  worktree: path,
+  branch: z.string().regex(/^(?:test|delivery)\/story-[a-f0-9-]{36}$/),
+});
+export const deliveryResult = z.object({
+  kind: z.literal("delivery-result"),
+  id: z.uuid(),
+  product: z.string(),
+  story: z.string(),
+  message: z.string(),
+  run: z
+    .object({ scope: deliveryScope, binding: z.string(), state: z.string() })
+    .optional(),
+});
+
+export const deliveryReport = z.discriminatedUnion("state", [
+  z.strictObject({
+    state: z.literal("blocked"),
+    question: z.string().trim().min(1).max(1000),
+  }),
+  z.strictObject({
+    state: z.literal("pull_request"),
+    number: z.number().int().positive(),
+    head: z.string().regex(/^[a-f0-9]{40}$/),
+    tests: z.string().trim().min(1).max(2048),
+  }),
+]);

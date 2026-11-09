@@ -1,3 +1,5 @@
+import { PullWorkspace } from "./pull-workspace.tsx";
+import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
 import { Backlog } from "./backlog.tsx";
 import { Priorities } from "./priorities.tsx";
@@ -1507,10 +1509,20 @@ export function App() {
               />
             ) : route === "prd" && snapshot?.productContext ? (
               <PrdWorkspace
+                openPreview={(url) => {
+                  setPreviewURL(url);
+                  dispatch({ type: "inspect", tab: "web" });
+                  browser({ action: "navigate", url });
+                }}
                 key={snapshot.productContext.productId}
                 context={snapshot.productContext}
                 mode={mode}
                 setMode={setMode}
+              />
+            ) : route === "prs" && snapshot?.productContext ? (
+              <PullWorkspace
+                key={snapshot.productContext.productId}
+                context={snapshot.productContext}
               />
             ) : route === "agents" ? (
               <AgentsPanel
@@ -1718,29 +1730,15 @@ export function App() {
             </aside>
           )}
         </div>
-        <footer className="composer">
-          <Icon name="send" />
-          <label className="sr-only" htmlFor="composer-input">
-            Ask Firstmate
-          </label>
-          <input
-            id="composer-input"
-            placeholder={
-              request ? "Ask Firstmate about this request…" : "Ask Firstmate…"
-            }
-            disabled
-          />
-          <span className="composer-context">
-            {request ? "Request selected" : "No Firstmate session attached"}
-          </span>
-          <button
-            className="primary icon-button"
-            aria-label="Send to Firstmate"
-            disabled
-          >
-            <Icon name="send" />
-          </button>
-        </footer>
+        <FirstmateComposer
+          key={preferences.productId ?? "none"}
+          context={snapshot?.productContext ?? null}
+          request={
+            request?.productId === preferences.productId && request
+              ? { id: request.id, ask: request.ask }
+              : null
+          }
+        />
         {layout.terminal && (
           <TerminalPane
             key={terminalTask ?? "workspace"}

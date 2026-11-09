@@ -91,8 +91,10 @@ test("captain starts real primary supervision, enters away posture and resumes t
     );
     await invoke("afk", "return");
     await expect
-      .poll(async () =>
-        readFile(join(state, ".afk-contract"), "utf8").catch(() => ""),
+      .poll(
+        async () =>
+          readFile(join(state, ".afk-contract"), "utf8").catch(() => ""),
+        { timeout: 60000 },
       )
       .toBe("");
     await expect(

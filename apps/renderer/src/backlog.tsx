@@ -1,3 +1,4 @@
+import { StoryImplementation } from "./story-implementation.tsx";
 import { AzureWorkReview, CardEdit } from "./azure-work-review.tsx";
 import { DecisionReview } from "./story-decisions.tsx";
 import { useState, useEffect, useRef } from "react";
@@ -52,6 +53,7 @@ export function Backlog({ context }: { context: Context }) {
                   PRD v{story.version} · {story.requirementId}
                 </p>
                 <blockquote>{story.requirement}</blockquote>
+                <StoryImplementation context={context} story={story.id} />
                 {context.storyDecisions
                   .filter((d) => d.itemId === story.id)
                   .map((d) => (

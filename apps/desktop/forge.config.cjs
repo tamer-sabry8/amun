@@ -1,6 +1,7 @@
 module.exports = {
   packagerConfig: {
     asar: true,
+    download: { checksums: require("electron/checksums.json") },
     appBundleId: "ai.amun.desktop",
     // App code is bundled; ship only the separately staged production runtime.
     prune: false,

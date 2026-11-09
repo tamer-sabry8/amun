@@ -1,4 +1,5 @@
 import {
+  chatResult,
   backlogResult,
   operationResult,
   healthRequest,
@@ -9,6 +10,10 @@ import {
   terminalEvent,
   piEvent,
   crewObservation,
+  prResult,
+  deliveryResult,
+  prototypeResult,
+  crewRoster,
   crewInventory,
   type WorkspaceSnapshot,
   type AuthEvent,
@@ -125,6 +130,24 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const pull = deliveryResult
+        .or(prototypeResult)
+        .or(prResult)
+        .safeParse(message.data);
+      if (pull.success) {
+        for (const f of eventListeners) f(pull.data);
+        return;
+      }
+      const roster = crewRoster.safeParse(message.data);
+      if (roster.success) {
+        for (const f of eventListeners) f(roster.data);
+        return;
+      }
+      const chat = chatResult.safeParse(message.data);
+      if (chat.success) {
+        for (const listener of eventListeners) listener(chat.data);
         return;
       }
       const operation = operationResult.safeParse(message.data);

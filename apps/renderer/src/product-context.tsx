@@ -1,3 +1,4 @@
+import { ModelRoutes } from "./model-routes.tsx";
 import type { FormEvent } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
@@ -93,6 +94,7 @@ export function ProductContext({
           <button>Save allowed models</button>
         </form>
       </details>
+      <ModelRoutes context={context} />
       <h3>Sources</h3>
       <label>
         Import document
