@@ -167,6 +167,38 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
           JSON.stringify({ binding: held.binding, ...exact }, null, 2),
           { mode: 0o600 },
         );
+        const approved = process.env.AMUN_T054_COMMIT_BINDING;
+        if (approved) {
+          expect(held.binding).toBe(approved);
+          expect(ids).toEqual([
+            1089414, 1089415, 1089416, 1089417, 1089418, 1089419,
+          ]);
+          await activate(btn("Approve and execute reviewed commitment"));
+          await expect(
+            page.getByText("Verified all 6 Azure items.", { exact: true }),
+          ).toBeVisible({ timeout: 120000 });
+          const client = new AdoWriteClient(
+            collection,
+            project,
+            azureTransport(collection, secret),
+          );
+          const receipts = new AdoBatch(db).preview(held.id).entries;
+          for (const receipt of receipts) {
+            expect(receipt.state).toBe("succeeded");
+            const item = await client.item(receipt.remoteId!);
+            expect(item.rev).toBe(receipt.remoteRev);
+            expect(item.rev).toBeGreaterThan(1);
+            expect(item.fields["System.IterationPath"]).toBe(sprint);
+            expect(item.fields["System.AssignedTo"]).toMatchObject({
+              uniqueName: assignee,
+            });
+          }
+          await writeFile(
+            join(root, "commitment-verified.json"),
+            JSON.stringify({ binding: held.binding, ids, verified: true }),
+            { mode: 0o600, flag: "wx" },
+          );
+        }
         return;
       }
       expect(current.entries.every((e) => e.state === "pending_approval")).toBe(

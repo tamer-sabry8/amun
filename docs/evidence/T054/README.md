@@ -23,3 +23,9 @@ This live run had uninterrupted connectivity. The separate lost-response regress
 ## Sprint commitment preview
 
 The owner selected a team sprint and named themselves as assignee for all six published stories. Read-only Azure discovery matched the authenticated identity ID to its canonical assignment name. The packaged Mac test traversed the sprint form by keyboard, selected all six items and opened the exact commitment review. It matched the displayed destination, IDs, revision guards and both field changes against the saved batch. All six entries were pending approval with zero attempts. The passing test took 25.7 seconds. The full binding and payload are in the private owner review. Live commitment and the requested post-test deletion await review and execution.
+
+## Approved commitment and cleanup
+
+The owner approved the held commitment binding and deletion of the six test IDs after verification. The packaged keyboard run compared the exact held preview, activated execution once, and passed in 27.1 seconds. Independent Azure reads confirmed all six receipts succeeded with advanced revisions, the selected sprint and the identity-matched assignee. The private profile retains the verification receipt.
+
+After commitment verification, cleanup validated each item's project, title, sprint, assignee and publication marker against the approved fixture. All six were deleted through Azure's supported work-item deletion API. Each live read returned 404 and each recycle-bin receipt matched its ID. These were recoverable deletions. The private profile retains per-ID cleanup receipts. The remaining golden-path stages are open.
