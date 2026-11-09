@@ -38,4 +38,4 @@ The M4 owner waiver covers the live restricted-worker publication and server-den
 
 The live six-item Azure publication had uninterrupted connectivity. The in-sequence interruption after item three remains unverified. Separate lost-response regression and packaged chaos evidence are linked in T054 and T053.
 
-The M1 redesign remains paused. Live Google and Obsidian acceptance remains in R3. Signing, notarization and clean-account release installation are open. This draft records no release or owner sign-off.
+The M1 redesign remains paused. Live Google and Obsidian acceptance remains in R3. Signing, notarization and clean-account release installation are open. Release and owner sign-off remain pending.

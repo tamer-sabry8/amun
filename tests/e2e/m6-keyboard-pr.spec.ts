@@ -62,6 +62,7 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
         page.getByRole("button", { name, exact: true });
     await expect(page.locator("#service-status")).toHaveText("Connected");
     const activate = async (control: import("@playwright/test").Locator) => {
+      await expect(control).toBeEnabled({ timeout: 60000 });
       await reach(page, control);
       await page.keyboard.press("Enter");
     };
@@ -215,8 +216,17 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
       );
       return;
     }
-    await activate(button("TEST-invitation-fixture/invitations.mjs"));
-    await expect(page.getByLabel("Diff summary")).toHaveText(/changed region/);
+    for (const file of files) {
+      await activate(button(file.filename));
+      await expect(
+        page
+          .getByRole("region", { name: "Pull request workspace" })
+          .getByRole("status"),
+      ).not.toHaveText("Contacting repository…", { timeout: 60000 });
+      await expect(page.getByLabel("Diff summary")).toHaveText(
+        /changed region/,
+      );
+    }
     await reach(page, page.getByLabel("Merge method"));
     await page.keyboard.press("m");
     await page.keyboard.press("Tab");

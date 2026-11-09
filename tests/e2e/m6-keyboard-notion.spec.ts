@@ -6,12 +6,15 @@ import { reach } from "../support/keyboard.ts";
 
 test("keyboard journey connects its isolated Notion workspace and verifies the existing Document Hub", async () => {
   const root = process.env.AMUN_T054_PROFILE;
+  const target = process.env.AMUN_T054_NOTION_TARGET;
   test.skip(
     !process.env.AMUN_T054_CONNECT_NOTION,
     "Explicit live Notion acceptance setup.",
   );
   if (root !== "/private/tmp/amun-m6-keyboard-aIPB0w")
     throw Error("Unexpected profile");
+  if (!target || !/^https:\/\/www\.notion\.so\/[a-f0-9]{32}$/.test(target))
+    throw Error("Provide the previously verified Notion destination");
   await access(join(root, "authoring-passed"));
   test.setTimeout(720000);
   const app = await launchMacWorkspace(root);
@@ -34,7 +37,7 @@ test("keyboard journey connects its isolated Notion workspace and verifies the e
       "Notion MCP connected",
       { timeout: 600000 },
     );
-    const target = "https://www.notion.so/4103581de3a980338ad4c4b1d6122d30";
+
     await reach(page, page.getByLabel("Notion destination link"));
     await page.keyboard.insertText(target);
     await activate(button("Check Notion destination"));
