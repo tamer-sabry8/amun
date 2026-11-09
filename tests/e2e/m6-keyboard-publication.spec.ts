@@ -8,6 +8,8 @@ import { reach } from "../support/keyboard.ts";
 import { pilotConnection } from "../../packages/connectors-ado/src/pilot-connection.ts";
 import { connectionId } from "../../packages/auth/src/broker.ts";
 import { workspaceIdentity } from "../../packages/data/src/identity.ts";
+import { azureTransport } from "../../packages/connectors-ado/src/transport.ts";
+import { AdoWriteClient } from "../../packages/connectors-ado/src/governed-writes.ts";
 import { AdoBatch } from "../../packages/data/src/ado-batch.ts";
 test("keyboard golden path prepares six live Azure backlog items for exact review", async () => {
   const root = process.env.AMUN_T054_PROFILE;
@@ -21,7 +23,7 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
   if (!st.isDirectory() || st.uid !== process.getuid!() || st.mode & 0o077)
     throw Error("Unsafe profile");
   await access(join(root, "authoring-passed"));
-  test.setTimeout(150000);
+  test.setTimeout(480000);
   const { credential, collection, project } = pilotConnection();
   if (
     project !== "ICV" ||
@@ -78,7 +80,7 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
       .getByRole("region", { name: "Azure DevOps backlog" })
       .getByRole("status")
       .last();
-    await expect(status).not.toHaveText("Loading…", { timeout: 90000 });
+    await expect(status).not.toHaveText("Loading…", { timeout: 300000 });
     await expect(status).toHaveText("");
     await select(page.getByLabel("Azure team"), project + " Team");
     await activate(btn("Load process details"));
@@ -107,8 +109,43 @@ test("keyboard golden path prepares six live Azure backlog items for exact revie
         destination: current.destination,
         steps: current.steps,
       });
+      const authorized = process.env.AMUN_APPROVED_BINDING;
+      if (authorized) {
+        expect(current.binding).toBe(authorized);
+        expect(current.steps).toHaveLength(6);
+        for (const step of current.steps) {
+          expect(step.fields).toMatchObject({
+            "System.Title": "Test Story",
+            "System.AreaPath": project,
+            "System.IterationPath": project,
+          });
+          expect(step.fields["System.AssignedTo"]).toBeUndefined();
+        }
+        await activate(btn("Approve and execute reviewed publication"));
+        await expect(
+          page.getByText("Verified all 6 Azure items.", { exact: true }),
+        ).toBeVisible({ timeout: 120000 });
+        const receipts = new AdoBatch(db).preview(current.id).entries;
+        expect(new Set(receipts.map((e) => e.remoteId)).size).toBe(6);
+        const client = new AdoWriteClient(
+          collection,
+          project,
+          azureTransport(collection, secret),
+        );
+        for (const receipt of receipts) {
+          expect(receipt.state).toBe("succeeded");
+          const item = await client.item(receipt.remoteId!);
+          expect(item.rev).toBe(receipt.remoteRev);
+          expect(item.fields["System.Title"]).toBe("Test Story");
+          expect(item.fields["System.IterationPath"]).toBe(project);
+          expect(item.fields["System.AreaPath"]).toBe(project);
+          expect(item.fields["System.AssignedTo"] ?? null).toBeNull();
+        }
+      }
       return;
     }
+    if (process.env.AMUN_APPROVED_BINDING)
+      throw Error("Missing reviewed batch");
     const fields = review.locator("fieldset");
     const selected = new Set<string>();
     const choices = db
