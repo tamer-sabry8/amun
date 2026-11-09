@@ -182,6 +182,9 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
 - [ ] **T044 — PR workspace** · P0 · TS · Dep T009, T016 — Build: Azure Repos (node-api) and GitHub/GHE (Octokit) adapters; cross-repo list; summary; Monaco diff; checks; reviews; threads; review actions with provider semantics. DoD: required workflow executed on each pilot provider; unsupported actions hidden, not faked.
 - [ ] **T045 — Merge approval and execution** · P0 · TS · Dep T014, T044 — Build: approval bound to repo, PR, head SHA, merge method; execution re-checks SHA, policy, checks, permission; GitHub `expectedHeadOid`/`sha`; ADO completion with last merge source commit. Tests: change head after approval → refused. Live: worker identity cannot merge or force-push (server rejects). DoD: evidence for both.
 - [ ] **T046 — Acceptance** · P0 · TS · Dep T045 — DoD: checklist + recorded Accepted/Rejected/Blocked; acceptance separate from merge.
+
+Mac evidence for the implementation worktree, GitHub read, packaged PR diff, stale-head refusal and separate acceptance decision is recorded in [delivery verification](evidence/M4/delivery-verification.md). Live pilot write and worker-permission tests remain open.
+
       **M4 exit:** golden path (section 6) passes live, including restart-reattach and changed-head refusal.
 
 ## M5 — Memory, Notion, skills, portfolio, reminders — LOCKED

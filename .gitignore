@@ -8,6 +8,7 @@ test-results/
 !.env.example
 .DS_Store
 apps/desktop/renderer/renderer.js
+apps/desktop/renderer/diff-worker.js
 apps/desktop/.runtime/
 apps/desktop/out/
 

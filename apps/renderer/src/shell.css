@@ -1323,3 +1323,8 @@ input[aria-invalid="true"] {
 .backlog-columns > section {
   min-width: 12rem;
 }
+
+.pull-diff {
+  height: 24rem;
+  width: 100%;
+}

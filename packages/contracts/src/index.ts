@@ -26,3 +26,6 @@ export * from "./workspace.js";
 export * from "./native-pi.js";
 export * from "./backlog.js";
 export * from "./firstmate-chat.js";
+export * from "./pr-workspace.js";
+
+export * from "./prototype.js";

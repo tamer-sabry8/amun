@@ -1,3 +1,4 @@
+import { PullWorkspace } from "./pull-workspace.tsx";
 import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
 import { Backlog } from "./backlog.tsx";
@@ -1508,10 +1509,20 @@ export function App() {
               />
             ) : route === "prd" && snapshot?.productContext ? (
               <PrdWorkspace
+                openPreview={(url) => {
+                  setPreviewURL(url);
+                  dispatch({ type: "inspect", tab: "web" });
+                  browser({ action: "navigate", url });
+                }}
                 key={snapshot.productContext.productId}
                 context={snapshot.productContext}
                 mode={mode}
                 setMode={setMode}
+              />
+            ) : route === "prs" && snapshot?.productContext ? (
+              <PullWorkspace
+                key={snapshot.productContext.productId}
+                context={snapshot.productContext}
               />
             ) : route === "agents" ? (
               <AgentsPanel

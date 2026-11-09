@@ -1,3 +1,10 @@
+import { PrototypeSession } from "./prototype-session.ts";
+import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
+import { implementationRun } from "./implementation-run.ts";
+import { sendDelivery } from "../../../packages/crew/src/send-delivery.ts";
+import { deliveryCommand } from "../../../packages/contracts/src/crew.ts";
+import { readPullWorkspace } from "./pr-workspace.ts";
+import { prCommand } from "../../../packages/contracts/src/pr-workspace.ts";
 import { ChatSession } from "./firstmate-chat.ts";
 import { FirstmateChat } from "../../../packages/data/src/firstmate-chat.ts";
 import { runAdoOperation } from "./ado-operations.ts";
@@ -483,6 +490,57 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
+  const repositoryCredential = (kind: "ado" | "github", url: string) => {
+    const conn = authMetadata
+      .list()
+      .find(
+        (c) =>
+          c.kind === kind &&
+          new URL(c.baseUrl).href.replace(/\/$/, "") ===
+            new URL(url).href.replace(/\/$/, ""),
+      );
+    if (conn) {
+      const secret = authKeyring().get(
+        workspaceIdentity(workspace) + "/" + connectionId(conn),
+      );
+      if (secret) {
+        redactor.register(secret);
+        return secret;
+      }
+    }
+    if (kind === "github" && url === "https://github.com") {
+      const stored = JSON.parse(authKeyring().get(githubAccount) ?? "null");
+      const grant = githubGrant.parse(stored?.grant);
+      if (
+        grant.expires_in &&
+        Date.now() >= stored.savedAt + grant.expires_in * 1000
+      )
+        throw Error("GitHub connection expired.");
+      return grant.access_token;
+    }
+    throw Error("Connect the mapped repository host in Settings.");
+  };
+  const prototypes = new PrototypeSession(
+    workspace,
+    workspaceRoot!,
+    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    async (id, text) => {
+      const releases = await FirstmateReleases.open(
+        workspaceRoot!,
+        process.env.AMUN_FIRSTMATE_ARCHIVES!,
+      );
+      await supervisor.ensureRunning();
+      return sendDelivery(
+        releases,
+        process.env.AMUN_CREW_RECEIPTS!,
+        process.env.AMUN_TMUX_BINARY!,
+        "claude",
+        id,
+        text,
+      );
+    },
+  );
+  port.once("close", () => void prototypes.close());
   const chatSession = new ChatSession(
     chats,
     supervisor,
@@ -716,6 +774,124 @@ process.parentPort?.on("message", (event) => {
               request.productId
           )
             port.postMessage(reply);
+        });
+    } else if (message.data?.kind === "prototype") {
+      const parsed = prototypeCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      void prototypes
+        .handle(cmd)
+        .catch((e: unknown) => ({
+          kind: "prototype-result",
+          id: cmd.id,
+          product: cmd.product,
+          objective: cmd.objective,
+          message:
+            e instanceof Error &&
+            /^(Review|Pin |Open |Start |Prototype delivery)/.test(e.message)
+              ? e.message
+              : "Prototype output is unavailable. Check the Designer run and try again.",
+        }))
+        .then((r) => {
+          if (
+            !closed &&
+            workspaceService.snapshot().preferences.productId === cmd.product
+          ) {
+            port.postMessage(r);
+            port.postMessage(workspaceService.snapshot());
+          }
+        });
+    } else if (message.data?.kind === "crew-delivery") {
+      const parsed = deliveryCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data,
+        current = () =>
+          closed ? null : workspaceService.snapshot().preferences.productId;
+      void implementationRun(
+        cmd,
+        workspace,
+        workspaceRoot!,
+        current,
+        async (id, text) => {
+          const releases = await FirstmateReleases.open(
+            workspaceRoot!,
+            process.env.AMUN_FIRSTMATE_ARCHIVES!,
+          );
+          await supervisor.ensureRunning();
+          return sendDelivery(
+            releases,
+            process.env.AMUN_CREW_RECEIPTS!,
+            process.env.AMUN_TMUX_BINARY!,
+            "codex",
+            id,
+            text,
+          );
+        },
+        async (source, number) => {
+          const r = await readPullWorkspace(
+            {
+              version: 1,
+              kind: "pr-workspace",
+              id: cmd.id,
+              action: "details",
+              product: cmd.product,
+              source,
+              number,
+            },
+            workspace,
+            workspaceService.snapshot().productContext?.sources ?? [],
+            current,
+            repositoryCredential,
+          );
+          if (!r.detail) throw Error("Pull request unavailable.");
+          return r.detail;
+        },
+      )
+        .catch((error: unknown) => ({
+          kind: "delivery-result",
+          id: cmd.id,
+          product: cmd.product,
+          story: cmd.story,
+          message:
+            error instanceof Error &&
+            /^(Select|Review|Check|Approve|Source commit|Local checkout|Repository mapping|Story changed)/.test(
+              error.message,
+            )
+              ? redactor.text(error.message)
+              : "Unable to prepare delivery. Verify the selected checkout and crew connection.",
+        }))
+        .then((r) => {
+          if (current() === cmd.product) {
+            port.postMessage(r);
+            port.postMessage(workspaceService.snapshot());
+          }
+        });
+    } else if (message.data?.kind === "pr-workspace") {
+      const parsed = prCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const product = () =>
+        closed ? null : workspaceService.snapshot().preferences.productId;
+      void readPullWorkspace(
+        parsed.data,
+        workspace,
+        workspaceService.snapshot().productContext?.sources ?? [],
+        product,
+        repositoryCredential,
+      )
+        .catch((e: unknown) => ({
+          kind: "pr-result",
+          id: parsed.data.id,
+          product: parsed.data.product,
+          message:
+            e instanceof Error &&
+            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file)/.test(
+              e.message,
+            )
+              ? redactor.text(e.message).slice(0, 512)
+              : "Pull request operation unconfirmed. Refresh and check the repository connection.",
+        }))
+        .then((r) => {
+          if (product() === parsed.data.product) port.postMessage(r);
         });
     } else if (message.data?.kind === "firstmate-chat") {
       void chatSession.handle(message.data);

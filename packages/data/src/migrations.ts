@@ -347,4 +347,9 @@ CREATE TABLE ado_steps(batch_id TEXT NOT NULL REFERENCES ado_batches(id),ordinal
   `CREATE TABLE firstmate_chat(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),model TEXT NOT NULL,selection TEXT,text TEXT NOT NULL,reply TEXT,state TEXT NOT NULL CHECK(state IN ('working','answered','interrupted')));
 CREATE INDEX chat_product ON firstmate_chat(product_id);`,
   `CREATE TABLE model_routes(product_id TEXT NOT NULL REFERENCES products(id),task TEXT NOT NULL,difficulty TEXT NOT NULL,model TEXT NOT NULL,PRIMARY KEY(product_id,task,difficulty));`,
+  `CREATE TABLE delivery_acceptance(id TEXT PRIMARY KEY,action_id TEXT NOT NULL REFERENCES actions(id),story_id TEXT NOT NULL REFERENCES work_items(id),verdict TEXT NOT NULL CHECK(verdict IN ('Accepted','Rejected','Blocked')),rationale TEXT NOT NULL,checklist TEXT NOT NULL,at TEXT NOT NULL);`,
+  `CREATE TABLE delivery_pull_requests(run_id TEXT PRIMARY KEY REFERENCES runs(id),repo TEXT NOT NULL,number INTEGER NOT NULL,head TEXT NOT NULL);
+CREATE INDEX delivery_pull_identity ON delivery_pull_requests(repo,number,head);
+CREATE UNIQUE INDEX delivery_acceptance_submission ON delivery_acceptance(action_id,story_id,verdict,rationale,checklist);`,
+  `CREATE TABLE prototype_runs(run_id TEXT PRIMARY KEY REFERENCES runs(id),objective TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,UNIQUE(objective,version));`,
 ] as const;

@@ -24,9 +24,11 @@ export function azureTransport(base: string, pat: string): Transport {
           ? await api.rest.get(url)
           : method === "POST"
             ? await api.rest.create(url, body, options)
-            : method === "PATCH"
-              ? await api.rest.update(url, body, options)
-              : null;
+            : method === "PUT"
+              ? await api.rest.replace(url, body, options)
+              : method === "PATCH"
+                ? await api.rest.update(url, body, options)
+                : null;
       if (!result) throw new Error("Unsupported method");
       const token =
         "x-ms-continuationtoken" in result.headers

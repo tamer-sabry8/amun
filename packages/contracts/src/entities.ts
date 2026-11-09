@@ -107,6 +107,7 @@ export const actionKind = z.enum([
   "file_destructive",
   "skill_install",
   "model_outside_allowlist",
+  "implementation_scope",
 ]);
 export const action = z.strictObject({
   ...base,

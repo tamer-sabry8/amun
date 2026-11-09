@@ -1,3 +1,4 @@
+import { PrototypeControls } from "./prototype-controls.tsx";
 import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
@@ -323,12 +324,14 @@ function PrdEditor({
 }
 export function PrdWorkspace({
   context,
+  openPreview,
   mode,
   setMode,
 }: {
   context: Context;
   mode: string;
   setMode: (s: string) => void;
+  openPreview: (url: string) => void;
 }) {
   const [difficulty, level] = useState("standard"),
     [chosen, choose] = useState(""),
@@ -411,6 +414,16 @@ export function PrdWorkspace({
             : "Draft PRD v" + prd.version}
           {prd.invalidated ? " · " + prd.invalidated : ""}
         </p>
+      )}
+      {prd?.approved && (
+        <PrototypeControls
+          key={objective.id + prd.version}
+          product={context.productId}
+          objective={objective.id}
+          revision={prd.version}
+          open={openPreview}
+          review={() => setMode("Review")}
+        />
       )}
       {mode === "Research" ? (
         <>

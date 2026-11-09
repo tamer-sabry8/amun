@@ -10,6 +10,9 @@ import {
   terminalEvent,
   piEvent,
   crewObservation,
+  prResult,
+  deliveryResult,
+  prototypeResult,
   crewRoster,
   crewInventory,
   type WorkspaceSnapshot,
@@ -127,6 +130,14 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const pull = deliveryResult
+        .or(prototypeResult)
+        .or(prResult)
+        .safeParse(message.data);
+      if (pull.success) {
+        for (const f of eventListeners) f(pull.data);
         return;
       }
       const roster = crewRoster.safeParse(message.data);
