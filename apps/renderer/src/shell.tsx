@@ -1,3 +1,4 @@
+import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
 import { Backlog } from "./backlog.tsx";
 import { Priorities } from "./priorities.tsx";
@@ -1718,29 +1719,15 @@ export function App() {
             </aside>
           )}
         </div>
-        <footer className="composer">
-          <Icon name="send" />
-          <label className="sr-only" htmlFor="composer-input">
-            Ask Firstmate
-          </label>
-          <input
-            id="composer-input"
-            placeholder={
-              request ? "Ask Firstmate about this request…" : "Ask Firstmate…"
-            }
-            disabled
-          />
-          <span className="composer-context">
-            {request ? "Request selected" : "No Firstmate session attached"}
-          </span>
-          <button
-            className="primary icon-button"
-            aria-label="Send to Firstmate"
-            disabled
-          >
-            <Icon name="send" />
-          </button>
-        </footer>
+        <FirstmateComposer
+          key={preferences.productId ?? "none"}
+          context={snapshot?.productContext ?? null}
+          request={
+            request?.productId === preferences.productId && request
+              ? { id: request.id, ask: request.ask }
+              : null
+          }
+        />
         {layout.terminal && (
           <TerminalPane
             key={terminalTask ?? "workspace"}

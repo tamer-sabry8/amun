@@ -171,9 +171,9 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
 - [x] **T036 — Story blockers in Decisions tile** · P1 · TS · Dep T032 — DoD: reason, owner, age, next action listed.
       **M3 exit verified.** The packaged app published two items, moved them into a sprint after separate approval, and recovered from an interrupted four-item publication with zero duplicates. [Sanitized acceptance results](evidence/M3-verification.md).
 
-## M4 — Firstmate, crew, PRs, acceptance — LOCKED
+## M4 — Firstmate, crew, PRs, acceptance — in progress
 
-- [ ] **T038 — Firstmate conversation and composer** · P0 · TS · Dep T006, T037 — DoD: composer sends with selected-item context; streaming; steer/follow-up; never approves anything.
+- [x] **T038 — Firstmate conversation and composer** · P0 · TS · Dep T006, T037 — DoD: composer sends with selected-item context; streaming; steer/follow-up; never approves anything. [Mac evidence](evidence/M4/T038.md).
 - [ ] **T039 — Model routing matrix** · P1 · TS · Dep T016, T038 — Build: per-product allowlist; task/difficulty matrix; actual model recorded per run; switching outside allowlist requires approval. DoD: Copilot and OpenRouter routes exercised live.
 - [ ] **T040 — Crew view** · P0 · TS/React · Dep T008 — Build: hierarchy and list; status counts; selected agent panel (current task, needs decision, up next, recent work, access scope, history). DoD: matches Firstmate and Amun-managed backend state live.
 - [ ] **T041 — Delegation and run tracker** · P0 · TS · Dep T037, T040 — Build: "Ask Firstmate to implement" with scope approval; run tracker activity; blocked → decision → resume. DoD: live run from story to PR link.

@@ -25,3 +25,4 @@ export * from "./auth.js";
 export * from "./workspace.js";
 export * from "./native-pi.js";
 export * from "./backlog.js";
+export * from "./firstmate-chat.js";

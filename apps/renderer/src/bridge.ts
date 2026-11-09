@@ -1,4 +1,5 @@
 import {
+  chatResult,
   backlogResult,
   operationResult,
   healthRequest,
@@ -125,6 +126,11 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const chat = chatResult.safeParse(message.data);
+      if (chat.success) {
+        for (const listener of eventListeners) listener(chat.data);
         return;
       }
       const operation = operationResult.safeParse(message.data);

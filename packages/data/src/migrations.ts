@@ -344,4 +344,6 @@ ALTER TABLE actions_workspace_upgrade RENAME TO actions;`,
   `CREATE TABLE story_decisions(request_id TEXT PRIMARY KEY REFERENCES attention_items(id),item_id TEXT NOT NULL REFERENCES work_items(id),requirement_id TEXT NOT NULL,options_json TEXT NOT NULL,proposed TEXT NOT NULL,missing TEXT NOT NULL,choice TEXT NOT NULL DEFAULT '',confirmation TEXT NOT NULL DEFAULT '',requested INTEGER NOT NULL DEFAULT 0);`,
   `CREATE TABLE ado_batches(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),kind TEXT NOT NULL,destination_json TEXT NOT NULL,binding TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE ado_steps(batch_id TEXT NOT NULL REFERENCES ado_batches(id),ordinal INTEGER NOT NULL,item_id TEXT NOT NULL,action_id TEXT NOT NULL UNIQUE REFERENCES actions(id),remote_id INTEGER,remote_rev INTEGER,PRIMARY KEY(batch_id,ordinal));`,
+  `CREATE TABLE firstmate_chat(id TEXT PRIMARY KEY,product_id TEXT NOT NULL REFERENCES products(id),model TEXT NOT NULL,selection TEXT,text TEXT NOT NULL,reply TEXT,state TEXT NOT NULL CHECK(state IN ('working','answered','interrupted')));
+CREATE INDEX chat_product ON firstmate_chat(product_id);`,
 ] as const;

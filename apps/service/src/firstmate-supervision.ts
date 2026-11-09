@@ -25,11 +25,24 @@ const controls = `export default function(pi) {
     if(r.code!==0) throw Error("Firstmate lock unavailable");
   }});
   pi.registerCommand("amun-product-turn",{description:"Review selected product sources",handler:async(encoded,ctx)=>{
-    const {model,instruction,context}=JSON.parse(Buffer.from(encoded,"base64url").toString("utf8"));
+    const {model,instruction,context,stream}=JSON.parse(Buffer.from(encoded,"base64url").toString("utf8"));
     const cut=model.indexOf("/");
     const selected=ctx.modelRegistry.find(model.slice(0,cut),model.slice(cut+1));
     if(cut<1 || !selected)throw Error("Selected product model unavailable");
-    const answer=await ctx.modelRegistry.complete(selected,{systemPrompt:instruction,messages:[{role:"user",content:[{type:"text",text:context}],timestamp:Date.now()}]},{signal:AbortSignal.timeout(90000)});
+    const prompt={systemPrompt:instruction,messages:[{role:"user",content:[{type:"text",text:context}],timestamp:Date.now()}]};
+    const options={signal:AbortSignal.timeout(90000)};
+    let answer;
+    if(stream){
+      const response=ctx.modelRegistry.streamSimple(selected,prompt,options);
+      let text="", last=0;
+      for await(const event of response){
+        if(event.type!=="text_delta")continue;
+        text+=event.delta;
+        if(text.length>30000)throw Error("Response exceeds conversation limit");
+        if(Date.now()-last>=80){ctx.ui.notify("AMUN_CHAT "+text,"info");last=Date.now();}
+      }
+      answer=await response.result();
+    }else answer=await ctx.modelRegistry.complete(selected,prompt,options);
     if(answer.stopReason!=="stop")throw Error("Incomplete product response");
     const text=answer.content.filter(block=>block.type==="text").map(block=>block.text).join("\\n");
     if(!text || text.length>30000)throw Error("Invalid product response");
@@ -166,11 +179,19 @@ export class FirstmateSupervision {
         },
       );
       let productReply = "";
+      let onStream: ((text: string) => void) | undefined;
       let reply = "",
         exited = false;
       const client = new PiRpcClient(
         (line) => child.stdin.write(line),
         (frame) => {
+          if (
+            frame.type === "extension_ui_request" &&
+            frame.method === "notify" &&
+            typeof frame.message === "string" &&
+            frame.message.startsWith("AMUN_CHAT ")
+          )
+            onStream?.(this.redactor.text(frame.message.slice(10)));
           if (
             frame.type === "extension_ui_request" &&
             frame.method === "notify" &&
@@ -263,16 +284,27 @@ export class FirstmateSupervision {
           model: string,
           instruction: string,
           context: string,
+          stream?: (text: string) => void,
         ) => {
-          productReply = "";
-          await command(
-            "/amun-product-turn " +
-              Buffer.from(
-                JSON.stringify({ model, instruction, context }),
-              ).toString("base64url"),
-          );
-          if (!productReply) throw Error("No verified product response");
-          return productReply;
+          onStream = stream;
+          try {
+            productReply = "";
+            await command(
+              "/amun-product-turn " +
+                Buffer.from(
+                  JSON.stringify({
+                    model,
+                    instruction,
+                    context,
+                    stream: !!stream,
+                  }),
+                ).toString("base64url"),
+            );
+            if (!productReply) throw Error("No verified product response");
+            return productReply;
+          } finally {
+            onStream = undefined;
+          }
         },
         run: async (name: string, argument: string) => {
           reply = "";
@@ -292,13 +324,18 @@ export class FirstmateSupervision {
       throw e;
     }
   }
-  async productTurn(model: string, instruction: string, context: string) {
+  async productTurn(
+    model: string,
+    instruction: string,
+    context: string,
+    stream?: (text: string) => void,
+  ) {
     if (this.busy) throw Error("Primary supervision busy");
     this.busy = true;
     try {
       return await (
         await this.owner()
-      ).productTurn(model, instruction, context);
+      ).productTurn(model, instruction, context, stream);
     } finally {
       this.busy = false;
     }

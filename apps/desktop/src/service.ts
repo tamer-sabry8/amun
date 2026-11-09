@@ -1,3 +1,5 @@
+import { ChatSession } from "./firstmate-chat.ts";
+import { FirstmateChat } from "../../../packages/data/src/firstmate-chat.ts";
 import { runAdoOperation } from "./ado-operations.ts";
 import { AdoWriteClient } from "../../../packages/connectors-ado/src/governed-writes.ts";
 import {
@@ -113,6 +115,8 @@ const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 const workspaceService = new WorkspaceService(workspace, redactor);
+const chats = new FirstmateChat(workspace);
+chats.recover();
 const actions = new ActionStore(workspace);
 actions.recover();
 const authKeyring = () => {
@@ -477,6 +481,12 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
+  const chatSession = new ChatSession(
+    chats,
+    supervisor,
+    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    (event) => port.postMessage(event),
+  );
   let backendOpening = false;
   let backendEpoch = 0;
   const localTerminal = new TerminalSession(
@@ -662,6 +672,8 @@ process.parentPort?.on("message", (event) => {
           )
             port.postMessage(reply);
         });
+    } else if (message.data?.kind === "firstmate-chat") {
+      void chatSession.handle(message.data);
     } else if (message.data?.kind === "product-authoring") {
       void workspaceService
         .author(message.data, (model, instruction, context) =>
