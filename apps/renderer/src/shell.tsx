@@ -1081,7 +1081,7 @@ export function App() {
             ))}
           </ul>
         ) : snapshot?.productContext ? null : (
-          <p className="empty-copy">Select a product to manage its skills.</p>
+          <p className="empty-copy">No skills installed in this workspace.</p>
         )}
       </>
     ) : (
