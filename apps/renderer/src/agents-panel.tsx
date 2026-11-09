@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   nativePiEvent,
+  crewRoster,
   crewInventory,
   crewObserve,
   crewObservation,
@@ -93,6 +94,20 @@ export function AgentsPanel({
     bridge.send({ version: 1, kind: "crew-list" });
     return off;
   }, [generation, status]);
+  const [roster, setRoster] =
+    useState<ReturnType<typeof crewRoster.parse>["members"]>();
+  const [view, setView] = useState("hierarchy");
+  useEffect(() => {
+    setRoster(undefined);
+    if (status !== "Connected") return;
+    const off = bridge.onEvent((raw) => {
+      const r = crewRoster.safeParse(raw);
+      if (r.success) setRoster(r.data.members);
+    });
+    bridge.send({ version: 1, kind: "refresh-crew" });
+    return off;
+  }, [status, generation, inventory]);
+  const member = roster?.find((m) => m.id === selection?.id);
   const taskId = selection?.id;
   useEffect(() => {
     if (!selection || status !== "Connected" || !generation) return;
@@ -118,6 +133,78 @@ export function AgentsPanel({
   return (
     <section aria-label="Workers">
       <h2>Workers</h2>
+      <section aria-label="Crew roster">
+        <button
+          onClick={() => bridge.send({ version: 1, kind: "refresh-crew" })}
+        >
+          Refresh crew
+        </button>
+        <label>
+          Crew view
+          <select value={view} onChange={(e) => setView(e.target.value)}>
+            <option value="hierarchy">Hierarchy</option>
+            <option value="list">List</option>
+          </select>
+        </label>
+        {roster === null ? (
+          <p>Crew snapshot unavailable.</p>
+        ) : (
+          roster && (
+            <>
+              <p aria-label="Crew status counts">
+                {[...new Set(roster.map((m) => m.state))]
+                  .map(
+                    (state) =>
+                      state +
+                      " " +
+                      roster.filter((m) => m.state === state).length,
+                  )
+                  .join(" · ") || "No workers recorded"}
+              </p>
+              {view === "hierarchy" && <h3>Firstmate</h3>}
+              <ul
+                aria-label={
+                  view === "hierarchy" ? "Firstmate’s crew" : "Worker list"
+                }
+              >
+                {roster.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => {
+                        setInput(m.id);
+                        select({ id: m.id });
+                      }}
+                    >
+                      {m.id}
+                    </button>{" "}
+                    · {m.state} · Endpoint {m.endpoint}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )
+        )}
+        {member && (
+          <section aria-label="Selected agent">
+            <h3>{member.id}</h3>
+            <dl>
+              {Object.entries({
+                "Current task": member.current,
+                "Needs decision": member.decisions.join(" · "),
+                "Up next": member.next.join(" · "),
+                "Recent work": member.history.at(0),
+                "Verified worktree": member.access,
+                History: member.history.join(" · "),
+              }).map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value || "No record"}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+      </section>
       <section aria-label="Firstmate runtime">
         <h3>Firstmate runtime</h3>
         <p>

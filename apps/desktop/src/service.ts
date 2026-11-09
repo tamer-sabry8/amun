@@ -21,6 +21,8 @@ import { firstmateBearings } from "../../../packages/crew/src/firstmate-bearings
 import { dispatchFirstmate } from "../../../packages/crew/src/firstmate-dispatch.ts";
 import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.ts";
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
+import { crewProfile } from "../../../packages/crew/src/crew-profile.ts";
+import { readCrewBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
 import { crewList } from "../../../packages/contracts/src/crew.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
@@ -527,12 +529,55 @@ process.parentPort?.on("message", (event) => {
     },
     (event) => port.postMessage(event),
   );
+  let rosterBusy = false;
   let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
-    else if (crewList.safeParse(message.data).success) {
+    else if (
+      message.data?.kind === "refresh-crew" &&
+      message.data.version === 1
+    ) {
+      if (rosterBusy) return;
+      rosterBusy = true;
+      void (async () => {
+        const root = process.env.AMUN_CREW_RECEIPTS!,
+          binary = process.env.AMUN_TMUX_BINARY!;
+        const releases = await FirstmateReleases.open(
+          workspaceRoot!,
+          process.env.AMUN_FIRSTMATE_ARCHIVES!,
+        );
+        const { snapshot } = await readCrewBearings(releases);
+        const keys = new Set([
+          ...((await listReceiptTasks(root)) ?? []),
+          ...[...snapshot.secondmates, ...snapshot.in_flight]
+            .map((r) => r.id)
+            .filter(
+              (id): id is string =>
+                typeof id === "string" && /^[-a-zA-Z0-9_]{1,64}$/.test(id),
+            ),
+        ]);
+        const members = [];
+        for (const id of keys)
+          members.push(
+            crewProfile(
+              id,
+              snapshot,
+              await observeOwnedTmux(root, id, binary, "workspace"),
+              redactor,
+            ),
+          );
+        return members;
+      })()
+        .catch(() => null)
+        .then((members) => {
+          if (!closed) port.postMessage({ kind: "crew-roster", members });
+        })
+        .finally(() => {
+          rosterBusy = false;
+        });
+    } else if (crewList.safeParse(message.data).success) {
       if (listingCrew) return;
       listingCrew = true;
       const root = process.env.AMUN_CREW_RECEIPTS;
@@ -725,6 +770,10 @@ process.parentPort?.on("message", (event) => {
           terminal = new TerminalSession(
             () => pty,
             (event) => port.postMessage(event),
+            () =>
+              outputs.audit("pm", "terminal.take-control", request.taskId, {
+                backend: "tmux",
+              }),
           );
           sessions.add(terminal);
           terminal.handle({ version: 1, kind: "terminal", action: "open" });

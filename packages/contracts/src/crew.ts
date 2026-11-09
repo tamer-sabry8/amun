@@ -54,6 +54,20 @@ export const crewList = z.strictObject({
   version: z.literal(1),
   kind: z.literal("crew-list"),
 });
+export const crewMember = z.object({
+  id: z.string(),
+  state: z.string(),
+  current: z.string().nullable(),
+  endpoint: z.enum(["verified", "unknown"]),
+  access: z.string().nullable(),
+  decisions: z.array(z.string()),
+  next: z.array(z.string()),
+  history: z.array(z.string()),
+});
+export const crewRoster = z.strictObject({
+  kind: z.literal("crew-roster"),
+  members: z.array(crewMember).nullable(),
+});
 export const crewInventory = z.strictObject({
   version: z.literal(1),
   kind: z.literal("crew-inventory"),

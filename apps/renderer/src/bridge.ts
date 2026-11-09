@@ -10,6 +10,7 @@ import {
   terminalEvent,
   piEvent,
   crewObservation,
+  crewRoster,
   crewInventory,
   type WorkspaceSnapshot,
   type AuthEvent,
@@ -126,6 +127,11 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const roster = crewRoster.safeParse(message.data);
+      if (roster.success) {
+        for (const f of eventListeners) f(roster.data);
         return;
       }
       const chat = chatResult.safeParse(message.data);

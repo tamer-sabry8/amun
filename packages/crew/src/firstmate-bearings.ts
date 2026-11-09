@@ -45,16 +45,10 @@ function describe(row: Record<string, unknown>) {
     "Recorded item (details unavailable)"
   );
 }
-export async function firstmateBearings(
+export async function readCrewBearings(
   releases: FirstmateReleases,
-  argument: string,
-  redactor = new Redactor(),
+  includePrs = false,
 ) {
-  const match = /^(?:(file|lavish)(?: |$))?(include PRs)?$/i.exec(
-    argument.trim(),
-  );
-  if (!match)
-    return "Supported options are /bearings, /bearings file /bearings lavish and include PRs.";
   const { home, revision } = await releases.crewHome();
   await releases.verifyHomes(revision, [home]);
   const owner = dirname(dirname(home));
@@ -98,7 +92,7 @@ export async function firstmateBearings(
     [
       join(home, "bin/fm-bearings-snapshot.sh"),
       "--json",
-      ...(match[2] ? ["--include-prs"] : []),
+      ...(includePrs ? ["--include-prs"] : []),
     ],
     {
       cwd: home,
@@ -107,8 +101,24 @@ export async function firstmateBearings(
       maxBuffer: 1048576,
     },
   );
-  const s = bearingsSnapshot.parse(JSON.parse(stdout)),
-    c = s.contributions;
+  return { home, env, snapshot: bearingsSnapshot.parse(JSON.parse(stdout)) };
+}
+export async function firstmateBearings(
+  releases: FirstmateReleases,
+  argument: string,
+  redactor = new Redactor(),
+) {
+  const match = /^(?:(file|lavish)(?: |$))?(include PRs)?$/i.exec(
+    argument.trim(),
+  );
+  if (!match)
+    return "Supported options are /bearings, /bearings file /bearings lavish and include PRs.";
+  const {
+    home,
+    env,
+    snapshot: s,
+  } = await readCrewBearings(releases, !!match[2]);
+  const c = s.contributions;
   const section = (
     name: string,
     items: Record<string, unknown>[],
