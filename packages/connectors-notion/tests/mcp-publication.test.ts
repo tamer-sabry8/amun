@@ -122,3 +122,23 @@ it("rejects invalid or oversized reviewed input before any network call", async 
     ).rejects.toThrow();
   expect(call).not.toHaveBeenCalled();
 });
+
+it("reconciles a 503 after commit by validating the candidate through a read without repeating creation", async () => {
+  const call = vi.fn(async () => ({
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ status: 503, committed_resource_id: pageId }),
+      },
+    ],
+  }));
+  for (const verified of [true, false]) {
+    const verify = vi.fn(async () => (verified ? pageId : undefined));
+    expect(await new NotionMcpPublisher(call, verify).create(draft)).toEqual(
+      verified ? { state: "created", pageId } : { state: "unknown" },
+    );
+    expect(verify).toHaveBeenCalledExactlyOnceWith(pageId);
+  }
+  expect(call).toHaveBeenCalledTimes(2);
+});

@@ -1,3 +1,6 @@
+import { SkillLibrary } from "./skill-library.ts";
+import { Reminders } from "./reminders.ts";
+import { MemorySync } from "./memory-sync.ts";
 import { portfolio, dependencies } from "./portfolio.ts";
 import { ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
@@ -20,6 +23,9 @@ import {
 import type { StatusActivity } from "../../contracts/src/entities.ts";
 import { AttentionStore, searchEntities } from "./attention-store.ts";
 export class WorkspaceService {
+  readonly skillLibrary: SkillLibrary;
+  readonly reminders: Reminders;
+  readonly memorySync: MemorySync;
   private readonly db: Database.Database;
   private readonly authoring: ProductAuthoring;
   private readonly documents: ProductDocuments;
@@ -27,6 +33,13 @@ export class WorkspaceService {
   private readonly redactor: Redactor;
   constructor(db: Database.Database, redactor = new Redactor()) {
     this.db = db;
+    this.skillLibrary = new SkillLibrary(db);
+    this.reminders = new Reminders(db);
+    this.memorySync = new MemorySync(
+      db,
+      () => this.preferences().productId,
+      redactor,
+    );
     this.redactor = redactor;
     this.authoring = new ProductAuthoring(
       db,
@@ -81,6 +94,12 @@ export class WorkspaceService {
       routes: new ModelRouting(this.db).list(productId),
       modelRuns: new ModelRouting(this.db).recent(productId),
       routingReviews: new ModelRouting(this.db).pending(productId),
+      skillLibrary: {
+        installed: this.skillLibrary.installed(productId),
+        reviews: this.skillLibrary.reviews(productId),
+      },
+      tasks: this.reminders.list(productId),
+      memoryLinks: this.memorySync.list(productId),
       storyDecisions: new StoryDecisions(this.db).list(productId),
       storyDrafts: this.db
         .prepare(
@@ -222,12 +241,16 @@ export class WorkspaceService {
         .all(preferences.productId, preferences.productId),
       artifacts: this.db
         .prepare(
-          "SELECT id,product_id AS productId,kind,path_or_uri AS ref FROM artifacts WHERE (? IS NULL OR product_id=?) ORDER BY rowid DESC",
+          "SELECT id,productId,kind,ref FROM (SELECT id,product_id AS productId,kind,path_or_uri AS ref,rowid AS seq FROM artifacts WHERE (? IS NULL OR product_id=?) UNION ALL SELECT id,NULL AS productId,'export' AS kind,path AS ref,rowid AS seq FROM portfolio_exports WHERE ? IS NULL) ORDER BY seq DESC,id",
         )
-        .all(preferences.productId, preferences.productId),
+        .all(
+          preferences.productId,
+          preferences.productId,
+          preferences.productId,
+        ),
       skills: this.db
         .prepare(
-          "SELECT id,name,version,approved_at AS approvedAt FROM skills ORDER BY name,id",
+          "SELECT id,name,version,approved_at AS approvedAt FROM skills WHERE id NOT IN (SELECT skill_id FROM installed_skill_text) ORDER BY name,id",
         )
         .all(),
     });
@@ -351,6 +374,60 @@ export class WorkspaceService {
               .run(command.key);
           })
           .immediate();
+      } else if (
+        command.action === "save-task" ||
+        command.action === "complete-task"
+      ) {
+        if (this.preferences().productId !== command.productId)
+          throw new AuthoringError("Select the task's product.");
+        if (command.action === "save-task")
+          this.reminders.create(
+            command.productId,
+            this.redactor.text(command.title),
+            command.category,
+            command.due,
+            command.consequential,
+          );
+        else
+          this.reminders.complete(
+            command.productId,
+            command.task,
+            command.title,
+            command.due,
+            command.confirm,
+          );
+      } else if (
+        command.action === "review-skill" ||
+        command.action === "decide-skill" ||
+        command.action === "use-skill"
+      ) {
+        if (command.productId !== this.preferences().productId)
+          throw Error("Product changed");
+        if (command.action === "review-skill")
+          this.skillLibrary.review(
+            command.productId,
+            command.name,
+            this.redactor.text(command.origin),
+            this.redactor.text(command.source),
+          );
+        else if (command.action === "decide-skill")
+          this.skillLibrary.decide(
+            command.productId,
+            command.review,
+            command.digest,
+            command.approve,
+          );
+        else
+          return {
+            version: 1,
+            kind: "workspace-skill-draft",
+            productId: command.productId,
+            text: this.skillLibrary.use(
+              command.productId,
+              command.name,
+              command.digest,
+            ),
+          };
       } else if (command.action === "create-product") {
         this.db
           .transaction(() => {

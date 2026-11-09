@@ -1,4 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { launchMacWorkspace } from "../support/mac-workspace.ts";
+import { test, expect } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,16 +8,7 @@ import { openWorkspace } from "../../packages/data/src/workspace.ts";
 
 test("portfolio shows two products, their blockers and decisions, and retains confirmation after restart", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m5-portfolio-"));
-  const launch = () =>
-    electron.launch({
-      args: [
-        ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
-        "--user-data-dir=" + root,
-      ],
-      ...(process.env.AMUN_PACKAGED_PATH
-        ? { executablePath: process.env.AMUN_PACKAGED_PATH }
-        : {}),
-    });
+  const launch = () => launchMacWorkspace(root);
   let app;
   try {
     const Database = createRequire(resolve("packages/data/package.json"))(

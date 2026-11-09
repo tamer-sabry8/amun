@@ -9,6 +9,7 @@ import { authBrowserArgs } from "./auth-browser.ts";
 import { installBrowser } from "./browser.js";
 import {
   app,
+  powerMonitor,
   BrowserWindow,
   session,
   utilityProcess,
@@ -248,6 +249,9 @@ if (!app.requestSingleInstanceLock()) {
         },
       });
     });
+    powerMonitor.on("resume", () =>
+      service?.postMessage({ kind: "resume-reminders" }),
+    );
     startService();
     openWindow();
     app.on("activate", () => {

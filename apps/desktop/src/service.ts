@@ -1,3 +1,7 @@
+import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
+import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
+import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
+import { syncCommand } from "../../../packages/contracts/src/memory-sync.ts";
 import { PrototypeSession } from "./prototype-session.ts";
 import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
 import { implementationRun } from "./implementation-run.ts";
@@ -123,6 +127,7 @@ const redactor = new Redactor();
 const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
+let syncingMemory = false;
 const workspaceService = new WorkspaceService(workspace, redactor);
 const chats = new FirstmateChat(workspace);
 chats.recover();
@@ -205,7 +210,18 @@ let stopping = false;
 let crewDispatchBusy = false;
 let togglingCalm = false;
 let backupBusy = false;
+const reminderListeners = new Set<() => void>();
+function checkReminders(missed: boolean) {
+  if (workspaceService.reminders.deliver(Date.now(), missed))
+    for (const refresh of reminderListeners) refresh();
+}
+checkReminders(true);
+setInterval(() => checkReminders(false), 1000).unref();
 process.parentPort?.on("message", (event) => {
+  if (event.data?.kind === "resume-reminders") {
+    checkReminders(true);
+    return;
+  }
   if (event.data?.kind === "pause-before-quit") {
     stopping = true;
     void Promise.all([...supervisors].map((s) => s.close())).then(() =>
@@ -272,6 +288,9 @@ process.parentPort?.on("message", (event) => {
 
   const port = event.ports[0];
   if (!port) return;
+  const refreshReminders = () => port.postMessage(workspaceService.snapshot());
+  reminderListeners.add(refreshReminders);
+  port.once("close", () => reminderListeners.delete(refreshReminders));
   let notionPreview: { title: string; text: string; at: number } | undefined;
   let notionReviewBusy = false;
   const notionReviews = new NotionConversationReview(workspace, {
@@ -300,6 +319,17 @@ process.parentPort?.on("message", (event) => {
       );
     },
   });
+  let updateReview:
+    | {
+        id: string;
+        binding: string;
+        title: string;
+        text: string;
+        product: string | null;
+        channel: string;
+      }
+    | undefined;
+  let updatingStakeholder = false;
   const lookupPublication = notionConnection.locate.bind(notionConnection);
   let checkingReceipt = false;
   const timer = setInterval(() => {
@@ -907,7 +937,186 @@ process.parentPort?.on("message", (event) => {
       void workspaceService.importDocument(message.data).then((reply) => {
         if (!closed) port.postMessage(reply);
       });
+    } else if (message.data?.kind === "stakeholder") {
+      const parsed = updateCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      const active = () =>
+        !closed &&
+        workspaceService.snapshot().preferences.productId === cmd.productId;
+      const reply = (fields: Record<string, unknown>) => {
+        if (active())
+          port.postMessage({
+            version: 1,
+            kind: "stakeholder-result",
+            productId: cmd.productId,
+            request: cmd.request,
+            ...fields,
+          });
+      };
+      if (!active() || updatingStakeholder) return;
+      updatingStakeholder = true;
+      void (async () => {
+        const updates = new StakeholderUpdates(workspace);
+        if (cmd.action === "draft") {
+          updateReview = undefined;
+          reply({
+            title: "Stakeholder update",
+            text: redactor.text(updates.draft(cmd.productId, cmd.objective)),
+          });
+          return;
+        }
+        if (cmd.action === "review") {
+          updateReview = undefined;
+          const title = redactor.text(cmd.title),
+            text = redactor.text(cmd.text);
+          let reviewed;
+          if (cmd.channel === "pdf")
+            reviewed = updates.prepareExport(cmd.productId, title, text);
+          else {
+            const saved = workspace
+              .prepare(
+                "SELECT value_json FROM workspace_settings WHERE id='notion.destination'",
+              )
+              .pluck()
+              .get();
+            if (typeof saved !== "string")
+              throw Error("Choose a Notion destination");
+            const target = await notionConnection.inspectTarget(
+              JSON.parse(saved),
+            );
+            if (!active() || !notionConnection.identity) return;
+            const notion = notionReviews.prepare(
+              { title, text },
+              target,
+              notionConnection.identity.workspaceId,
+              cmd.productId,
+            );
+            reviewed = {
+              ...notion,
+              destination:
+                target.title +
+                " · " +
+                target.parentId +
+                (notion.markerPropertyId
+                  ? " · Amun publication ID: " + notion.markerPropertyId
+                  : ""),
+            };
+          }
+          updateReview = {
+            ...reviewed,
+            product: cmd.productId,
+            channel: cmd.channel,
+          };
+          reply({
+            title: reviewed.title,
+            text: reviewed.text,
+            review: {
+              id: reviewed.id,
+              binding: reviewed.binding,
+              destination: reviewed.destination,
+              channel: cmd.channel,
+            },
+          });
+          return;
+        }
+        const r = updateReview;
+        updateReview = undefined;
+        if (
+          !r ||
+          r.product !== cmd.productId ||
+          r.id !== cmd.id ||
+          r.binding !== cmd.binding ||
+          r.channel !== cmd.channel ||
+          r.title !== cmd.title ||
+          r.text !== cmd.text
+        )
+          throw Error("Review changed");
+        if (cmd.channel === "notion") {
+          const result = await notionReviews.publish(cmd.id, cmd.binding);
+          reply({
+            message:
+              result === "succeeded"
+                ? "Published to Notion."
+                : "Publication unconfirmed. Check the existing receipt.",
+          });
+          return;
+        }
+        updates.claimExport(
+          cmd.productId,
+          cmd.id,
+          cmd.binding,
+          cmd.title,
+          cmd.text,
+        );
+        try {
+          const dest = await writeStakeholderPdf(
+            workspaceRoot,
+            cmd.id,
+            cmd.title,
+            cmd.text,
+          );
+          workspace
+            .transaction(() => {
+              if (cmd.productId === null)
+                workspace
+                  .prepare("INSERT INTO portfolio_exports(id,path) VALUES(?,?)")
+                  .run(cmd.id, dest);
+              else
+                workspace
+                  .prepare(
+                    "INSERT INTO artifacts(id,product_id,kind,path_or_uri) VALUES(?,?,'export',?)",
+                  )
+                  .run(cmd.id, cmd.productId, dest);
+              actions.finish(cmd.id, "succeeded");
+            })
+            .immediate();
+          reply({ message: "PDF saved to " + dest });
+        } catch {
+          actions.finish(cmd.id, "unknown");
+          throw Error("Export unconfirmed");
+        }
+      })()
+        .catch(() =>
+          reply({
+            message:
+              "Update unavailable. Check the destination and review the exact content again.",
+          }),
+        )
+        .finally(() => {
+          updatingStakeholder = false;
+        });
     } else if (message.data?.kind === "workspace") {
+      const sync = syncCommand.safeParse(message.data);
+      if (sync.success) {
+        if (syncingMemory) {
+          port.postMessage({
+            version: 1,
+            kind: "workspace-error",
+            message: "A memory sync is in progress.",
+          });
+          return;
+        }
+        syncingMemory = true;
+        void workspaceService.memorySync
+          .run(sync.data, notionConnection)
+          .then(() => {
+            if (!closed) port.postMessage(workspaceService.snapshot());
+          })
+          .catch(() => {
+            if (!closed)
+              port.postMessage({
+                version: 1,
+                kind: "workspace-error",
+                message:
+                  "Memory review changed or the mapping is unavailable. Refresh the product.",
+              });
+          })
+          .finally(() => {
+            syncingMemory = false;
+          });
+        return;
+      }
       const reply = workspaceService.handle(message.data);
       if (reply?.kind === "workspace-snapshot")
         nativePi.selectProduct(reply.preferences.productId);
@@ -1527,6 +1736,17 @@ process.parentPort?.on("message", (event) => {
                 (typeof input.url !== "string" || input.url.length > 2048))
             )
               throw Error("Invalid lookup");
+            if (
+              !workspace
+                .prepare(
+                  "SELECT id FROM actions WHERE id=? AND product_id IS ?",
+                )
+                .get(
+                  input.id,
+                  workspaceService.snapshot().preferences.productId,
+                )
+            )
+              throw Error("Review unavailable in this product");
             const status = await notionReviews.check(
               input.id,
               lookupPublication,
@@ -1545,19 +1765,32 @@ process.parentPort?.on("message", (event) => {
           } else if (command.command === "notion-receipts") {
             sendNative(command.id, {
               kind: "publication-receipts",
-              unconfirmed: notionReviews.unconfirmed().map((item) => ({
-                ...item,
-                delivery: notionReviews.deliveryState(item.id),
-                title: redactor.text(item.title).slice(0, 256),
-              })),
+              unconfirmed: notionReviews
+                .unconfirmed(workspaceService.snapshot().preferences.productId)
+                .map((item) => ({
+                  ...item,
+                  delivery: notionReviews.deliveryState(item.id),
+                  title: redactor.text(item.title).slice(0, 256),
+                })),
               pages: notionReviews
-                .receipts()
+                .receipts(workspaceService.snapshot().preferences.productId)
                 .map((page) => ({ ...page, title: redactor.text(page.title) })),
             });
           } else if (command.command === "notion-publish") {
             const approval = notionApprovalRequest.parse(
               JSON.parse(command.argument),
             );
+            if (
+              !workspace
+                .prepare(
+                  "SELECT id FROM actions WHERE id=? AND product_id IS ?",
+                )
+                .get(
+                  approval.reviewId,
+                  workspaceService.snapshot().preferences.productId,
+                )
+            )
+              throw Error("Review unavailable in this product");
             const outcome = await notionReviews.publish(
               approval.reviewId,
               approval.binding,
@@ -1600,6 +1833,7 @@ process.parentPort?.on("message", (event) => {
               },
               target,
               identity.workspaceId,
+              workspaceService.snapshot().preferences.productId,
             );
             sendNative(command.id, {
               kind: "notion-review",

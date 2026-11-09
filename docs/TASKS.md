@@ -190,10 +190,10 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 ## M5 — Memory, Notion, skills, portfolio, reminders — active
 
 - [x] **T047 — Portfolio** · P1 · TS · Dep T023, T036 — DoD: progress, blockers, decisions across ≥ 2 products; inferred dependencies labelled until confirmed. [Mac acceptance](evidence/T047/README.md).
-- [ ] **T048 — Notion connector and publish** · P0 · TS · Dep T016, T015 — Build: notion-sdk-js; native Markdown endpoints; rate-limit handling; 503-after-commit reconciliation via `committed_resource_id`. DoD: approved publish to a test page; no duplicate on simulated 503.
-- [ ] **T049 — Notion two-way memory sync** · P0 · TS · Dep T048 — Build: sync_links baseline; field mapping UI; conflict side-by-side; delete/unlink/keep prompt; offline edits retained. DoD: simultaneous edit, deletion, revoked access and offline tests pass.
-- [ ] **T050 — Tasks and reminders** · P1 · TS · Dep T013, T021a, T021b — DoD: reminders during sleep appear on resume; consequential work awaits approval.
-- [ ] **T051 — Skills library** · P1 · TS · Dep T014 — Build: curated skills; editor; external discovery from configured sources; preview; pinned hash; approved install/update; rejected install cannot execute. DoD: install/update/reject tests green.
+- [x] **T048 — Notion connector and publish** · P0 · TS · Dep T016, T015 — Build: notion-sdk-js; native Markdown endpoints; rate-limit handling; 503-after-commit reconciliation via `committed_resource_id`. DoD: approved publish to a test page; no duplicate on simulated 503. [Mac and live acceptance](evidence/T048/README.md). Hosted MCP Markdown publication follows ADR-011.
+- [x] **T049 — Notion two-way memory sync** · P0 · TS · Dep T048 — Build: sync_links baseline; field mapping UI; conflict side-by-side; delete/unlink/keep prompt; offline edits retained. DoD: simultaneous edit, deletion, revoked access and offline tests pass. [Mac acceptance](evidence/T049/README.md).
+- [x] **T050 — Tasks and reminders** · P1 · TS · Dep T013, T021a, T021b — DoD: reminders during sleep appear on resume; consequential work awaits approval. [Mac acceptance](evidence/T050/README.md).
+- [x] **T051 — Skills library** · P1 · TS · Dep T014 — Build: curated skills; editor; external discovery from configured sources; preview; pinned hash; approved install/update; rejected install cannot execute. DoD: install/update/reject tests green. [Mac acceptance](evidence/T051/README.md).
 - [ ] **T052 — Stakeholder updates** · P1 · TS · Dep T046, T048 — DoD: draft cites source records; unknowns marked; approved publish/export.
 
 ## M6 — Hardening and release — LOCKED

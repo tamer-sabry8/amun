@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { chatResult, type WorkspaceSnapshot } from "@amun/contracts";
+import {
+  workspaceEvent,
+  chatResult,
+  type WorkspaceSnapshot,
+} from "@amun/contracts";
 import { bridge } from "./bridge.ts";
 import { Icon } from "./icons.tsx";
 type Context = WorkspaceSnapshot["productContext"];
@@ -34,6 +38,15 @@ export function FirstmateComposer({
         requests.current.clear();
         busy(false);
         notify("Connection interrupted.");
+        return;
+      }
+      const skill = workspaceEvent.safeParse(raw);
+      if (
+        skill.success &&
+        skill.data.kind === "workspace-skill-draft" &&
+        skill.data.productId === productId
+      ) {
+        setDraft(skill.data.text);
         return;
       }
       const parsed = chatResult.safeParse(raw);

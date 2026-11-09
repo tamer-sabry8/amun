@@ -137,7 +137,7 @@ export async function findNotionPublication(
       if (!props || JSON.parse(props[1]!)[markerProperty] !== intent.marker)
         continue;
     } else {
-      const lines = content.trimEnd().split("\n"),
+      const lines = content.trimEnd().split(/\n|<br\s*\/?>/i),
         footer = markerProperty + ": " + intent.marker;
       if (
         lines.at(-1) !== footer ||

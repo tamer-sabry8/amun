@@ -1,3 +1,6 @@
+import { StakeholderEditor } from "./stakeholder-editor.tsx";
+import { Tasks } from "./tasks.tsx";
+import { MemoryLinks } from "./memory-links.tsx";
 import { ModelRoutes } from "./model-routes.tsx";
 import type { FormEvent } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
@@ -209,6 +212,12 @@ export function ProductContext({
           <button>Pin decision</button>
         </form>
       )}
+      <StakeholderEditor
+        key={"update-" + context.productId}
+        context={context}
+      />
+      <Tasks key={"tasks-" + context.productId} context={context} />
+      <MemoryLinks key={context.productId} context={context} />
       <ul>
         {context.memory.map((entry) => (
           <li key={entry.id}>

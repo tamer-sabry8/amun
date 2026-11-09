@@ -26,12 +26,14 @@ export class NotionConversationReview {
     this.store = new ActionStore(db);
     this.connector = new NotionOutboxConnector(db, publisher);
   }
-  unconfirmed(): { id: string; title: string }[] {
+  unconfirmed(
+    productId: string | null = null,
+  ): { id: string; title: string }[] {
     return this.db
       .prepare(
-        "SELECT id,json_extract(payload_json,'$.title') AS title FROM actions WHERE kind='notion_publish' AND state='unknown' AND json_type(payload_json,'$.title')='text' AND length(json_extract(payload_json,'$.title')) BETWEEN 1 AND 256 ORDER BY rowid DESC LIMIT 50",
+        "SELECT id,json_extract(payload_json,'$.title') AS title FROM actions WHERE product_id IS ? AND kind='notion_publish' AND state='unknown' AND json_type(payload_json,'$.title')='text' AND length(json_extract(payload_json,'$.title')) BETWEEN 1 AND 256 ORDER BY rowid DESC LIMIT 50",
       )
-      .all() as { id: string; title: string }[];
+      .all(productId) as { id: string; title: string }[];
   }
   deliveryState(id: string) {
     return (
@@ -102,12 +104,12 @@ export class NotionConversationReview {
       return "blocked" as const;
     }
   }
-  receipts() {
+  receipts(productId: string | null = null) {
     const rows = this.db
       .prepare(
-        "SELECT id FROM actions WHERE kind='notion_publish' AND state='succeeded' ORDER BY rowid DESC LIMIT 50",
+        "SELECT id FROM actions WHERE product_id IS ? AND kind='notion_publish' AND state='succeeded' ORDER BY rowid DESC LIMIT 50",
       )
-      .all() as { id: string }[];
+      .all(productId) as { id: string }[];
     return rows.flatMap(({ id }) => {
       const action = this.store.read(id);
       const receipt = this.connector.receipt(action.operationMarker);
@@ -127,6 +129,7 @@ export class NotionConversationReview {
     preview: { title: string; text: string },
     target: NotionDestination,
     workspaceId: string,
+    productId: string | null = null,
   ) {
     if (
       !preview.title.trim() ||
@@ -158,11 +161,15 @@ export class NotionConversationReview {
         .digest("hex"),
     };
 
-    const revisions = { workspaceId, destinationTitle: target.title };
+    const revisions = {
+      workspaceId,
+      destinationTitle: target.title,
+      ...(productId ? { productId } : {}),
+    };
     const binding = bindAction("notion_publish", payload, revisions);
     this.store.propose({
       id,
-      productId: null,
+      productId,
       kind: "notion_publish",
       payload,
       revisions,
