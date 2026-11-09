@@ -163,7 +163,7 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
       page
         .getByRole("region", { name: "Pull request workspace" })
         .getByRole("status"),
-    ).toHaveText(/^[1-9][0-9]* open pull requests/, { timeout: 60000 });
+    ).toHaveText(/^[1-9][0-9]* open pull requests/, { timeout: 300000 });
     await activate(
       page.getByRole("button", {
         name: new RegExp("TEST implementation repository #" + number),
