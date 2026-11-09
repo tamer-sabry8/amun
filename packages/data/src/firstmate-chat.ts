@@ -1,3 +1,4 @@
+import { ModelRouting } from "./model-routing.ts";
 import type Database from "better-sqlite3";
 import {
   chatTurn,
@@ -6,6 +7,14 @@ import {
 } from "../../contracts/src/firstmate-chat.ts";
 export class FirstmateChat {
   constructor(private db: Database.Database) {}
+  model(t: ChatTurn) {
+    return new ModelRouting(this.db).resolve(
+      t.productId,
+      "conversation",
+      t.difficulty ?? "standard",
+      t.model,
+    );
+  }
   history(productId: string) {
     return this.db
       .prepare(
@@ -47,10 +56,25 @@ export class FirstmateChat {
   }
   finish(id: string, product: string, reply: string | null) {
     this.db
-      .prepare(
-        "UPDATE firstmate_chat SET reply=?,state=? WHERE id=? AND product_id=? AND state='working'",
-      )
-      .run(reply, reply === null ? "interrupted" : "answered", id, product);
+      .transaction(() => {
+        const change = this.db
+          .prepare(
+            "UPDATE firstmate_chat SET reply=?,state=? WHERE id=? AND product_id=? AND state='working'",
+          )
+          .run(reply, reply === null ? "interrupted" : "answered", id, product);
+        if (reply !== null && change.changes) {
+          const row = this.db
+            .prepare("SELECT model FROM firstmate_chat WHERE id=?")
+            .get(id) as { model: string };
+          new ModelRouting(this.db).record(
+            product,
+            id,
+            row.model,
+            "conversation",
+          );
+        }
+      })
+      .immediate();
   }
   recover() {
     this.db

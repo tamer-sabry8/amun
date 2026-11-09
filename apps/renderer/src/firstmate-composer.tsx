@@ -12,6 +12,7 @@ export function FirstmateComposer({
 }) {
   const [draft, setDraft] = useState(""),
     [model, setModel] = useState(context?.allowedModels[0] ?? ""),
+    [difficulty, level] = useState("standard"),
     [story, setStory] = useState(""),
     [preview, show] = useState(""),
     [status, notify] = useState(""),
@@ -64,9 +65,14 @@ export function FirstmateComposer({
     });
     return stop;
   }, [productId]);
-  const selectedModel = context?.allowedModels.includes(model)
-    ? model
-    : (context?.allowedModels[0] ?? "");
+  const routed = context?.routes.find(
+    (r) => r.task === "conversation" && r.difficulty === difficulty,
+  )?.model;
+  const selectedModel =
+    routed ??
+    (context?.allowedModels.includes(model)
+      ? model
+      : (context?.allowedModels[0] ?? ""));
   const send = (action: "send" | "steer" | "follow-up") => {
     if (!productId || !draft.trim() || !selectedModel) return;
     const id = crypto.randomUUID();
@@ -81,6 +87,7 @@ export function FirstmateComposer({
         id,
         productId,
         model: selectedModel,
+        difficulty,
         selection: story || request?.id || null,
         text: draft,
       },
@@ -125,8 +132,19 @@ export function FirstmateComposer({
         {context && (
           <>
             <label>
+              Conversation difficulty
+              <select
+                value={difficulty}
+                onChange={(e) => level(e.target.value)}
+              >
+                <option>standard</option>
+                <option>complex</option>
+              </select>
+            </label>
+            <label>
               Conversation model
               <select
+                disabled={!!routed}
                 value={selectedModel}
                 onChange={(e) => setModel(e.target.value)}
               >

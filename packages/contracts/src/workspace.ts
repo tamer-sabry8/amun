@@ -1,3 +1,4 @@
+import { modelRoute, routingReview, difficulty } from "./model-routing.ts";
 import { z } from "zod";
 import { attentionItem, notification, statusActivity } from "./entities.ts";
 const id = z.string().min(1).max(256);
@@ -33,6 +34,7 @@ const docTarget = {
   expectedVersion: docVersion,
 };
 const modelBase = {
+  difficulty: difficulty.optional(),
   version: z.literal(1),
   kind: z.literal("product-authoring"),
   productId: id,
@@ -160,6 +162,18 @@ const priorityFields = {
 const modelList = z.array(z.string().trim().min(1).max(256)).max(100);
 const base = { version: z.literal(1), kind: z.literal("workspace") };
 export const workspaceCommand = z.discriminatedUnion("action", [
+  modelRoute.extend({
+    ...base,
+    action: z.literal("save-model-route"),
+    productId: id,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("approve-model-route"),
+    productId: id,
+    reviewId: z.uuid(),
+    binding: z.string().length(64),
+  }),
   z.strictObject({
     ...base,
     action: z.literal("review-story-decision"),
@@ -274,6 +288,9 @@ export const workspaceSnapshot = z.strictObject({
     .strictObject({
       productId: id,
       allowedModels: z.array(id),
+      routes: z.array(modelRoute).default([]),
+      modelRuns: z.array(z.object({ id, task: id, model: id })).default([]),
+      routingReviews: z.array(routingReview).default([]),
       storyDecisions: z.array(storyDecision).default([]),
       storyDrafts: z.array(storyDraft).default([]),
       priorities: z.array(

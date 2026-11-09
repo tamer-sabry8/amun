@@ -330,7 +330,8 @@ export function PrdWorkspace({
   mode: string;
   setMode: (s: string) => void;
 }) {
-  const [chosen, choose] = useState(""),
+  const [difficulty, level] = useState("standard"),
+    [chosen, choose] = useState(""),
     [selection, select] = useState(""),
     [model, chooseModel] = useState(context.allowedModels[0] ?? "");
   const objective =
@@ -355,6 +356,7 @@ export function PrdWorkspace({
       ...target,
       action,
       model,
+      difficulty,
       understandingVersion: u?.version,
       selection: passage,
     });
@@ -385,6 +387,13 @@ export function PrdWorkspace({
               {o.statement}
             </option>
           ))}
+        </select>
+      </label>
+      <label>
+        Authoring difficulty
+        <select value={difficulty} onChange={(e) => level(e.target.value)}>
+          <option>standard</option>
+          <option>complex</option>
         </select>
       </label>
       <label>
@@ -460,6 +469,7 @@ export function PrdWorkspace({
                     ...target,
                     action: "stories",
                     model,
+                    difficulty,
                   })
                 }
               >

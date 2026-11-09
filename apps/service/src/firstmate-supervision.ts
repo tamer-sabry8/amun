@@ -43,6 +43,7 @@ const controls = `export default function(pi) {
       }
       answer=await response.result();
     }else answer=await ctx.modelRegistry.complete(selected,prompt,options);
+    if(answer.provider!==selected.provider || answer.model!==selected.id)throw Error("Provider returned a different model");
     if(answer.stopReason!=="stop")throw Error("Incomplete product response");
     const text=answer.content.filter(block=>block.type==="text").map(block=>block.text).join("\\n");
     if(!text || text.length>30000)throw Error("Invalid product response");

@@ -1,3 +1,4 @@
+import { ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
@@ -36,7 +37,17 @@ export class ProductAuthoring {
   ) {}
   async run(input: unknown, firstmate: ProductModel) {
     const cmd = productAuthoring.parse(input);
-    const { productId, model } = cmd;
+    const { productId } = cmd;
+    const model = new ModelRouting(this.db).resolve(
+      productId,
+      cmd.action === "stories"
+        ? "stories"
+        : cmd.action === "story-decision"
+          ? "decision"
+          : "authoring",
+      cmd.difficulty ?? "standard",
+      cmd.model,
+    );
     const validate = () => {
       if (this.selected() !== productId)
         throw new AuthoringError("Product selection changed.");

@@ -60,10 +60,11 @@ export class ChatSession {
         const t: ChatTurn = this.current;
         let begun = false;
         try {
-          const context = this.chat.begin(t);
+          const model = this.chat.model(t);
+          const context = this.chat.begin({ ...t, model });
           begun = true;
           const reply = await this.primary.productTurn(
-            t.model,
+            model,
             "You are Firstmate, the product manager's collaborator. Answer the current message using the selected record and conversation history as reference. This conversation has no authority to approve or execute actions.",
             context,
             (text) => this.emit(t, "stream", text),

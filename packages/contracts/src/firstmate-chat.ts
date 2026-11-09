@@ -1,3 +1,4 @@
+import { difficulty } from "./model-routing.ts";
 import { z } from "zod";
 const key = z.string().min(1).max(256);
 export const chatTurn = z.strictObject({
@@ -5,6 +6,7 @@ export const chatTurn = z.strictObject({
   productId: key,
   model: key,
   selection: key.nullable(),
+  difficulty: difficulty.optional(),
   text: z.string().trim().min(1).max(12000),
 });
 export const chatCommand = z.discriminatedUnion("action", [

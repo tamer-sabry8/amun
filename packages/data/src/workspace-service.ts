@@ -1,3 +1,4 @@
+import { ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
 import { riceScore, type RiceInputs } from "../../domain/src/rice.ts";
 import { ProductDocuments, AuthoringError } from "./product-documents.ts";
@@ -7,6 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Redactor } from "../../security/src/redaction.ts";
 import type Database from "better-sqlite3";
 import {
+  productAuthoring,
   documentImport,
   workspaceCommand,
   workspaceSnapshot,
@@ -75,6 +77,9 @@ export class WorkspaceService {
     return {
       productId,
       sources,
+      routes: new ModelRouting(this.db).list(productId),
+      modelRuns: new ModelRouting(this.db).recent(productId),
+      routingReviews: new ModelRouting(this.db).pending(productId),
       storyDecisions: new StoryDecisions(this.db).list(productId),
       storyDrafts: this.db
         .prepare(
@@ -230,7 +235,17 @@ export class WorkspaceService {
     firstmate: ProductModel,
   ): Promise<WorkspaceEvent> {
     try {
-      await this.authoring.run(input, firstmate);
+      const request = productAuthoring.parse(input);
+      await this.authoring.run(request, async (model, instruction, context) => {
+        const answer = await firstmate(model, instruction, context);
+        new ModelRouting(this.db).record(
+          request.productId,
+          randomUUID(),
+          model,
+          request.action,
+        );
+        return answer;
+      });
       return this.snapshot();
     } catch (e) {
       return {
@@ -340,6 +355,22 @@ export class WorkspaceService {
             this.savePreferences({ ...this.preferences(), productId: id });
           })
           .immediate();
+      } else if (
+        command.action === "save-model-route" ||
+        command.action === "approve-model-route"
+      ) {
+        if (this.preferences().productId !== command.productId)
+          throw new AuthoringError("Product selection changed.");
+        const routes = new ModelRouting(this.db);
+        if (command.action === "save-model-route")
+          routes.save({
+            productId: command.productId,
+            model: command.model,
+            task: command.task,
+            difficulty: command.difficulty,
+          });
+        else
+          routes.approve(command.productId, command.reviewId, command.binding);
       } else if (command.action === "product-models") {
         if (this.preferences().productId !== command.productId)
           throw new AuthoringError("Product selection changed.");
