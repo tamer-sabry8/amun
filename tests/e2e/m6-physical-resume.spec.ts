@@ -46,7 +46,21 @@ test("real Mac sleep spans a reminder deadline and wake produces one review", as
       new Date(deadline).toISOString(),
       true,
     );
-    await promisify(execFile)("/usr/bin/pmset", ["sleepnow"]);
+    if (process.env.AMUN_T053_APPLE_MENU === "1") {
+      await promisify(execFile)("/usr/bin/osascript", [
+        "-e",
+        `tell application "System Events"
+          set activeApp to first application process whose frontmost is true
+          tell menu bar item 1 of menu bar 1 of activeApp
+            click
+            delay 0.25
+            set sleepItem to menu item "Sleep" of menu 1
+            if not enabled of sleepItem then error "Apple menu Sleep is disabled"
+            click sleepItem
+          end tell
+        end tell`,
+      ]);
+    } else await promisify(execFile)("/usr/bin/pmset", ["sleepnow"]);
     await expect
       .poll(async () => (await trace.jsonValue()).map((e) => e.kind), {
         timeout: 9 * 60_000,
