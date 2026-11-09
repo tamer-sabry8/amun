@@ -2,7 +2,7 @@ export type Transport = (
   method: string,
   url: string,
   body?: unknown,
-) => Promise<{ status: number; data: unknown }>;
+) => Promise<{ status: number; data: unknown; continuationToken?: string }>;
 export type ProofItem = { id: number; rev: number };
 function positive(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;

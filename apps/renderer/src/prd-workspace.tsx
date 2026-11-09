@@ -443,6 +443,32 @@ export function PrdWorkspace({
           )}
           {prd && (
             <>
+              <button
+                disabled={
+                  !prd.approved ||
+                  !model ||
+                  context.storyDrafts.some(
+                    (d) =>
+                      d.objectiveId === objective.id &&
+                      d.version === prd.version,
+                  )
+                }
+                onClick={() =>
+                  bridge.send({
+                    version: 1,
+                    kind: "product-authoring",
+                    ...target,
+                    action: "stories",
+                    model,
+                  })
+                }
+              >
+                Generate stories
+              </button>
+              {context.storyDrafts.some(
+                (d) =>
+                  d.objectiveId === objective.id && d.version === prd.version,
+              ) && <p role="status">Story drafts ready in Backlog.</p>}
               <h3>Review PRD v{prd.version}</h3>
               <pre>{prd.markdown}</pre>
               <button

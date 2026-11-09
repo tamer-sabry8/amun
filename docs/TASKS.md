@@ -160,16 +160,16 @@ Evidence for T013–T015: [durable core acceptance](evidence/T013/2026-11-06-dur
 - [x] **T029 — RICE prioritisation** · P1 · TS · Dep T023 — Tests: formula, units, empty/zero/negative handling. DoD: "Priorities" tile shows ordered table.
       **M2 exit verified.** The Mac app generated a sourced PRD, recorded approval on v1 and invalidated the approval after an edit. [Sanitized acceptance evidence](evidence/M2-verification.md).
 
-## M3 — Backlog and sprint on Azure DevOps — LOCKED
+## M3 — Backlog and sprint on Azure DevOps — Mac exit verified
 
-- [ ] **T030 — ADO discovery and read model** · P0 · TS · Dep T009, T013 — Build: process/type/field/state/area/iteration/board-column discovery with caching; paging; permissions. DoD: Tahaluf test project rendered correctly in Backlog (list + board).
-- [ ] **T031 — Story generation from PRD** · P0 · TS · Dep T028, T030 — Build: proposed hierarchy with requirement links; unknown required fields block publication. DoD: every story traces to a requirement.
-- [ ] **T032 — Decision requests on items** · P0 · TS/React · Dep T021a, T031 — Build: AM-106 pattern: options, Firstmate proposal (Unapproved), missing confirmations, Save / Request confirmation / Later / Resolve. DoD: resolving updates the linked requirement and story.
-- [ ] **T033 — Publication preview and execution** · P0 · TS · Dep T014, T015, T031 — Build: exact preview; approval; execution with operation marker (e.g. a tag or field agreed in M0) per item; Publication tracker activity. Tests: chaos network drop after item 3. DoD: zero duplicates; created IDs reported; sprint not committed.
-- [ ] **T034 — Board and detail editing** · P1 · TS · Dep T030 — DoD: edits/moves respect board mapping and revisions; failures preserve edits.
-- [ ] **T035 — Sprint planning and commitment** · P0 · TS · Dep T033 — Build: iteration selection; manual assignees; separate commitment approval; post-execution verification. DoD: publishing cannot commit implicitly; final server state matches approval.
-- [ ] **T036 — Story blockers in Decisions tile** · P1 · TS · Dep T032 — DoD: reason, owner, age, next action listed.
-      **M3 exit:** live publication + commitment on the Tahaluf test project with chaos test evidence.
+- [x] **T030 — ADO discovery and read model** · P0 · TS · Dep T009, T013 — Build: process/type/field/state/area/iteration/board-column discovery with caching; paging; permissions. DoD: configured pilot project rendered correctly in Backlog (list + board).
+- [x] **T031 — Story generation from PRD** · P0 · TS · Dep T028, T030 — Build: proposed hierarchy with requirement links; unknown required fields block publication. DoD: every story traces to a requirement.
+- [x] **T032 — Decision requests on items** · P0 · TS/React · Dep T021a, T031 — Build: AM-106 pattern: options, Firstmate proposal (Unapproved), missing confirmations, Save / Request confirmation / Later / Resolve. DoD: resolving updates the linked requirement and story.
+- [x] **T033 — Publication preview and execution** · P0 · TS · Dep T014, T015, T031 — Build: exact preview; approval; execution with operation marker (e.g. a tag or field agreed in M0) per item; Publication tracker activity. Tests: chaos network drop after item 3. DoD: zero duplicates; created IDs reported; sprint not committed.
+- [x] **T034 — Board and detail editing** · P1 · TS · Dep T030 — DoD: edits/moves respect board mapping and revisions; failures preserve edits.
+- [x] **T035 — Sprint planning and commitment** · P0 · TS · Dep T033 — Build: iteration selection; manual assignees; separate commitment approval; post-execution verification. DoD: publishing cannot commit implicitly; final server state matches approval.
+- [x] **T036 — Story blockers in Decisions tile** · P1 · TS · Dep T032 — DoD: reason, owner, age, next action listed.
+      **M3 exit verified.** The packaged app published two items, moved them into a sprint after separate approval, and recovered from an interrupted four-item publication with zero duplicates. [Sanitized acceptance results](evidence/M3-verification.md).
 
 ## M4 — Firstmate, crew, PRs, acceptance — LOCKED
 

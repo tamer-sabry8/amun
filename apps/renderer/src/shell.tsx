@@ -1,3 +1,5 @@
+import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
+import { Backlog } from "./backlog.tsx";
 import { Priorities } from "./priorities.tsx";
 import { PrdWorkspace } from "./prd-workspace.tsx";
 import { ProductContext } from "./product-context.tsx";
@@ -1491,6 +1493,13 @@ export function App() {
                   </section>
                 </div>
               </>
+            ) : route === "decisions" && snapshot?.productContext ? (
+              <StoryBlockers context={snapshot.productContext} />
+            ) : route === "backlog" && snapshot?.productContext ? (
+              <Backlog
+                key={snapshot.productContext.productId}
+                context={snapshot.productContext}
+              />
             ) : route === "priorities" && snapshot?.productContext ? (
               <Priorities
                 key={snapshot.productContext.productId}
@@ -1566,57 +1575,69 @@ export function App() {
                         </ul>
                       </div>
                     )}
-                    {request.state === "open" && (
-                      <>
-                        {request.governed || request.type === "approve" ? (
-                          <div className="approval-note">
-                            This request needs its dedicated approval review.
-                            Opening it does not approve or execute it.
-                          </div>
-                        ) : (
-                          <form
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              command("resolve", {
-                                id: request.id,
-                                source: "review",
-                                ...(request.type === "answer"
-                                  ? { answer }
-                                  : {}),
-                              });
-                            }}
-                          >
-                            {request.type === "answer" && (
-                              <label>
-                                Your answer
-                                <textarea
-                                  value={answer}
-                                  onChange={(event) =>
-                                    setAnswer(event.target.value)
-                                  }
-                                  maxLength={16384}
-                                />
-                              </label>
-                            )}
-                            <button
-                              className="primary"
-                              disabled={
-                                request.type === "answer" && !answer.trim()
-                              }
+                    {snapshot?.productContext?.storyDecisions.some(
+                      (d) => d.id === request.id,
+                    ) ? (
+                      <DecisionReview
+                        key={request.id}
+                        productId={request.productId}
+                        decision={snapshot.productContext.storyDecisions.find(
+                          (d) => d.id === request.id,
+                        )!}
+                      />
+                    ) : (
+                      request.state === "open" && (
+                        <>
+                          {request.governed || request.type === "approve" ? (
+                            <div className="approval-note">
+                              This request needs its dedicated approval review.
+                              Opening it does not approve or execute it.
+                            </div>
+                          ) : (
+                            <form
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                command("resolve", {
+                                  id: request.id,
+                                  source: "review",
+                                  ...(request.type === "answer"
+                                    ? { answer }
+                                    : {}),
+                                });
+                              }}
                             >
-                              {request.type === "answer"
-                                ? "Save answer"
-                                : "Mark reviewed"}
-                            </button>
-                          </form>
-                        )}
-                        <button
-                          className="text-button"
-                          onClick={() => snooze(request)}
-                        >
-                          Later — snooze for one hour
-                        </button>
-                      </>
+                              {request.type === "answer" && (
+                                <label>
+                                  Your answer
+                                  <textarea
+                                    value={answer}
+                                    onChange={(event) =>
+                                      setAnswer(event.target.value)
+                                    }
+                                    maxLength={16384}
+                                  />
+                                </label>
+                              )}
+                              <button
+                                className="primary"
+                                disabled={
+                                  request.type === "answer" && !answer.trim()
+                                }
+                              >
+                                {request.type === "answer"
+                                  ? "Save answer"
+                                  : "Mark reviewed"}
+                              </button>
+                            </form>
+                          )}
+                          <button
+                            className="text-button"
+                            onClick={() => snooze(request)}
+                          >
+                            Later — snooze for one hour
+                          </button>
+                        </>
+                      )
                     )}
                     <p className="muted">
                       {request.state === "resolved"

@@ -1,0 +1,12 @@
+# M3 acceptance on macOS
+
+| Task          | Verified outcome                                                                                                                                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T030          | The packaged app discovered the configured process and team board. An independent server read confirmed the displayed backlog row and board card.                                                                                                                          |
+| T031          | A real local model generated a hierarchy from an approved PRD. Each story linked to a quoted requirement. A missing required custom field blocked the publication preview.                                                                                                 |
+| T032 and T036 | Firstmate proposed options. The product manager saved a choice, requested confirmation, deferred the decision, then resolved it. The story showed the resolution and the blocker cleared from Decisions.                                                                   |
+| T033          | Two unassigned items were published to the project root. The app recovered an existing item by marker after server-side HTML normalization. A local TLS fixture dropped the third acknowledgement in a four-item batch. Reconciliation finished with exactly four creates. |
+| T034          | A stale board edit preserved the entered title. After reload the app applied the reviewed change and verified the mapped column, state and new revision against the local fixture.                                                                                         |
+| T035          | After separate approval, the app moved both live items into the reviewed sprint. Independent reads verified the iteration and empty assignees.                                                                                                                             |
+
+The verified M3 checkout passed 483 unit tests across 143 files, lint, typechecking and formatting. The packaged local-model journey and the packaged backlog tests passed on an arm64 Mac.

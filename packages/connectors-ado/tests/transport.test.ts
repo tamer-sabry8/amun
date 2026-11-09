@@ -90,3 +90,16 @@ it("does not follow credential-bearing redirects", async () => {
   ).rejects.toThrow("request_rejected_302");
   expect(escaped).toBe(0);
 });
+it("retains the server pagination token for discovery reads", async () => {
+  server.use(
+    http.get(base + "boards", () =>
+      HttpResponse.json(
+        { value: [] },
+        { headers: { "x-ms-continuationtoken": "next" } },
+      ),
+    ),
+  );
+  expect(
+    await azureTransport(base, "test-canary")("GET", base + "boards"),
+  ).toMatchObject({ status: 200, continuationToken: "next" });
+});

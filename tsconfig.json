@@ -12,6 +12,7 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
   },
+  "exclude": ["**/node_modules", "apps/desktop/out", "apps/desktop/.runtime"],
   "include": [
     "packages/**/*.ts",
     "apps/**/*.ts",

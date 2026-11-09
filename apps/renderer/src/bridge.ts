@@ -1,4 +1,6 @@
 import {
+  backlogResult,
+  operationResult,
   healthRequest,
   healthResponse,
   workspaceEvent,
@@ -123,6 +125,16 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        return;
+      }
+      const operation = operationResult.safeParse(message.data);
+      if (operation.success) {
+        for (const listener of eventListeners) listener(operation.data);
+        return;
+      }
+      const backlog = backlogResult.safeParse(message.data);
+      if (backlog.success) {
+        for (const listener of eventListeners) listener(backlog.data);
         return;
       }
       const native = nativePiEvent.safeParse(message.data);

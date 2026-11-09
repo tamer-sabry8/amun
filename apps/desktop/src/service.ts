@@ -1,3 +1,12 @@
+import { runAdoOperation } from "./ado-operations.ts";
+import { AdoWriteClient } from "../../../packages/connectors-ado/src/governed-writes.ts";
+import {
+  adoOperation,
+  backlogRead,
+} from "../../../packages/contracts/src/backlog.ts";
+import { projectSource } from "../../../packages/connectors-ado/src/project-source.ts";
+import { BoardDiscovery } from "../../../packages/connectors-ado/src/board-discovery.ts";
+import { azureTransport } from "../../../packages/connectors-ado/src/transport.ts";
 import { localStow } from "../../../packages/crew/src/firstmate-stow.ts";
 import { BoardError } from "../../../packages/crew/src/firstmate-board.ts";
 import { FirstmateSupervision } from "../../service/src/firstmate-supervision.ts";
@@ -508,6 +517,7 @@ process.parentPort?.on("message", (event) => {
     },
     (event) => port.postMessage(event),
   );
+  let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
@@ -524,6 +534,133 @@ process.parentPort?.on("message", (event) => {
         })
         .finally(() => {
           listingCrew = false;
+        });
+    } else if (
+      message.data?.kind === "backlog-read" ||
+      message.data?.kind === "ado-operation"
+    ) {
+      const parsed =
+        message.data.kind === "ado-operation"
+          ? adoOperation.safeParse(message.data)
+          : backlogRead.safeParse(message.data);
+      if (!parsed.success) return;
+      const request = parsed.data;
+      const context = workspaceService.snapshot().productContext;
+      if (context?.productId !== request.productId) return;
+      const source = context.sources.find(
+        (s) => s.id === request.sourceId && s.kind === "ado",
+      );
+      const meta = {
+        kind: "backlog-result",
+        productId: request.productId,
+        requestId: request.requestId,
+      };
+      const read = async () => {
+        if (!source?.reference)
+          throw Error("Map an Azure project in Product context.");
+        const { connection, collection, project } = projectSource(
+          source.reference,
+          authMetadata.list(),
+        );
+        const secret = authKeyring().get(
+          workspaceIdentity(workspace) + "/" + connectionId(connection),
+        );
+        if (!secret)
+          throw Error("Connect the mapped Azure collection in Settings.");
+        redactor.register(secret);
+        const scope = JSON.stringify([
+          request.productId,
+          source.id,
+          collection,
+          project,
+          createHash("sha256").update(secret).digest("hex"),
+        ]);
+        if (lastBoardRead?.scope !== scope) {
+          lastBoardRead = {
+            scope,
+            reader: new BoardDiscovery(
+              collection,
+              project,
+              azureTransport(collection, secret),
+            ),
+          };
+        }
+        const d = lastBoardRead.reader;
+        if (request.kind === "ado-operation")
+          return runAdoOperation(
+            workspace,
+            request,
+            { collection, project, team: request.team },
+            d,
+            new AdoWriteClient(
+              collection,
+              project,
+              azureTransport(collection, secret),
+            ),
+            () =>
+              workspaceService.snapshot().preferences.productId ===
+              request.productId,
+          );
+        if (request.action === "schema")
+          return { ...meta, view: "schema", schema: await d.processSchema() };
+        if (request.action === "teams")
+          return { ...meta, view: "teams", teams: await d.teams() };
+        if (request.action === "options") {
+          return {
+            ...meta,
+            view: "options",
+            levels: await d.levels(request.team),
+          };
+        }
+        const level = (await d.levels(request.team)).find(
+          (x) => x.id === request.level,
+        );
+        if (!level) throw Error("Unknown backlog level");
+        const [settings, columns] = await Promise.all([
+          d.boardSettings(request.team, level.name),
+          d.columns(request.team, level.name),
+        ]);
+        return {
+          ...meta,
+          view: "cards",
+          columns,
+          cards: await d.cards(
+            request.team,
+            request.level,
+            settings.columnField,
+          ),
+          canEditBoard: settings.canEdit,
+        };
+      };
+      void read()
+        .catch((error: unknown) => {
+          const raw = error instanceof Error ? error.message : "";
+          if (request.kind === "ado-operation")
+            return {
+              ...meta,
+              kind: "ado-operation-result",
+              message:
+                raw === "revision_conflict"
+                  ? "The Azure item changed. Your edits are retained. Reload its revision before saving."
+                  : redactor.text(raw || "Azure operation failed."),
+            };
+          const message =
+            raw === "request_rejected_403"
+              ? "Azure denied read access to this board."
+              : raw === "request_rejected_401"
+                ? "Azure sign-in expired. Check the connection in Settings."
+                : raw === "Connect the mapped Azure collection in Settings."
+                  ? raw
+                  : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
+          return { ...meta, view: "error", message };
+        })
+        .then((reply) => {
+          if (
+            !closed &&
+            workspaceService.snapshot().productContext?.productId ===
+              request.productId
+          )
+            port.postMessage(reply);
         });
     } else if (message.data?.kind === "product-authoring") {
       void workspaceService
