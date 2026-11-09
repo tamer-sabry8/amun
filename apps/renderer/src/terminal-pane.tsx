@@ -27,6 +27,16 @@ export function TerminalPane({
       theme: { background: "#0B0E14", foreground: "#F2F5F8" },
     });
     terminal.open(container.current);
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type === "keydown" && event.key === "Tab" && event.shiftKey) {
+        event.preventDefault();
+        container.current?.parentElement
+          ?.querySelector<HTMLButtonElement>(".terminal-toolbar button")
+          ?.focus();
+        return false;
+      }
+      return true;
+    });
     const unsubscribe = bridge.onEvent((input) => {
       if (
         input &&
