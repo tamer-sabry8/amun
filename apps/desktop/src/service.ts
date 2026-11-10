@@ -1,7 +1,7 @@
 import {
-  diagnosticEvent,
-  type DiagnosticEvent,
-} from "../../../packages/contracts/src/diagnostic.ts";
+  recordDiagnostics,
+  sqliteDiagnosticExporter,
+} from "../../../packages/data/src/diagnostic-exporter.ts";
 import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
 import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
@@ -128,17 +128,7 @@ const workspace = openWorkspace(
   requireNative(databaseModule) as typeof Database,
 );
 const redactor = new Redactor();
-function recordDiagnostic(event: DiagnosticEvent) {
-  try {
-    workspace
-      .prepare(
-        "INSERT INTO diagnostic_events(event,subject,elapsed_ms) VALUES(?,?,?)",
-      )
-      .run(event.event, event.subject, event.elapsedMs);
-  } catch {
-    /* Optional measurements must never interrupt user work. */
-  }
-}
+const recordDiagnostic = recordDiagnostics(sqliteDiagnosticExporter(workspace));
 const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
@@ -638,10 +628,7 @@ process.parentPort?.on("message", (event) => {
   let updatingFirstmate = false;
   port.on("message", (message) => {
     if (message.data?.kind === "diagnostic") {
-      const event = diagnosticEvent.safeParse(message.data);
-      if (event.success) {
-        recordDiagnostic(event.data);
-      }
+      recordDiagnostic(message.data);
       return;
     }
     const response = handleHealthRequest(message.data);

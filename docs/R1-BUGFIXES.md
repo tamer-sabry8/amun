@@ -53,6 +53,8 @@ The initial PR head recorded scope and the owner hold. Subsequent commits add th
 
 ### Local diagnostic queries
 
+R1 uses only the local SQLite exporter. Its contract admits enumerated event and subject names and a bounded duration. The MCP reader validates stored rows again before returning a report. Raw errors, prompts, filesystem paths, tokens and user content are excluded. R2-DIAG tracks future email delivery; a future Sentry exporter requires explicit opt-in.
+
 Run `node packages/diagnostics-mcp/server.ts` as a local stdio MCP server to query the issue register with `list_beta_issues`. To read measurements, pass an explicit candidate workspace database path as the sole argument. The server opens it read-only. `query_diagnostics` accepts event, subject and limit. No database is opened for issue-register queries. Older builds have audit records but lack the diagnostic table.
 
 The source records native dialog opening to the next visible frame opportunity, sign-in click to its first visible dialog frame, provider error status, renderer errors and unhandled promise rejections. These are frame estimates. It retains the newest 2,000 measurements per workspace. The events carry enumerated subjects and durations only. No credential, input text, browser address, conversation, or device code is accepted. The service also measures worker launch to first prompt and requested browser handoff. Full crash reports, detailed provider error categories and end-to-end cross-process traces remain open.

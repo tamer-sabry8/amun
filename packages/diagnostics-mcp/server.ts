@@ -9,6 +9,12 @@ const server = new McpServer({
   name: "amun-beta-diagnostics",
   version: "0.1.0",
 });
+const reportRow = z.strictObject({
+  at: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+  event: diagnosticEvent.shape.event,
+  subject: diagnosticEvent.shape.subject,
+  elapsed_ms: diagnosticEvent.shape.elapsedMs,
+});
 const databasePath = process.argv[2];
 const tracker = new URL("../../docs/R1-BUGFIXES.md", import.meta.url);
 const textResult = (text: string) => ({
@@ -53,11 +59,12 @@ server.registerTool(
       return textResult(
         "No diagnostics database selected. Pass a candidate workspace.sqlite path when starting the server.",
       );
-    const db = new DatabaseSync(databasePath, {
-      readOnly: true,
-      allowExtension: false,
-    });
+    let db: DatabaseSync | undefined;
     try {
+      db = new DatabaseSync(databasePath, {
+        readOnly: true,
+        allowExtension: false,
+      });
       db.exec("PRAGMA trusted_schema=OFF; PRAGMA query_only=ON");
       if (
         !db
@@ -78,9 +85,15 @@ server.registerTool(
           subject ?? null,
           limit,
         );
-      return textResult(JSON.stringify(rows));
+      const reports = rows.flatMap((row) => {
+        const parsed = reportRow.safeParse(row);
+        return parsed.success ? [parsed.data] : [];
+      });
+      return textResult(JSON.stringify(reports));
+    } catch {
+      return textResult("The local diagnostics database could not be read.");
     } finally {
-      db.close();
+      db?.close();
     }
   },
 );

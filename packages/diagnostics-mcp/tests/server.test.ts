@@ -23,6 +23,9 @@ it("queries one report and filters a disposable timing database over MCP", async
       db.exec(
         "INSERT INTO diagnostic_events(event,subject,elapsed_ms) VALUES ('login-first-dialog','openai',42),('provider-error','openrouter',NULL)",
       );
+      db.exec(
+        "INSERT INTO diagnostic_events(at,event,subject,elapsed_ms) VALUES ('/Users/private-token','dialog-frame','openai',4),('2026-11-10 05:00:00','private-prompt','openai',4)",
+      );
     } finally {
       db.close();
     }
@@ -43,6 +46,7 @@ it("queries one report and filters a disposable timing database over MCP", async
     });
     expect(JSON.stringify(result.content)).toContain("login-first-dialog");
     expect(JSON.stringify(result.content)).not.toContain("openrouter");
+    expect(JSON.stringify(result.content)).not.toContain("private");
   } finally {
     await client.close();
     await rm(root, { recursive: true, force: true });
