@@ -102,4 +102,4 @@ Focused rebuilt Mac acceptance passed five tests in 26.2 seconds, covering PDF e
 
 On 10 November the owner explicitly accepted the separate chaos and ADO batch recovery evidence and instructed closure of T054. The accepted composition combines the real packaged keyboard journey, the separate packaged crash/lost-response scenarios and the ADO batch lost-acknowledgement regression after item three. T054 is complete under that decision. The same-flow live interruption remains a recorded proof boundary.
 
-The owner retained the 500 MiB memory budget and requested a task selection checkpoint before further M6 implementation. T056, T057 and T058 remain open pending selection.
+The owner retained the 500 MiB memory budget and requested a task selection checkpoint before further M6 implementation. The owner then selected T056, T057 and T058 to proceed under the standing approvals.

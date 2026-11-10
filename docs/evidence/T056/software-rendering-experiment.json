@@ -1,0 +1,110 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "packaged": true,
+  "rendererMode": "software experiment",
+  "trials": [
+    {
+      "startupMs": 1057,
+      "workingSetMiB": 575,
+      "processes": 5,
+      "processWorkingSets": [
+        {
+          "type": "Browser",
+          "workingSetMiB": 173
+        },
+        {
+          "type": "GPU",
+          "workingSetMiB": 100
+        },
+        {
+          "type": "Utility",
+          "name": "Network Service",
+          "workingSetMiB": 48
+        },
+        {
+          "type": "Tab",
+          "workingSetMiB": 148
+        },
+        {
+          "type": "Utility",
+          "name": "Amun Service",
+          "workingSetMiB": 106
+        }
+      ],
+      "terminalEchoMs": 26
+    },
+    {
+      "startupMs": 461,
+      "workingSetMiB": 619,
+      "processes": 5,
+      "processWorkingSets": [
+        {
+          "type": "Browser",
+          "workingSetMiB": 171
+        },
+        {
+          "type": "GPU",
+          "workingSetMiB": 129
+        },
+        {
+          "type": "Utility",
+          "name": "Network Service",
+          "workingSetMiB": 48
+        },
+        {
+          "type": "Tab",
+          "workingSetMiB": 165
+        },
+        {
+          "type": "Utility",
+          "name": "Amun Service",
+          "workingSetMiB": 106
+        }
+      ],
+      "terminalEchoMs": 24
+    },
+    {
+      "startupMs": 310,
+      "workingSetMiB": 605,
+      "processes": 5,
+      "processWorkingSets": [
+        {
+          "type": "Browser",
+          "workingSetMiB": 171
+        },
+        {
+          "type": "GPU",
+          "workingSetMiB": 116
+        },
+        {
+          "type": "Utility",
+          "name": "Network Service",
+          "workingSetMiB": 49
+        },
+        {
+          "type": "Tab",
+          "workingSetMiB": 163
+        },
+        {
+          "type": "Utility",
+          "name": "Amun Service",
+          "workingSetMiB": 106
+        }
+      ],
+      "terminalEchoMs": 25
+    }
+  ],
+  "limitations": [
+    "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+    "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+    "Terminal echo includes automation scheduling",
+    "Other apps remained running"
+  ],
+  "budgets": {
+    "startupMs": 3000,
+    "workingSetMiB": 500,
+    "terminalEchoMs": 200
+  },
+  "budgetsStatus": "M6 packaged full-shell measurements against the T012 budgets"
+}

@@ -29,9 +29,6 @@ import {
 } from "./notion-result.ts";
 import { notionToolPolicy } from "../../domain/src/notion-tools.ts";
 import { createHash } from "node:crypto";
-import { auth } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { withRefreshLock, type Keyring } from "./broker.ts";
 import { createOAuthLoopback } from "./oauth-loopback.ts";
 import {
@@ -79,6 +76,8 @@ async function verifyMcp(
   },
   memory?: MemoryExchange,
 ): Promise<void> {
+  const { Client, StreamableHTTPClientTransport } =
+    await import("./mcp-client.ts");
   const client = new Client({ name: "amun", version: "0.1.0" });
   let creating = false;
   let committedHint: unknown;
@@ -498,6 +497,7 @@ export class NotionConnection {
             serverUrl: NOTION_MCP,
             fetchFn: notionAuthFetch(this.options.fetcher),
           };
+          const { auth } = await import("./mcp-client.ts");
           const result = await auth(provider, oauthOptions);
           if (result === "REDIRECT")
             await auth(provider, {

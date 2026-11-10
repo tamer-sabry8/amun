@@ -1,5 +1,3 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { boundedMcpResponse } from "./notion-response.ts";
 import { obsidianEndpoints } from "../../contracts/src/auth.ts";
 
@@ -9,6 +7,8 @@ export async function probeObsidian(
   send: typeof fetch,
 ) {
   if (!obsidianEndpoints.some((url) => url === endpoint)) return false;
+  const { Client, StreamableHTTPClientTransport } =
+    await import("./mcp-client.ts");
   const client = new Client({ name: "amun", version: "0.1.0" });
   try {
     await client.connect(

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, mkdir, open } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { modelLoginOptions } from "./broker.ts";
+import { modelLoginOptions } from "../../contracts/src/auth.ts";
 export function validateLogin(provider: string, type: string): void {
   if (
     !modelLoginOptions.some(

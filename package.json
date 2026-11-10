@@ -19,6 +19,8 @@
     "runtime:stage": "pnpm --filter @amun/pi-runtime deploy --legacy --prod --force apps/desktop/.runtime/pi && node scripts/prepare-runtime.ts && pnpm install --frozen-lockfile --prod=false",
     "package": "pnpm runtime:stage && pnpm firstmate:stage && pnpm terminal:stage && pnpm database:stage && pnpm mcp:stage && pnpm auth:stage && pnpm --filter @amun/desktop package",
     "test:packaged": "node scripts/packaged-proof.ts",
+    "release:mac": "AMUN_RELEASE=1 node scripts/release-mac.ts",
+    "beta:mac": "AMUN_BETA=1 node scripts/beta-mac.ts",
     "firstmate:stage": "node scripts/stage-firstmate.ts",
     "test:pi-bridge": "node scripts/pi-bridge-proof.mjs",
     "test:firstmate": "node scripts/firstmate-proof.ts",

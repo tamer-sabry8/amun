@@ -36,6 +36,10 @@ For Notion, replace the manual integration-token onboarding with official hosted
 
 Keep credentials in Amun's protected service-owned storage, never in renderer state, logs or exports. Authentication does not authorize publication: preserve governed writes, exact-content review, destination binding and uncertain-write reconciliation. This preference does not expand milestone scope or prove a connector's live acceptance.
 
+## Trusted tester beta and release signing
+
+On 2026-11-10 the owner selected an ad-hoc-signed R1 beta for trusted testers on Apple-chip Macs. Developer ID signing and notarization are deferred to the final step of R2. Do not claim Apple verification, notarization or public-release readiness for the beta. Preserve the 500 MiB memory budget and report its actual acceptance result. Keep the proper Developer ID release path separate from the explicit beta mode.
+
 ## Public hosting
 
 Every workspace owner chooses a hosting provider and hostname before hosted publication. Use `https://amun.transfrm.ai` only for Tamer’s own setup. The user owns the parent zone in Cloudflare. Use Cloudflare's hosted API MCP with Code Mode for the hosting acceptance test. Inspect existing records, bind each proposed operation to the intended zone and hostname, and verify DNS and HTTPS after deployment. Track the GitHub web callback separately from device sign-in.

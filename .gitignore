@@ -7,8 +7,7 @@ test-results/
 .env.*
 !.env.example
 .DS_Store
-apps/desktop/renderer/renderer.js
-apps/desktop/renderer/diff-worker.js
+apps/desktop/renderer/*.js
 apps/desktop/.runtime/
 apps/desktop/out/
 

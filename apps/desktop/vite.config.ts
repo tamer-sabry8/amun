@@ -4,7 +4,6 @@ export default defineConfig({
   build: {
     lib: {
       entry: {
-        main: "src/main.ts",
         service: "src/service.ts",
         "auth-worker": "src/auth-worker.ts",
         "native-pi-worker": "src/native-pi-worker.ts",

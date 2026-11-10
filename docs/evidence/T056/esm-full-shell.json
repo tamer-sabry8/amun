@@ -1,0 +1,37 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "packaged": true,
+  "trials": [
+    {
+      "startupMs": 9556,
+      "workingSetMiB": 563,
+      "processes": 5,
+      "terminalEchoMs": 26
+    },
+    {
+      "startupMs": 365,
+      "workingSetMiB": 554,
+      "processes": 5,
+      "terminalEchoMs": 25
+    },
+    {
+      "startupMs": 329,
+      "workingSetMiB": 540,
+      "processes": 5,
+      "terminalEchoMs": 25
+    }
+  ],
+  "limitations": [
+    "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+    "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+    "Terminal echo includes automation scheduling",
+    "Other apps remained running"
+  ],
+  "budgets": {
+    "startupMs": 3000,
+    "workingSetMiB": 500,
+    "terminalEchoMs": 200
+  },
+  "budgetsStatus": "M6 packaged full-shell measurements against the T012 budgets"
+}

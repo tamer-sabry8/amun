@@ -198,14 +198,22 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 
 [M5 verification and M6 handoff](M5-TO-M6-HANDOFF.md).
 
-## M6 — Hardening and release — awaiting owner task selection
+## M6 — Hardening and release — active
 
 - [x] **T053 — Chaos suite** · P0 — all scenarios in section 12. [Mac chaos evidence and physical wake result](evidence/T053/README.md).
 - [x] **T054 — Accessibility and keyboard** · P0 — three-theme axe and normal keyboard golden path verified through live publication, sprint commitment, worker reattachment, TEST merge, acceptance and Notion publication. On 10 November the owner accepted the separate chaos and ADO batch recovery evidence for the interruption step. [Accepted coverage and Mac evidence](evidence/T054/README.md).
 - [x] **T055 — Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens. [Approved visual baselines](evidence/T055/README.md).
-- [ ] **T056 — Performance** · P1 — budgets from T012 met. The owner retained the 500 MiB memory budget on 10 November. Latest warm-cache memory measured 587–589 MiB. Further work awaits owner task selection. [Measurements and remediation](evidence/T056/README.md).
-- [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex. [Release prerequisite status](evidence/T057/README.md).
-- [ ] **T058 — R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off. [Draft evidence matrix and open conditions](R1-ACCEPTANCE.md).
+- [ ] **T056 — Performance** · P1 — budgets from T012 met. The owner retained the 500 MiB memory budget and selected all remaining M6 tasks on 10 November. Actual module splitting reduced the latest measured full-shell memory to 532–546 MiB; the gate still fails. Further Azure SDK deferral is under packaged verification. [Measurements and remediation](evidence/T056/README.md).
+- [ ] **T057 — Beta packaging** · P0 — owner revised on 10 November: ad-hoc-signed DMG for trusted testers, pinned Pi + Firstmate, launch verified on this Apple-chip Mac. Developer ID signing and notarization move to the final step of R2. Claude 2.1.321 isolated inference passed. DMG and copy-out launch verification are in progress. [Beta/release evidence](evidence/T057/README.md).
+- [ ] **T058 — R1 acceptance report** · P0 — F01–F23 linked to evidence; residual limitations named. Matrix prepared, awaiting remaining technical gates and product-owner sign-off. [Draft evidence matrix and open conditions](R1-ACCEPTANCE.md).
+
+## R2 — Decision and planning workflows
+
+- [ ] **T059 — Visual roadmap** — Initiatives by objective, release and status; editable sequencing with dependency evidence. Start from the verified beta and owner installation feedback, preserving product isolation and labeling inferred dependencies until confirmed.
+- [ ] **T060 — Decision Room** — Alternatives, adversarial specialist perspectives, source evidence, uncertainty and a recorded human decision. Keep Firstmate as the single owner-facing coordinator.
+- [ ] **T061 — RFP and proposal workflows** — Requirements ingestion, compliance matrix and sourced draft sections. Preserve exact-content and destination review before external publication.
+- [ ] **T062 — R2 integrated acceptance** — TDD and real packaged Mac journeys for R2, beta feedback, remaining performance work and regression evidence. Retain the 500 MiB budget.
+- [ ] **R001 — Final R2 release gate** — Last step of R2 by owner decision on 10 November: install the selected Developer ID identity and protected notarization profile; sign app/helpers/native modules; notarize and staple the DMG; clean-account installation and signed-update Keychain acceptance. No public release before this gate passes.
 
 ## R3 — Expansion backlog
 
@@ -259,7 +267,7 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 ## Explicit scope decisions — 2026-11-06
 
 - Focus T010 on secure preview/external handoff and direct-login persistence proof. Local-file protocol, annotations, screenshot import and production agent attachment delivery are retained for later milestones, not implemented or waived. See `preview/STRESS-TEST.md`.
-- Release gate R001 (open): Apple Developer setup, signing/notarization including native modules, notarized DMG and clean-account installation acceptance. Moved out of M0 at the user’s explicit request; no release evidence is claimed.
+- Release gate R001 (open): Apple Developer setup, signing/notarization including native modules, notarized DMG and clean-account installation acceptance. Moved out of M0 at the user's explicit request, then moved to the final step of R2 on 10 November. R1 is an ad-hoc-signed beta for trusted testers; no Developer ID or notarization pass is claimed.
 - PR #1 may be merged only after the revised M0 gates are all verified; the user authorized that conditional merge. M1 remains locked until then.
 
 Earlier dated/incremental notes below the milestone lists are historical snapshots. The current acceptance status and `M0-final-audit.md` supersede their unresolved-gate wording.

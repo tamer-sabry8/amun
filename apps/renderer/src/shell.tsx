@@ -6,13 +6,14 @@ import { FirstmateComposer } from "./firstmate-composer.tsx";
 import { StoryBlockers, DecisionReview } from "./story-decisions.tsx";
 import { Backlog } from "./backlog.tsx";
 import { Priorities } from "./priorities.tsx";
-import { PrdWorkspace } from "./prd-workspace.tsx";
 import { ProductContext } from "./product-context.tsx";
 import { AgentsPanel } from "./agents-panel.tsx";
 import { NativePiPanel } from "./native-pi-panel.tsx";
 import { canSubmitAuthPrompt } from "./auth-prompt.ts";
 import { createRoot } from "react-dom/client";
 import {
+  lazy,
+  Suspense,
   useEffect,
   useReducer,
   useRef,
@@ -40,9 +41,19 @@ import {
 } from "./layout.ts";
 import { Island, attentionLabels } from "./island.tsx";
 import { Icon } from "./icons.tsx";
-import { TerminalPane } from "./terminal-pane.tsx";
 import "./tokens.css";
 import "./shell.css";
+const PrdWorkspace = lazy(() =>
+  import("./prd-workspace.tsx").then(({ PrdWorkspace }) => ({
+    default: PrdWorkspace,
+  })),
+);
+const TerminalPane = lazy(() =>
+  import("./terminal-pane.tsx").then(({ TerminalPane }) => ({
+    default: TerminalPane,
+  })),
+);
+
 const tools = [
   ["browser", "Browser"],
   ["terminal", "Terminal"],
@@ -1532,17 +1543,19 @@ export function App() {
                 context={snapshot.productContext}
               />
             ) : route === "prd" && snapshot?.productContext ? (
-              <PrdWorkspace
-                openPreview={(url) => {
-                  setPreviewURL(url);
-                  dispatch({ type: "inspect", tab: "web" });
-                  browser({ action: "navigate", url });
-                }}
-                key={snapshot.productContext.productId}
-                context={snapshot.productContext}
-                mode={mode}
-                setMode={setMode}
-              />
+              <Suspense fallback={<p role="status">Opening PRD studio…</p>}>
+                <PrdWorkspace
+                  openPreview={(url) => {
+                    setPreviewURL(url);
+                    dispatch({ type: "inspect", tab: "web" });
+                    browser({ action: "navigate", url });
+                  }}
+                  key={snapshot.productContext.productId}
+                  context={snapshot.productContext}
+                  mode={mode}
+                  setMode={setMode}
+                />
+              </Suspense>
             ) : route === "prs" && snapshot?.productContext ? (
               <PullWorkspace
                 key={snapshot.productContext.productId}
@@ -1762,14 +1775,16 @@ export function App() {
           }
         />
         {layout.terminal && (
-          <TerminalPane
-            key={terminalTask ?? "workspace"}
-            taskId={terminalTask}
-            onClose={() => {
-              setTerminalTask(null);
-              dispatch({ type: "terminal" });
-            }}
-          />
+          <Suspense fallback={<p role="status">Opening terminal…</p>}>
+            <TerminalPane
+              key={terminalTask ?? "workspace"}
+              taskId={terminalTask}
+              onClose={() => {
+                setTerminalTask(null);
+                dispatch({ type: "terminal" });
+              }}
+            />
+          </Suspense>
         )}
       </div>
       <aside className="status-rail" aria-label="Status rail">
