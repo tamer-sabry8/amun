@@ -211,3 +211,37 @@ it("refuses a payload changed after the preview check but before durable approva
     db.close();
   }
 });
+
+it("resumes the same pending review after restart and rejects destination or workspace drift", () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const publisher = {
+    create: vi.fn(async () => ({ state: "unknown" as const })),
+  };
+  try {
+    const prepared = new NotionConversationReview(db, publisher).prepare(
+      { title: "Saved update", text: "Exact body" },
+      target,
+      "workspace-id",
+    );
+    const resumed = new NotionConversationReview(db, publisher);
+    expect(resumed.restore(target, "workspace-id")).toMatchObject({
+      ...prepared,
+      draftText: "Exact body",
+    });
+    expect(() =>
+      resumed.restore(
+        { ...target, parentId: "33333333-3333-4333-8333-333333333333" },
+        "workspace-id",
+      ),
+    ).toThrow();
+    expect(() => resumed.restore(target, "other-workspace")).toThrow();
+    expect(() =>
+      resumed.restore(target, "workspace-id", "foreign-product"),
+    ).toThrow();
+    expect(db.prepare("SELECT count(*) FROM actions").pluck().get()).toBe(1);
+    expect(publisher.create).not.toHaveBeenCalled();
+  } finally {
+    db.close();
+  }
+});

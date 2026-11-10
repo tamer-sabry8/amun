@@ -30,7 +30,7 @@ Draft. M6 remains open. Product-owner sign-off is pending.
 
 ## Current measurements and limitations
 
-The rebuilt packaged Mac regression passed 55 tests with 21 conditional tests skipped. Live Azure publication and commitment, worker dispatch and reattachment, and TEST GitHub PR checks are recorded separately in T054. The broad suite includes three-theme axe and keyboard navigation.
+The broad packaged Mac regression passed 55 tests with 21 conditional tests skipped. After adding saved-review recovery, five focused packaged Mac tests and all 510 unit tests passed. The original approved T054 Notion review was resumed after restart, published once and independently fetched. Live Azure publication and commitment, worker dispatch and reattachment, and TEST GitHub PR checks are recorded separately in T054. The broad suite includes three-theme axe and keyboard navigation.
 
 The full shell exceeds the 500 MiB foundation-shell working-set budget. T056 records initial and deferred-editor measurements and remains open. Repeated process-cold launches after the regression suite pass the startup and terminal-echo budgets. The first launches after rebuilding exceeded the startup budget.
 

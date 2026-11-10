@@ -38,8 +38,15 @@ export function StakeholderEditor({
         setReview(r.review);
         notify(r.message ?? "");
         if (r.title !== undefined && r.text !== undefined) {
-          if (r.review) setExact({ title: r.title, text: r.text });
-          else {
+          if (r.review) {
+            setExact({ title: r.title, text: r.text });
+            setEditing(true);
+            setChannel(r.review.channel);
+            if (r.draftText !== undefined) {
+              setTitle(r.title);
+              setText(r.draftText);
+            }
+          } else {
             setEditing(true);
             setTitle(r.title);
             setText(r.text);
@@ -85,6 +92,9 @@ export function StakeholderEditor({
         </label>
         <button onClick={() => send("draft", objective ? { objective } : {})}>
           Draft from source records
+        </button>
+        <button onClick={() => send("restore", {})}>
+          Resume last Notion review
         </button>
         {editing ? (
           <>

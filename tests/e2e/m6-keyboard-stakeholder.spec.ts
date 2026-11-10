@@ -64,26 +64,39 @@ test("keyboard journey prepares the exact synthetic delivery update for owner re
       has: page.locator("summary").filter({ hasText: /^Stakeholder update$/ }),
     });
     await activate(update.locator("summary"));
-    await activate(
-      update.getByRole("button", {
-        name: "Draft from source records",
-        exact: true,
-      }),
-    );
-    await expect(update.getByLabel("Update content")).toHaveValue(
-      /Revoke Invitation — Accepted/,
-    );
-    await enter(update.getByLabel("Update title"), title);
-    await enter(update.getByLabel("Update content"), text);
-    await reach(page, update.getByLabel("Share via"));
-    await page.keyboard.press("n");
-    await page.keyboard.press("Tab");
-    await activate(
-      update.getByRole("button", {
-        name: "Review exact content and destination",
-        exact: true,
-      }),
-    );
+    const approvedBinding = process.env.AMUN_T054_APPROVED_BINDING;
+    if (approvedBinding) {
+      expect(approvedBinding).toBe(
+        "8c003af9c7fdb653a0d8fc6e2beb2d71a7d2b98a85baa5a9630434fd36801645",
+      );
+      await activate(
+        update.getByRole("button", {
+          name: "Resume last Notion review",
+          exact: true,
+        }),
+      );
+    } else {
+      await activate(
+        update.getByRole("button", {
+          name: "Draft from source records",
+          exact: true,
+        }),
+      );
+      await expect(update.getByLabel("Update content")).toHaveValue(
+        /Revoke Invitation — Accepted/,
+      );
+      await enter(update.getByLabel("Update title"), title);
+      await enter(update.getByLabel("Update content"), text);
+      await reach(page, update.getByLabel("Share via"));
+      await page.keyboard.press("n");
+      await page.keyboard.press("Tab");
+      await activate(
+        update.getByRole("button", {
+          name: "Review exact content and destination",
+          exact: true,
+        }),
+      );
+    }
     await expect(
       update.getByRole("button", {
         name: "Approve exact Notion publication",
@@ -110,7 +123,16 @@ test("keyboard journey prepares the exact synthetic delivery update for owner re
       ),
       { mode: 0o600 },
     );
-    // The test observes the owner-authorized UI action; it never triggers publication.
+    if (approvedBinding) {
+      expect(held.binding).toBe(approvedBinding);
+      expect(held.id).toBe("2e581d75-bec8-4f0c-b69a-58c08438efbf");
+      await activate(
+        update.getByRole("button", {
+          name: "Approve exact Notion publication",
+          exact: true,
+        }),
+      );
+    }
     await expect(update.getByRole("status")).toHaveText(
       "Published to Notion.",
       { timeout: 600000 },

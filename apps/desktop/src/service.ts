@@ -966,6 +966,45 @@ process.parentPort?.on("message", (event) => {
           });
           return;
         }
+        if (cmd.action === "restore") {
+          updateReview = undefined;
+          const saved = workspace
+            .prepare(
+              "SELECT value_json FROM workspace_settings WHERE id='notion.destination'",
+            )
+            .pluck()
+            .get();
+          if (typeof saved !== "string")
+            throw Error("Choose a Notion destination");
+          const target = await notionConnection.inspectTarget(
+            JSON.parse(saved),
+          );
+          if (!active() || !notionConnection.identity) return;
+          const restored = notionReviews.restore(
+            target,
+            notionConnection.identity.workspaceId,
+            cmd.productId,
+          );
+          if (restored.text.length > 100000)
+            throw Error("Saved update exceeds the stakeholder limit");
+          updateReview = {
+            ...restored,
+            product: cmd.productId,
+            channel: "notion",
+          };
+          reply({
+            title: restored.title,
+            text: restored.text,
+            draftText: restored.draftText,
+            review: {
+              id: restored.id,
+              binding: restored.binding,
+              destination: target.title + " · " + target.parentId,
+              channel: "notion",
+            },
+          });
+          return;
+        }
         if (cmd.action === "review") {
           updateReview = undefined;
           const title = redactor.text(cmd.title),
