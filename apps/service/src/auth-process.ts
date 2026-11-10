@@ -1,3 +1,4 @@
+import type { DiagnosticEvent } from "../../../packages/contracts/src/diagnostic.ts";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { authEvent } from "../../../packages/contracts/src/auth.ts";
@@ -10,8 +11,19 @@ export function startPiLogin(
   entry: string,
   root: string,
   browser: (provider: string, url: string, selectedHost?: string) => void,
+  record?: (event: DiagnosticEvent) => void,
 ): StartLogin {
   return (command, send, done) => {
+    const started = performance.now();
+    let measuredPrompt = false;
+    const measure = (event: "login-worker-prompt" | "login-browser-handoff") =>
+      record?.({
+        version: 1,
+        kind: "diagnostic",
+        event,
+        subject: command.provider,
+        elapsedMs: Math.round(performance.now() - started),
+      });
     const child = spawn(binary, [worker], {
       env: {
         HOME: root,
@@ -70,6 +82,7 @@ export function startPiLogin(
                 ? frame.selectedHost
                 : undefined,
             );
+            measure("login-browser-handoff");
             continue;
           }
           const event = authEvent.parse(frame);
@@ -79,6 +92,10 @@ export function startPiLogin(
             ["configured", "error", "cancelled"].includes(event.status)
           )
             terminal = true;
+          if (event.kind === "auth-prompt" && !measuredPrompt) {
+            measuredPrompt = true;
+            measure("login-worker-prompt");
+          }
           send(event);
         }
       } catch {

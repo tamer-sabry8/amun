@@ -20,26 +20,26 @@ Record other owner-reported or reproduced beta defects as they arrive. Preserve 
 
 ## 10 November owner reports
 
-| ID    | Report                        | State                                       |
-| ----- | ----------------------------- | ------------------------------------------- |
-| BF002 | PRD and R1                    | Owner report; recommendation pending review |
-| BF003 | Requests                      | Owner report; recommendation pending review |
-| BF004 | Overview shortcuts            | Owner report; recommendation pending review |
-| BF005 | Service connections           | Owner report; recommendation pending review |
-| BF006 | Pi and worker sign-ins        | Owner report; recommendation pending review |
-| BF007 | The six CLI buttons           | Owner report; recommendation pending review |
-| BF008 | Terminal appears stuck        | Owner report; recommendation pending review |
-| BF009 | Provider readiness and status | Owner report; recommendation pending review |
-| BF010 | Slow provider dialogs         | Source optimized; packaged check pending    |
-| BF011 | Copilot host error            | Owner report; recommendation pending review |
-| BF012 | Copilot pairing code          | Owner report; recommendation pending review |
-| BF013 | Settings header               | Owner report; recommendation pending review |
-| BF014 | Browser too small             | Owner report; recommendation pending review |
-| BF015 | Agents and creating a worker  | Owner report; recommendation pending review |
-| BF016 | Empty Conversations           | Owner report; recommendation pending review |
-| BF017 | Commands, Notion and reading  | Owner report; recommendation pending review |
-| BF018 | Logs, timing and failures     | Owner report; recommendation pending review |
-| BF001 | Memory budget                 | Measured; open                              |
+| ID    | Report                        | State                                                      |
+| ----- | ----------------------------- | ---------------------------------------------------------- |
+| BF002 | PRD and R1                    | Owner report; recommendation pending review                |
+| BF003 | Requests                      | Owner report; recommendation pending review                |
+| BF004 | Overview shortcuts            | Owner report; recommendation pending review                |
+| BF005 | Service connections           | Owner report; recommendation pending review                |
+| BF006 | Pi and worker sign-ins        | Owner report; recommendation pending review                |
+| BF007 | The six CLI buttons           | Owner report; recommendation pending review                |
+| BF008 | Terminal appears stuck        | Owner report; recommendation pending review                |
+| BF009 | Provider readiness and status | Owner report; recommendation pending review                |
+| BF010 | Slow provider dialogs         | Source optimized; packaged check pending                   |
+| BF011 | Copilot host error            | Owner report; recommendation pending review                |
+| BF012 | Copilot pairing code          | Owner report; recommendation pending review                |
+| BF013 | Settings header               | Owner report; recommendation pending review                |
+| BF014 | Browser too small             | Owner report; recommendation pending review                |
+| BF015 | Agents and creating a worker  | Owner report; recommendation pending review                |
+| BF016 | Empty Conversations           | Owner report; recommendation pending review                |
+| BF017 | Commands, Notion and reading  | Owner report; recommendation pending review                |
+| BF018 | Logs, timing and failures     | Local MCP and source capture verified; packaged UI pending |
+| BF001 | Memory budget                 | Measured; open                                             |
 
 BF010 shares one model-runtime entry across the six Pi sign-in choices. A disposable worker check times first interaction independently from the visible app. Recheck click-to-visible interaction in a future candidate. BF018 adds local measurements in source; packaged coverage and end-user access to diagnostics still require acceptance.
 
@@ -49,13 +49,13 @@ Use a meaningful failing regression before a runtime fix, then run appropriate s
 
 R2 T059–T062 are on hold. Keep the M1 redesign paused and live Google/Obsidian checks in R3. Developer ID signing/notarization remains the final R2 step when R2 is explicitly resumed. Reuse settled Firstmate/secondmate approvals for the same scope; changed content, destination or source head retains its exact review. Do not replay the completed Azure, GitHub TEST or Notion publications. Preserve personal sessions and the M4 worker-check waiver.
 
-This initial PR records the branch scope and owner hold. It does not claim to fix BF001 or introduce R2 functionality.
+The initial PR head recorded scope and the owner hold. Subsequent commits add the BF010 candidate and local diagnostics. BF001 remains open.
 
 ### Local diagnostic queries
 
 Run `node packages/diagnostics-mcp/server.ts` as a local stdio MCP server to query the issue register with `list_beta_issues`. To read measurements, pass an explicit candidate workspace database path as the sole argument. The server opens it read-only. `query_diagnostics` accepts event, subject and limit. No database is opened for issue-register queries. Older builds have audit records but lack the diagnostic table.
 
-The source records native dialog opening to the next visible frame opportunity, sign-in click to its first visible dialog frame, provider error status, renderer errors and unhandled promise rejections. These are frame estimates. It retains the newest 2,000 measurements per workspace. The events carry enumerated subjects and durations only. No credential, input text, browser address, conversation, or device code is accepted. Full crash reports, provider error categories, browser handoff timings in the app and cross-process tracing remain open.
+The source records native dialog opening to the next visible frame opportunity, sign-in click to its first visible dialog frame, provider error status, renderer errors and unhandled promise rejections. These are frame estimates. It retains the newest 2,000 measurements per workspace. The events carry enumerated subjects and durations only. No credential, input text, browser address, conversation, or device code is accepted. The service also measures worker launch to first prompt and requested browser handoff. Full crash reports, detailed provider error categories and end-to-end cross-process traces remain open.
 
 ### BF010 local verification
 
@@ -71,3 +71,16 @@ A source regression failed with the original Pi entry and passed with the model-
 | Anthropic API key                  |                3487 |                   332 |
 
 Five choices improved in this run. The OpenAI key prompt was slower in this run and faster in another. Repeat interleaved cold/warm packaged trials before assigning a guarantee. Source diagnostics produced two 11 ms frame measurements in an isolated Chrome dialog, independently from the worker trials. Packaged click-to-visible verification and memory impact remain open.
+
+### BF010 packaged-worker comparison
+
+Four disposable trials per provider and entry used the unchanged installed beta executable in Node mode, its bundled auth worker and its bundled Pi SDK. Alternating the entry order between rounds reduced ordering bias. The table reports median milliseconds to the first actionable prompt or requested browser handoff. No user input or external browser operation was performed. This exercises the real worker without rebuilding or running the app UI. [All 48 measurements](evidence/BF010/worker-timings.csv).
+
+| Provider       | Method  | Original | Candidate |
+| -------------- | ------- | -------: | --------: |
+| anthropic      | api_key |     1097 |       244 |
+| github-copilot | oauth   |     1159 |       247 |
+| openai         | api_key |      460 |       249 |
+| openai-codex   | oauth   |   2225.5 |       244 |
+| openrouter     | api_key |     1538 |     254.5 |
+| openrouter     | oauth   |     1407 |     243.5 |

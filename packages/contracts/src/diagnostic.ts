@@ -7,6 +7,8 @@ export const diagnosticEvent = z.strictObject({
   event: z.enum([
     "dialog-frame",
     "login-first-dialog",
+    "login-worker-prompt",
+    "login-browser-handoff",
     "provider-error",
     "renderer-error",
     "unhandled-rejection",

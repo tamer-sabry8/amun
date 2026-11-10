@@ -1,4 +1,7 @@
-import { diagnosticEvent } from "../../../packages/contracts/src/diagnostic.ts";
+import {
+  diagnosticEvent,
+  type DiagnosticEvent,
+} from "../../../packages/contracts/src/diagnostic.ts";
 import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
 import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
@@ -125,6 +128,17 @@ const workspace = openWorkspace(
   requireNative(databaseModule) as typeof Database,
 );
 const redactor = new Redactor();
+function recordDiagnostic(event: DiagnosticEvent) {
+  try {
+    workspace
+      .prepare(
+        "INSERT INTO diagnostic_events(event,subject,elapsed_ms) VALUES(?,?,?)",
+      )
+      .run(event.event, event.subject, event.elapsedMs);
+  } catch {
+    /* Optional measurements must never interrupt user work. */
+  }
+}
 const logger = createSafeLogger(redactor, process.stdout);
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
@@ -507,6 +521,7 @@ process.parentPort?.on("message", (event) => {
           provider,
           url,
         }),
+      recordDiagnostic,
     ),
     (provider) =>
       checkPiReadiness(
@@ -625,15 +640,7 @@ process.parentPort?.on("message", (event) => {
     if (message.data?.kind === "diagnostic") {
       const event = diagnosticEvent.safeParse(message.data);
       if (event.success) {
-        try {
-          workspace
-            .prepare(
-              "INSERT INTO diagnostic_events(event,subject,elapsed_ms) VALUES(?,?,?)",
-            )
-            .run(event.data.event, event.data.subject, event.data.elapsedMs);
-        } catch {
-          /* Optional measurements must never interrupt user work. */
-        }
+        recordDiagnostic(event.data);
       }
       return;
     }

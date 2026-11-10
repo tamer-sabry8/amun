@@ -21,6 +21,7 @@ it("opens a provider prompt using only the Pi model runtime entry", async () => 
     `,
     );
     const events: string[] = [];
+    const measurements: object[] = [];
     await new Promise<void>((done) => {
       const login = startPiLogin(
         process.execPath,
@@ -28,6 +29,7 @@ it("opens a provider prompt using only the Pi model runtime entry", async () => 
         join(root, "bundle/cli.js"),
         join(root, "profile"),
         () => {},
+        (sample) => measurements.push(sample),
       )(
         {
           version: 1,
@@ -44,6 +46,15 @@ it("opens a provider prompt using only the Pi model runtime entry", async () => 
       );
     });
     expect(events).toContain("auth-prompt");
+    expect(measurements).toEqual([
+      {
+        version: 1,
+        kind: "diagnostic",
+        event: "login-worker-prompt",
+        subject: "openai",
+        elapsedMs: expect.any(Number),
+      },
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
