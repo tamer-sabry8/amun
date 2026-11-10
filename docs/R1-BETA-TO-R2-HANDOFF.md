@@ -1,15 +1,17 @@
 # Amun trusted beta to R2 handoff
 
+**R2 is on hold by owner instruction on 10 November 2026.** Existing M6 code is merged to main; the active work is `fix/r1-beta-bugs`. Read [R1 bug-fix scope](R1-BUGFIXES.md). The R2 sequence below is retained for later use and does not authorize starting R2.
+
 The owner requested a trusted tester beta, a fresh local app installation and an R2 continuation. Developer ID signing and notarization are explicitly deferred to the **final step of R2**. The 500 MiB memory budget remains fixed. Do not mark a failed performance gate as passed or infer that the signing deferral waives it.
 
 ## Repository and starting point
 
 - Repository: `tamer-sabry8/amun`.
 - Canonical checkout: `/Users/tamersabry/Projects/amun`, on `main`; preserve it.
-- M6 worktree: `/Users/tamersabry/Documents/ChatGPT/Amun/m6`, branch `feat/m6-hardening-release`, draft PR [#8](https://github.com/tamer-sabry8/amun/pull/8).
+- M6 worktree: `/Users/tamersabry/Documents/ChatGPT/Amun/m6`, branch `feat/m6-hardening-release`, merged PR [#8](https://github.com/tamer-sabry8/amun/pull/8).
 - Verified beta source: `7eea589313988756ffe32c378699f413c6c208fd`, clean at build start. Later documentation commits may follow it without changing the packaged code. [Hosted Mac CI](https://github.com/tamer-sabry8/amun/actions/runs/42742690772) passed for that exact commit.
-- Read this handoff, `AGENTS.md`, `docs/TASKS.md`, `docs/R1-ACCEPTANCE.md` and `docs/plans/product-and-r1-plan.md` before continuing. Fetch origin, verify the working tree and the beta receipt, and inspect current PR state. Do not assume `main` includes an unmerged M6 branch.
-- Create or resume `feat/r2-decision-planning` in `/Users/tamersabry/Documents/ChatGPT/Amun/r2`, starting from the verified M6 beta source when it is not yet on `main`. Keep the source checkout and the M6 evidence intact. Do not merge an incomplete acceptance gate merely to obtain a base branch.
+- Read this handoff, `AGENTS.md`, `docs/TASKS.md`, `docs/R1-ACCEPTANCE.md` and `docs/plans/product-and-r1-plan.md` before continuing. Fetch origin, verify the working tree and the beta receipt, and inspect current PR state. M6 was merged at `b03b7016ad33c514a7d1bd28c020385c3c22a6cd`; main and the source checkout were verified to contain it.
+- Current bug-fix branch: `fix/r1-beta-bugs`, based on merged main, in `/Users/tamersabry/.codex/worktrees/amun-beta-bugfixes/amun`. Keep the M6 evidence intact. Do not create or resume an R2 worktree under the current owner instruction.
 
 ## Beta artifact and installation
 
@@ -27,7 +29,7 @@ The initial pre-beta broad packaged run passed 56 tests, skipped 23 conditional 
 
 T056 remains open at **525–530 MiB** in the corrected ad-hoc beta trials, improved from about 588 MiB. The budget is 500 MiB across all five Electron-reported app processes; keep shared-page double counting and excluded external worker memory explicit. All three corrected-beta startup and terminal-echo trials passed; earlier first launches after rebuilding exceeded 3,000 ms. Azure SDK deferral reduced the service entry from about 1.4 MB to 311 KB and its measured process working set from 104 to 90 MiB. PRD typing with local preview, terminal and an explicit synthetic run record measured median 8.3 ms, p95 11.2 ms and maximum 20.1 ms; no earlier editor baseline or separate budget exists. See [T056](evidence/T056/README.md). The signing deferral does not waive memory, and beta delivery is not full M6 sign-off.
 
-## R2 sequence
+## R2 sequence — deferred
 
 1. Read the final beta evidence and owner installation feedback. Resolve any remaining T056 failure under the unchanged budget; it is not silently waived or moved by the signing decision.
 2. **T059 — Visual roadmap:** initiatives grouped by objective, release and status, editable sequencing and dependency evidence. Label inferred dependencies until confirmed. Preserve product isolation.
@@ -52,4 +54,4 @@ The M1 redesign stays paused. Live Google and Obsidian checks stay in R3. Do not
 
 ## Continuation prompt
 
-> Continue Amun toward R2 using `tamer-sabry8/amun`. First read `docs/R1-BETA-TO-R2-HANDOFF.md`, `AGENTS.md`, `docs/TASKS.md`, `docs/R1-ACCEPTANCE.md` and the product plan from the M6 worktree. Verify the delivered beta receipt, current origin and owner installation feedback. Use a separate R2 worktree. Keep the 500 MiB budget; finish any open T056 proof before claiming the hardening gate complete. Then start T059 and continue through the R2 tracker with TDD and real Mac acceptance. Developer ID signing/notarization is the final R2 step, R001. Reuse settled owner/Firstmate approvals and preserve product isolation, personal sessions, the M4 waiver, the paused M1 redesign and the R3 Google/Obsidian boundary. Update sanitized evidence as each task passes.
+> Continue R1 beta bug fixes on `fix/r1-beta-bugs` in `/Users/tamersabry/.codex/worktrees/amun-beta-bugfixes/amun`. Do not start R2. Read `AGENTS.md`, `docs/R1-BUGFIXES.md`, `docs/TASKS.md` and current beta evidence. Preserve the 500 MiB budget, owner data, existing approvals, product isolation, M4 waiver, paused M1 redesign and R3 Google/Obsidian boundary. Reproduce each reported defect, use TDD and real Mac acceptance in disposable profiles, and update sanitized evidence. Developer ID signing/notarization stays at the final R2 step when the owner explicitly resumes R2.

@@ -209,7 +209,17 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 
 The [R1 beta to R2 handoff](R1-BETA-TO-R2-HANDOFF.md) records the verified artifact, fresh-install cleanup, remaining T056 gate and R2 starting scope. The owner is trying the beta; no full M6/performance sign-off is inferred from beta delivery.
 
-## R2 — Decision and planning workflows
+## R1 beta — bug fixes (active)
+
+Owner decision on 10 November: do not start R2. PR #8 was merged into `main` at `b03b7016ad33c514a7d1bd28c020385c3c22a6cd`; the clean source checkout was fast-forwarded to that commit. Continue on `fix/r1-beta-bugs` in its separate managed worktree. [Bug-fix scope and validation](R1-BUGFIXES.md).
+
+- [ ] **BF001 / T056 — Memory budget regression** — Current corrected-beta baseline is 525–530 MiB against 500 MiB. Retain all five app processes in the measurement, add meaningful regression proof and verify on the Mac before closing it. No budget waiver is inferred from the merge.
+- T058 remains open for the remaining technical gate and owner beta feedback. Add further defects from an owner report or reproduced failure; do not invent resolved bugs or count branch setup as a runtime fix.
+- Preserve the installed beta and the completed cleanup. Use disposable acceptance profiles and retain the standing approvals and external-write safeguards.
+
+## R2 — Decision and planning workflows — on hold
+
+The owner explicitly requested bug fixes first. T059–T062 are future scope; do not begin them until the owner resumes R2. R001 remains the final signing/notarization step when R2 resumes.
 
 - [ ] **T059 — Visual roadmap** — Initiatives by objective, release and status; editable sequencing with dependency evidence. Start from the verified beta and owner installation feedback, preserving product isolation and labeling inferred dependencies until confirmed.
 - [ ] **T060 — Decision Room** — Alternatives, adversarial specialist perspectives, source evidence, uncertainty and a recorded human decision. Keep Firstmate as the single owner-facing coordinator.

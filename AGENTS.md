@@ -1,5 +1,9 @@
 # Amun agent instructions
 
+## Current work: R1 beta bug fixes
+
+On 2026-11-10 the owner explicitly stopped R2 progression, requested merging the existing code to main, and requested a new branch and PR for bug fixes. Keep T059–T062 on hold until the owner explicitly resumes R2. Work on R1 beta defects and their regression/real Mac acceptance only. The 500 MiB memory budget remains unchanged; merging the beta does not waive the open T056 gate or imply final owner acceptance. Preserve the owner's installed beta profile and use disposable profiles for tests. Do not repeat the completed fresh-install cleanup.
+
 ## Firstmate homes
 
 Amun-managed Firstmate homes must be real Git worktrees backed by an Amun-owned Git repository. The user explicitly confirmed this requirement on 2026-11-06 for all future Amun work.
