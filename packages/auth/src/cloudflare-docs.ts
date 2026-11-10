@@ -1,10 +1,10 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { publicMcpFetch } from "./public-mcp-fetch.ts";
 const endpoint = "https://docs.mcp.cloudflare.com/mcp";
 export const docsFetch = (input: RequestInfo | URL, init?: RequestInit) =>
   publicMcpFetch(endpoint, fetch, input, init);
 export async function discoverCloudflareDocs(): Promise<string> {
+  const { Client, StreamableHTTPClientTransport } =
+    await import("./mcp-client.ts");
   const c = new Client({ name: "amun", version: "0.1.0" });
   try {
     await c.connect(

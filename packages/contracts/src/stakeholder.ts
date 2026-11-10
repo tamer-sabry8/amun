@@ -16,6 +16,7 @@ export const updateCommand = z.discriminatedUnion("action", [
     action: z.literal("draft"),
     objective: z.string().min(1).max(256).optional(),
   }),
+  z.strictObject({ ...base, action: z.literal("restore") }),
   z.strictObject({ ...base, action: z.literal("review"), channel, ...exact }),
   z.strictObject({
     ...base,
@@ -33,6 +34,7 @@ export const updateResult = z.object({
   request: z.uuid(),
   title: z.string().optional(),
   text: z.string().optional(),
+  draftText: z.string().optional(),
   review: z
     .object({
       id: z.uuid(),

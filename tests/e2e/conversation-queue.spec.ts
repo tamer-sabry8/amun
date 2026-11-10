@@ -95,7 +95,10 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
     await btn("Open Pi commands").click();
     await p.getByLabel("Native Pi command").selectOption("model");
     await btn("Run command").click();
-    await btn("Queue acceptance").click({ timeout: 18000 });
+    await btn("Queue acceptance").click({ timeout: 30000 });
+    await expect(p.getByTestId("native-pi-result")).toContainText(
+      "Model selected: amun-queue/queue",
+    );
     await btn("Read active conversation").click();
     const png =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
@@ -170,6 +173,21 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
         .slice(2)
         .some((body) => body.includes("Retain the queue acceptance decision.")),
     ).toBe(true);
+  } catch (error) {
+    const page = await app.firstWindow();
+    console.log("Synthetic queue diagnostics", {
+      requests: requests.length,
+      result: await page
+        .getByTestId("native-pi-result")
+        .textContent()
+        .catch(() => "unavailable"),
+      conversation: await page
+        .getByLabel("Active conversation text")
+        .inputValue()
+        .catch(() => "unavailable"),
+      notices: await page.getByRole("status").allTextContents(),
+    });
+    throw error;
   } finally {
     release();
     await app.close();

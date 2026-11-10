@@ -1,8 +1,6 @@
 import { verifyAmunManifest } from "./github-manifest.ts";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 export class GithubReadFailure extends Error {}
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { boundedMcpResponse } from "./notion-response.ts";
 export async function checkGithubMcp(token: string) {
   await useGithubClient(token, "repos", readManifest);
@@ -13,6 +11,8 @@ async function useGithubClient<T>(
   use: (client: Client, stage: (name: string) => void) => Promise<T>,
 ) {
   const endpoint = "https://api.githubcopilot.com/mcp/";
+  const { Client, StreamableHTTPClientTransport } =
+    await import("./mcp-client.ts");
   const client = new Client({ name: "amun", version: "0.1.0" });
   let stage = "server initialization";
   try {
@@ -109,6 +109,7 @@ async function useGithubClient<T>(
 }
 
 async function readManifest(client: Client, stage: (s: string) => void) {
+  const { CallToolResultSchema } = await import("./mcp-client.ts");
   stage("tool listing");
   const tools = await client.listTools();
   if (!tools.tools.some((t) => t.name === "get_file_contents"))

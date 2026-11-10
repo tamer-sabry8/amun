@@ -1,5 +1,3 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,6 +40,7 @@ export async function checkBrowserMcp(
   modules: string,
 ) {
   const adapter = adapters[key];
+  const { Client, StdioClientTransport } = await import("./mcp-client.ts");
   // Chromium and Playwright create Unix sockets below TMPDIR on macOS.
   const home = await mkdtemp(
     join(

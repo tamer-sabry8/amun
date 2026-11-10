@@ -99,11 +99,37 @@ export class ActionStore {
       })
       .immediate();
   }
-  approve(id: string, actor: string): void {
+  approve(id: string, actor: string, expectedBinding?: string): void {
     this.db
       .transaction(() => {
+        const action = this.read(id);
+        if (
+          expectedBinding !== undefined &&
+          expectedBinding !==
+            bindAction(action.kind, action.payload, action.revisions)
+        )
+          throw Error("Review changed before approval");
+        if (
+          ["approved", "executing", "unknown", "succeeded"].includes(
+            action.state,
+          )
+        ) {
+          const approved = this.db
+            .prepare(
+              "SELECT 1 FROM approvals WHERE action_id=? AND kind=? AND payload_hash=? AND target_revisions_json=? AND invalidated_reason IS NULL",
+            )
+            .get(
+              id,
+              action.kind,
+              bindAction(action.kind, action.payload, action.revisions),
+              canonicalJson(action.revisions),
+            );
+          if (!actor.trim() || !approved)
+            throw Error("Review the current action before approval");
+          return;
+        }
         const { approval } = approveAction(
-          this.read(id),
+          action,
           actor,
           new Date().toISOString(),
         );
@@ -117,7 +143,7 @@ export class ActionStore {
             "approve",
             approval.kind,
             approval.binding,
-            canonicalJson(this.read(id).revisions),
+            canonicalJson(action.revisions),
             actor,
             approval.approvedAt,
           );

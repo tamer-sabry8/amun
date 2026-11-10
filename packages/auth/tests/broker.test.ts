@@ -213,3 +213,43 @@ it("allows internal Notion operations only after a successful scoped connection 
   await expect(broker.withNotionCredential(operation)).rejects.toThrow();
   expect(calls).toBe(1);
 });
+
+it("updates the same saved connection through rotation and broker restart until explicit disconnect", async () => {
+  const values = new Map<string, string>();
+  const accounts: string[] = [];
+  let deletes = 0;
+  const keyring = {
+    get: (account: string) => values.get(account),
+    set: (account: string, value: string) => {
+      accounts.push(account);
+      values.set(account, value);
+    },
+    delete: (account: string) => {
+      deletes++;
+      values.delete(account);
+    },
+  };
+  const connection = {
+    kind: "ado" as const,
+    baseUrl: "https://example.invalid/Collection/",
+  };
+  const make = () =>
+    new AuthBroker(
+      "installation-workspace",
+      keyring,
+      new Redactor(),
+      async (_connection, secret) => secret === "rotated",
+    );
+  const first = make();
+  first.save(connection, "initial");
+  first.save(connection, "rotated");
+  const resumed = make();
+  expect(resumed.status(connection)).toBe("configured");
+  expect(await resumed.check(connection)).toBe("ready");
+  expect(new Set(accounts).size).toBe(1);
+  expect(deletes).toBe(0);
+  expect(values.size).toBe(1);
+  resumed.forget(connection);
+  expect(deletes).toBe(1);
+  expect(make().status(connection)).toBe("missing");
+});

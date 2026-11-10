@@ -1,0 +1,23 @@
+{
+  "packaged": true,
+  "platform": "darwin",
+  "arch": "arm64",
+  "samplesMs": [
+    20.1, 11.2, 9.3, 8, 8.5, 8.3, 8, 8.3, 8.5, 8.1, 8.6, 8.1, 8.4, 8.5, 8.8,
+    7.7, 8.3, 8.2, 8.5, 8.3, 8.3, 8.4, 8.2, 8.2, 8.2, 9.6, 7.3, 8.4, 8.2, 8.3,
+    8.3, 8.4, 8.4, 8.3
+  ],
+  "medianMs": 8.3,
+  "p95Ms": 11.2,
+  "maxMs": 20.1,
+  "browser": "scoped local WebContentsView",
+  "terminal": "open read-only PTY",
+  "run": "synthetic running record; no worker inference",
+  "contentVerified": true,
+  "limitations": [
+    "Automation scheduling included",
+    "Small synthetic PRD",
+    "No prior PRD typing baseline or owner-selected editor budget",
+    "External worker inference not included"
+  ]
+}

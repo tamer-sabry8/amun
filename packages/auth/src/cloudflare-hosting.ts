@@ -1,7 +1,5 @@
 import { cloudflareDestination } from "../../contracts/src/hosting.ts";
-import { auth } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { z } from "zod";
 import {
   CF_ISSUER,
@@ -50,6 +48,8 @@ export async function withCloudflareClient<T>(
   scope: string,
   use: (client: Client) => Promise<T>,
 ) {
+  const { Client, StreamableHTTPClientTransport, auth } =
+    await import("./mcp-client.ts");
   const stored = readNotionOAuthRecord(options.read(), CF_ISSUER);
   let token = stored?.tokens?.access_token;
   if (!token || !stored?.expiresAt || stored.expiresAt <= Date.now() + 60000) {

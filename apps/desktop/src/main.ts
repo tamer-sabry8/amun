@@ -18,7 +18,7 @@ import {
 } from "electron";
 import { join } from "node:path";
 import { windowPreferences, shellSecurityPolicy } from "./security.js";
-import { restartDelay } from "../../service/src/health.js";
+import { restartDelay } from "../../service/src/restart-delay.ts";
 
 const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;

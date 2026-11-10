@@ -1,0 +1,19 @@
+{
+  "appStatePaths": 9,
+  "temporaryDirectories": 724,
+  "temporaryFiles": 1568,
+  "ownedTmuxServers": 3,
+  "unmatchedTmuxServers": 0,
+  "stoppedOwnedWorkers": 2,
+  "deletedCredentials": 4,
+  "absentCredentials": 75,
+  "failedCredentials": 0,
+  "movedPaths": 2301,
+  "activeAppDataAbsent": true,
+  "sourcePreserved": true,
+  "backupPermissions": "0700",
+  "sourceCheckout": "main, clean, 1b0850b30e45c80a552c02e4469309b92886ea83",
+  "personalProfiles": "not targeted",
+  "publishedTestRecords": "preserved",
+  "freshInstallState": "verified at cleanup; owner may now install"
+}

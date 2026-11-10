@@ -395,7 +395,7 @@ All journeys use the same example product, **Team onboarding**, and objective **
 
 | ID | Capability | Minimum observable result |
 |---|---|---|
-| F01 | macOS desktop app | Signed, notarized DMG; Finder launch; independent local state |
+| F01 | macOS desktop app | R1 trusted tester beta: ad-hoc-signed DMG, Apple-chip Mac launch and independent local state. Developer ID signing and notarization are the final step of R2 by owner decision on 10 November 2026. |
 | F02 | Bundled Pi and prerequisite discovery | Bundled pinned Pi runs with no global Pi; Firstmate home created or imported; Herdr/tmux, Claude Code, Codex detected with actionable errors |
 | F03 | Models and routing | Pi provider sign-in (Copilot, OpenRouter, OpenAI/Codex, API keys); per-product allowlist; editable task/difficulty routing matrix; actual model shown per run; no silent cross-provider fallback |
 | F04 | Products and portfolio | Isolated product contexts; combined progress, dependencies, blockers, decisions |
@@ -900,7 +900,7 @@ flowchart LR
 | **M3 — Backlog and sprint on Azure DevOps** | F07, F08, F18 (story blockers) | Process discovery (types, fields, required fields, states, area/iteration paths, board columns) on the Tahaluf test project; story generation from approved PRD with requirement links; decision requests (AM-106 pattern) in inspector; publication preview → approval → execution with operation markers; **network killed mid-publication recovers with zero duplicates**; board/list views reflect server state; sprint planning with manual assignees and **separate** commitment approval; final server state verified. |
 | **M4 — Firstmate, crew, PRs, acceptance** | F09, F10, F11, F12, F13, F18 (agent blockers), F20, F21 | amun-bridge extension gates governed tools (fail closed; unknown tools treated as governed); crew view (hierarchy/list) from Firstmate + Herdr state; run tracker; blocked-worker decision loop; restart reattach; prototype path with browser preview + feedback bar; PR workspace for Azure Repos and GitHub/GHE; merge approval bound to head SHA; changed head after approval is refused; worker identity cannot merge or force-push (server-verified); acceptance checklist and recorded decision. **Golden path passes end to end.** |
 | **M5 — Memory, Notion, skills, portfolio, reminders** | F04 (portfolio), F14 (Notion), F15, F16, F19 | Portfolio across ≥ 2 products with unconfirmed-dependency labels; Notion publish + two-way sync of selected records with conflict UI, deletion/unlink choices, 503-after-commit reconciliation; personal tasks and reminders with missed-run handling after sleep; skills library with source preview, pinned hash, approved install/update; stakeholder update with citations and approved publication. |
-| **M6 — Hardening and release** | F01, F21, F22, F23 + all | Chaos suite green; accessibility zero serious/critical in all themes; visual baselines approved; performance within budgets; signed + notarized DMG with pinned Pi + Firstmate; clean-account install test; backup/restore of a real product; acceptance report covering F01–F23 with evidence and named residual limitations signed off by the product owner. |
+| **M6 — Hardening and beta** | F01, F21, F22, F23 + all | Chaos suite green; accessibility zero serious/critical in all themes; visual baselines approved; performance within retained budgets; ad-hoc-signed trusted tester DMG with pinned Pi + Firstmate and verified Apple-chip Mac launch; backup/restore evidence; acceptance report covering F01–F23 with named limitations. On 10 November the owner deferred Developer ID signing and notarization to the final step of R2 and requested a fresh local beta installation and R2 handoff. |
 
 ---
 
@@ -1094,12 +1094,14 @@ DoD: Requests history (open and resolved, filters) whose badge equals the Island
 **T054 · Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path.
 **T055 · Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens.
 **T056 · Performance** · P1 — budgets from T012 met.
-**T057 · Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for Herdr/tmux, Claude Code, Codex.
+**T057 · Beta packaging** · P0 — owner-revised on 10 November: ad-hoc-signed DMG with pinned Pi + Firstmate for trusted testers; launch verified on an Apple-chip Mac; prerequisite checks for the verified backend, Claude Code and Codex. Developer ID signing and notarization are the final step of R2, tracked as R001.
 **T058 · R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off.
 
 ---
 
 ## 16. R1 definition of done (release)
+
+Owner revision on 10 November 2026: R1 distribution is a trusted tester beta with an ad-hoc signature, not a Developer ID-signed or notarized public release. R001 is the final step of R2. The 500 MiB memory budget remains unchanged. The owner will try the beta installation after engineering supplies the verified DMG and archives earlier Amun app data.
 
 - [ ] Golden path (section 6) passes live on the Tahaluf test project, a GitHub test repo and a Notion test page.
 - [ ] Every F01–F23 capability demonstrated with linked evidence.
@@ -1127,7 +1129,7 @@ DoD: Requests history (open and resolved, filters) whose badge equals the Island
 | GitHub Enterprise type (Server vs Cloud), host, auth policy | Product owner | M4 |
 | Notion destinations, field scope, and OAuth vs internal token | Product owner | M5 |
 | GitHub Copilot use through Pi: confirm acceptable under Tahaluf and GitHub terms | Product owner | M1 |
-| Signing/notarization credentials | Product owner | M0 (T012) |
+| Signing/notarization credentials | Product owner | Final step of R2 (R001), deferred by owner on 10 November 2026 |
 | Pi and Firstmate upgrade cadence (Pi ships breaking changes in minor releases; Firstmate has no releases) | Engineering | Ongoing: pin + replay fixtures |
 | Arc-style UI final visual design and Amun logo | Design | M1 |
 

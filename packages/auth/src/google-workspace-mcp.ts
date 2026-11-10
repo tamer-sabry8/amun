@@ -1,5 +1,3 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { publicMcpFetch } from "./public-mcp-fetch.ts";
 const products = [
   {
@@ -69,6 +67,8 @@ export function googleDiscoveryFetch(
     publicMcpFetch(product.endpoint, send, input, init);
 }
 export async function discoverGoogleMcp(product: Product) {
+  const { Client, StreamableHTTPClientTransport } =
+    await import("./mcp-client.ts");
   const client = new Client({ name: "amun", version: "0.1.0" });
   try {
     await client.connect(

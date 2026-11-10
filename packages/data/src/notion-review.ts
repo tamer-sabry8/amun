@@ -185,6 +185,54 @@ export class NotionConversationReview {
       destination: target.title,
     };
   }
+  restore(
+    target: NotionDestination,
+    workspaceId: string,
+    productId: string | null = null,
+  ) {
+    const row = this.db
+      .prepare(
+        "SELECT id,payload_hash AS binding FROM actions WHERE kind='notion_publish' AND product_id IS ? AND state='pending_approval' ORDER BY rowid DESC LIMIT 1",
+      )
+      .get(productId) as { id: string; binding: string } | undefined;
+    if (!row) throw Error("No pending Notion review");
+    const action = this.store.read(row.id);
+    const payload = publication(action.payload);
+    const revisions = action.revisions as {
+      workspaceId?: string;
+      destinationTitle?: string;
+      productId?: string;
+    };
+    if (
+      action.operationMarker !== row.id ||
+      bindAction(action.kind, action.payload, action.revisions) !==
+        row.binding ||
+      revisions.workspaceId !== workspaceId ||
+      (revisions.productId ?? null) !== productId ||
+      revisions.destinationTitle !== target.title ||
+      payload.parentId !== target.parentId ||
+      (payload.parentType ?? "page_id") !== target.parentType ||
+      (payload.titleProperty ?? "title") !== target.titleProperty ||
+      (payload.markerPropertyId && !target.markerPropertyAvailable)
+    )
+      throw Error("Saved Notion review changed");
+    const footer = "\n\nAmun publication ID: " + row.id;
+    if (!payload.markerPropertyId && !payload.text.endsWith(footer))
+      throw Error("Saved publication marker changed");
+    return {
+      id: row.id,
+      binding: row.binding,
+      title: payload.title,
+      text: payload.text,
+      draftText: payload.markerPropertyId
+        ? payload.text
+        : payload.text.slice(0, -footer.length),
+      ...(payload.markerPropertyId
+        ? { markerPropertyId: payload.markerPropertyId }
+        : {}),
+      destination: target.title,
+    };
+  }
   async publish(id: string, binding: string) {
     const action = this.store.read(id);
     if (
@@ -193,7 +241,7 @@ export class NotionConversationReview {
       binding !== bindAction(action.kind, action.payload, action.revisions)
     )
       throw Error("Review is stale or already submitted");
-    this.store.approve(id, "user");
+    this.store.approve(id, "user", binding);
     await dispatchOne(this.store, this.connector, id);
     return this.store.read(id).state;
   }

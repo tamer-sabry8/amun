@@ -1,5 +1,4 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
-import { listSelectedFolder } from "../../../packages/auth/src/filesystem-mcp.ts";
 
 export function installFolderPicker(window: BrowserWindow, modules: string) {
   let busy = false;
@@ -29,6 +28,8 @@ export function installFolderPicker(window: BrowserWindow, modules: string) {
         window.isDestroyed()
       )
         return send("Folder selection cancelled.");
+      const { listSelectedFolder } =
+        await import("../../../packages/auth/src/filesystem-mcp.ts");
       send(await listSelectedFolder(modules, picked.filePaths[0]!));
     } catch {
       send(

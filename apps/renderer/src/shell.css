@@ -756,6 +756,10 @@ kbd {
   padding: 9px;
   gap: 5px;
 }
+.inspector-tabs [role="tablist"] {
+  display: flex;
+  gap: inherit;
+}
 .inspector-tabs button {
   background: transparent;
   border: 0;

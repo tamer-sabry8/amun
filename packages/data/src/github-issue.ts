@@ -54,7 +54,7 @@ export class GithubIssueReview {
     if (item.id !== id || item.binding !== binding)
       throw Error("Invalid issue approval");
     const store = new ActionStore(this.db);
-    store.approve(id, "user");
+    store.approve(id, "user", binding);
     await dispatchOne(
       store,
       {

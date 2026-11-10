@@ -36,6 +36,10 @@ For Notion, replace the manual integration-token onboarding with official hosted
 
 Keep credentials in Amun's protected service-owned storage, never in renderer state, logs or exports. Authentication does not authorize publication: preserve governed writes, exact-content review, destination binding and uncertain-write reconciliation. This preference does not expand milestone scope or prove a connector's live acceptance.
 
+## Trusted tester beta and release signing
+
+On 2026-11-10 the owner selected an ad-hoc-signed R1 beta for trusted testers on Apple-chip Macs. Developer ID signing and notarization are deferred to the final step of R2. Do not claim Apple verification, notarization or public-release readiness for the beta. Preserve the 500 MiB memory budget and report its actual acceptance result. Keep the proper Developer ID release path separate from the explicit beta mode.
+
 ## Public hosting
 
 Every workspace owner chooses a hosting provider and hostname before hosted publication. Use `https://amun.transfrm.ai` only for Tamer’s own setup. The user owns the parent zone in Cloudflare. Use Cloudflare's hosted API MCP with Code Mode for the hosting acceptance test. Inspect existing records, bind each proposed operation to the intended zone and hostname, and verify DNS and HTTPS after deployment. Track the GitHub web callback separately from device sign-in.
@@ -47,3 +51,15 @@ The user requires explicit approval before starting T022c (neumorphic interface 
 ## Local Firstmate memory
 
 Amun runs `/stow` entirely on the Mac. It may read the selected conversation, crew memory files, local backlog and per-home budget. Apply ordinary edits automatically. Show each proposed change to a pinned entry for individual review. Retain the decision in the owned home and reuse it across restarts. Use the existing Firstmate memory files and tier markers. A prior decision settles the same question until its underlying rule or evidence changes.
+
+## Reuse owner approvals
+
+Carry the owner's approval through Firstmate, secondmates, retries and restarts for the same authorized scope. Consult recorded decisions and approval bindings before asking again. Continue routine implementation, recovery and verification within that scope autonomously. A changed payload, destination or source head must pass the corresponding exact review. Describe the changed decision when owner input is required.
+
+For the M6 synthetic keyboard acceptance journey, the owner approved the Firstmate and secondmates, captain-account TEST publication in tamer-sabry8/amun, and continued Mac acceptance through completion or a new owner decision. Use the isolated TEST branches and worktree for the synthetic story. Preserve the recorded M4 worker-check waiver.
+
+## Keychain access lifetime
+
+Normal Amun use should require Keychain authorization once per Mac user and installation. Keep credentials in persistent app-owned entries with stable workspace/connection identities. Update an existing entry during credential rotation. Reuse the same entry across reads, service recovery and app restarts. Preserve a stable signed app/helper identity for release acceptance. Delete credentials when the user explicitly disconnects or removes them.
+
+Acceptance harnesses must retain a temporary real-provider entry throughout the entire reviewed journey, including retries and failures. Remove it after the final verified workflow cleanup. Exercise ordinary persistence with a synthetic credential created by the packaged Amun service, so a Node-created test entry cannot be mistaken for normal app behavior.

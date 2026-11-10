@@ -1,3 +1,4 @@
+import { ActionStore } from "../src/outbox.ts";
 import { it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { migrate } from "../src/database.ts";
@@ -171,6 +172,75 @@ it("distinguishes offline preflight from disconnection during send and preserves
         send ? "sent-unknown" : "not sent",
       );
     }
+  } finally {
+    db.close();
+  }
+});
+
+it("refuses a payload changed after the preview check but before durable approval", async () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const create = vi.fn(async () => ({ state: "unknown" as const }));
+  const reviews = new NotionConversationReview(db, { create });
+  const item = reviews.prepare(
+    { title: "Original", text: "Reviewed" },
+    target,
+    "workspace",
+  );
+  const store = new ActionStore(db);
+  const original = ActionStore.prototype.approve;
+  const interleave = vi
+    .spyOn(ActionStore.prototype, "approve")
+    .mockImplementationOnce(function (this: ActionStore, ...args) {
+      const current = store.read(item.id);
+      store.edit(
+        item.id,
+        { ...(current.payload as object), title: "Changed" },
+        current.revisions,
+      );
+      return original.apply(this, args);
+    });
+  try {
+    await expect(reviews.publish(item.id, item.binding)).rejects.toThrow(
+      /review/i,
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(db.prepare("SELECT count(*) FROM approvals").pluck().get()).toBe(0);
+  } finally {
+    interleave.mockRestore();
+    db.close();
+  }
+});
+
+it("resumes the same pending review after restart and rejects destination or workspace drift", () => {
+  const db = new Database(":memory:");
+  migrate(db);
+  const publisher = {
+    create: vi.fn(async () => ({ state: "unknown" as const })),
+  };
+  try {
+    const prepared = new NotionConversationReview(db, publisher).prepare(
+      { title: "Saved update", text: "Exact body" },
+      target,
+      "workspace-id",
+    );
+    const resumed = new NotionConversationReview(db, publisher);
+    expect(resumed.restore(target, "workspace-id")).toMatchObject({
+      ...prepared,
+      draftText: "Exact body",
+    });
+    expect(() =>
+      resumed.restore(
+        { ...target, parentId: "33333333-3333-4333-8333-333333333333" },
+        "workspace-id",
+      ),
+    ).toThrow();
+    expect(() => resumed.restore(target, "other-workspace")).toThrow();
+    expect(() =>
+      resumed.restore(target, "workspace-id", "foreign-product"),
+    ).toThrow();
+    expect(db.prepare("SELECT count(*) FROM actions").pluck().get()).toBe(1);
+    expect(publisher.create).not.toHaveBeenCalled();
   } finally {
     db.close();
   }

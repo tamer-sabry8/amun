@@ -1,17 +1,22 @@
-import { WebApi, getPersonalAccessTokenHandler } from "azure-devops-node-api";
 import type { Transport } from "./client.ts";
 /** Use the supported SDK transport, explicitly pinning routes in the proof client to Server 2022 API 7.0. */
 export function azureTransport(base: string, pat: string): Transport {
-  const api = new WebApi(base, getPersonalAccessTokenHandler(pat, false), {
-    allowRetries: false,
-    maxRetries: 0,
-    allowRedirects: false,
-    socketTimeout: 15000,
-  });
+  let api:
+    | Promise<InstanceType<typeof import("azure-devops-node-api").WebApi>>
+    | undefined;
   return async (method, url, body) => {
     if (!url.startsWith(base) || new URL(url).origin !== new URL(base).origin)
       throw new Error("Scope mismatch");
     try {
+      const client = await (api ??= import("azure-devops-node-api").then(
+        ({ WebApi, getPersonalAccessTokenHandler }) =>
+          new WebApi(base, getPersonalAccessTokenHandler(pat, false), {
+            allowRetries: false,
+            maxRetries: 0,
+            allowRedirects: false,
+            socketTimeout: 15000,
+          }),
+      ));
       const options = {
         additionalHeaders: {
           "Content-Type": Array.isArray(body)
@@ -21,13 +26,13 @@ export function azureTransport(base: string, pat: string): Transport {
       };
       const result =
         method === "GET"
-          ? await api.rest.get(url)
+          ? await client.rest.get(url)
           : method === "POST"
-            ? await api.rest.create(url, body, options)
+            ? await client.rest.create(url, body, options)
             : method === "PUT"
-              ? await api.rest.replace(url, body, options)
+              ? await client.rest.replace(url, body, options)
               : method === "PATCH"
-                ? await api.rest.update(url, body, options)
+                ? await client.rest.update(url, body, options)
                 : null;
       if (!result) throw new Error("Unsupported method");
       const token =

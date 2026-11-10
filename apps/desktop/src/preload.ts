@@ -1,8 +1,24 @@
 import { ipcRenderer } from "electron";
 
+let rendererReady = false;
+let pendingPort: MessagePort | undefined;
 ipcRenderer.on("amun-port", (event) => {
   const port = event.ports[0];
-  if (port) window.postMessage({ kind: "amun-port" }, "*", [port]);
+  if (!port) return;
+  if (rendererReady) window.postMessage({ kind: "amun-port" }, "*", [port]);
+  else {
+    pendingPort?.close();
+    pendingPort = port;
+  }
+});
+window.addEventListener("message", (event) => {
+  if (event.source !== window || event.data?.kind !== "amun-renderer-ready")
+    return;
+  rendererReady = true;
+  if (pendingPort) {
+    window.postMessage({ kind: "amun-port" }, "*", [pendingPort]);
+    pendingPort = undefined;
+  }
 });
 ipcRenderer.on("amun-status", (_event, status: unknown) => {
   if (status === "reconnecting")

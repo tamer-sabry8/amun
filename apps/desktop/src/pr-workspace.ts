@@ -7,7 +7,6 @@ import {
 import { DeliveryReview } from "../../../packages/data/src/pr-delivery.ts";
 import { repositoryTarget, type PullAdapter } from "./pr-repositories.ts";
 import { azurePulls } from "./azure-pulls.ts";
-import { githubPulls } from "./github-pulls.ts";
 type Source = { id: string; kind: string; reference: string | null };
 export async function readPullWorkspace(
   input: unknown,
@@ -23,11 +22,19 @@ export async function readPullWorkspace(
   };
   check();
   const available = sources.filter((s) => s.kind === "repo" && s.reference);
-  const connect = (s: Source) => {
+  const connect = async (s: Source) => {
     const t = repositoryTarget(s.reference!);
+    const github =
+      t.provider === "GitHub" ? await import("./github-pulls.ts") : undefined;
+    check();
     const adapter: PullAdapter =
       t.provider === "GitHub"
-        ? githubPulls(t.origin, t.owner, t.repo, credential("github", t.origin))
+        ? github!.githubPulls(
+            t.origin,
+            t.owner,
+            t.repo,
+            credential("github", t.origin),
+          )
         : azurePulls(
             t.collection,
             t.project,
@@ -41,7 +48,7 @@ export async function readPullWorkspace(
     let unavailable = 0;
     for (const source of available) {
       try {
-        const { t, adapter } = connect(source);
+        const { t, adapter } = await connect(source);
         for (const row of await adapter.list())
           rows.push({ ...row, source: source.id, provider: t.provider });
       } catch {
@@ -59,7 +66,7 @@ export async function readPullWorkspace(
   }
   const source = available.find((s) => s.id === cmd.source);
   if (!source) throw Error("Map this repository to the current product.");
-  const { adapter, t } = connect(source),
+  const { adapter, t } = await connect(source),
     n = cmd.number,
     read = async () => prDetail.parse(await adapter.details(n));
   const service = new DeliveryReview(db);
