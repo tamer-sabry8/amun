@@ -198,12 +198,12 @@ Mac evidence for the implementation worktree, GitHub read, packaged PR diff, sta
 
 [M5 verification and M6 handoff](M5-TO-M6-HANDOFF.md).
 
-## M6 — Hardening and release — active
+## M6 — Hardening and release — awaiting owner task selection
 
 - [x] **T053 — Chaos suite** · P0 — all scenarios in section 12. [Mac chaos evidence and physical wake result](evidence/T053/README.md).
-- [ ] **T054 — Accessibility and keyboard** · P0 — zero serious/critical axe findings in three themes; keyboard golden path. Six reviewed stories published once on the Mac. Approved sprint commitment verified on the Mac, six Azure fixtures deleted and deletion verified. Approved TEST run started, same native worker and worktree verified across restart. Terminal keyboard exit fixed and packaged test passed. Synthetic fixture passed 3/3 Mac tests. Packaged report review reached the publishing-identity blocker, owner-approved TEST PR #9 published and linked to the story through packaged keyboard report verification. Live changed-head refusal, TEST merge and Accepted verdict passed. Exact final Notion update published once and independently verified. Normal keyboard flow passed. Strict same-flow interruption after item three remains open. [Keyboard journey coverage and open steps](evidence/T054/README.md).
+- [x] **T054 — Accessibility and keyboard** · P0 — three-theme axe and normal keyboard golden path verified through live publication, sprint commitment, worker reattachment, TEST merge, acceptance and Notion publication. On 10 November the owner accepted the separate chaos and ADO batch recovery evidence for the interruption step. [Accepted coverage and Mac evidence](evidence/T054/README.md).
 - [x] **T055 — Visual baselines** · P1 — approved screenshots for all Island item types and sizes, each drawer, the status pill, and key screens. [Approved visual baselines](evidence/T055/README.md).
-- [ ] **T056 — Performance** · P1 — budgets from T012 met. Initial full-shell measurements exceeded startup and memory budgets. [Measurements and remediation](evidence/T056/README.md).
+- [ ] **T056 — Performance** · P1 — budgets from T012 met. The owner retained the 500 MiB memory budget on 10 November. Latest warm-cache memory measured 587–589 MiB. Further work awaits owner task selection. [Measurements and remediation](evidence/T056/README.md).
 - [ ] **T057 — Release packaging** · P0 — notarized DMG with pinned Pi + Firstmate; clean-account install; prerequisite checks for the verified non-Herdr backend, Claude Code, Codex. [Release prerequisite status](evidence/T057/README.md).
 - [ ] **T058 — R1 acceptance report** · P0 — F01–F23 each linked to evidence; residual limitations named; product-owner sign-off. [Draft evidence matrix and open conditions](R1-ACCEPTANCE.md).
 

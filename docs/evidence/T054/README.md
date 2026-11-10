@@ -1,6 +1,6 @@
 # T054 keyboard and accessibility
 
-The packaged keyboard journey is verified through TEST merge, Accepted delivery and the final Notion publication. The strict same-flow interruption after the third live Azure item remains unverified. The original six-item live publication was uninterrupted and its fixtures were subsequently deleted at the owner’s request. T053 and the lost-response regression provide separate recovery evidence. T054 remains open pending the owner’s decision on accepting that composition or requiring a fresh live replay.
+T054 is closed by owner acceptance on 10 November. The packaged keyboard journey is verified through TEST merge, Accepted delivery and the final Notion publication. The owner accepted the separate T053 chaos and ADO batch recovery evidence for the interruption step. The original live publication was uninterrupted and the six Azure fixtures were subsequently deleted as requested. This closure uses that accepted evidence composition.
 
 The Mac test seeds a disposable product with an approved PRD and linked backlog drafts. It reaches controls using Tab and activates them with the keyboard. The test covers the primary routes, the local stakeholder draft, exact-content review and PDF export, browser inspector, terminal dock and portfolio switcher in the default, Navy Gold and Navy Cyan themes.
 
@@ -97,3 +97,9 @@ On 10 November the owner approved the exact saved T054 stakeholder review. The e
 The rebuilt packaged keyboard run resumed the original owner-approved review and activated its existing approval button. The test passed in 24.0 seconds. The ledger recorded succeeded with one execution attempt and the original publication ID. An independent Notion fetch matched the exact title, body, Document Hub parent and footer after normalizing provider rich-text line breaks and link formatting. The receipt and approved preview remain in the private acceptance profile.
 
 Focused rebuilt Mac acceptance passed five tests in 26.2 seconds, covering PDF export, all three themes’ keyboard/axe checks and app-owned Keychain persistence through repeated use, rotation and full restarts. The final full check passed 510 unit tests, lint, type checking and formatting. The original Azure batch’s same-flow interruption condition remains open.
+
+## Owner acceptance and closure
+
+On 10 November the owner explicitly accepted the separate chaos and ADO batch recovery evidence and instructed closure of T054. The accepted composition combines the real packaged keyboard journey, the separate packaged crash/lost-response scenarios and the ADO batch lost-acknowledgement regression after item three. T054 is complete under that decision. The same-flow live interruption remains a recorded proof boundary.
+
+The owner retained the 500 MiB memory budget and requested a task selection checkpoint before further M6 implementation. T056, T057 and T058 remain open pending selection.
