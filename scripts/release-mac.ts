@@ -62,7 +62,7 @@ const team = signing.identity.match(/\(([A-Z0-9]{10})\)$/)![1];
 run("/usr/bin/codesign", [
   "--verify",
   "-R",
-  `identifier "ai.amun.desktop" and anchor apple generic and certificate leaf[subject.OU] = "${team}"`,
+  `=identifier "ai.amun.desktop" and anchor apple generic and certificate leaf[subject.OU] = "${team}"`,
   app,
 ]);
 const stage = mkdtempSync(join(tmpdir(), "amun-release-"));

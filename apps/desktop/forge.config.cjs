@@ -36,7 +36,9 @@ module.exports = {
             osxSign: {
               identity: "-",
               identityValidation: false,
-              optionsForFile: () => ({ hardenedRuntime: true }),
+              // Ad-hoc code has no Team ID for hardened library validation.
+              // Developer ID release mode above retains hardened runtime.
+              optionsForFile: () => ({ hardenedRuntime: false }),
             },
           }
         : {}),

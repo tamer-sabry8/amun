@@ -15,6 +15,7 @@ test("trusted tester beta uses an ad-hoc identity without notarization", () => {
   const config = load();
   expect(config.osxSign.identity).toBe("-");
   expect(config.osxSign.identityValidation).toBe(false);
+  expect(config.osxSign.optionsForFile("Amun.app").hardenedRuntime).toBe(false);
   expect(config.osxNotarize).toBeUndefined();
   expect(config.appBundleId).toBe("ai.amun.desktop");
 });

@@ -1,5 +1,13 @@
 # Mac release procedure
 
+## R1 trusted tester beta
+
+The owner revised distribution on 10 November: use an ad-hoc-signed arm64 beta for trusted testers. Developer ID signing and notarization are the final step of R2 (R001). The 500 MiB budget is unchanged.
+
+Run `pnpm beta:mac` after verifying the staged pinned runtime. This explicit mode selects the ad-hoc identity, verifies the app signature and bundle identifier, creates a DMG with an Applications shortcut and beta information, verifies the image and writes an artifact/hash receipt under `../releases`. It cannot be combined with Developer ID release mode. Copy the app out of that exact DMG into a disposable installation directory and verify launch/terminal/security/runtime behavior before handing it to the owner. Record actual hardware/OS; do not infer Intel or all-macOS support. Archive earlier local app data for a fresh owner installation while preserving source and evidence.
+
+## Developer ID release — final R2 step
+
 Release acceptance remains gated on T056, T057 and product-owner sign-off in T058. A development package is not a release artifact.
 
 Install the owner's Developer ID Application certificate and private key locally. Store notarization credentials with Apple's interactive `xcrun notarytool store-credentials` flow. Do not put passwords, API keys or certificate exports in the repository, shell history or evidence. Only the identity's public name and the Keychain profile name are build inputs.

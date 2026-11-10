@@ -33,7 +33,7 @@ run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app]);
 run("/usr/bin/codesign", [
   "--verify",
   "-R",
-  'identifier "ai.amun.desktop"',
+  '=identifier "ai.amun.desktop"',
   app,
 ]);
 const stage = mkdtempSync(join(tmpdir(), "amun-beta-dmg-"));

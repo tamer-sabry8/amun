@@ -6,6 +6,12 @@ On 10 November the owner requested an ad-hoc-signed R1 beta DMG for trusted test
 
 An explicit beta mode now selects only the ad-hoc identity and never requests notarization. It cannot be combined with the Developer ID release mode. These two configuration regressions were observed failing before implementation and passing afterward; all five signing-mode configuration tests passed. `pnpm beta:mac` builds the pinned-runtime package, verifies its ad-hoc signature and stable app identifier, and creates/verifies an arm64 DMG with an Applications shortcut, beta information and an artifact receipt. DMG copy-out launch verification is still pending at this checkpoint.
 
+The first ad-hoc beta used hardened runtime and failed before application code ran: DYLD rejected the Electron framework because non-platform ad-hoc code has no matching Developer Team ID. The owner supplied the same 06:17:24 crash report generated during acceptance. Only the bounded cause is recorded here; personal crash/device identifiers are excluded.
+
+The beta configuration regression was observed failing with hardened runtime enabled, then passing with it disabled specifically for ad-hoc beta mode. The Developer ID release test still requires hardened runtime enabled. Re-signing with the corrected beta configuration produced `Signature=adhoc`, `Identifier=ai.amun.desktop`, no TeamIdentifier and flags `0x2(adhoc)`. Deep/strict signature verification and the inline app-identifier requirement passed. The separate inline codesign requirement syntax was corrected to begin with `=` after an actual command refused the earlier expression.
+
+The corrected package then launched successfully in three fresh Mac profiles on macOS 27.2 arm64 and verified service connection, terminal control and echo. Startup was 2,261 / 429 / 394 ms. [The full performance receipt](../T056/ad-hoc-beta-full-shell.json) also records the still-failing memory budget. The beta is being rebuilt from the corrected source before its DMG is delivered.
+
 ## Earlier release preparation
 
 The development Mac package has an ad-hoc signature, identifier Electron and no TeamIdentifier. The available code-signing identity query returned zero valid identities.
