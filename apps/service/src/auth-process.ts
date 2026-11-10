@@ -20,7 +20,11 @@ export function startPiLogin(
         PI_CODING_AGENT_DIR: root,
         PI_SKIP_VERSION_CHECK: "1",
         AMUN_AUTH_ROOT: root,
-        AMUN_AUTH_SDK: join(dirname(dirname(entry)), "index.js"),
+        AMUN_AUTH_SDK: join(
+          dirname(dirname(entry)),
+          "core",
+          "model-runtime.js",
+        ),
         ...(process.env.NODE_EXTRA_CA_CERTS
           ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }
           : {}),

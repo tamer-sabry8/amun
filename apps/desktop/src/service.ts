@@ -1,3 +1,4 @@
+import { diagnosticEvent } from "../../../packages/contracts/src/diagnostic.ts";
 import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
 import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
@@ -621,6 +622,21 @@ process.parentPort?.on("message", (event) => {
   let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
+    if (message.data?.kind === "diagnostic") {
+      const event = diagnosticEvent.safeParse(message.data);
+      if (event.success) {
+        try {
+          workspace
+            .prepare(
+              "INSERT INTO diagnostic_events(event,subject,elapsed_ms) VALUES(?,?,?)",
+            )
+            .run(event.data.event, event.data.subject, event.data.elapsedMs);
+        } catch {
+          /* Optional measurements must never interrupt user work. */
+        }
+      }
+      return;
+    }
     const response = handleHealthRequest(message.data);
     if (response) port.postMessage(response);
     else if (

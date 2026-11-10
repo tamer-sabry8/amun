@@ -8,6 +8,7 @@ it("clears stale errors and device codes on success or a fresh attempt but retai
     },
   };
   vi.stubGlobal("window", fakeWindow);
+  vi.stubGlobal("document", new EventTarget());
   const { bridge, initializeBridge } = await import("../src/bridge.ts");
   initializeBridge();
   const port = {

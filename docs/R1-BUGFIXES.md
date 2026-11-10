@@ -18,6 +18,31 @@ The owner instructed on 10 November 2026: merge the existing code to main, open 
 
 Record other owner-reported or reproduced beta defects as they arrive. Preserve the distinction between a reproduced defect, a proposed repair and a verified repair. T058 and final owner acceptance remain open; merging code is not an acceptance waiver.
 
+## 10 November owner reports
+
+| ID    | Report                        | State                                       |
+| ----- | ----------------------------- | ------------------------------------------- |
+| BF002 | PRD and R1                    | Owner report; recommendation pending review |
+| BF003 | Requests                      | Owner report; recommendation pending review |
+| BF004 | Overview shortcuts            | Owner report; recommendation pending review |
+| BF005 | Service connections           | Owner report; recommendation pending review |
+| BF006 | Pi and worker sign-ins        | Owner report; recommendation pending review |
+| BF007 | The six CLI buttons           | Owner report; recommendation pending review |
+| BF008 | Terminal appears stuck        | Owner report; recommendation pending review |
+| BF009 | Provider readiness and status | Owner report; recommendation pending review |
+| BF010 | Slow provider dialogs         | Source optimized; packaged check pending    |
+| BF011 | Copilot host error            | Owner report; recommendation pending review |
+| BF012 | Copilot pairing code          | Owner report; recommendation pending review |
+| BF013 | Settings header               | Owner report; recommendation pending review |
+| BF014 | Browser too small             | Owner report; recommendation pending review |
+| BF015 | Agents and creating a worker  | Owner report; recommendation pending review |
+| BF016 | Empty Conversations           | Owner report; recommendation pending review |
+| BF017 | Commands, Notion and reading  | Owner report; recommendation pending review |
+| BF018 | Logs, timing and failures     | Owner report; recommendation pending review |
+| BF001 | Memory budget                 | Measured; open                              |
+
+BF010 shares one model-runtime entry across the six Pi sign-in choices. A disposable worker check times first interaction independently from the visible app. Recheck click-to-visible interaction in a future candidate. BF018 adds local measurements in source; packaged coverage and end-user access to diagnostics still require acceptance.
+
 ## Validation and boundaries
 
 Use a meaningful failing regression before a runtime fix, then run appropriate source checks and real Mac acceptance. Exercise invalid/stale input and recovery when relevant. Retest the affected packaged behavior before reporting it fixed. Use disposable profiles; do not reset, clean or adopt the owner's newly installed beta data.
@@ -25,3 +50,24 @@ Use a meaningful failing regression before a runtime fix, then run appropriate s
 R2 T059–T062 are on hold. Keep the M1 redesign paused and live Google/Obsidian checks in R3. Developer ID signing/notarization remains the final R2 step when R2 is explicitly resumed. Reuse settled Firstmate/secondmate approvals for the same scope; changed content, destination or source head retains its exact review. Do not replay the completed Azure, GitHub TEST or Notion publications. Preserve personal sessions and the M4 worker-check waiver.
 
 This initial PR records the branch scope and owner hold. It does not claim to fix BF001 or introduce R2 functionality.
+
+### Local diagnostic queries
+
+Run `node packages/diagnostics-mcp/server.ts` as a local stdio MCP server to query the issue register with `list_beta_issues`. To read measurements, pass an explicit candidate workspace database path as the sole argument. The server opens it read-only. `query_diagnostics` accepts event, subject and limit. No database is opened for issue-register queries. Older builds have audit records but lack the diagnostic table.
+
+The source records native dialog opening to the next visible frame opportunity, sign-in click to its first visible dialog frame, provider error status, renderer errors and unhandled promise rejections. These are frame estimates. It retains the newest 2,000 measurements per workspace. The events carry enumerated subjects and durations only. No credential, input text, browser address, conversation, or device code is accepted. Full crash reports, provider error categories, browser handoff timings in the app and cross-process tracing remain open.
+
+### BF010 local verification
+
+A source regression failed with the original Pi entry and passed with the model-runtime entry. On this Mac, a fresh Node worker loaded the installed beta's unchanged Pi package with an empty temporary profile for every trial. No browser opened and no credentials were entered. These values measure process start to the first actionable prompt or browser request, one run per provider per entry, original entry first. Filesystem caching, load, and order affect the result. They do not measure the installed UI.
+
+| Provider / method                  | Original entry (ms) | Model-only entry (ms) |
+| ---------------------------------- | ------------------: | --------------------: |
+| OpenAI API key                     |                2045 |                  2642 |
+| GitHub Copilot                     |                1806 |                   637 |
+| OpenAI / Codex                     |                4887 |                   321 |
+| OpenRouter OAuth (browser handoff) |                2034 |                   319 |
+| OpenRouter API key                 |                5098 |                   316 |
+| Anthropic API key                  |                3487 |                   332 |
+
+Five choices improved in this run. The OpenAI key prompt was slower in this run and faster in another. Repeat interleaved cold/warm packaged trials before assigning a guarantee. Source diagnostics produced two 11 ms frame measurements in an isolated Chrome dialog, independently from the worker trials. Packaged click-to-visible verification and memory impact remain open.

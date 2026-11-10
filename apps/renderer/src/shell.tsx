@@ -620,6 +620,7 @@ function Settings({
               disabled={modelBusy}
               onClick={() => {
                 const [provider, type] = model.split(":");
+                if (provider) bridge.beginLogin(provider);
                 bridge.send({
                   version: 1,
                   kind: "auth",

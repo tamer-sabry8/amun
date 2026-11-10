@@ -383,4 +383,8 @@ ALTER TABLE actions_portfolio_upgrade RENAME TO actions;
   CREATE TRIGGER notion_confirm_after_update AFTER UPDATE OF state ON actions WHEN NEW.kind='notion_publish' AND NEW.state='succeeded'
     BEGIN UPDATE notion_delivery SET state='confirmed' WHERE action_id=NEW.id; END;
 CREATE TABLE portfolio_exports(id TEXT PRIMARY KEY REFERENCES actions(id),path TEXT NOT NULL);`,
+  `CREATE TABLE diagnostic_events(id INTEGER PRIMARY KEY, at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, event TEXT NOT NULL, subject TEXT NOT NULL, elapsed_ms INTEGER);
+CREATE TRIGGER limit_diagnostic_history AFTER INSERT ON diagnostic_events BEGIN
+  DELETE FROM diagnostic_events WHERE id <= NEW.id - 2000;
+END;`,
 ] as const;

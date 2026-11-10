@@ -1,3 +1,5 @@
+import { diagnosticEvent } from "../../../packages/contracts/src/diagnostic.ts";
+import { observeDiagnostics } from "./diagnostics.ts";
 import { updateResult } from "../../../packages/contracts/src/stakeholder.ts";
 import {
   chatResult,
@@ -50,7 +52,12 @@ const update = (next: Partial<BridgeState>) => {
   state = { ...state, ...next };
   for (const listener of listeners) listener();
 };
+let diagnostics: ReturnType<typeof observeDiagnostics> | undefined;
 export const bridge = {
+  beginLogin: (provider: string) => {
+    const subject = diagnosticEvent.shape.subject.safeParse(provider);
+    if (subject.success) diagnostics?.login(subject.data);
+  },
   getSnapshot: () => state,
   subscribe: (listener: () => void) => {
     listeners.add(listener);
@@ -69,6 +76,7 @@ export const bridge = {
   clearNotice: () => update({ notice: "" }),
 };
 export function initializeBridge() {
+  diagnostics ??= observeDiagnostics((event) => port?.postMessage(event));
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     if (
@@ -78,6 +86,7 @@ export function initializeBridge() {
       clearTimeout(timer);
       port?.close();
       port = undefined;
+      diagnostics?.clear();
       update({ status: "Reconnecting", prompt: null, modelStatus: {} });
       for (const listener of eventListeners) listener({ kind: "service-lost" });
       return;
@@ -121,7 +130,17 @@ export function initializeBridge() {
         else if (event.kind === "auth-prompt") update({ prompt: event });
         else if (event.kind === "auth-notice")
           update({ notice: event.message });
-        else
+        else {
+          if (event.status === "error") {
+            const subject = diagnosticEvent.shape.subject.safeParse(event.id);
+            if (subject.success) diagnostics?.failed(subject.data);
+          }
+          if (
+            ["configured", "error", "cancelled", "missing", "ready"].includes(
+              event.status,
+            )
+          )
+            diagnostics?.clear();
           update({
             modelStatus: { ...state.modelStatus, [event.id]: event.status },
             ...(["checking", "configured", "ready", "cancelled"].includes(
@@ -133,6 +152,7 @@ export function initializeBridge() {
               ? { prompt: null }
               : {}),
           });
+        }
         return;
       }
       const updateEvent = updateResult.safeParse(message.data);
