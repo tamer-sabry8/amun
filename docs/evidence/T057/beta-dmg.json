@@ -1,0 +1,32 @@
+{
+  "artifact": "Amun-0.1.0-beta-arm64-7eea589.dmg",
+  "sourceCommit": "7eea589313988756ffe32c378699f413c6c208fd",
+  "dirty": false,
+  "version": "0.1.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "sha256": "2ab47125a20822191c44ff639b337f911015c5c89cb99ef4c4e1aa3a2ffc7a52",
+  "bundleId": "ai.amun.desktop",
+  "signature": "ad-hoc",
+  "developerIdSigned": false,
+  "notarized": false,
+  "audience": "trusted testers",
+  "signingAndNotarization": "deferred to final step of R2 by owner on 2026-11-10",
+  "launchAcceptance": {
+    "macOS": "27.2",
+    "arch": "arm64",
+    "readOnlyDmgMount": true,
+    "copiedAppStrictSignature": true,
+    "appAsarMatchesPackagedBuild": true,
+    "normalLaunchServices": "Overview rendered and service Connected in fresh profile",
+    "packagedRegression": {
+      "passed": 57,
+      "conditionalSkipped": 23,
+      "failed": 0
+    },
+    "dmgCopyTests": {
+      "passed": 6,
+      "failed": 0
+    }
+  }
+}

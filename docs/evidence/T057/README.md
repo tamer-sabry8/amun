@@ -1,4 +1,29 @@
-# T057 release prerequisites
+# T057 verified trusted tester beta
+
+Status: complete for the owner's revised beta packaging scope. M6's 500 MiB performance gate and the owner's installation feedback remain open separately. Developer ID signing/notarization are R001, the final step of R2.
+
+## Verified artifact
+
+- File: `/Users/tamersabry/Documents/ChatGPT/Amun/releases/Amun-0.1.0-beta-arm64-7eea589.dmg` (426 MiB).
+- Source: `7eea589313988756ffe32c378699f413c6c208fd`, clean at build start.
+- SHA-256: `2ab47125a20822191c44ff639b337f911015c5c89cb99ef4c4e1aa3a2ffc7a52`.
+- Signature: ad-hoc, app identifier `ai.amun.desktop`, no Developer Team ID, not notarized. Developer ID mode still requires hardened runtime; only the explicit ad-hoc beta mode disables it.
+- Deep/strict app signature, app-identifier requirement, DMG signature and image integrity passed. The image was mounted read-only, the app copied into a disposable installation directory, its signature verified and its `app.asar` compared byte-for-byte with the packaged source. The test image was detached.
+- Corrected beta packaged regression: **57 passed, 23 conditional skips, no failures in 8.1 minutes**, plus pinned Pi RPC and Firstmate owner/permission proofs. Six further tests passed from the DMG copy in 31.3 seconds: shell/restart/themes, drawer timing/focus, PRD import/export, app-owned Keychain persistence across rotation and two restarts, deferred module evaluation and terminal control.
+- Normal macOS LaunchServices opened the copied app with a fresh profile on **macOS 27.2 arm64**. Native AX/screenshot inspection verified the rendered Overview, Workspace selector, normal navigation and service **Connected**. The test app was then closed. This verifies this Apple-chip Mac; Intel or every macOS release is not inferred.
+- All 515 source unit tests, lint, typecheck and formatting passed. [Hosted macOS CI for the exact beta source](https://github.com/tamer-sabry8/amun/actions/runs/42742690772) completed successfully.
+
+[Sanitized beta receipt](beta-dmg.json). The original receipt remains beside the DMG.
+
+## Fresh-install cleanup
+
+At the owner's request, nine old app-state/development-app paths, 724 temporary Amun directories and 1,568 temporary Amun files were moved into a private, mode-0700 archive at `~/Library/Application Support/Amun-Backups/2026-11-10-before-beta`. Development app bundles were renamed as backups. Three verified Amun-owned tmux servers and two Amun-owned worker processes were stopped. Four identified `ai.amun` credential entries were removed; 75 other identified targets were already absent, with zero failures. No credential values were read or exported.
+
+The active Amun app-data folder was absent after cleanup, ready for the owner's fresh install. The owner may now create new app state; do not repeat cleanup against it. Source/evidence and the DMG were preserved. The canonical checkout remained clean on `main` at `1b0850b30e45c80a552c02e4469309b92886ea83`. Personal Firstmate/Herdr/Pi and CLI profiles were not targeted. Remote TEST branch/PR records and the approved Notion pages remain intact. [Sanitized cleanup receipt](cleanup.json). The complete path manifest stays private in the archive.
+
+The owner's normal installation/product-creation feedback is pending. No clean-account public-release installation or full M6 sign-off is claimed. See the [R2 handoff](../../R1-BETA-TO-R2-HANDOFF.md).
+
+## Earlier checkpoints
 
 ## Owner revision: trusted tester beta
 
