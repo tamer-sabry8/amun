@@ -187,11 +187,13 @@ export class Trajectory {
     const rows = (
       productId === undefined
         ? this.db
-            .prepare("SELECT * FROM trajectory_sessions ORDER BY created_at,id")
+            .prepare(
+              "SELECT * FROM trajectory_sessions ORDER BY created_at,rowid",
+            )
             .all()
         : this.db
             .prepare(
-              "SELECT * FROM trajectory_sessions WHERE product_id=? ORDER BY created_at,id",
+              "SELECT * FROM trajectory_sessions WHERE product_id=? ORDER BY created_at,rowid",
             )
             .all(productId)
     ) as SessionRow[];
@@ -273,7 +275,7 @@ export class Trajectory {
     const rows = this.db
       .prepare(
         `SELECT e.* FROM trajectory_events e JOIN trajectory_sessions s ON s.id=e.session_id
-         WHERE s.product_id=? ORDER BY e.at,e.session_id,e.seq`,
+         WHERE s.product_id=? ORDER BY e.at,s.rowid,e.seq`,
       )
       .all(scope.productId) as EventRow[];
     return filterEvents(rows.map(toEvent), filter);
@@ -321,7 +323,7 @@ export class Trajectory {
            SELECT ? UNION ALL
            SELECT s.id FROM trajectory_sessions s JOIN family f ON s.parent_id=f.id
          )
-         SELECT s.* FROM trajectory_sessions s JOIN family f ON f.id=s.id ORDER BY s.created_at,s.id`,
+         SELECT s.* FROM trajectory_sessions s JOIN family f ON f.id=s.id ORDER BY s.created_at,s.rowid`,
       )
       .all(root.id) as SessionRow[];
     return rows.map(toSession);
