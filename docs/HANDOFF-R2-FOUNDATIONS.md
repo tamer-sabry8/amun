@@ -2,21 +2,21 @@
 
 ## Executive summary
 
-One working session reviewed Amun against seven open-source agent products, decided to keep building Amun, and then added nine foundations as new, tested modules. **None of them is wired into the running app.** They are storage, rules, presentational views and unit tests. A user of the app sees no change, apart from one accessibility fix to the Activity drawer button.
+One working session reviewed Amun against seven open-source agent products, decided to keep building Amun, and then added eighteen foundations as new, tested modules across five pull requests. **None of them is wired into the running app.** They are storage, rules, presentational views and unit tests. A user of the app sees no change, apart from one accessibility fix to the Activity drawer button.
 
 Your job as the next agent is the wiring: recording real events, calling these modules from the service, and adding the views to the shell. Read "What is not done" before you start.
 
 State when this file was last updated:
 
-- `main` head before PR 14: `03029f1` (merge of PR 12). PR 14 carries this file; once it merges, all four pull requests are on `main`.
-- Local checks on the last branch: 597 unit tests pass across 179 files; lint, typecheck, format and the coverage gate pass.
+- `main` head before PR 15: `19b8156` (merge of PR 14). PRs 11 to 14 are merged. PR 15 carries features 9–17 and this update.
+- Local checks on the PR 15 branch: see the count in PR 15's description; lint, typecheck, format and the coverage gate pass.
 - No packaged Mac, accessibility or performance run was made for any of this work. The session ran on Linux with Node 22; the repo pins Node 24.
 
 ## Read these first
 
 1. `AGENTS.md` — standing owner rules. Two matter most here: T022c (interface redesign) needs explicit owner approval before any design or implementation, and credentials stay in service-owned storage.
 2. `docs/R1-BETA-TO-R2-HANDOFF.md` and `docs/R1-ACCEPTANCE.md` — R1 state. R1 acceptance is still a draft: memory is 525–530 MiB against a 500 MiB budget (T056 open) and owner sign-off is pending.
-3. `docs/decisions/ADR-012-widget-registry.md`, `ADR-013-trajectory-org-goals.md`, `ADR-014-heartbeats-checkout-plugins-feedback.md` — the decisions behind this work.
+3. `docs/decisions/ADR-012-widget-registry.md`, `ADR-013-trajectory-org-goals.md`, `ADR-014-heartbeats-checkout-plugins-feedback.md`, `ADR-015-operations-fleet-git.md` — the decisions behind this work.
 
 ## The conversation, in order
 
@@ -28,18 +28,20 @@ State when this file was last updated:
 3. **Activity drawer label fix** (PR 12), found when PR 11's CI failed on an existing accessibility defect.
 4. **Features 1–4:** session trajectory; search, branch comparison and replay; agent organisation; goal alignment (PR 13).
 5. **Features 5–8:** heartbeats; atomic task checkout; plugin catalog; element feedback (PR 14).
-6. **This handoff.**
+6. **This handoff**, first written with PR 14.
+7. **Features 9–17:** operations dashboard; chat-to-CLI continuity; tool detection; Creator Mode; session goals; ports and lifecycle scripts; ticket ingestion; worker fleet; git fabric (PR 15). Before starting, the owner was told that adding more unwired foundations was the weak point of the plan and chose to proceed.
 
 A licensing point the owner raised: copying MIT or Apache-2.0 code requires keeping its copyright and licence notice. To honour the owner's wish for no attribution in the code, **no code was copied from any other project**. Everything is an original implementation of the same ideas.
 
 ## Pull requests and branches
 
-| PR                                                  | Branch                                 | State when written                                                     | Contents                                                     |
-| --------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [#11](https://github.com/tamer-sabry8/amun/pull/11) | `widgets_registry`                     | Merged to `main` (`944a370`)                                           | Widget registry, dock layout, request widgets, renderer host |
-| [#12](https://github.com/tamer-sabry8/amun/pull/12) | `claude/inspiring-fermi-f8c2uh`        | Merged to `main` (`03029f1`)                                           | Activity drawer button label fix                             |
-| [#13](https://github.com/tamer-sabry8/amun/pull/13) | `session-trajectory-org-goals`         | Merged to `main` (`4d46706`)                                           | Features 1–4                                                 |
-| [#14](https://github.com/tamer-sabry8/amun/pull/14) | `heartbeats-checkout-plugins-feedback` | Merge approved by the owner; merged once CI passes on its final commit | Features 5–8 and this file                                   |
+| PR                                                  | Branch                                 | State when written                                          | Contents                                                          |
+| --------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| [#11](https://github.com/tamer-sabry8/amun/pull/11) | `widgets_registry`                     | Merged to `main` (`944a370`)                                | Widget registry, dock layout, request widgets, renderer host      |
+| [#12](https://github.com/tamer-sabry8/amun/pull/12) | `claude/inspiring-fermi-f8c2uh`        | Merged to `main` (`03029f1`)                                | Activity drawer button label fix                                  |
+| [#13](https://github.com/tamer-sabry8/amun/pull/13) | `session-trajectory-org-goals`         | Merged to `main` (`4d46706`)                                | Features 1–4                                                      |
+| [#14](https://github.com/tamer-sabry8/amun/pull/14) | `heartbeats-checkout-plugins-feedback` | Merged to `main` (`19b8156`)                                | Features 5–8, the first version of this file, and an ordering fix |
+| [#15](https://github.com/tamer-sabry8/amun/pull/15) | `r2-operations-fleet-git`              | Open when written; check its state before relying on `main` | Features 9–17 and this update                                     |
 
 The owner explicitly approved each merge: PR 11 and PR 13 once CI passed, then PR 12 and PR 14 after reviewing their status. Do not treat this as standing permission; ask before merging any new pull request.
 
@@ -90,6 +92,36 @@ Tables (one appended migration): `task_claims`, `task_claim_events`, `agent_hear
 - Views: `apps/renderer/src/operations-view.tsx` (`ClaimsView`, `HeartbeatView`, `PluginCatalogView`).
 - Tests: `packages/data/tests/heartbeats.test.ts`, `task-checkout.test.ts`, `plugins.test.ts`, `element-feedback.test.ts`; `packages/domain/tests/plugins.test.ts`, `element-feedback.test.ts`; `apps/renderer/tests/operations-view.test.ts`.
 
+### 5. Features 9–17 — PR 15, ADR-015
+
+Tables (one appended migration): `session_goals`, `port_leases`, `tool_registry`, `fleet_plans`, `fleet_tasks`, `tickets`, `git_checkpoints`.
+
+| Feature                   | Modules                                                                                                          | What it does                                                                                                                                            | What Amun already had                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 9 Operations dashboard    | `packages/domain/src/operations.ts`, `packages/data/src/operations.ts`                                           | Live sessions with stuck detection, ranked attention queue, schedule health, capacity, usage by dimension, budget forecast, quality rates               | Portfolio, Island and Requests, Activity drawer                          |
+| 10 Chat-to-CLI continuity | `packages/domain/src/session-ref.ts`, `packages/data/src/session-surface.ts`                                     | `amun://session/<id>` reference; same state from chat or terminal; command interpreter with text or JSON output; every action recorded with its surface | Terminal pane, Pi conversations                                          |
+| 11 Tool detection         | `packages/domain/src/tool-detection.ts`, `packages/crew/src/tool-probe.ts`, `packages/data/src/tool-registry.ts` | Probes known CLIs with their fixed version command only; six statuses with one next step each; manual add, disable, default                             | Discovery only in acceptance scripts                                     |
+| 12 Creator Mode           | `packages/data/src/creator.ts`                                                                                   | Read-only introspection, declarative extension specs, validation feedback, mount without restart with failure isolation, export and uninstall           | Plugin catalog, widget registry                                          |
+| 13 Session goals          | `packages/domain/src/session-goals.ts`, `packages/data/src/session-goals.ts`                                     | Criteria, guardrails, verdict and feedback after each turn, blocked summary, resume, one-time notification, survives restart                            | Nothing equivalent                                                       |
+| 14 Ports and lifecycle    | `packages/domain/src/lifecycle.ts`, `packages/data/src/port-leases.ts`                                           | `.amun.json` (`setup`, `run`, `teardown`, `env`), one port per task, `WORKSPACE_PORT`, badge, teardown plan                                             | Prototype preview on a random port                                       |
+| 15 Ticket ingestion       | `packages/domain/src/tickets.ts`, `packages/data/src/tickets.ts`                                                 | One ticket shape, adapter interface, backlog filter, branch name, agent brief, proposed tracker updates                                                 | Azure DevOps work items, GitHub issue path                               |
+| 16 Worker fleet           | `packages/domain/src/fleet.ts`, `packages/data/src/fleet.ts`                                                     | Plan validation, parallel waves, ready and stalled subtasks, worker briefs, retries, ordered merges, delivery gate                                      | Firstmate lead and secondmate dispatch                                   |
+| 17 Git fabric             | `packages/crew/src/git-fabric.ts`, `packages/data/src/git-checkpoints.ts`                                        | Branch graph, conflict projection, three-way versions, sandboxed rebase and cherry-pick, protected branches, checkpoints and rollback                   | Worktree creation, branch guards, PR workspace with revision-bound merge |
+
+- View: `apps/renderer/src/control-tower-view.tsx` (`ControlTower`, `FleetView`, `ToolSetupView`, `PortBadge`).
+- Tests: `packages/domain/tests/{operations,session-goals,fleet,tickets,lifecycle,tool-detection,session-ref}.test.ts`; `packages/data/tests/{session-goals,ports-tools,fleet,tickets,creator,session-surface,operations}.test.ts`; `packages/crew/tests/git-fabric.test.ts` (runs real git against temporary repositories, and the tool probe against fake executables); `apps/renderer/tests/control-tower-view.test.ts`.
+- `packages/domain/src/plugins.ts` gained two optional manifest fields used by Creator Mode: `createdBy` and widget `fields`.
+
+Specific to features 9–17, and easy to assume wrongly:
+
+- **No tracker adapter exists.** Only the interface. Jira, Linear, GitLab, Asana, Monday.com, YouTrack, Plain and Featurebase each need an authenticated client. None was written because none could be verified without accounts.
+- **There is no `amun` command.** `SessionSurface.cli(argv, actor)` is the interpreter; nothing installs or exposes it.
+- **Session goals do not run checks, and lifecycle commands are not executed.** The caller runs the command and passes the result in. Running repository-supplied commands must go through the service's approval and sandbox rules.
+- **No agent reconciles conflicts.** `conflictVersions` and `speculativeRebase` supply the material and the sandbox only.
+- **No canvas UI.** No pan and zoom, no drag-and-drop cherry-pick, no keyboard publishing.
+- **Creator extensions are declarative.** An agent cannot add code. A "tool that checks staging endpoints" is therefore not buildable in Creator Mode today; that needs a connector plugin with a reviewed MCP server.
+- **Usage has no token counts.** `agent_usage` stores cost only.
+
 ## What is not done
 
 These are the gaps between "module exists" and "product capability".
@@ -133,9 +165,10 @@ Notes:
 
 ## Suggested next steps, in order
 
-1. Confirm PR 14 is merged and `main` is green.
+1. Check whether PR 15 is merged; if not, ask the owner. Then confirm `main` is green.
 2. Close T056 (memory) or get the owner's decision on it; R1 is not signed off.
 3. Add service commands for one capability end to end. Trajectory is the best first choice: record Firstmate dispatch and approval events, then show `TrajectoryView` for a run.
 4. Take a `TaskCheckout` before a worker starts in `firstmate-dispatch.ts`, and release or fail it when the run ends.
 5. Ask the owner about T022c before adding any navigation.
-6. Continue the R2 tasks already recorded in `docs/R1-BETA-TO-R2-HANDOFF.md` (T059 roadmap, T060 Decision Room, T061 RFP).
+6. Stop adding foundations. Eighteen exist and none is wired; each one ages while it waits.
+7. Continue the R2 tasks already recorded in `docs/R1-BETA-TO-R2-HANDOFF.md` (T059 roadmap, T060 Decision Room, T061 RFP).
