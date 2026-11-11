@@ -41,6 +41,7 @@ import {
 } from "./layout.ts";
 import { Island, attentionLabels } from "./island.tsx";
 import { Icon } from "./icons.tsx";
+import { railLabel } from "./rail-label.ts";
 import "./tokens.css";
 import "./shell.css";
 const PrdWorkspace = lazy(() =>
@@ -1792,7 +1793,10 @@ export function App() {
           <button
             className={layout.drawer === id ? "active" : ""}
             key={id}
-            aria-label={label + " drawer"}
+            aria-label={railLabel(
+              label,
+              id === "activity" ? activities.length : 0,
+            )}
             title={`${label} · ⌥⌘${index + 1}`}
             aria-expanded={layout.drawer === id}
             disabled={layout.focus}
