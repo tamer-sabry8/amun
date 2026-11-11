@@ -9,7 +9,7 @@ Your job as the next agent is the wiring: recording real events, calling these m
 State when this file was last updated:
 
 - `main` head before PR 14: `03029f1` (merge of PR 12). PR 14 carries this file; once it merges, all four pull requests are on `main`.
-- Local checks on the last branch: 593 unit tests pass across 178 files; lint, typecheck, format and the coverage gate pass.
+- Local checks on the last branch: 595 unit tests pass across 179 files; lint, typecheck, format and the coverage gate pass.
 - No packaged Mac, accessibility or performance run was made for any of this work. The session ran on Linux with Node 22; the repo pins Node 24.
 
 ## Read these first
