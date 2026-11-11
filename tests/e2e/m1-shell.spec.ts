@@ -29,14 +29,10 @@ test("M1 shell has fixed navigation, explicit overlay drawers and persisted acce
     ]);
     await expect(page.getByTestId("drawer")).toHaveCount(0);
     const before = await page.getByTestId("workspace").boundingBox();
-    await page
-      .getByRole("button", { name: "Activity drawer", exact: true })
-      .hover();
+    await page.getByRole("button", { name: /^Activity drawer/ }).hover();
     await expect(page.getByTestId("drawer")).toBeVisible();
     expect(await page.getByTestId("workspace").boundingBox()).toEqual(before);
-    await page
-      .getByRole("button", { name: "Activity drawer", exact: true })
-      .click();
+    await page.getByRole("button", { name: /^Activity drawer/ }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("drawer")).toHaveCount(0);
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -75,8 +71,7 @@ test("drawer intent and grace timers are exact, pinning is exclusive and Escape 
     await page.clock.install();
     await page.clock.pauseAt(new Date());
     const activity = page.getByRole("button", {
-      name: "Activity drawer",
-      exact: true,
+      name: /^Activity drawer/,
     });
     await activity.dispatchEvent("pointerover", { pointerType: "mouse" });
     await page.clock.runFor(149);

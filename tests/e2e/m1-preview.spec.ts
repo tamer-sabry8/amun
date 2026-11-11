@@ -60,9 +60,7 @@ test("native preview fits its inspector and hides behind overlays without reload
         ),
       )
       .toBe(true);
-    await page
-      .getByRole("button", { name: "Activity drawer", exact: true })
-      .click();
+    await page.getByRole("button", { name: /^Activity drawer/ }).click();
     await expect
       .poll(() =>
         app.evaluate(({ BrowserWindow }) =>
