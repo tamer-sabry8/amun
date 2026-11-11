@@ -2,13 +2,13 @@
 
 ## Executive summary
 
-One working session reviewed Amun against seven open-source agent products, decided to keep building Amun, and then added nine foundations as new, tested modules. **None of them is wired into the running app.** They are storage, rules, presentational views and unit tests. A user of the app sees no change yet, apart from one accessibility fix that is still an open pull request.
+One working session reviewed Amun against seven open-source agent products, decided to keep building Amun, and then added nine foundations as new, tested modules. **None of them is wired into the running app.** They are storage, rules, presentational views and unit tests. A user of the app sees no change, apart from one accessibility fix to the Activity drawer button.
 
 Your job as the next agent is the wiring: recording real events, calling these modules from the service, and adding the views to the shell. Read "What is not done" before you start.
 
-State when this file was written:
+State when this file was last updated:
 
-- `main` head: `4d46706` (merge of PR 13).
+- `main` head before PR 14: `03029f1` (merge of PR 12). PR 14 carries this file; once it merges, all four pull requests are on `main`.
 - Local checks on the last branch: 593 unit tests pass across 178 files; lint, typecheck, format and the coverage gate pass.
 - No packaged Mac, accessibility or performance run was made for any of this work. The session ran on Linux with Node 22; the repo pins Node 24.
 
@@ -34,14 +34,14 @@ A licensing point the owner raised: copying MIT or Apache-2.0 code requires keep
 
 ## Pull requests and branches
 
-| PR                                                  | Branch                                 | State when written                                                             | Contents                                                     |
-| --------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| [#11](https://github.com/tamer-sabry8/amun/pull/11) | `widgets_registry`                     | Merged to `main` (`944a370`)                                                   | Widget registry, dock layout, request widgets, renderer host |
-| [#12](https://github.com/tamer-sabry8/amun/pull/12) | `claude/inspiring-fermi-f8c2uh`        | Open, draft, CI green, **not merged** — the owner has not yet said to merge it | Activity drawer button label fix                             |
-| [#13](https://github.com/tamer-sabry8/amun/pull/13) | `session-trajectory-org-goals`         | Merged to `main` (`4d46706`)                                                   | Features 1–4                                                 |
-| [#14](https://github.com/tamer-sabry8/amun/pull/14) | `heartbeats-checkout-plugins-feedback` | Open, draft, CI running — the owner has not yet said to merge it               | Features 5–8 and this file                                   |
+| PR                                                  | Branch                                 | State when written                                                     | Contents                                                     |
+| --------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [#11](https://github.com/tamer-sabry8/amun/pull/11) | `widgets_registry`                     | Merged to `main` (`944a370`)                                           | Widget registry, dock layout, request widgets, renderer host |
+| [#12](https://github.com/tamer-sabry8/amun/pull/12) | `claude/inspiring-fermi-f8c2uh`        | Merged to `main` (`03029f1`)                                           | Activity drawer button label fix                             |
+| [#13](https://github.com/tamer-sabry8/amun/pull/13) | `session-trajectory-org-goals`         | Merged to `main` (`4d46706`)                                           | Features 1–4                                                 |
+| [#14](https://github.com/tamer-sabry8/amun/pull/14) | `heartbeats-checkout-plugins-feedback` | Merge approved by the owner; merged once CI passes on its final commit | Features 5–8 and this file                                   |
 
-The owner explicitly asked for PR 11 and PR 13 to be merged once CI passed. No such instruction exists for PR 12 or PR 14. Ask before merging them.
+The owner explicitly approved each merge: PR 11 and PR 13 once CI passed, then PR 12 and PR 14 after reviewing their status. Do not treat this as standing permission; ask before merging any new pull request.
 
 ## What was built
 
@@ -59,7 +59,7 @@ All paths are relative to the repository root. "Data" modules take a `better-sql
 
 - Defect: the status-rail Activity button shows a visible count when an activity exists, but its accessible name stayed "Activity drawer". axe reports `label-content-name-mismatch`. It fails only when an activity exists at scan time, so `tests/e2e/m6-accessibility.spec.ts` fails intermittently.
 - Fix: `apps/renderer/src/rail-label.ts` (`railLabel`) used in `apps/renderer/src/shell.tsx`; three locators in `tests/e2e/m1-shell.spec.ts` and `tests/e2e/m1-preview.spec.ts` now match by prefix.
-- Until PR 12 is on `main`, that accessibility test can fail on any pull request. One re-run got PR 11 green.
+- Before this fix reached `main`, that accessibility test failed once on PR 11 and passed on a single re-run. If it fails again with the same rule, the fix did not cover the case; investigate, do not re-run.
 
 ### 3. Features 1–4 — PR 13, ADR-013
 
@@ -132,7 +132,7 @@ Notes:
 
 ## Suggested next steps, in order
 
-1. Ask the owner whether to merge PR 12 and PR 14.
+1. Confirm PR 14 is merged and `main` is green.
 2. Close T056 (memory) or get the owner's decision on it; R1 is not signed off.
 3. Add service commands for one capability end to end. Trajectory is the best first choice: record Firstmate dispatch and approval events, then show `TrajectoryView` for a run.
 4. Take a `TaskCheckout` before a worker starts in `firstmate-dispatch.ts`, and release or fail it when the run ends.
