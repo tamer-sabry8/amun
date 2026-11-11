@@ -506,4 +506,95 @@ CREATE TABLE goal_links (
   CONSTRAINT goal_links_kind CHECK (target_kind IN ('objective','work_item','run','session','artifact','decision')),
   CONSTRAINT goal_links_contribution CHECK (contribution IN ('unassessed','advanced','no_effect','set_back'))
 );`,
+  `CREATE TABLE task_claims (
+  task_kind TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  holder_kind TEXT,
+  holder_id TEXT,
+  state TEXT NOT NULL,
+  activity TEXT NOT NULL DEFAULT '',
+  generation INTEGER NOT NULL DEFAULT 0,
+  acquired_at TEXT,
+  renewed_at TEXT,
+  expires_at TEXT,
+  PRIMARY KEY (task_kind, task_id),
+  CONSTRAINT task_claims_state CHECK (state IN ('available','claimed','waiting_human','waiting_dependency','failed','paused','completed')),
+  CONSTRAINT task_claims_holder_kind CHECK (holder_kind IS NULL OR holder_kind IN ('agent','human','team','service')),
+  CONSTRAINT task_claims_holder CHECK ((holder_kind IS NULL) = (holder_id IS NULL)),
+  CONSTRAINT task_claims_available_unheld CHECK (state <> 'available' OR holder_id IS NULL),
+  CONSTRAINT task_claims_active_held CHECK (state NOT IN ('claimed','waiting_human','waiting_dependency') OR holder_id IS NOT NULL)
+);
+CREATE TABLE task_claim_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  task_kind TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  event TEXT NOT NULL,
+  holder TEXT,
+  reason TEXT NOT NULL DEFAULT ''
+);
+CREATE TRIGGER task_claim_events_no_update BEFORE UPDATE ON task_claim_events BEGIN SELECT RAISE(ABORT, 'Claim history is append-only'); END;
+CREATE TRIGGER task_claim_events_no_delete BEFORE DELETE ON task_claim_events BEGIN SELECT RAISE(ABORT, 'Claim history is append-only'); END;
+CREATE TABLE agent_heartbeats (
+  agent_id TEXT PRIMARY KEY NOT NULL REFERENCES agents(id),
+  cadence_minutes INTEGER NOT NULL,
+  next_at TEXT NOT NULL,
+  max_wakes_per_hour INTEGER NOT NULL DEFAULT 12,
+  max_consecutive_acts INTEGER NOT NULL DEFAULT 20,
+  halted_reason TEXT,
+  CONSTRAINT agent_heartbeats_cadence CHECK (cadence_minutes >= 1),
+  CONSTRAINT agent_heartbeats_limits CHECK (max_wakes_per_hour >= 1 AND max_consecutive_acts >= 1)
+);
+CREATE TABLE agent_wakes (
+  id TEXT PRIMARY KEY NOT NULL,
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  at TEXT NOT NULL,
+  trigger_kind TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  waiting_on TEXT,
+  next_at TEXT,
+  objective_ref TEXT,
+  counterpart_id TEXT,
+  parent_wake_id TEXT REFERENCES agent_wakes(id),
+  CONSTRAINT agent_wakes_trigger CHECK (trigger_kind IN ('assignment','message','blocker_resolved','schedule','business_event','human_request','delegation','escalation')),
+  CONSTRAINT agent_wakes_decision CHECK (decision IN ('act','wait','delegate','escalate','request_approval','refused'))
+);
+CREATE TABLE plugins (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  version TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  manifest_hash TEXT NOT NULL,
+  granted_hash TEXT,
+  state TEXT NOT NULL,
+  installed_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CONSTRAINT plugins_manifest_json_valid CHECK (json_valid(manifest_json)),
+  CONSTRAINT plugins_kind CHECK (kind IN ('model_provider','connector','skill','workflow','interface','policy')),
+  CONSTRAINT plugins_origin CHECK (origin IN ('first_party','customer','third_party')),
+  CONSTRAINT plugins_state CHECK (state IN ('installed','enabled','disabled','removed')),
+  CONSTRAINT plugins_enabled_granted CHECK (state <> 'enabled' OR (granted_hash IS NOT NULL AND granted_hash = manifest_hash))
+);
+CREATE TABLE element_feedback (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  thread_id TEXT NOT NULL,
+  iteration INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  intent TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  capture_json TEXT NOT NULL,
+  acknowledged_plan TEXT,
+  after_json TEXT,
+  verdict TEXT,
+  CONSTRAINT element_feedback_capture_json_valid CHECK (json_valid(capture_json)),
+  CONSTRAINT element_feedback_after_json_valid CHECK (after_json IS NULL OR json_valid(after_json)),
+  CONSTRAINT element_feedback_verdict CHECK (verdict IS NULL OR verdict IN ('accepted','iterate')),
+  CONSTRAINT element_feedback_iteration UNIQUE (thread_id, iteration)
+);`,
 ] as const;
