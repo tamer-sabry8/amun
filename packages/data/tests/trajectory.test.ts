@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { migrate } from "../src/database.ts";
 import { Trajectory } from "../src/trajectory.ts";
@@ -448,4 +448,33 @@ it("distinguishes a faithful reconstruction from a new run and reports what chan
   expect(comparison.differences.map((d) => d.step)).toEqual([4, 5]);
   expect(() => t.replayComparison(original.id)).toThrow(/not a replay/);
   db.close();
+});
+
+it("lists sessions and branches in the order they were created, even within one instant", () => {
+  vi.useFakeTimers({ now: new Date("2026-11-10T10:00:00Z") });
+  try {
+    const db = open();
+    const t = new Trajectory(db);
+    const root = t.start({ title: "Main", origin: "pi", productId: "p" });
+    const first = t.append(root.id, {
+      source: "user",
+      kind: "request",
+      participant: "pm",
+      summary: "Start",
+    });
+    const titles = Array.from({ length: 20 }, (_, i) => "Branch " + i);
+    for (const title of titles) t.fork(root.id, first.id, title);
+    expect(t.branches(root.id).map((s) => s.title)).toEqual([
+      "Main",
+      ...titles,
+    ]);
+    expect(t.sessions("p").map((s) => s.title)).toEqual(["Main", ...titles]);
+    expect(t.compareBranches(root.id).map((s) => s.title)).toEqual([
+      "Main",
+      ...titles,
+    ]);
+    db.close();
+  } finally {
+    vi.useRealTimers();
+  }
 });

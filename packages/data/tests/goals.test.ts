@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { migrate } from "../src/database.ts";
 import { Goals } from "../src/goals.ts";
@@ -208,4 +208,31 @@ it("reports contribution separately from completion, by agent and with cost", ()
   });
   expect(goals.links(child.id)[1]?.note).toBe("Finished, but nobody uses it");
   db.close();
+});
+
+it("returns links and the goals a piece of work serves in the order they were linked, even within one instant", () => {
+  vi.useFakeTimers({ now: new Date("2026-11-10T10:00:00Z") });
+  try {
+    const db = open();
+    const goals = new Goals(db);
+    const names = Array.from({ length: 12 }, (_, i) => "Goal " + (11 - i));
+    const ids = names.map(
+      (title) => goals.create({ title, category: "product quality" }).id,
+    );
+    for (const id of ids) goals.link(id, "run", "run-1");
+    expect(
+      goals.goalsFor("run", "run-1").map((path) => path[0]!.title),
+    ).toEqual(names);
+    const targets = ["z", "m", "a", "q"];
+    for (const target of targets) goals.link(ids[0]!, "work_item", target);
+    expect(
+      goals
+        .links(ids[0]!)
+        .filter((link) => link.kind === "work_item")
+        .map((link) => link.targetId),
+    ).toEqual(targets);
+    db.close();
+  } finally {
+    vi.useRealTimers();
+  }
 });

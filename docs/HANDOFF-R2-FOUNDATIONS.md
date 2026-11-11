@@ -9,7 +9,7 @@ Your job as the next agent is the wiring: recording real events, calling these m
 State when this file was last updated:
 
 - `main` head before PR 14: `03029f1` (merge of PR 12). PR 14 carries this file; once it merges, all four pull requests are on `main`.
-- Local checks on the last branch: 595 unit tests pass across 179 files; lint, typecheck, format and the coverage gate pass.
+- Local checks on the last branch: 597 unit tests pass across 179 files; lint, typecheck, format and the coverage gate pass.
 - No packaged Mac, accessibility or performance run was made for any of this work. The session ran on Linux with Node 22; the repo pins Node 24.
 
 ## Read these first
@@ -72,6 +72,7 @@ Tables (one appended migration): `trajectory_sessions`, `trajectory_events`, `tr
 - **Goal alignment** — `packages/data/src/goals.ts` (`Goals`). Hierarchy goal → initiative → project → workstream within an administrator taxonomy; `link` to existing objectives, work items, runs, sessions, artifacts and decisions; `assess` records contribution separately from completion; `context` builds the goal text for an agent; `aligned` applies the policy; `report` gives progress, contribution by agent and cost.
   - Not rebuilt: product `objectives` already exist; goals link to them.
 - Views: `apps/renderer/src/trajectory-view.tsx`, `apps/renderer/src/org-goals-view.tsx`.
+- Fixed in PR 14: sessions, branches and goal links were ordered by timestamp and then by a random id, so rows created in the same millisecond came back in a varying order and one test failed intermittently in CI. They are now ordered by timestamp and then insertion order. When you add a list query, break ties with `rowid`, never with a random id.
 - Tests: `packages/data/tests/trajectory.test.ts`, `agent-org.test.ts`, `goals.test.ts`; `packages/domain/tests/trajectory.test.ts`, `agent-org.test.ts`; `apps/renderer/tests/trajectory-views.test.ts`.
 
 ### 4. Features 5–8 — PR 14, ADR-014

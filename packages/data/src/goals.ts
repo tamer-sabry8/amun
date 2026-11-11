@@ -347,7 +347,7 @@ export class Goals {
     return (
       this.db
         .prepare(
-          "SELECT * FROM goal_links WHERE goal_id=? ORDER BY linked_at,target_kind,target_id",
+          "SELECT * FROM goal_links WHERE goal_id=? ORDER BY linked_at,rowid",
         )
         .all(goalId) as LinkRow[]
     ).map(toLink);
@@ -362,7 +362,7 @@ export class Goals {
   goalsFor(kind: LinkKind, targetId: string): Goal[][] {
     const rows = this.db
       .prepare(
-        "SELECT goal_id FROM goal_links WHERE target_kind=? AND target_id=? ORDER BY linked_at",
+        "SELECT goal_id FROM goal_links WHERE target_kind=? AND target_id=? ORDER BY linked_at,rowid",
       )
       .all(kind, targetId) as { goal_id: string }[];
     return rows.map((row) => this.lineage(row.goal_id));
