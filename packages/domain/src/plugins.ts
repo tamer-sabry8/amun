@@ -70,7 +70,16 @@ export interface PluginManifest {
   /** workflow: ordered stages with decision points and checkpoints. */
   workflow?: { stages: readonly WorkflowStage[] };
   /** interface: widget kinds and the slot each appears in. */
-  interface?: { widgets: readonly { kind: string; slot: string }[] };
+  interface?: {
+    widgets: readonly {
+      kind: string;
+      slot: string;
+      /** Labelled values the widget shows, read from its data by key. */
+      fields?: readonly { label: string; key: string }[];
+    }[];
+  };
+  /** Set when the extension was built in Creator Mode rather than installed. */
+  createdBy?: "creator";
   /** policy: named rules the runtime consults. A policy can only restrict. */
   policy?: {
     rules: readonly { name: string; effect: "deny" | "require_approval" }[];

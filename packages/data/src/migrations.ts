@@ -597,4 +597,105 @@ CREATE TABLE element_feedback (
   CONSTRAINT element_feedback_verdict CHECK (verdict IS NULL OR verdict IN ('accepted','iterate')),
   CONSTRAINT element_feedback_iteration UNIQUE (thread_id, iteration)
 );`,
+  `CREATE TABLE session_goals (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_ref TEXT NOT NULL,
+  title TEXT NOT NULL,
+  criteria_json TEXT NOT NULL,
+  max_turns INTEGER NOT NULL,
+  budget_micros INTEGER,
+  deadline_at TEXT,
+  state TEXT NOT NULL,
+  turns INTEGER NOT NULL DEFAULT 0,
+  spent_micros INTEGER NOT NULL DEFAULT 0,
+  last_json TEXT NOT NULL DEFAULT '{}',
+  blocked_reason TEXT,
+  notified_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CONSTRAINT session_goals_criteria_json_valid CHECK (json_valid(criteria_json)),
+  CONSTRAINT session_goals_last_json_valid CHECK (json_valid(last_json)),
+  CONSTRAINT session_goals_state CHECK (state IN ('running','satisfied','blocked','cancelled')),
+  CONSTRAINT session_goals_limits CHECK (max_turns >= 1 AND turns >= 0 AND spent_micros >= 0 AND (budget_micros IS NULL OR budget_micros >= 0)),
+  CONSTRAINT session_goals_blocked CHECK ((state = 'blocked') = (blocked_reason IS NOT NULL))
+);
+CREATE TABLE port_leases (
+  port INTEGER PRIMARY KEY NOT NULL,
+  task_kind TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  leased_at TEXT NOT NULL,
+  CONSTRAINT port_leases_task UNIQUE (task_kind, task_id),
+  CONSTRAINT port_leases_range CHECK (port BETWEEN 1024 AND 65535)
+);
+CREATE TABLE tool_registry (
+  id TEXT PRIMARY KEY NOT NULL,
+  origin TEXT NOT NULL,
+  label TEXT NOT NULL,
+  path TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  CONSTRAINT tool_registry_origin CHECK (origin IN ('detected','manual')),
+  CONSTRAINT tool_registry_flags CHECK (enabled IN (0,1) AND is_default IN (0,1)),
+  CONSTRAINT tool_registry_manual_path CHECK (origin <> 'manual' OR path IS NOT NULL)
+);
+CREATE TABLE fleet_plans (
+  id TEXT PRIMARY KEY NOT NULL,
+  objective TEXT NOT NULL,
+  objective_ref TEXT,
+  supervisor TEXT NOT NULL,
+  integration_branch TEXT NOT NULL,
+  state TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  CONSTRAINT fleet_plans_state CHECK (state IN ('planned','running','integrating','delivered','cancelled'))
+);
+CREATE TABLE fleet_tasks (
+  plan_id TEXT NOT NULL REFERENCES fleet_plans(id),
+  task_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  contract TEXT NOT NULL DEFAULT '',
+  depends_json TEXT NOT NULL DEFAULT '[]',
+  state TEXT NOT NULL,
+  worker TEXT,
+  branch TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  note TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (plan_id, task_id),
+  CONSTRAINT fleet_tasks_depends_json_valid CHECK (json_valid(depends_json)),
+  CONSTRAINT fleet_tasks_state CHECK (state IN ('pending','running','blocked','failed','done','merged'))
+);
+CREATE TABLE tickets (
+  provider TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority INTEGER NOT NULL DEFAULT 3,
+  assignee TEXT,
+  project TEXT,
+  labels_json TEXT NOT NULL DEFAULT '[]',
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  fetched_at TEXT NOT NULL,
+  branch TEXT,
+  session_id TEXT,
+  started_at TEXT,
+  PRIMARY KEY (provider, external_id),
+  CONSTRAINT tickets_labels_json_valid CHECK (json_valid(labels_json)),
+  CONSTRAINT tickets_detail_json_valid CHECK (json_valid(detail_json)),
+  CONSTRAINT tickets_priority CHECK (priority BETWEEN 1 AND 5)
+);
+CREATE TABLE git_checkpoints (
+  id TEXT PRIMARY KEY NOT NULL,
+  repository TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  before_sha TEXT NOT NULL,
+  after_sha TEXT,
+  created_at TEXT NOT NULL,
+  rolled_back_at TEXT
+);`,
 ] as const;
