@@ -383,4 +383,127 @@ ALTER TABLE actions_portfolio_upgrade RENAME TO actions;
   CREATE TRIGGER notion_confirm_after_update AFTER UPDATE OF state ON actions WHEN NEW.kind='notion_publish' AND NEW.state='succeeded'
     BEGIN UPDATE notion_delivery SET state='confirmed' WHERE action_id=NEW.id; END;
 CREATE TABLE portfolio_exports(id TEXT PRIMARY KEY REFERENCES actions(id),path TEXT NOT NULL);`,
+  `CREATE TABLE trajectory_sessions (
+  id TEXT PRIMARY KEY NOT NULL,
+  product_id TEXT REFERENCES products(id),
+  title TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  run_id TEXT,
+  parent_id TEXT REFERENCES trajectory_sessions(id),
+  fork_seq INTEGER,
+  replay_of TEXT REFERENCES trajectory_sessions(id),
+  replay_mode TEXT,
+  created_at TEXT NOT NULL,
+  CONSTRAINT trajectory_fork_complete CHECK ((parent_id IS NULL) = (fork_seq IS NULL)),
+  CONSTRAINT trajectory_replay_complete CHECK ((replay_of IS NULL) = (replay_mode IS NULL)),
+  CONSTRAINT trajectory_replay_mode CHECK (replay_mode IS NULL OR replay_mode IN ('reconstruction','re_execution'))
+);
+CREATE TABLE trajectory_events (
+  session_id TEXT NOT NULL REFERENCES trajectory_sessions(id),
+  seq INTEGER NOT NULL,
+  id TEXT NOT NULL UNIQUE,
+  at TEXT NOT NULL,
+  source TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  participant TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  refers_to TEXT REFERENCES trajectory_events(id),
+  status TEXT,
+  tool TEXT,
+  cost_micros INTEGER,
+  duration_ms INTEGER,
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  PRIMARY KEY (session_id, seq),
+  CONSTRAINT trajectory_events_detail_json_valid CHECK (json_valid(detail_json)),
+  CONSTRAINT trajectory_events_source CHECK (source IN ('user','system','reasoning','tool','context','subagent','approval','error','outcome')),
+  CONSTRAINT trajectory_events_seq CHECK (seq >= 1)
+);
+CREATE TRIGGER trajectory_events_no_update BEFORE UPDATE ON trajectory_events BEGIN SELECT RAISE(ABORT, 'Trajectory events are append-only'); END;
+CREATE TRIGGER trajectory_events_no_delete BEFORE DELETE ON trajectory_events BEGIN SELECT RAISE(ABORT, 'Trajectory events are append-only'); END;
+CREATE TRIGGER trajectory_sessions_no_delete BEFORE DELETE ON trajectory_sessions BEGIN SELECT RAISE(ABORT, 'Trajectory sessions are retained'); END;
+CREATE TABLE trajectory_preferred (
+  root_id TEXT PRIMARY KEY NOT NULL REFERENCES trajectory_sessions(id),
+  session_id TEXT NOT NULL REFERENCES trajectory_sessions(id),
+  chosen_at TEXT NOT NULL
+);
+CREATE TABLE agents (
+  id TEXT PRIMARY KEY NOT NULL,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  runtime TEXT NOT NULL,
+  external_ref TEXT,
+  accountable_owner TEXT,
+  manager_id TEXT REFERENCES agents(id),
+  status TEXT NOT NULL,
+  scopes_json TEXT NOT NULL DEFAULT '{}',
+  budget_micros INTEGER,
+  budget_period TEXT,
+  schedule_json TEXT NOT NULL DEFAULT '{}',
+  escalation TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CONSTRAINT agents_scopes_json_valid CHECK (json_valid(scopes_json)),
+  CONSTRAINT agents_schedule_json_valid CHECK (json_valid(schedule_json)),
+  CONSTRAINT agents_status CHECK (status IN ('active','paused','blocked','needs_attention','retired')),
+  CONSTRAINT agents_budget CHECK ((budget_micros IS NULL) = (budget_period IS NULL) AND (budget_micros IS NULL OR budget_micros >= 0)),
+  CONSTRAINT agents_budget_period CHECK (budget_period IS NULL OR budget_period IN ('day','week','month','total')),
+  CONSTRAINT agents_accountable CHECK (accountable_owner IS NOT NULL OR manager_id IS NOT NULL)
+);
+CREATE TABLE agent_collaborators (
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  peer_id TEXT NOT NULL REFERENCES agents(id),
+  PRIMARY KEY (agent_id, peer_id),
+  CONSTRAINT agent_collaborators_ordered CHECK (agent_id < peer_id)
+);
+CREATE TABLE agent_assignments (
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  assigned_at TEXT NOT NULL,
+  PRIMARY KEY (agent_id, target_kind, target_id),
+  CONSTRAINT agent_assignments_kind CHECK (target_kind IN ('product','project','team','customer','workflow'))
+);
+CREATE TABLE agent_usage (
+  id TEXT PRIMARY KEY NOT NULL,
+  agent_id TEXT NOT NULL REFERENCES agents(id),
+  at TEXT NOT NULL,
+  micros INTEGER NOT NULL,
+  ref TEXT,
+  CONSTRAINT agent_usage_micros CHECK (micros >= 0)
+);
+CREATE TABLE goals (
+  id TEXT PRIMARY KEY NOT NULL,
+  parent_id TEXT REFERENCES goals(id),
+  level TEXT NOT NULL,
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  why TEXT NOT NULL DEFAULT '',
+  beneficiaries TEXT NOT NULL DEFAULT '',
+  success TEXT NOT NULL DEFAULT '',
+  constraints_text TEXT NOT NULL DEFAULT '',
+  rules_text TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 3,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  CONSTRAINT goals_level CHECK (level IN ('goal','initiative','project','workstream')),
+  CONSTRAINT goals_status CHECK (status IN ('active','achieved','paused','dropped')),
+  CONSTRAINT goals_priority CHECK (priority BETWEEN 1 AND 5)
+);
+CREATE TABLE goal_links (
+  goal_id TEXT NOT NULL REFERENCES goals(id),
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  contribution TEXT NOT NULL DEFAULT 'unassessed',
+  note TEXT NOT NULL DEFAULT '',
+  agent_id TEXT REFERENCES agents(id),
+  linked_at TEXT NOT NULL,
+  assessed_at TEXT,
+  PRIMARY KEY (goal_id, target_kind, target_id),
+  CONSTRAINT goal_links_kind CHECK (target_kind IN ('objective','work_item','run','session','artifact','decision')),
+  CONSTRAINT goal_links_contribution CHECK (contribution IN ('unassessed','advanced','no_effect','set_back'))
+);`,
 ] as const;
