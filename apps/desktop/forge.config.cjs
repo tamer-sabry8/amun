@@ -55,6 +55,7 @@ module.exports = {
       ".runtime/pi",
       ".runtime/firstmate",
       ".runtime/firstmate-archives",
+      ".runtime/roast-room",
       ".runtime/terminal",
       ".runtime/database",
       ".runtime/auth",

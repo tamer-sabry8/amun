@@ -1,7 +1,7 @@
 import StyleDictionary from "style-dictionary";
 import { colorHex } from "../packages/theme/src/contrast.ts";
 import { readFile, writeFile } from "node:fs/promises";
-const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan"];
+const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan", "amun-light"];
 StyleDictionary.registerFormat({
   name: "amun/css",
   format: ({ dictionary, options }) => {

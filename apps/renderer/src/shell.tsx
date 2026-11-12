@@ -103,7 +103,7 @@ function Brand() {
     </div>
   );
 }
-function AuthPrompt() {
+export function AuthPrompt() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [value, setValue] = useState("");
   const prompt = state.prompt;
@@ -205,7 +205,7 @@ function AuthPrompt() {
     </dialog>
   );
 }
-function BackupControls() {
+export function BackupControls() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   useEffect(() => {
@@ -260,17 +260,20 @@ function BackupControls() {
     </>
   );
 }
-function Settings({
+export function Settings({
   initialService = "github",
   preferences,
   onPreferences,
+  section,
 }: {
+  /** Show one section without the tab strip (used by the rebuilt Settings). */
+  section?: "connections" | "models" | "appearance" | "data";
   initialService?: "github" | "ado" | "notion" | "obsidian";
   preferences: UiPreferences;
   onPreferences(value: UiPreferences): void;
 }) {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
-  const [tab, setTab] = useState("connections");
+  const [tab, setTab] = useState<string>(section ?? "connections");
   const [kind, setKind] = useState<"github" | "ado" | "notion" | "obsidian">(
     initialService,
   );
@@ -300,6 +303,7 @@ function Settings({
         className="section-tabs"
         role="tablist"
         aria-label="Settings sections"
+        hidden={section !== undefined}
       >
         {[
           ["connections", "Connections"],

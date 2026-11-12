@@ -78,6 +78,15 @@ import {
 import { backupRequest } from "./backup-policy.ts";
 import { checkPiReadiness } from "../../../packages/auth/src/readiness.ts";
 import { WorkspaceService } from "../../../packages/data/src/workspace-service.ts";
+import { WorkStore } from "../../../packages/data/src/work-store.ts";
+import { CouncilService } from "../../../packages/council/src/service.ts";
+import { gitFetcher } from "../../../packages/council/src/git-fetcher.ts";
+import { Room } from "../../../packages/council/src/room.ts";
+import { readFileSync } from "node:fs";
+import { councilCommand } from "../../../packages/contracts/src/work.ts";
+import { spawn as spawnProcess } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
 import {
   AuthBroker,
@@ -129,6 +138,93 @@ const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 let syncingMemory = false;
 const workspaceService = new WorkspaceService(workspace, redactor);
+// UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
+const workStore = new WorkStore(workspace, redactor);
+/** The Roast Room version staged with this build (scripts/stage-roast-room.ts). */
+function councilPin() {
+  const directory = process.env.AMUN_COUNCIL_VENDOR;
+  if (!directory) return null;
+  try {
+    const pin = JSON.parse(readFileSync(join(directory, "pin.json"), "utf8"));
+    if (
+      typeof pin.repository !== "string" ||
+      !/^[a-f0-9]{40}$/.test(pin.commit) ||
+      !/^[a-f0-9]{64}$/.test(pin.sha256)
+    )
+      return null;
+    return { directory: join(directory, pin.commit), pin };
+  } catch {
+    return null;
+  }
+}
+// Council (Roast Room): runs on the Mac's own Claude Code; questions from the
+// Chair reach the Island through an Amun-owned tool, never a terminal prompt.
+const councilService = new CouncilService({
+  root:
+    process.env.AMUN_COUNCIL_ROOT ?? join(workspaceRoot ?? "", "roast-room"),
+  records: workStore,
+  findClaude: async () => {
+    for (const candidate of [
+      join(homedir(), ".local/bin/claude"),
+      "/opt/homebrew/bin/claude",
+      "/usr/local/bin/claude",
+    ])
+      if (existsSync(candidate)) return candidate;
+    return null;
+  },
+  spawn: ({ command, args, cwd, stdin }) => {
+    const child = spawnProcess(command, args, {
+      cwd,
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    child.stdin.end(stdin);
+    return {
+      done: new Promise((resolve) => {
+        child.once("error", () => resolve(1));
+        child.once("exit", (code) => resolve(code ?? 1));
+      }),
+      stop: () => child.kill(),
+    };
+  },
+  askServer: {
+    command: process.execPath,
+    args: [process.env.AMUN_COUNCIL_ASK ?? ""],
+    env: { ELECTRON_RUN_AS_NODE: "1" },
+  },
+  fetcher: gitFetcher,
+  bundledNode: process.versions.node,
+  room: (() => {
+    let room: Room | null = null;
+    return {
+      start: (directory: string) => {
+        room?.stop();
+        room = new Room(directory, {
+          node: process.execPath,
+          env: { ELECTRON_RUN_AS_NODE: "1" },
+        });
+        return room.start();
+      },
+      stop: () => {
+        room?.stop();
+        room = null;
+      },
+    };
+  })(),
+  shipped: councilPin(),
+});
+setInterval(
+  () => void councilService.poll().catch(() => undefined),
+  1500,
+).unref();
+// Weekly, validated, automatic; the previous version is kept for rollback.
+setTimeout(
+  () => void councilService.checkUpdate().catch(() => undefined),
+  60_000,
+).unref();
+setInterval(
+  () => void councilService.checkUpdate().catch(() => undefined),
+  6 * 3_600_000,
+).unref();
 const chats = new FirstmateChat(workspace);
 chats.recover();
 const actions = new ActionStore(workspace);
@@ -1125,6 +1221,41 @@ process.parentPort?.on("message", (event) => {
         .finally(() => {
           updatingStakeholder = false;
         });
+    } else if (message.data?.kind === "work") {
+      for (const event of workStore.handle(message.data))
+        port.postMessage(event);
+    } else if (message.data?.kind === "council") {
+      const parsed = councilCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const command = parsed.data;
+      void (async () => {
+        if (command.action === "run") {
+          const started = await councilService.run(command);
+          port.postMessage({
+            version: 1,
+            kind: "work-result",
+            action: "council-run",
+            ok: started.ok,
+            message: started.ok ? "" : started.reason,
+            ref: started.ok ? started.sessionId : null,
+            step: null,
+          });
+          port.postMessage(workStore.snapshot());
+        }
+        const status =
+          command.action === "toggle-seat"
+            ? await councilService.toggleSeat(command.key, command.disabled)
+            : command.action === "check-update"
+              ? await councilService.checkUpdate(true)
+              : command.action === "rollback"
+                ? await councilService.rollback()
+                : command.action === "room"
+                  ? await councilService.openRoom()
+                  : command.action === "close-room"
+                    ? await councilService.closeRoom()
+                    : await councilService.status();
+        if (!closed) port.postMessage(status);
+      })().catch(() => undefined);
     } else if (message.data?.kind === "workspace") {
       const sync = syncCommand.safeParse(message.data);
       if (sync.success) {

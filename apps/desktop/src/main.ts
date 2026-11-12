@@ -69,6 +69,12 @@ function startService(): void {
           ? join(process.resourcesPath, "firstmate-archives")
           : join(app.getAppPath(), ".runtime/firstmate-archives"),
         AMUN_WORKSPACE_ROOT: join(app.getPath("userData"), "workspace"),
+        // Council (Roast Room): Amun-owned runtime, registry and sessions.
+        AMUN_COUNCIL_ROOT: join(app.getPath("userData"), "roast-room"),
+        AMUN_COUNCIL_ASK: join(app.getAppPath(), "dist/council-ask-server.cjs"),
+        AMUN_COUNCIL_VENDOR: app.isPackaged
+          ? join(process.resourcesPath, "roast-room")
+          : join(app.getAppPath(), ".runtime/roast-room"),
         AMUN_DATABASE_MODULE: app.isPackaged
           ? join(process.resourcesPath, "database/node_modules/better-sqlite3")
           : join(
@@ -219,7 +225,12 @@ function openWindow(): void {
         ? { proof: "1" }
         : !app.isPackaged && app.commandLine.hasSwitch("amun-gallery")
           ? { gallery: "1" }
-          : {}),
+          : // UX rebuild: the earlier shell stays available for comparison and
+            // for its own end-to-end suites. See docs/UX-REBUILD.md.
+            app.commandLine.hasSwitch("amun-legacy-shell") ||
+              process.env.AMUN_LEGACY_SHELL === "1"
+            ? { legacy: "1" }
+            : {}),
     },
   });
 }
