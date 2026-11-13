@@ -1,6 +1,6 @@
 # Amun · handoff for the next agent
 
-13 November 2026, updated after pull request 22. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This is the only current handoff; the other `docs/*HANDOFF*.md` files are history, except the two memory documents named below.
+13 November 2026, updated after pull request 24. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This is the only current handoff; the other `docs/*HANDOFF*.md` files are history, except the two memory documents named below.
 
 ## What Amun is
 
@@ -10,17 +10,17 @@ Three outside projects are bundled and must stay on their own upstream update pa
 
 ## Where things are
 
-| What                    | Where                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| Repository              | https://github.com/tamer-sabry8/amun                                            |
-| Branch to start from    | `main` (at `7cad71d` when this was written; CI green)                           |
-| Open pull requests      | None                                                                            |
-| Local checkout          | `/Users/tamersabry/Projects/amun`                                               |
-| Worktree used so far    | `/Users/tamersabry/Projects/amun/.claude/worktrees/amun-workflow-wiring-e0ccc3` |
-| Owner's rules           | `AGENTS.md` (read all of it)                                                    |
-| Owner's original scope  | `/Users/tamersabry/Documents/ChatGPT/Amun/Amun-Claude-Code-workflow-handoff.md` |
-| Earlier issue note      | `docs/6-issues.md`                                                              |
-| Development app profile | `~/Library/Application Support/Amun-Workflow-Dev` (the owner is signed in here) |
+| What                    | Where                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Repository              | https://github.com/tamer-sabry8/amun                                                                               |
+| Branch to start from    | `main` (at `52c7a38` when this was written)                                                                        |
+| Open pull requests      | None                                                                                                               |
+| Local checkout          | `/Users/tamersabry/Projects/amun`                                                                                  |
+| Worktrees used so far   | `amun-workflow-wiring-e0ccc3` and `amun-mac-app-3e38e7` under `/Users/tamersabry/Projects/amun/.claude/worktrees/` |
+| Owner's rules           | `AGENTS.md` (read all of it)                                                                                       |
+| Owner's original scope  | `/Users/tamersabry/Documents/ChatGPT/Amun/Amun-Claude-Code-workflow-handoff.md`                                    |
+| Earlier issue note      | `docs/6-issues.md`                                                                                                 |
+| Development app profile | `~/Library/Application Support/Amun-Workflow-Dev` (the owner is signed in here)                                    |
 
 Create a new branch from `main` and a new pull request for your work. Other agents may be working in other worktrees of this repository; do not touch their worktrees or branches.
 
@@ -37,30 +37,43 @@ Every commit on `main` that day, grouped by the pull request that carried it. Us
 | 20 · Setup sign-in fixes             | Fixed sign-in stuck on "Checking…", a lost check and the hidden device code; "Signed in" instead of "Connected"; "Employer" renamed "Work"; the simpler How you work step; the twenty agents with avatars.                                                 | `6b72b74`, `81e5d9f`, `8537aad`                                             |
 | 21 · Tools, chat and sidebar         | Firstmate-only chat with the labelled layout; the model shown and selectable in the prompt box; Home fixes; tool detection and its screen; more Pi sign-ins; the downloads fly-out; the sidebar and Island redesign; the tool switch enforced at dispatch. | `101004b`, `231d35e`, `407d2e3`, `80e2b50`                                  |
 | 22 · This handoff                    | Documentation only; also records that pull request 10 is closed.                                                                                                                                                                                           | `e179366`                                                                   |
+| 23 · Handoff history                 | Documentation only: this table and the packaged memory status.                                                                                                                                                                                             | `d7065f4`                                                                   |
+| 24 · Logo, motion, Agents, Council   | The ram logo and Dock icon; the motion the owner approved item by item; the Agents screen as "Working now" and "Ready"; the Council room scaled to fit, and the embedded browser view kept inside its panel.                                               | `1124133`, `e34a76b`                                                        |
 
 Two migrations were added that day: 30 (`plan_writes`, in `99ce89d`) and 31 (`split_from`, in `fab1dc7`).
 
 ### Packaged memory: where it stands
 
-The packaged app has a fixed budget of 500 MiB, summed across every process, at the first screen and on Home. Read `docs/2026-11-13-PACKAGED-MEMORY-HANDOFF.md` before touching `apps/desktop/src/main.ts` or `graphics-mode.ts`; it lists what must be preserved.
+The packaged app has a fixed budget of 500 MiB, summed across every process, at the first screen and on Home. **`main` is over that budget on Home today.** Read `docs/2026-11-13-PACKAGED-MEMORY-HANDOFF.md` before touching `apps/desktop/src/main.ts` or `graphics-mode.ts`; it lists what must be preserved.
 
-- **Last measurement:** Home 479 to 483 MiB, taken at `c46cf36`. That build had pull request 17 but **not** pull requests 18, 20 or 21.
-- **Not measured since.** Pull requests 18, 20 and 21 added screens, twenty avatar images, a tool probe and a conversation that now opens shortly after launch to learn the model. Any of these could move the number. Nobody has packaged or measured current `main`.
-- **Startup:** the first launch after signing took about 7.5 seconds against a 3-second gate. That gate is still open and is the owner's call.
-- **How to measure:** `AMUN_BETA=1 pnpm package`, then `node scripts/rebuild-performance-proof.ts` and `node scripts/graphics-fallback-proof.ts`. Use disposable profiles only.
+Measured on 13 November 2026 on one Apple-chip Mac, disposable profiles, three launches per run:
 
-If your work adds to startup or memory, measure before and after and report the real numbers. Do not raise the budget or leave a process out of the sum.
+| Build                                                                  | Launches                 | First screen (MiB) | Home (MiB) |
+| ---------------------------------------------------------------------- | ------------------------ | ------------------ | ---------- |
+| `c46cf36` (pull request 17 only; as recorded earlier, not re-measured) | see `docs/evidence/T056` | not recorded here  | 479 to 483 |
+| `7cad71d` (after pull requests 18, 20, 21)                             | 9                        | 454 to 470         | 496 to 508 |
+| `1124133` (pull request 24)                                            | 9                        | 463 to 469         | 509 to 517 |
+| `1124133` with every animation off                                     | 3                        | 462 to 468         | 500 to 501 |
+| `1124133` with entrance animations off                                 | 6                        | 453 to 462         | 484 to 497 |
+
+- **Pull requests 18, 20 and 21 added about 20 MiB on Home.** Nobody has found which parts.
+- **Pull request 24 adds about 10 MiB on Home.** The cost is the entrance animations together (the screen easing in, staggered lists, Firstmate's card settling, ticks drawing, the reply reveal). No single one accounts for more than about 2 MiB. Loops, the pulse and the static styles cost nothing measurable.
+- **The owner saw these numbers and chose to keep the entrance animations.** Do not remove them to recover memory without asking.
+- **Repeat packagings vary by a few MiB.** Treat a difference under 5 MiB as noise unless it repeats.
+- **Startup:** the first launch after packaging took 6.0 to 6.6 seconds against a 3-second gate; later launches 0.4 to 0.5 seconds. That gate is still open and is the owner's call.
+- **How to measure:** `AMUN_BETA=1 pnpm package`, then `node scripts/rebuild-performance-proof.ts` and `node scripts/graphics-fallback-proof.ts`. Use disposable profiles only. Stop the development app first: packaging rewrites the files it runs from. To compare variants quickly once the runtimes are staged, `pnpm tokens:build && AMUN_BETA=1 pnpm --filter @amun/desktop package` is enough.
+
+If your work adds to startup or memory, measure before and after and report the real numbers. Do not raise the budget or leave a process out of the sum. Bringing Home back under 500 MiB is open work that the owner has not yet asked for.
 
 ## Your assignment
 
-Build these four things, in this order:
+Three things remain, in this order:
 
 1. **Fork** a conversation from a chosen message.
-2. **The Sprints reader**: fill the existing Sprints screen from Azure DevOps.
+2. **The Sprints reader**: fill the existing Sprints screen from Azure DevOps. Parked until the owner connects Azure DevOps.
 3. **Agents acting on their scopes**: Firstmate delegates to the twenty agents using each one's brief.
-4. **Animated icons** in the interface.
 
-Details for each are below. Do not start anything else from the "Not built" list without asking.
+Animated icons, the fourth item, landed in pull request 24. Details are below. Do not start anything else from the "Not built" list without asking.
 
 ## Rules the owner has set
 
@@ -142,9 +155,14 @@ Verified in the development app unless noted.
 - **Approved plans publish** to Azure DevOps and Notion, with lookup before any resend. The review shows each item's destination and lets the owner approve only some items. Unit-tested with stand-ins; never run live.
 - **Attachments:** PDF, Word, Excel, PowerPoint, CSV, Markdown, text and images are read and filed in the library; problems show as an amber card. Screenshot capture is wired but not exercised.
 - **Sidebar and Island:** icon-tile navigation and Firstmate's card with state, steps and one action. The owner approved it.
-- **Downloads panel** flies out for six seconds on a new download.
+- **Downloads panel** flies out for six seconds on a new download, with a line that counts the time down.
+- **Logo:** the ram in the sidebar, coloured by the theme. A Dock icon is wired into packaging; nobody has looked at it in a packaged build.
+- **Firstmate's face:** two eyes on its amber tile, with four moods (`apps/renderer/src/rebuild/firstmate-mark.tsx`).
+- **Motion:** everything in `apps/renderer/src/rebuild/motion.css`, each block named after the review item the owner approved. Checked from still captures and for errors; nobody has watched each one play.
+- **Agents screen:** Firstmate on top, "Working now" cards, then a compact "Ready" list of everyone else at any depth. "Working now" has never been seen with a real busy agent.
+- **Council screen:** the Roast Room exactly as upstream built it, scaled to fit, with no address bar. Its position was verified by the bounds Amun sends, not by eye.
 
-## The four things to build
+## The three things to build, and the one that landed
 
 ### 1. Fork
 
@@ -154,7 +172,9 @@ Verified in the development app unless noted.
 
 **What blocks it:**
 
-- **An unanswered question for the owner:** where a forked chat lives so it can be reopened. Either as its own item under Your work (reuses existing screens), or as a second chat inside the same work (needs a chat switcher, which needs design approval). Ask before building.
+- **The owner's answer (13 November 2026):** a fork is a second chat inside the same work, not a new item under Your work.
+- **There is no such level today.** The hierarchy is Group, then Work, then one conversation. The owner asked for it to be built: a work holds one or more chats; the first is the main chat and each fork remembers the message it came from; each chat has its own Firstmate conversation; Search finds messages across chats and opens the right one.
+- **The chat switcher needs the owner's approval before it is built.** Show options for it first.
 - **A technical finding:** every work area shares one Firstmate conversation today. `apps/renderer/src/rebuild/firstmate.ts` keeps a single `session`. A fork that excludes later messages needs its own conversation. Pi already has session branching upstream: `apps/desktop/src/native-pi-worker.ts` routes `new`, `resume`, `fork`, `clone` and `tree` to `sessionActions`. Use that; do not build branching in Amun.
 
 Messages are stored per work area in `work_messages` (`packages/data/src/work-store.ts`, command `message`). `packages/data/src/trajectory.ts` has an unused session store with `fork`; decide whether it helps or should be left alone.
@@ -173,7 +193,7 @@ Messages are stored per work area in `work_messages` (`packages/data/src/work-st
 
 **Starting points:** `packages/connectors-ado/src/board-discovery.ts` (`teams`, `iterations`, `levels`, `columns`, `cards`), the board read in `apps/desktop/src/service.ts` (`backlog-read`), `apps/renderer/src/rebuild/screens.tsx` (Sprints, search for `planSprint`), and `save-sprint` / `external-change` / `work_sprints` in `packages/data/src/work-store.ts`.
 
-**Live check:** `POCs\2021-Q1\Sprint 5`, team `POCs Team`. The owner must connect Azure DevOps in the development app first; it is not connected yet.
+**Live check:** `POCs\2021-Q1\Sprint 5`, team `POCs Team`. The owner must connect Azure DevOps in the development app first; it is not connected, and on 13 November 2026 the owner said to do this later.
 
 ### 3. Agents acting on their scopes
 
@@ -185,23 +205,33 @@ Messages are stored per work area in `work_messages` (`packages/data/src/work-st
 
 **Acceptance idea:** ask Firstmate to "have QA check the booking flow". Firstmate assigns the QA agent without the owner naming it again, the Agents screen shows the assignment, and the findings arrive in the same chat.
 
-### 4. Animated icons
+### 4. Animated icons and motion (landed in pull request 24)
 
-**What the owner asked for:** use these as references for motion in the interface.
+The owner reviewed sixteen items side by side and approved them one at a time. All of it is hand-written CSS on existing elements; no library was added, so no licence was taken on.
 
-- https://github.com/shadcn-ui/ui/discussions/10590
-- https://github.com/fridayowl/exode-animated-icons
-- https://github.com/a2rp/framer-motion-demos
-- https://lucide-animated.com/
+**Decisions the owner made that are easy to undo by accident:**
 
-**Where it stands:** not started. Icons are static paths in `apps/renderer/src/icons.tsx`. There is no animation library in the app.
+- The ram sits on its own in the sidebar, without a tile. The Dock icon is the black one.
+- Cards lift at 1.06 times. Sprint story tiles are deliberately left out so the Sprints screen has no visual change.
+- The pulse plays three beats and stops.
+- The entrance animations stay, although they cost about 10 MiB on Home.
+- The Agents screen is "Working now" first, then everyone else.
+- The Council room keeps the original's look, portraits included. The owner rejected three options that changed it and asked only that it fit the screen.
 
-**Constraints:** check each library's licence before using it. The packaged app has a 500 MiB memory budget that is already at its limit, so prefer CSS or small hand-written motion over a large dependency, and measure if you add one. Respect `prefers-reduced-motion`. Follow `/impeccable`: one purposeful moment rather than motion everywhere. Good candidates are the sidebar tiles on hover and when selected, the Island when something new arrives, and the send button. Show the owner before building, since this is a look-and-feel change with no agreed design.
+**Not built from that review:**
 
-**Other design references the owner supplied:**
+- Item 12, agent cards that flip. The agent's brief is shown in its panel instead; the owner has not said whether a flip is still wanted.
+- Item 15 reveals the whole newest reply top to bottom, not word by word.
+- The WebGL shader zoom, the gooey filter and new parts in the prompt box were left out on purpose, for memory and because the owner wants nothing added to the prompt box.
 
-- Sidebar and Island targets: `/Users/tamersabry/Downloads/Gemini_Generated_Image_9xmqyu9xmqyu9xmq.jpeg`, `/Users/tamersabry/Desktop/Screenshot 2026-11-04 at 10.29.23 AM.png`, and two files in `/Users/tamersabry/Downloads/screens for Amun/` (`Screenshot 2026-11-04 at 10.29.48 AM.png`, `Screenshot 2026-11-04 at 10.30.17 AM.png`). The current sidebar was built from these and approved.
+**Offered and not answered:** the `@` button does nothing on the Council screen because no work areas are passed to that prompt box. Hiding it where it has nothing to offer was suggested; the owner has not replied.
+
+**Design references the owner supplied:**
+
+- Sidebar and Island targets: `/Users/tamersabry/Downloads/Gemini_Generated_Image_9xmqyu9xmqyu9xmq.jpeg`, `/Users/tamersabry/Desktop/Screenshot 2026-11-04 at 10.29.23 AM.png`, and two files in `/Users/tamersabry/Downloads/screens for Amun/` (`Screenshot 2026-11-04 at 10.29.48 AM.png`, `Screenshot 2026-11-04 at 10.30.17 AM.png`).
+- Logo sources: `/Users/tamersabry/Downloads/Gemini_Generated_Image_ysyxnxysyxnxysyx.jpeg` (black) and `Gemini_Generated_Image_tzkux8tzkux8tzku.jpeg` (white). The cut-outs are `apps/desktop/renderer/brand/ram.png` and `apps/desktop/assets/icon.icns`.
 - Agent avatars: https://github.com/smnandre/animoon (CC0). Seventeen pictures for twenty agents, so wolf, koala and giraffe are used twice, mirrored. They live in `apps/desktop/renderer/avatars/`.
+- Motion references: https://lucide-animated.com/, https://smoothui.dev/ (the owner likes the orb face and the fluid notch), https://github.com/codse/animata.
 - Tool detection inspiration: https://github.com/generalaction/emdash
 
 ## Not verified
@@ -210,7 +240,8 @@ Messages are stored per work area in `work_messages` (`packages/data/src/work-st
 - A real conversation turn with Firstmate inside the rebuilt app ("Our pilot is in Dubai" then "Where is our pilot?").
 - Sign-ins for xAI, Kimi Code and Meta.
 - Screenshot capture, and an image actually reaching a model.
-- The packaged app's 500 MiB memory check on current `main`. The last reading (479 to 483 MiB on Home) predates pull requests 18, 20 and 21.
+- CI on `main` after pull requests 23 and 24 were both merged. Each passed on its own; 23 is documentation only.
+- The Dock icon in a packaged build, and each animation actually playing.
 - Development performance and memory measurements the owner's scope asks for.
 
 ## Not built (do not start without asking)
@@ -229,13 +260,19 @@ Council room and one Quick Council; product memory in Notion; composer sources f
 - **A waiting message is never dropped.** It stays saved until Firstmate has answered, and one attempt runs at a time per work area (`inFlight` in `apps/renderer/src/rebuild/firstmate.ts`). CI caught an earlier version losing it.
 - **The app opens a Firstmate conversation about a second after launch** to learn the model for the prompt box (`prime` in `firstmate.ts`). Keep that in mind for startup and memory.
 - **Hooks must sit above early returns** in `apps/renderer/src/rebuild/app.tsx`. A hook placed after the setup check blanks the app when setup finishes.
-- **CI takes about 16 to 20 minutes** and runs the full app-test suite on macOS.
+- **CI takes about 16 to 20 minutes** and runs the full app-test suite on macOS. The app's pull request watcher reports failures and review comments but not a pass.
+- **Auto-merge is not allowed on this repository.** Merge by hand with a merge commit once CI is green.
+- **The embedded browser view is a native layer above the whole interface.** It must be told where to sit (`apps/renderer/src/rebuild/browser-bounds.ts`). A position that leaves the window is refused by the app, which then draws the view across the full window; that was the Council bug. Anything Amun draws over the panel has to be listed in `coverSelector` or the view will cover it.
+- **The owner's development app is set to the "Amun dark" theme.** It was on "Match macOS", which showed the light theme on a Mac in light mode and confused a review. Test screenshots use the dark theme with `AMUN_REBUILD_SCHEME=dark`.
+- **The accessibility scan waits for entrance animations** under one second before judging contrast (`tests/e2e/rebuild-shell.spec.ts`). A new fade longer than that will be read mid-fade and fail.
+- **The owner reviews designs in Lavish** (`lavish-axi <file>`, then `lavish-axi poll <file>` as a tracked background job). Sketches must use the real pictures: initials in place of the Council portraits made the owner reject all three options.
+- **The review pages from 13 November 2026 are not in the repository.** They sit untracked under `docs/preview/2026-11-13-*` in the `amun-mac-app-3e38e7` worktree and are ignored by Prettier.
 
 ## First steps
 
 1. Read `AGENTS.md`.
 2. Create a branch from `main` and stage the runtimes if your worktree is fresh.
 3. Run `pnpm check` and the four app journeys to confirm a green start.
-4. Ask the owner the Fork question (where a forked chat lives).
-5. Ask the owner to connect Azure DevOps in the development app, so the Sprints reader can be checked against Sprint 5.
-6. Start with whichever of Fork or the Sprints reader is unblocked first.
+4. For Fork, show the owner options for switching between the chats inside a work, and wait for approval before building it.
+5. Leave the Sprints reader until the owner connects Azure DevOps.
+6. Agents acting on their scopes needs no sign-in and no new screen, so it can proceed alongside the Fork design review.
