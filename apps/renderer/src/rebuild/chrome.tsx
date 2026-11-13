@@ -8,6 +8,7 @@ import {
   type Route,
 } from "../../../../packages/domain/src/work/shell.ts";
 import type { Attention } from "../../../../packages/domain/src/work/home.ts";
+import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import type { Snapshot } from "./view-model.ts";
 
@@ -53,18 +54,6 @@ const islandFoot: Partial<Record<Attention["kind"], string>> = {
 const waitingLine = (count: number) =>
   `${count} more ${count === 1 ? "thing is" : "things are"} waiting`;
 
-function FirstmateMark({ size = 36 }: { size?: number }) {
-  return (
-    <span
-      className="rb-fm-mark"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }}
-      aria-hidden="true"
-    >
-      F
-    </span>
-  );
-}
-
 function IslandCard({
   item,
   count,
@@ -94,7 +83,7 @@ function IslandCard({
       aria-label="Needs you"
     >
       <div className="head">
-        <FirstmateMark />
+        <FirstmateMark mood={item.kind === "result" ? "done" : "needs"} />
         <span className="who">
           <strong>Firstmate</strong>
           <span className={"state " + item.kind}>{kindLabel[item.kind]}</span>
@@ -300,7 +289,7 @@ export function Island({
         aria-expanded={false}
         onClick={() => minimise(false)}
       >
-        <FirstmateMark size={28} />
+        <FirstmateMark size={28} mood="needs" />
         <span className="text">
           <strong>Firstmate</strong>
           <span>{kindLabel[top.kind]}</span>
@@ -321,7 +310,7 @@ export function Island({
         title={needs}
         onClick={() => setHovered((value) => !value)}
       >
-        <FirstmateMark size={30} />
+        <FirstmateMark size={30} mood="needs" />
         <span className="count">{count}</span>
         <Icon name="chevron" width={12} height={12} />
       </button>
@@ -373,9 +362,7 @@ export function Sidebar({
   return (
     <nav className="rb-side" aria-label="Amun">
       <div className="rb-brand">
-        <span className="rb-mark" aria-hidden="true">
-          A
-        </span>
+        <span className="rb-mark" aria-hidden="true" />
         <strong>Amun</strong>
       </div>
       <div className="rb-tiles">

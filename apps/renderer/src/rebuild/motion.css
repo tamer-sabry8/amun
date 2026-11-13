@@ -1,0 +1,446 @@
+/* Motion the owner approved item by item on 13 November 2026, plus the
+   Agents and Council layouts chosen the same day. Everything here is CSS on
+   elements that already exist: no library, no canvas. Each block names the
+   review item it implements so one can be removed without touching another. */
+
+/* 01 · The ram replaces the "A". The picture is used as a mask so the mark
+   takes the theme's text colour: white on dark themes, black on light. */
+.rb-mark {
+  color: var(--ink);
+  background: currentColor;
+  box-shadow: none;
+  border-radius: 0;
+  -webkit-mask: url("./brand/ram.png") center / contain no-repeat;
+  mask: url("./brand/ram.png") center / contain no-repeat;
+}
+
+/* 05 · Icons draw themselves when pointed at or focused. */
+@keyframes rb-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+:is(.rb-nav, .rb-rail button, .rb-user button):is(:hover, :focus-visible)
+  .ic
+  path {
+  stroke-dasharray: 1;
+  animation: rb-draw 520ms var(--ease);
+}
+
+/* 06 · The send arrow takes off (played from motion.ts). */
+.rb-send {
+  overflow: hidden;
+}
+
+/* 07 · A tick draws itself wherever one appears. */
+.rb .ic-check path {
+  stroke-dasharray: 1;
+  animation: rb-draw 380ms var(--ease) 40ms both;
+}
+
+/* Agents screen, option C the owner chose: who is working first, then
+   everyone else as a compact list. Nothing scrolls sideways. */
+.rb-team {
+  display: grid;
+  gap: 18px;
+  padding: 8px 0 20px;
+}
+.rb-team .lead {
+  display: flex;
+  justify-content: center;
+}
+.rb-team h2 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rb-team h2 .count {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--card);
+  font-weight: 500;
+}
+.rb-team .working {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.rb-team .working .rb-agent {
+  width: auto;
+  border-color: color-mix(
+    in srgb,
+    var(--amun-status-connected) 35%,
+    var(--line)
+  );
+}
+.rb-team .working .rb-agent .doing {
+  color: var(--ink);
+}
+.rb-team .roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  column-gap: 22px;
+}
+.rb-agent.row {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  width: auto;
+  padding: 8px 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 !important;
+  background: none;
+}
+.rb-agent.row:hover,
+.rb-agent.row[aria-pressed="true"] {
+  background: var(--hover);
+}
+.rb-agent.row .role {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* Council: the room is shown as its makers designed it, scaled to fit, and
+   given all the height the window can spare. */
+.rb-room {
+  --room-height: max(380px, calc(100vh - 330px));
+  height: var(--room-height);
+  /* The room's table keeps its own proportions; a panel wider than this
+     would cut the bottom of it off. */
+  width: 100%;
+  max-width: calc(var(--room-height) * 1.78);
+  padding: 0;
+  margin: 0 auto 20px;
+  overflow: hidden;
+  background: #07121c;
+}
+
+/* 03 · Firstmate's face. Two eyes on the tile it already had; the mood is
+   set where the mark is used. Sizes are in em so every size of mark works. */
+.rb-fm-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.36em;
+}
+.rb-fm-mark i {
+  width: 0.3em;
+  height: 0.52em;
+  border-radius: 0.15em;
+  background: var(--canvas);
+  transition:
+    transform 300ms var(--ease),
+    height 200ms var(--ease),
+    border-radius 200ms var(--ease);
+}
+.rb-fm-mark[data-mood="resting"] i {
+  animation: rb-blink 4.4s infinite;
+}
+.rb-fm-mark[data-mood="working"] i {
+  animation: rb-scan 1.5s ease-in-out infinite;
+}
+.rb-fm-mark[data-mood="needs"] i {
+  transform: translateY(-0.14em);
+  height: 0.58em;
+}
+.rb-fm-mark[data-mood="done"] i {
+  height: 0.2em;
+  border-radius: 0.2em 0.2em 0 0;
+  transform: translateY(0.12em);
+}
+@keyframes rb-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.12);
+  }
+}
+@keyframes rb-scan {
+  0%,
+  100% {
+    transform: translateX(-0.14em);
+  }
+  50% {
+    transform: translateX(0.14em);
+  }
+}
+.rb-msg .who,
+.rb-working {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.rb-msg .who .rb-fm-mark,
+.rb-working .rb-fm-mark {
+  box-shadow: none;
+}
+
+/* 04 · Firstmate's card grows out of its one-line shape, upward from where
+   it sits, and settles back the same way. */
+.rb-island:not(.empty, .floating) {
+  transform-origin: bottom center;
+  animation: rb-island-open 420ms var(--ease);
+}
+.rb-island-line,
+.rb-island.empty {
+  animation: rb-island-rest 300ms var(--ease);
+}
+@keyframes rb-island-open {
+  from {
+    clip-path: inset(calc(100% - 46px) 0 0 0 round 23px);
+    opacity: 0.6;
+  }
+  to {
+    clip-path: inset(0 round 18px);
+    opacity: 1;
+  }
+}
+@keyframes rb-island-rest {
+  from {
+    clip-path: inset(-40px 0 0 0 round 18px);
+    transform: scaleY(1.12);
+    transform-origin: bottom center;
+    opacity: 0.7;
+  }
+}
+
+/* 08 · A soft amber pulse on the one thing waiting for the owner: three
+   beats when it arrives, then still. */
+@keyframes rb-ring {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+.rb-island .btn.primary,
+.rb-rail .count,
+.rb-inline.amber {
+  animation: rb-ring 1.5s ease-out 300ms 3;
+}
+
+/* 09 · Cards lift when pointed at. The owner chose 1.06x. Only cards that
+   open something; sprint story tiles are left exactly as they were. */
+.rb-workcard,
+.rb-card,
+.rb-agent-card,
+button.rb-tile {
+  transition:
+    transform 300ms var(--ease),
+    box-shadow 300ms var(--ease),
+    border-color 160ms var(--ease),
+    background-color 160ms var(--ease);
+}
+:is(.rb-workcard, .rb-card, .rb-agent-card, button.rb-tile):is(
+  :hover,
+  :focus-visible
+) {
+  transform: scale(1.06);
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 16px 32px -14px rgb(0 0 0 / 0.55);
+}
+.rb-agent-card:is(:hover, :focus-visible) {
+  box-shadow:
+    inset 0 0 0 1px var(--control),
+    0 16px 32px -14px rgb(0 0 0 / 0.55);
+}
+:is(.rb-workcard, .rb-card, .rb-agent-card, button.rb-tile):active {
+  transform: scale(1.02);
+}
+
+/* 10 · Lists arrive one item after another, 60 ms apart, capped so a long
+   list never keeps anyone waiting. Plays when the list first appears. */
+@keyframes rb-rise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows) > * {
+  animation: rb-rise 360ms var(--ease) backwards;
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows) > :nth-child(2) {
+  animation-delay: 60ms;
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows) > :nth-child(3) {
+  animation-delay: 120ms;
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows) > :nth-child(4) {
+  animation-delay: 180ms;
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows) > :nth-child(5) {
+  animation-delay: 240ms;
+}
+:is(.rb-work, .rb-cards, .rb-agent-cards, .rb-chips, .rb-rows)
+  > :nth-child(n + 6) {
+  animation-delay: 300ms;
+}
+
+/* 11 · The downloads note shows how long it will stay. The line drains over
+   the same six seconds as the timer and holds while the note is in use. */
+@keyframes rb-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+.rb-drawer.popover.timed::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: rb-drain 6s linear forwards;
+}
+.rb-drawer.popover.timed:is(:hover, :focus-within)::after {
+  animation-play-state: paused;
+}
+
+/* 13 · A screen eases in when the owner changes place. */
+@keyframes rb-screen {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+.rb-page {
+  animation: rb-screen 240ms var(--ease) backwards;
+}
+
+/* 14 · Buttons press in, the chosen tab slides, menus pop from their corner. */
+.rb .btn,
+.rb-send {
+  transition:
+    transform 120ms var(--ease),
+    background-color 140ms var(--ease),
+    border-color 140ms var(--ease);
+}
+.rb .btn:active:not(:disabled),
+.rb-send:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@supports (anchor-scope: --rb-seg) {
+  .rb-seg {
+    position: relative;
+    anchor-scope: --rb-seg;
+  }
+  .rb-seg button {
+    position: relative;
+    z-index: 1;
+  }
+  .rb-seg button:is([aria-pressed="true"], [aria-selected="true"]) {
+    anchor-name: --rb-seg;
+    background: none;
+  }
+  .rb-seg::before {
+    content: "";
+    position: absolute;
+    position-anchor: --rb-seg;
+    top: anchor(top);
+    left: anchor(left);
+    width: anchor-size(width);
+    height: anchor-size(height);
+    border-radius: 7px;
+    background: var(--selected);
+    transition:
+      left 220ms var(--ease),
+      width 220ms var(--ease);
+  }
+}
+@keyframes rb-pop {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+.rb-menu {
+  transform-origin: top left;
+  animation: rb-pop 180ms var(--ease) backwards;
+}
+.rb-composer .rb-menu {
+  transform-origin: bottom left;
+}
+
+/* 15 · Firstmate's newest reply is revealed from its first line down, as if
+   being written. Older messages are left alone. */
+@property --rb-written {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@keyframes rb-written {
+  from {
+    --rb-written: -30%;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 var(--rb-written),
+      transparent calc(var(--rb-written) + 30%)
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 var(--rb-written),
+      transparent calc(var(--rb-written) + 30%)
+    );
+  }
+  to {
+    --rb-written: 100%;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 var(--rb-written),
+      transparent calc(var(--rb-written) + 30%)
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 var(--rb-written),
+      transparent calc(var(--rb-written) + 30%)
+    );
+  }
+}
+.rb-msg.firstmate:is(:last-child, :nth-last-child(2)) {
+  animation: rb-written 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb .ic path {
+    animation: none !important;
+    stroke-dasharray: none;
+  }
+  /* Loops stop outright; the moods still show through the eyes' shape. */
+  .rb-drawer.popover.timed::after {
+    display: none;
+  }
+  .rb .btn:active:not(:disabled),
+  .rb-send:active:not(:disabled) {
+    transform: none;
+  }
+  .rb-fm-mark i {
+    animation: none !important;
+  }
+  :is(.rb-workcard, .rb-card, .rb-agent-card, button.rb-tile):is(
+    :hover,
+    :focus-visible,
+    :active
+  ) {
+    transform: none;
+  }
+  .rb-island .btn.primary,
+  .rb-rail .count,
+  .rb-inline.amber {
+    animation: none;
+  }
+}

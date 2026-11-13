@@ -51,6 +51,7 @@ const paths: Record<string, string> = {
 };
 export function Icon({
   name,
+  className,
   ...props
 }: { name: string } & SVGProps<SVGSVGElement>) {
   return (
@@ -64,9 +65,12 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      // The name lets the stylesheet give one icon its own motion; a path
+      // length of 1 lets any icon be drawn on without measuring it.
+      className={className ? `ic ic-${name} ${className}` : `ic ic-${name}`}
       {...props}
     >
-      <path d={paths[name] ?? paths.prd} />
+      <path pathLength={1} d={paths[name] ?? paths.prd} />
     </svg>
   );
 }

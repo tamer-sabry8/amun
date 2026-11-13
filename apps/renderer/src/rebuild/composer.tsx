@@ -15,6 +15,7 @@ import {
 import { councilCommands } from "../../../../packages/domain/src/work/council.ts";
 import { Icon } from "../icons.tsx";
 import { ModelPicker } from "./model-picker.tsx";
+import { takeOff } from "./motion.ts";
 
 export const allCommands: SlashCommand[] = [
   ...builtInCommands,
@@ -131,10 +132,12 @@ export function Composer({
     change(next, start + insert.length);
     area.current?.focus();
   };
+  const sendButton = useRef<HTMLButtonElement>(null);
   const send = () => {
     const text = draft.trim();
     if ((!text && !files.length) || busy) return;
     recognition.current?.stop();
+    takeOff(sendButton.current?.firstElementChild);
     onSend(text, files);
     setDraft("");
     setFiles([]);
@@ -355,6 +358,7 @@ export function Composer({
             aria-label="Send"
             disabled={busy || (!draft.trim() && !files.length)}
             onClick={send}
+            ref={sendButton}
           >
             <Icon name="up" width={16} height={16} strokeWidth={2.2} />
           </button>

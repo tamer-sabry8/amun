@@ -50,6 +50,12 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       );
       if (valid) {
         view?.setBounds(valid.bounds);
+        if (
+          view &&
+          valid.zoom !== undefined &&
+          Math.abs(view.webContents.getZoomFactor() - valid.zoom) > 0.005
+        )
+          view.webContents.setZoomFactor(valid.zoom);
         view?.setVisible(valid.visible);
       } else view?.setVisible(false);
     } else

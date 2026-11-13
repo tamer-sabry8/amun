@@ -25,6 +25,7 @@ import { Icon } from "../icons.tsx";
 import "../tokens.css";
 import "../shell.css";
 import "./rebuild.css";
+import "./motion.css";
 import { Island, Palette, Sidebar } from "./chrome.tsx";
 import { useFirstmateModel } from "./firstmate.ts";
 import { Home, type IntakeStep } from "./home.tsx";
@@ -539,7 +540,10 @@ export function App() {
         {layout.rail && !expandedRail && (
           <aside
             className={
-              "rb-drawer" + (layout.rail === "downloads" ? " popover" : "")
+              "rb-drawer" +
+              (layout.rail === "downloads" ? " popover" : "") +
+              // Shown by a new download: a line counts down until it closes.
+              (layout.rail === "downloads" && flownOut.current ? " timed" : "")
             }
             role="dialog"
             aria-modal="false"

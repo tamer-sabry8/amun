@@ -18,6 +18,8 @@ import {
   maxRatio,
   minRatio,
 } from "../../../../packages/domain/src/work/shell.ts";
+import { browserBounds, coverSelector } from "./browser-bounds.ts";
+import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
@@ -66,7 +68,18 @@ const browserCommand = (value: unknown) =>
  * The isolated browser view, placed over this pane. It follows the pane as
  * the divider moves, so it is as wide as the user makes it (BF014).
  */
-export function BrowserPane({ url, hidden }: { url: string; hidden: boolean }) {
+export function BrowserPane({
+  url,
+  hidden,
+  fit,
+}: {
+  url: string;
+  hidden: boolean;
+  /** For a page with a fixed design: the size it was made for. The page is
+      shrunk until that much of it fits the panel, and the address bar is left
+      out, since there is nowhere else to go. */
+  fit?: { width: number; height: number };
+}) {
   const viewport = useRef<HTMLDivElement>(null);
   const [address, setAddress] = useState(url);
   const [status, setStatus] = useState("");
@@ -85,32 +98,71 @@ export function BrowserPane({ url, hidden }: { url: string; hidden: boolean }) {
   }, [url]);
   useEffect(() => {
     const update = () => {
-      const rect = viewport.current?.getBoundingClientRect();
+      const panel = viewport.current;
+      const scroller = panel?.closest(".rb-scroll");
+      const placed = browserBounds(
+        panel?.getBoundingClientRect() ?? null,
+        [
+          { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
+          ...(scroller ? [scroller.getBoundingClientRect()] : []),
+        ],
+        [...document.querySelectorAll(coverSelector)]
+          .filter((cover) => !cover.contains(panel ?? null))
+          .map((cover) => cover.getBoundingClientRect()),
+      );
+      const size = panel?.getBoundingClientRect();
       browserCommand({
+        ...(fit &&
+          size && {
+            zoom: Math.max(
+              0.3,
+              Math.min(1, size.width / fit.width, size.height / fit.height),
+            ),
+          }),
         action: "layout",
-        visible: !hidden && !!rect && rect.width > 1,
-        bounds: {
-          x: Math.max(0, Math.round(rect?.x ?? 0)),
-          y: Math.max(0, Math.round(rect?.y ?? 0)),
-          width: Math.max(1, Math.floor(rect?.width ?? 1)),
-          height: Math.max(1, Math.floor(rect?.height ?? 1)),
-        },
+        // Search dims the whole window, so the room goes with it.
+        visible:
+          !hidden && placed.visible && !document.querySelector("dialog:modal"),
+        bounds: placed.bounds,
       });
     };
+    // The panel moves without changing size when the screen scrolls or
+    // something opens above it, so those are watched as well as its size.
+    let frame = 0;
+    const soon = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
     update();
-    const observer = new ResizeObserver(update);
+    const observer = new ResizeObserver(soon);
     if (viewport.current) observer.observe(viewport.current);
-    window.addEventListener("resize", update);
+    const changes = new MutationObserver(soon);
+    changes.observe(document.body, {
+      childList: true,
+      subtree: true,
+      // Search and the panels are shown and hidden without being rebuilt.
+      attributes: true,
+      attributeFilter: ["class", "open", "hidden", "style", "aria-hidden"],
+    });
+    window.addEventListener("resize", soon);
+    document.addEventListener("scroll", soon, true);
+    // A screen that eases in is a few pixels off until it lands.
+    document.addEventListener("animationend", soon, true);
     return () => {
+      cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", update);
+      changes.disconnect();
+      window.removeEventListener("resize", soon);
+      document.removeEventListener("scroll", soon, true);
+      document.removeEventListener("animationend", soon, true);
       browserCommand({
         action: "layout",
         visible: false,
         bounds: { x: 0, y: 0, width: 1, height: 1 },
       });
     };
-  }, [hidden]);
+  }, [hidden, fit?.width, fit?.height]);
+  if (fit) return <div ref={viewport} style={{ height: "100%" }} />;
   return (
     <div
       style={{
@@ -1212,7 +1264,10 @@ export function WorkSession({
                         the owner's own messages sit on the right. */}
                     {message.role === "firstmate" &&
                       context.messages[position - 1]?.role !== "firstmate" && (
-                        <span className="who">Firstmate</span>
+                        <span className="who">
+                          <FirstmateMark size={18} />
+                          Firstmate
+                        </span>
                       )}
                     {message.text}
                   </div>
@@ -1432,7 +1487,8 @@ export function WorkSession({
                   </div>
                 )}
               {busy && (
-                <p className="muted" role="status">
+                <p className="muted rb-working" role="status">
+                  <FirstmateMark size={22} mood="working" />
                   Firstmate is working…
                 </p>
               )}

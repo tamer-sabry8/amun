@@ -36,6 +36,7 @@ import {
   suggestFullCouncil,
 } from "../../../../packages/domain/src/work/council.ts";
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
+import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentsPanel } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
@@ -146,57 +147,122 @@ function Segmented<T extends string>({
 }
 
 // ── Agents ───────────────────────────────────────────────────────────────────
-function AgentTree({
+/** One agent: a full card for the lead and for anyone working, a compact
+    row for the rest. Choosing either opens the same panel underneath. */
+function AgentButton({
   node,
+  row = false,
+  selected,
+  onSelect,
+  busy = false,
+}: {
+  node: AgentNode;
+  row?: boolean;
+  selected: string | null;
+  onSelect(id: string): void;
+  /** For the lead: whether anyone on the team is working. */
+  busy?: boolean;
+}) {
+  const quiet =
+    node.kind === "lead"
+      ? "Your lead agent"
+      : node.kind === "temporary"
+        ? "Temporary"
+        : row
+          ? "Ready"
+          : "Always on";
+  return (
+    <button
+      className={
+        "rb-agent" + (row ? " row" : "") + (node.fading ? " fading" : "")
+      }
+      aria-pressed={selected === node.id}
+      onClick={() => onSelect(node.id)}
+    >
+      {node.kind === "lead" ? (
+        <span style={{ gridRow: "span 2" }}>
+          <FirstmateMark size={30} mood={busy ? "working" : "resting"} />
+        </span>
+      ) : agentProfile(node.role) ? (
+        <span style={{ gridRow: row ? undefined : "span 2" }}>
+          <AgentAvatar role={node.role} size={row ? 26 : 30} />
+        </span>
+      ) : (
+        <span className="glyph" aria-hidden="true">
+          <Icon name={node.icon} width={16} height={16} />
+        </span>
+      )}
+      <span className="role">
+        {node.role}
+        {!row && (
+          <span className={"rb-live " + node.state} title={node.status} />
+        )}
+      </span>
+      <span className="doing">{node.nowDoing ?? quiet}</span>
+      {row && <span className={"rb-live " + node.state} title={node.status} />}
+    </button>
+  );
+}
+function Team({
+  chart,
   selected,
   onSelect,
 }: {
-  node: AgentNode;
+  chart: AgentNode;
   selected: string | null;
   onSelect(id: string): void;
 }) {
+  const working = chart.children.filter(
+    (agent) => agent.state === "working" || agent.state === "waiting",
+  );
+  const ready = chart.children.filter((agent) => !working.includes(agent));
   return (
-    <li>
-      <button
-        className={"rb-agent" + (node.fading ? " fading" : "")}
-        aria-pressed={selected === node.id}
-        onClick={() => onSelect(node.id)}
-      >
-        {agentProfile(node.role) ? (
-          <span style={{ gridRow: "span 2" }}>
-            <AgentAvatar role={node.role} size={30} />
-          </span>
-        ) : (
-          <span className="glyph" aria-hidden="true">
-            <Icon name={node.icon} width={16} height={16} />
-          </span>
-        )}
-        <span className="role">
-          {node.role}
-          <span className={"rb-live " + node.state} title={node.status} />
-        </span>
-        <span className="doing">
-          {node.nowDoing ??
-            (node.kind === "lead"
-              ? "Your lead agent"
-              : node.kind === "always_on"
-                ? "Always on"
-                : "Temporary")}
-        </span>
-      </button>
-      {node.children.length > 0 && (
-        <ul>
-          {node.children.map((child) => (
-            <AgentTree
-              key={child.id}
-              node={child}
-              selected={selected}
-              onSelect={onSelect}
-            />
-          ))}
-        </ul>
+    <div className="rb-team">
+      <div className="lead">
+        <AgentButton
+          node={chart}
+          selected={selected}
+          onSelect={onSelect}
+          busy={working.length > 0}
+        />
+      </div>
+      {working.length > 0 && (
+        <section aria-labelledby="rb-team-working">
+          <h2 id="rb-team-working">
+            Working now <span className="count">{working.length}</span>
+          </h2>
+          <div className="working">
+            {working.map((agent) => (
+              <AgentButton
+                key={agent.id}
+                node={agent}
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </section>
       )}
-    </li>
+      {ready.length > 0 && (
+        <section aria-labelledby="rb-team-ready">
+          <h2 id="rb-team-ready">
+            Ready when Firstmate needs them{" "}
+            <span className="count">{ready.length}</span>
+          </h2>
+          <div className="roster">
+            {ready.map((agent) => (
+              <AgentButton
+                key={agent.id}
+                node={agent}
+                row
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 export function Agents({
@@ -238,16 +304,14 @@ export function Agents({
       }
     >
       {chart ? (
-        <ol className="rb-org" style={{ listStyle: "none", margin: 0 }}>
-          <AgentTree
-            node={chart}
-            selected={selected}
-            onSelect={(id) => {
-              setSelected(id);
-              setWatch(false);
-            }}
-          />
-        </ol>
+        <Team
+          chart={chart}
+          selected={selected}
+          onSelect={(id) => {
+            setSelected(id);
+            setWatch(false);
+          }}
+        />
       ) : (
         <p className="muted">Finish setup to meet Firstmate and your agents.</p>
       )}
@@ -287,6 +351,12 @@ export function Agents({
             )}
           </header>
           <div style={{ padding: "0 18px 18px", display: "grid", gap: 10 }}>
+            {agentProfile(agent.role) && (
+              <p>
+                <span className="muted">What it does · </span>
+                {agentProfile(agent.role)?.summary}
+              </p>
+            )}
             <p>
               <span className="muted">Now doing · </span>
               {agent.nowDoing ?? "Nothing right now"}
@@ -310,6 +380,9 @@ export function Agents({
 
 // ── Council ──────────────────────────────────────────────────────────────────
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
+/** The Roast Room is laid out for a wide window: two columns from 1221 px,
+    and a table at least 520 px tall under its header. */
+const roomDesign = { width: 1280, height: 770 };
 export function Council({
   snapshot,
   status,
@@ -338,7 +411,11 @@ export function Council({
   return (
     <Page
       title="Council"
-      line="Put a hard decision to a board of advisors. They debate; you decide."
+      // With the room open, the room itself says what this is; the space
+      // goes to the advisors.
+      {...(!status?.roomUrl && {
+        line: "Put a hard decision to a board of advisors. They debate; you decide.",
+      })}
       actions={
         <>
           {status?.installed && (
@@ -432,7 +509,7 @@ export function Council({
         {simulationLabel} A verdict is advice: it never changes a roadmap,
         backlog or ticket.
       </p>
-      {status && status.seats.length > 0 && (
+      {status && status.seats.length > 0 && !status.roomUrl && (
         <div className="row wrap" style={{ marginBottom: 20 }}>
           {status.seats.map((seat) => (
             <span
@@ -447,12 +524,8 @@ export function Council({
         </div>
       )}
       {status?.roomUrl && (
-        <section
-          className="rb-panel"
-          aria-label="The room"
-          style={{ height: 520, padding: 12, marginBottom: 20 }}
-        >
-          <BrowserPane url={status.roomUrl} hidden={false} />
+        <section aria-label="The room" className="rb-panel rb-room">
+          <BrowserPane url={status.roomUrl} hidden={false} fit={roomDesign} />
         </section>
       )}
       <section className="rb-panel" aria-labelledby="rb-council-h">

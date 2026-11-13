@@ -62,11 +62,22 @@ export function browserLayout(
 ): {
   visible: boolean;
   bounds: { x: number; y: number; width: number; height: number };
+  /** Shrinks the page to fit its panel; absent leaves the page's zoom alone. */
+  zoom?: number;
 } | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const value = input as Record<string, unknown>;
+  const zoomed = "zoom" in value;
   if (
-    Object.keys(value).length !== 3 ||
+    zoomed &&
+    (typeof value.zoom !== "number" ||
+      !Number.isFinite(value.zoom) ||
+      value.zoom < 0.3 ||
+      value.zoom > 1)
+  )
+    return null;
+  if (
+    Object.keys(value).length !== (zoomed ? 4 : 3) ||
     value.action !== "layout" ||
     typeof value.visible !== "boolean" ||
     !value.bounds ||
@@ -97,5 +108,9 @@ export function browserLayout(
     bounds.y + bounds.height > height
   )
     return null;
-  return { visible: value.visible, bounds };
+  return {
+    visible: value.visible,
+    bounds,
+    ...(zoomed && { zoom: value.zoom as number }),
+  };
 }
