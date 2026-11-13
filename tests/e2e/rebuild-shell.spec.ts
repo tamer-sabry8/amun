@@ -213,14 +213,16 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     ).toBeVisible();
     await expect(page.getByText("No response owner").first()).toBeVisible();
     await page.getByLabel("Stage").selectOption("won");
-    await expect(
-      page.getByRole("button", { name: "Hand to delivery" }),
-    ).toBeDisabled();
+    const handToDelivery = page.getByRole("button", {
+      name: "Hand to delivery",
+      exact: true,
+    });
+    await expect(handToDelivery).toBeDisabled();
     await page.getByLabel("Proposal signed").check();
     await page.getByLabel("BRD approved").check();
-    await page.getByRole("button", { name: "Hand to delivery" }).click();
+    await handToDelivery.click();
     await expect(
-      page.getByRole("button", { name: "Open delivery project" }),
+      page.getByRole("button", { name: "Open delivery project", exact: true }),
     ).toBeVisible();
     await shot(page, "09-rfps");
     await scan(page, "rfps");
