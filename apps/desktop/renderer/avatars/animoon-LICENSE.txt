@@ -1,0 +1,2 @@
+Animal pictures from Animoon by Simon André (https://github.com/smnandre/animoon),
+released under CC0 1.0 Universal. Resized to 192 px for use as agent avatars.

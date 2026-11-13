@@ -1,6 +1,8 @@
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
+import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
+import { AgentAvatar } from "./agent-avatar.tsx";
 import { useState, type DragEvent, type ReactNode } from "react";
 import {
   horizonBoard,
@@ -160,9 +162,15 @@ function AgentTree({
         aria-pressed={selected === node.id}
         onClick={() => onSelect(node.id)}
       >
-        <span className="glyph" aria-hidden="true">
-          <Icon name={node.icon} width={16} height={16} />
-        </span>
+        {agentProfile(node.role) ? (
+          <span style={{ gridRow: "span 2" }}>
+            <AgentAvatar role={node.role} size={30} />
+          </span>
+        ) : (
+          <span className="glyph" aria-hidden="true">
+            <Icon name={node.icon} width={16} height={16} />
+          </span>
+        )}
         <span className="role">
           {node.role}
           <span className={"rb-live " + node.state} title={node.status} />

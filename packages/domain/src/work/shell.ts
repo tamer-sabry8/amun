@@ -1,5 +1,6 @@
 // Shell v3 (handoff §4, Q57–Q68): navigation, layout, Island, composer, wizard.
 
+import { agentCatalog } from "./agents.ts";
 export const tiles = [
   ["agents", "Agents"],
   ["council", "Council"],
@@ -268,7 +269,7 @@ export const workCards = [
   ["task", "Tasks"],
   ["rfp", "RFP tracking"],
 ] as const;
-export const groupCards = ["Employer", "Personal", "Side business"] as const;
+export const groupCards = ["Work", "Personal", "Side business"] as const;
 export const providerCards = [
   ["openai-codex", "ChatGPT Plus/Pro"],
   ["anthropic", "Claude Pro/Max"],
@@ -278,14 +279,12 @@ export const providerCards = [
   ["radius", "Radius"],
   ["api-key", "API key"],
 ] as const;
-export const suggestedAgents = [
-  { role: "Researcher", recommended: true },
-  { role: "Analyst", recommended: true },
-  { role: "Writer", recommended: true },
-  { role: "Designer", recommended: false },
-  { role: "QA", recommended: false },
-  // No Engineer by default: Amun does not write production code (Q41).
-] as const;
+// The owner's day-one agents, all offered and selected to begin with.
+// No Engineer: Amun does not write production code (Q41).
+export const suggestedAgents = agentCatalog.map((agent) => ({
+  role: agent.name,
+  recommended: true,
+}));
 
 export interface WizardState {
   step: WizardStep;

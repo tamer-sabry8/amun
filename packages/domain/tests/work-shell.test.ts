@@ -250,11 +250,19 @@ describe("wizard (handoff §5)", () => {
     expect(go([{ type: "back" }]).step).toBe("models");
     expect(go([{ type: "next" }, { type: "back" }]).step).toBe("models");
   });
-  it("preselects recommended agents without an Engineer", () => {
-    expect(initialWizard.agents).toEqual(["Researcher", "Analyst", "Writer"]);
+  it("preselects the day-one agents without an Engineer", () => {
+    expect(initialWizard.agents).toHaveLength(20);
+    expect(initialWizard.agents.slice(0, 3)).toEqual([
+      "Research & Insights",
+      "Product Manager",
+      "UX",
+    ]);
+    expect(initialWizard.agents.some((name) => /engineer/i.test(name))).toBe(
+      false,
+    );
     expect(
-      go([{ type: "toggle", field: "agents", value: "Writer" }]).agents,
-    ).toEqual(["Researcher", "Analyst"]);
+      go([{ type: "toggle", field: "agents", value: "UX" }]).agents,
+    ).not.toContain("UX");
     expect(
       go([{ type: "toggle", field: "tools", value: "ado" }]).tools,
     ).toEqual(["ado"]);

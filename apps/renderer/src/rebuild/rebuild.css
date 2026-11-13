@@ -1684,3 +1684,103 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Agents: a picture, a name and one line. The chosen state is carried three
+   ways (ring, tint, tick) so it reads at a glance in every theme. */
+.rb-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--press);
+  color: var(--accent);
+  font-weight: 600;
+}
+.rb-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.rb-agent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.rb-agent-card {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: stretch !important;
+  gap: 12px !important;
+  text-align: left;
+  padding: 12px 14px 12px 12px;
+  border-radius: 14px !important;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition:
+    box-shadow 160ms var(--ease),
+    background-color 160ms var(--ease);
+}
+.rb-agent-card:hover {
+  box-shadow: inset 0 0 0 1px var(--control);
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+}
+.rb-agent-card .text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rb-agent-card strong {
+  font-weight: 600;
+  text-wrap: balance;
+}
+.rb-agent-card .text > span {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.rb-agent-card .rb-avatar {
+  transition:
+    filter 160ms var(--ease),
+    opacity 160ms var(--ease),
+    box-shadow 160ms var(--ease);
+}
+/* Not chosen: the picture steps back. */
+.rb-agent-card[aria-pressed="false"] .rb-avatar {
+  filter: saturate(0.35);
+  opacity: 0.6;
+}
+.rb-agent-card .mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1.5px var(--control);
+  color: var(--amun-color-button-text);
+  transition:
+    background-color 160ms var(--ease),
+    box-shadow 160ms var(--ease);
+}
+.rb-agent-card[aria-pressed="true"],
+.rb-agent-card[aria-pressed="true"]:hover {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--selected);
+}
+.rb-agent-card[aria-pressed="true"] .rb-avatar {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.rb-agent-card[aria-pressed="true"] .mark {
+  background: var(--accent);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-agent-card,
+  .rb-agent-card .rb-avatar,
+  .rb-agent-card .mark {
+    transition: none;
+  }
+}
