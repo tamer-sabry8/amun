@@ -1,0 +1,761 @@
+{
+  "date": "2026-11-13",
+  "head": "c46cf36 (main 36f4756 plus handoff document)",
+  "signing": "ad-hoc",
+  "node": "v22.23.1",
+  "memoryProofRuns": [
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "packaged": true,
+      "shell": "rebuild (v3)",
+      "trials": [
+        {
+          "startupMs": 7564,
+          "setup": {
+            "workingSetMiB": 457,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 193
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 125
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 480,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 203
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 372,
+          "setup": {
+            "workingSetMiB": 458,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 193
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 480,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 202
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 137
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 374,
+          "setup": {
+            "workingSetMiB": 460,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 195
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 480,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 203
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        }
+      ],
+      "limitations": [
+        "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+        "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+        "No sign-in, no agents running and no Council session",
+        "Other apps remained running"
+      ],
+      "budgets": {
+        "startupMs": 3000,
+        "workingSetMiB": 500
+      },
+      "allBudgetsMet": false
+    },
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "packaged": true,
+      "shell": "rebuild (v3)",
+      "trials": [
+        {
+          "startupMs": 369,
+          "setup": {
+            "workingSetMiB": 461,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 196
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 479,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 202
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 393,
+          "setup": {
+            "workingSetMiB": 461,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 196
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 479,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 202
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 374,
+          "setup": {
+            "workingSetMiB": 459,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 194
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 479,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 202
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        }
+      ],
+      "limitations": [
+        "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+        "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+        "No sign-in, no agents running and no Council session",
+        "Other apps remained running"
+      ],
+      "budgets": {
+        "startupMs": 3000,
+        "workingSetMiB": 500
+      },
+      "allBudgetsMet": true
+    },
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "packaged": true,
+      "shell": "rebuild (v3)",
+      "trials": [
+        {
+          "startupMs": 385,
+          "setup": {
+            "workingSetMiB": 461,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 196
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 483,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 204
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 138
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 391,
+          "setup": {
+            "workingSetMiB": 459,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 194
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 479,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 202
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 385,
+          "setup": {
+            "workingSetMiB": 458,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 194
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 124
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 480,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 203
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        }
+      ],
+      "limitations": [
+        "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+        "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+        "No sign-in, no agents running and no Council session",
+        "Other apps remained running"
+      ],
+      "budgets": {
+        "startupMs": 3000,
+        "workingSetMiB": 500
+      },
+      "allBudgetsMet": true
+    },
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "packaged": true,
+      "shell": "rebuild (v3)",
+      "trials": [
+        {
+          "startupMs": 396,
+          "setup": {
+            "workingSetMiB": 462,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 197
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 126
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 481,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 204
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 421,
+          "setup": {
+            "workingSetMiB": 460,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 195
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 125
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 481,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 204
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        },
+        {
+          "startupMs": 393,
+          "setup": {
+            "workingSetMiB": 459,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 194
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 48
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 91
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 125
+              }
+            ]
+          },
+          "home": {
+            "workingSetMiB": 479,
+            "processes": 4,
+            "processWorkingSets": [
+              {
+                "type": "Browser",
+                "workingSetMiB": 203
+              },
+              {
+                "type": "Utility",
+                "name": "Network Service",
+                "workingSetMiB": 49
+              },
+              {
+                "type": "Utility",
+                "name": "Amun Service",
+                "workingSetMiB": 92
+              },
+              {
+                "type": "Tab",
+                "workingSetMiB": 136
+              }
+            ]
+          }
+        }
+      ],
+      "limitations": [
+        "Process-cold launch with warm filesystem caches, not a reboot or clean account",
+        "Working set summed across Electron-reported app processes; shared pages may be counted more than once",
+        "No sign-in, no agents running and no Council session",
+        "Other apps remained running"
+      ],
+      "budgets": {
+        "startupMs": 3000,
+        "workingSetMiB": 500
+      },
+      "allBudgetsMet": true
+    }
+  ],
+  "fallbackProof": {
+    "packaged": true,
+    "steps": [
+      {
+        "launch": 1,
+        "expected": "in-process",
+        "mode": "in-process",
+        "graphicsProcess": false,
+        "exit": "clean",
+        "failuresAfter": 0
+      },
+      {
+        "launch": 2,
+        "expected": "in-process",
+        "mode": "in-process",
+        "graphicsProcess": false,
+        "exit": "killed",
+        "failuresAfter": 0
+      },
+      {
+        "launch": 3,
+        "expected": "separate",
+        "mode": "separate",
+        "graphicsProcess": true,
+        "exit": "clean",
+        "failuresAfter": 1
+      },
+      {
+        "launch": 4,
+        "expected": "in-process",
+        "mode": "in-process",
+        "graphicsProcess": false,
+        "exit": "killed",
+        "failuresAfter": 1
+      },
+      {
+        "launch": 5,
+        "expected": "separate",
+        "mode": "separate",
+        "graphicsProcess": true,
+        "exit": "clean",
+        "failuresAfter": 2
+      },
+      {
+        "launch": 6,
+        "expected": "separate",
+        "mode": "separate",
+        "graphicsProcess": true,
+        "exit": "clean",
+        "failuresAfter": 2
+      }
+    ],
+    "soak": {
+      "screenChanges": 280,
+      "frames": 1273,
+      "medianFrameMs": 8.3,
+      "p99FrameMs": 9.3,
+      "framesOver50Ms": 0,
+      "rendererCrashes": 0,
+      "appStillRunning": true,
+      "graphicsProcess": false,
+      "workingSetMiB": 576
+    },
+    "ok": true
+  }
+}
