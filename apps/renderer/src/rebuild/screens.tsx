@@ -7,6 +7,7 @@ import { useState, type DragEvent, type ReactNode } from "react";
 import {
   horizonBoard,
   orgChart,
+  teamUnder,
   planSummary,
   calendarNote,
   releaseGroups,
@@ -212,10 +213,11 @@ function Team({
   selected: string | null;
   onSelect(id: string): void;
 }) {
-  const working = chart.children.filter(
+  const team = teamUnder(chart);
+  const working = team.filter(
     (agent) => agent.state === "working" || agent.state === "waiting",
   );
-  const ready = chart.children.filter((agent) => !working.includes(agent));
+  const ready = team.filter((agent) => !working.includes(agent));
   return (
     <div className="rb-team">
       <div className="lead">

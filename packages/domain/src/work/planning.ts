@@ -415,6 +415,11 @@ const statusText = {
   idle: "Idle",
   done: "Finished",
 } as const;
+/** Everyone below the lead, however deep: a helper started by another agent
+    sits under that agent in the chart and still belongs on the Agents screen. */
+export function teamUnder(node: AgentNode): AgentNode[] {
+  return node.children.flatMap((child) => [child, ...teamUnder(child)]);
+}
 export function orgChart(agents: AgentCard[]): AgentNode | null {
   const lead = agents.find((agent) => agent.kind === "lead");
   if (!lead) return null;
