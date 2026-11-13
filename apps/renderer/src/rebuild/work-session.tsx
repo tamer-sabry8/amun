@@ -1193,7 +1193,7 @@ export function WorkSession({
                   <span className="note">{rfpAuthoringBoundary}</span>
                 </div>
               )}
-              {context.messages.map((message) =>
+              {context.messages.map((message, position) =>
                 message.role === "card" ? (
                   <InlineCard
                     key={message.id}
@@ -1208,6 +1208,12 @@ export function WorkSession({
                   />
                 ) : (
                   <div key={message.id} className={"rb-msg " + message.role}>
+                    {/* Firstmate is named where its turn begins, on the left;
+                        the owner's own messages sit on the right. */}
+                    {message.role === "firstmate" &&
+                      context.messages[position - 1]?.role !== "firstmate" && (
+                        <span className="who">Firstmate</span>
+                      )}
                     {message.text}
                   </div>
                 ),

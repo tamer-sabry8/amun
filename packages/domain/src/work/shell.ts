@@ -162,6 +162,8 @@ export const sidebarCollapsed = (state: ShellLayout) =>
 
 // ── Island (Q31–Q32) ─────────────────────────────────────────────────────────
 export const islandFloatMs = 6000;
+/** How long the downloads panel stays out after a new download arrives. */
+export const downloadsFloatMs = 6000;
 /**
  * In the collapsed sidebar a new item floats out for about six seconds and
  * returns to icon + badge. It never takes focus, and with reduced motion it
@@ -245,9 +247,47 @@ export function matchMentions(
       .map((area) => ({ kind: "work" as const, ...area })),
   ].slice(0, 8);
 }
-/** "Auto · Sonnet 5.5": routing is automatic and every run shows the model it used. */
+const providerNames: Record<string, string> = {
+  "github-copilot": "GitHub Copilot",
+  "openai-codex": "ChatGPT",
+  openai: "OpenAI",
+  anthropic: "Claude",
+  openrouter: "OpenRouter",
+  google: "Google",
+  xai: "xAI",
+};
+const modelWords: Record<string, string> = {
+  gpt: "GPT",
+  ai: "AI",
+  xai: "xAI",
+  oss: "OSS",
+};
+/**
+ * "github-copilot/claude-sonnet-5" → "GitHub Copilot · Claude Sonnet 5": the
+ * provider the owner signed in to and the model, in words.
+ */
+export function modelDisplay(id: string | null): string | null {
+  if (!id || /(^|\/)unknown$/.test(id)) return null;
+  const parts = id.split("/");
+  const model = parts.pop()!;
+  const provider = parts[0];
+  const name = model
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(
+      (word) =>
+        modelWords[word.toLowerCase()] ??
+        (/^\d/.test(word)
+          ? word
+          : word.charAt(0).toUpperCase() + word.slice(1)),
+    )
+    .join(" ");
+  if (!provider) return name;
+  return `${providerNames[provider] ?? provider} · ${name}`;
+}
+/** The model in use, shown in the prompt box; "Auto" until one is known. */
 export function routingLabel(model: string | null, manual = false) {
-  return model ? `${manual ? "Chosen" : "Auto"} · ${model}` : "Auto";
+  return model ? `${manual ? "Chosen · " : ""}${model}` : "Auto";
 }
 /** Voice only dictates into the box; nothing runs until the user sends (Q70). */
 export function dictation(draft: string, transcript: string) {

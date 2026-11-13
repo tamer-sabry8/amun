@@ -201,6 +201,29 @@ export type IntakeStep =
   | { step: "file_work"; type: WorkType; area: WorkArea }
   | { step: "choose_work"; type: WorkType; options: WorkArea[] };
 
+/**
+ * The one group a message names for itself, as in "for work" or "in my side
+ * business". A bare word is not enough ("work on the deck" names no group),
+ * and two named groups are no answer at all.
+ */
+export function groupMentioned(
+  text: string,
+  groups: readonly { id: string; name: string }[],
+): string | null {
+  const named = groups.filter((group) => {
+    const name = group.name
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s+");
+    if (!name) return false;
+    return new RegExp(
+      `(?:\\b(?:for|in|at|under|to|on)\\s+(?:my\\s+|the\\s+|our\\s+)?${name}\\b)|(?:\\b${name}\\s+group\\b)`,
+      "i",
+    ).test(text);
+  });
+  return named.length === 1 ? named[0]!.id : null;
+}
+
 /** F1 intake: group first, then kind, then link. Never creates a duplicate silently. */
 export function intake(input: {
   text: string;
@@ -246,8 +269,18 @@ export function needsLinking(records: SupportingRecord[]) {
  */
 export function nameFromRequest(text: string, fallback = "Untitled") {
   const line = text.trim().split("\n")[0]?.trim() ?? "";
-  const named = /\b(?:called|named)\s+["“]?(.+?)["”]?\s*$/i.exec(line);
-  const stripped = (named?.[1] ?? line)
+  const quoted =
+    /\b(?:called|named)\s+(?:called\s+|named\s+)?["“]([^"”]+)["”]/i.exec(line);
+  const named =
+    quoted ??
+    /\b(?:called|named)\s+(?:called\s+|named\s+)?(.+?)\s*$/i.exec(line);
+  // Only the name: what follows it ("it is for work and has a deadline…")
+  // describes the work and is not part of what it is called.
+  const afterName =
+    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+  const only = (value: string) =>
+    quoted ? value : (value.split(afterName)[0] ?? value);
+  const stripped = (named ? only(named[1]!) : line)
     .replace(
       /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i,
       "",

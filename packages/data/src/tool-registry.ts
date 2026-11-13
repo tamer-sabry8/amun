@@ -80,6 +80,11 @@ export class ToolRegistry {
       .run(id, label.trim(), path, new Date().toISOString());
   }
 
+  /** False only when the person turned this tool off. */
+  enabled(id: string): boolean {
+    return this.row(id)?.enabled !== 0;
+  }
+
   setEnabled(id: string, enabled: boolean): void {
     this.ensure(id);
     this.db

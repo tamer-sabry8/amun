@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  downloadsFloatMs,
   initialShell,
   resolveTheme,
   shellReducer,
@@ -164,6 +165,35 @@ export function App() {
     });
   }, [pane, layout.route]);
 
+  const downloadCount = (bridgeState.workspace?.artifacts ?? []).filter(
+    (item) => ["export", "download"].includes(item.kind),
+  ).length;
+  // A new download shows itself: the panel flies out for a few seconds and
+  // closes again unless the pointer or keyboard is in it.
+  const seenDownloads = useRef<number | null>(null);
+  const flownOut = useRef(false);
+  useEffect(() => {
+    const before = seenDownloads.current;
+    seenDownloads.current = downloadCount;
+    if (before === null || downloadCount <= before || layout.rail) return;
+    flownOut.current = true;
+    dispatch({ type: "rail", item: "downloads" });
+  }, [downloadCount]);
+  useEffect(() => {
+    if (layout.rail !== "downloads" || !flownOut.current) {
+      if (layout.rail !== "downloads") flownOut.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const drawer = document.querySelector(".rb-drawer.popover");
+      // Someone is using it: leave it open.
+      if (drawer?.matches(":hover") || drawer?.contains(document.activeElement))
+        return;
+      flownOut.current = false;
+      dispatch({ type: "rail", item: "downloads" });
+    }, downloadsFloatMs);
+    return () => clearTimeout(timer);
+  }, [layout.rail, downloadCount]);
   if (!snapshot)
     return (
       <div className="rb setup">

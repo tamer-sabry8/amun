@@ -15,7 +15,7 @@
   --selected: color-mix(in srgb, var(--accent) 16%, transparent);
   --float: 0 12px 32px -8px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.2);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --sidebar: 232px;
+  --sidebar: 252px;
   --strip: 56px;
   display: grid;
   grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--amun-size-rail);
@@ -1783,4 +1783,417 @@
   .rb-agent-card .mark {
     transition: none;
   }
+}
+
+/* Sign-in prompt inside the rebuilt shell: real buttons, side by side. */
+.rb .auth-dialog .button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.rb .auth-dialog .btn {
+  padding: 8px 16px;
+}
+.rb .auth-dialog .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A chat: the owner on the right, Firstmate named on the left. */
+.rb-msg.firstmate {
+  justify-self: start;
+}
+.rb-msg .who {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: normal;
+}
+
+/* Model in the prompt box: a quiet button that opens upward. */
+.rb-model {
+  position: relative;
+  margin-left: auto;
+}
+.rb-composer .rb-model .routing {
+  margin-left: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  gap: 5px;
+}
+.rb-composer .rb-model .routing:hover,
+.rb-composer .rb-model .routing[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rb-composer .rb-model .routing svg {
+  transform: rotate(-90deg);
+  opacity: 0.7;
+}
+.rb-composer .rb-model .rb-menu {
+  left: auto;
+  right: 0;
+  min-width: 300px;
+  max-height: 340px;
+}
+.rb-model .rb-menu input {
+  margin: 2px 2px 6px;
+  width: calc(100% - 4px);
+}
+.rb-model .rb-menu p {
+  margin: 0;
+  padding: 8px 10px;
+}
+.rb-model .rb-menu button {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto 14px;
+  justify-content: stretch !important;
+  gap: 10px !important;
+  text-align: left;
+}
+.rb-model .rb-menu button .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-model .rb-menu button[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── Sidebar and Island (owner's references, 13 November 2026) ──────────────
+   Icon tiles in a grid, a larger brand mark, and Firstmate's card with its
+   state, progress and one clear action. Colours are the theme's own. */
+.rb-side {
+  padding: 12px 12px 12px;
+  gap: 0;
+  background:
+    radial-gradient(
+      120% 60% at 0% 0%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 70%
+    ),
+    var(--nav);
+}
+.rb-brand {
+  gap: 11px;
+  padding: 26px 4px 18px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.rb-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  box-shadow:
+    0 6px 16px -6px
+      color-mix(in srgb, var(--amun-color-button-end) 70%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.rb-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.rb-nav {
+  width: auto;
+  aspect-ratio: 1;
+  justify-content: center !important;
+  padding: 0;
+  border-radius: 13px !important;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent);
+  transition:
+    background-color 160ms var(--ease),
+    color 160ms var(--ease),
+    box-shadow 160ms var(--ease),
+    translate 160ms var(--ease);
+}
+.rb-nav:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  translate: 0 -1px;
+}
+.rb-nav:active {
+  translate: 0 0;
+}
+/* The current place: a ring in the theme's two signature colours. */
+.rb-nav[aria-current="page"] {
+  color: var(--ink);
+  background:
+    linear-gradient(var(--nav), var(--nav)) padding-box,
+    linear-gradient(135deg, var(--accent), var(--amun-color-button-end))
+      border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+.rb-nav.small {
+  width: 36px;
+  height: 36px;
+  aspect-ratio: auto;
+  border-radius: 11px !important;
+}
+.rb-user {
+  padding: 10px 0 0;
+  gap: 8px;
+}
+.rb-user .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent);
+}
+.rb.collapsed .rb-side {
+  padding-inline: 8px;
+}
+.rb.collapsed .rb-tiles {
+  grid-template-columns: 40px;
+  gap: 6px;
+}
+.rb.collapsed .rb-nav {
+  width: 40px;
+  padding: 0;
+}
+.rb.collapsed .rb-brand {
+  padding-inline: 3px;
+}
+.rb.collapsed .rb-user {
+  flex-direction: column;
+  gap: 6px;
+}
+.rb.collapsed .rb-user .grow {
+  display: none;
+}
+.rb.collapsed .rb-nav.small {
+  width: 40px;
+  height: 40px;
+}
+
+.rb-fm-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  font-weight: 700;
+  color: var(--canvas);
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--accent) 80%, white),
+    var(--accent)
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+.rb-island {
+  border: 0;
+  border-radius: 18px;
+  padding: 14px;
+  gap: 12px;
+  margin: 10px 0 0;
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent),
+    0 14px 30px -18px rgb(0 0 0 / 0.5);
+}
+.rb-island.empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.rb-island .head {
+  flex-wrap: nowrap;
+  gap: 10px;
+  font-size: inherit;
+  color: inherit;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+}
+.rb-island .who {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.25;
+}
+.rb-island .who strong {
+  font-weight: 600;
+}
+.rb-island .state {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--amun-status-signed-out);
+}
+.rb-island .state.result,
+.rb-island .state.offer {
+  color: var(--amun-status-connected);
+}
+.rb-island .state.failure {
+  color: var(--amun-status-error);
+}
+.rb-island .head .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+.rb-island .head .icon-btn svg {
+  transform: rotate(90deg);
+}
+.rb-island .title {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.rb-island .steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.rb-island .steps li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rb-island .steps .dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1.5px var(--control);
+}
+.rb-island .steps .done {
+  color: var(--ink);
+}
+.rb-island .steps .done .dot {
+  background: var(--amun-status-connected);
+  color: var(--canvas);
+  box-shadow: none;
+}
+.rb-island .steps .now {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rb-island .steps .now .dot {
+  box-shadow: inset 0 0 0 4px var(--accent);
+}
+.rb-island .facts {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.rb-island .facts li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rb-island .facts li::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  translate: 0 -1px;
+  background: var(--control);
+}
+.rb-island .facts .good::before {
+  background: var(--amun-status-connected);
+}
+.rb-island .facts .warn::before {
+  background: var(--amun-status-signed-out);
+}
+.rb-island .btn {
+  padding-block: 9px;
+  border-radius: 11px;
+}
+.rb-island .foot {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Minimised: one line in the open sidebar, a small pill in the strip. */
+.rb-island-line {
+  display: flex !important;
+  align-items: center;
+  gap: 10px !important;
+  justify-content: flex-start !important;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 14px !important;
+  text-align: left;
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.rb-island-line:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--card));
+}
+.rb-island-line .text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.rb-island-line .text strong {
+  font-weight: 600;
+}
+.rb-island-line .text span {
+  font-size: 12.5px;
+  color: var(--amun-status-signed-out);
+}
+.rb-island-line svg {
+  transform: rotate(-90deg);
+  color: var(--muted);
+}
+.rb-island-badge {
+  width: 40px;
+  height: auto;
+  padding: 6px 0 8px;
+  display: grid !important;
+  justify-items: center;
+  gap: 6px !important;
+  border-radius: 20px !important;
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.rb-island-badge .rb-fm-mark {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--nav),
+    0 0 0 4px color-mix(in srgb, var(--amun-status-connected) 70%, transparent);
+}
+.rb-island-badge .count {
+  position: static;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-nav {
+    transition: none;
+  }
+  .rb-nav:hover {
+    translate: none;
+  }
+}
+
+.rb-island .steps {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rb-island .steps .dot {
+  flex: none;
 }

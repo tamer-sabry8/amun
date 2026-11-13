@@ -316,7 +316,10 @@ describe("shell chrome", () => {
       }),
     );
     expect(
-      [...html.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]),
+      // Icon tiles: each is named for assistive technology.
+      [...html.matchAll(/class="rb-nav"[^>]*aria-label="([^"]+)"/g)].map(
+        (match) => match[1],
+      ),
     ).toEqual([
       "Home",
       "Search",
@@ -327,7 +330,7 @@ describe("shell chrome", () => {
       "Portfolio",
       "RFPs",
     ]);
-    expect(html).toMatch(/aria-current="page"[^>]*>.*?Roadmap/);
+    expect(html).toMatch(/aria-current="page" aria-label="Roadmap"/);
     expect(html).not.toMatch(/Requests|Terminal|Priorities|Crew/);
   });
   it("names the collapsed strip's icons for assistive technology", () => {
@@ -456,7 +459,7 @@ describe("Home", () => {
     ])
       expect(html).toContain(card);
     expect(html).not.toContain("Respond to an RFP");
-    expect(html).toContain("Auto · claude-sonnet-5-5");
+    expect(html).toContain("claude-sonnet-5-5");
   });
   it("lists attention with at most one primary button per row, then Your work", () => {
     const html = renderToStaticMarkup(

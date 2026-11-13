@@ -17,6 +17,7 @@ import { NativePiPanel } from "../native-pi-panel.tsx";
 import { AgentsPanel } from "../agents-panel.tsx";
 import { SkillsLibrary } from "../skills-library.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
+import { ToolCards } from "./tool-cards.tsx";
 import { council, work } from "./store.ts";
 import { groupName, shortDate, type Snapshot } from "./view-model.ts";
 
@@ -109,6 +110,7 @@ export function Settings({
                 when you sign in and once a day when Amun opens.
               </p>
               <ModelCards />
+              <ToolCards />
               <h3>Model for each kind of task</h3>
               <p className="muted">
                 Firstmate picks a model per task type from the accounts above,

@@ -88,6 +88,7 @@ import {
   planOpen,
   planPlaces,
   planPublish,
+  toolsCommand,
   workAttachment,
 } from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
@@ -100,6 +101,8 @@ import {
 } from "../../../packages/data/src/plan-publication.ts";
 import { adoPlanTarget, notionPlanTarget } from "./plan-targets.ts";
 import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
+import { ToolRegistry } from "../../../packages/data/src/tool-registry.ts";
+import { probeTools } from "./tool-probe.ts";
 import { trackerName } from "../../../packages/domain/src/work/flows.ts";
 import {
   AuthBroker,
@@ -247,6 +250,22 @@ function councilPin() {
     return null;
   }
 }
+/** The detected-tool name for a worker harness. */
+const workerTool = { claude: "claude_code", codex: "codex" } as const;
+/**
+ * A worker the person turned off under "Tools already on this Mac" is never
+ * started, whatever asked for it.
+ */
+function requireWorkerOn(harness: unknown) {
+  const tool =
+    typeof harness === "string"
+      ? workerTool[harness as keyof typeof workerTool]
+      : undefined;
+  if (tool && !new ToolRegistry(workspace).enabled(tool))
+    throw new WorkerTurnedOff(harness === "claude" ? "Claude Code" : "Codex");
+}
+class WorkerTurnedOff extends Error {}
+
 // After a restart, a write that was sent and never confirmed is looked up
 // once the connections are ready. Nothing new is sent from here.
 setTimeout(() => {
@@ -753,6 +772,7 @@ process.parentPort?.on("message", (event) => {
         workspaceRoot!,
         process.env.AMUN_FIRSTMATE_ARCHIVES!,
       );
+      requireWorkerOn("claude");
       await supervisor.ensureRunning();
       return sendDelivery(
         releases,
@@ -1041,6 +1061,7 @@ process.parentPort?.on("message", (event) => {
             workspaceRoot!,
             process.env.AMUN_FIRSTMATE_ARCHIVES!,
           );
+          requireWorkerOn("codex");
           await supervisor.ensureRunning();
           return sendDelivery(
             releases,
@@ -1355,6 +1376,42 @@ process.parentPort?.on("message", (event) => {
               message: error instanceof Error ? error.message : "",
             }),
           );
+    } else if (message.data?.kind === "tools") {
+      const parsed = toolsCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const command = parsed.data;
+      const registry = new ToolRegistry(workspace);
+      let problem = "";
+      try {
+        if (command.action === "enable")
+          registry.setEnabled(command.id, command.enabled);
+        else if (command.action === "default") registry.setDefault(command.id);
+        else if (command.action === "remove") registry.remove(command.id);
+        else if (command.action === "add")
+          registry.addManual(
+            // A stable short name from the label the person typed.
+            command.label
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^[^a-z]+|_+$/g, "")
+              .slice(0, 32) || "tool",
+            command.label,
+            command.path,
+          );
+      } catch (error) {
+        problem = error instanceof Error ? error.message : "";
+      }
+      void probeTools(registry.tools())
+        .then((probes) => {
+          if (!closed)
+            port.postMessage({
+              version: 1,
+              kind: "tools-report",
+              message: problem,
+              tools: registry.report(probes),
+            });
+        })
+        .catch(() => undefined);
     } else if (message.data?.kind === "plan-publish") {
       const parsed = planPublish.safeParse(message.data);
       if (!parsed.success) return;
@@ -1844,11 +1901,15 @@ process.parentPort?.on("message", (event) => {
                 workspaceRoot!,
                 process.env.AMUN_FIRSTMATE_ARCHIVES!,
               );
+              const dispatch: unknown = JSON.parse(request.argument);
+              requireWorkerOn(
+                (dispatch as { harness?: unknown } | null)?.harness,
+              );
               const text = await dispatchFirstmate(
                 releases,
                 process.env.AMUN_CREW_RECEIPTS!,
                 process.env.AMUN_TMUX_BINARY!,
-                JSON.parse(request.argument),
+                dispatch as Parameters<typeof dispatchFirstmate>[3],
               );
               try {
                 await supervisor.ensureRunning();
@@ -1861,10 +1922,13 @@ process.parentPort?.on("message", (event) => {
                     " Primary supervision could not start. Use /ahoy to retry.",
                 });
               }
-            } catch {
+            } catch (error) {
               sendNative(request.id, {
                 kind: "message",
-                text: "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
+                text:
+                  error instanceof WorkerTurnedOff
+                    ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
+                    : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
               });
             } finally {
               crewDispatchBusy = false;

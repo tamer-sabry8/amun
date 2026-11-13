@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { nativePiEvent } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 import { replyFromTranscript } from "./view-model.ts";
+import { modelDisplay } from "../../../../packages/domain/src/work/shell.ts";
 
 interface Session {
   sessionId: string;
@@ -192,21 +193,79 @@ export async function askFirstmate(
       };
 }
 
-/** The model Firstmate last used, for the composer's routing label. */
+let priming: Promise<void> | null = null;
+/** Opens the conversation once, so the model in use is known before a message. */
+function prime() {
+  if (session || priming) return priming ?? Promise.resolve();
+  priming = run("conversation", "")
+    .then((opened) => {
+      if (opened.kind === "conversation" && !session)
+        session = {
+          sessionId: String(opened.sessionId),
+          model: (opened.model as string | null) ?? null,
+          text: String(opened.text ?? ""),
+          acceptsImage: opened.acceptsImage === true,
+        };
+    })
+    .finally(() => {
+      priming = null;
+    });
+  return priming;
+}
+
+const modelListeners = new Set<() => void>();
+/** The models the signed-in providers offer, as Pi lists them. */
+export async function listModels(): Promise<{ id: string; label: string }[]> {
+  await prime();
+  const result = await run("model", "");
+  return result.kind === "choices" && Array.isArray(result.choices)
+    ? (result.choices as { id: string; label: string }[])
+    : [];
+}
+/** Switches Firstmate to another model; true when Pi accepted it. */
+export async function chooseModel(id: string): Promise<boolean> {
+  await prime();
+  if (!session) return false;
+  const result = await run("model", id);
+  if (result.kind !== "message" || !String(result.text).includes(id))
+    return false;
+  session = { ...session, model: id };
+  // What the new model can do (look at images, for one) is the conversation's
+  // to say, so it is read again rather than carried over from the old model.
+  const refreshed = await run("conversation", "");
+  if (refreshed.kind === "conversation")
+    session = {
+      sessionId: String(refreshed.sessionId),
+      model: (refreshed.model as string | null) ?? id,
+      text: String(refreshed.text ?? ""),
+      acceptsImage: refreshed.acceptsImage === true,
+    };
+  for (const listener of modelListeners) listener();
+  return true;
+}
+/** The full id of the model in use, e.g. "github-copilot/claude-sonnet-5". */
+export const currentModel = () => session?.model ?? null;
+
+/** The provider and model Firstmate is using, for the prompt box. */
 export function useFirstmateModel() {
   const [model, setModel] = useState<string | null>(session?.model ?? null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    const timer = setInterval(() => {
+    // Shortly after opening, so the label is right before the first message.
+    const first = setTimeout(() => void prime(), 1200);
+    const sync = () => {
       if (mounted.current && (session?.model ?? null) !== model)
         setModel(session?.model ?? null);
-    }, 1500);
+    };
+    const timer = setInterval(sync, 1500);
+    modelListeners.add(sync);
     return () => {
       mounted.current = false;
+      clearTimeout(first);
       clearInterval(timer);
+      modelListeners.delete(sync);
     };
   }, [model]);
-  const name = model?.split("/").pop() ?? null;
-  return name && name !== "unknown" ? name : null;
+  return modelDisplay(model);
 }

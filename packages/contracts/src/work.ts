@@ -823,7 +823,71 @@ export const planOpen = z.strictObject({
   planId: id,
   itemId: id,
 });
+/** Agent command-line tools on this Mac: look, and remember choices. */
+export const toolsCommand = z.discriminatedUnion("action", [
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("tools"),
+    action: z.literal("refresh"),
+  }),
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("tools"),
+    action: z.literal("enable"),
+    id: z.string().max(64),
+    enabled: z.boolean(),
+  }),
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("tools"),
+    action: z.literal("default"),
+    id: z.string().max(64),
+  }),
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("tools"),
+    action: z.literal("add"),
+    label: z.string().trim().min(1).max(64),
+    path: z.string().min(2).max(1024),
+  }),
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("tools"),
+    action: z.literal("remove"),
+    id: z.string().max(64),
+  }),
+]);
+export const toolsReport = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("tools-report"),
+  /** A problem with the last change, in plain words. */
+  message: z.string(),
+  tools: z.array(
+    z.strictObject({
+      id: z.string(),
+      label: z.string(),
+      status: z.enum([
+        "ready",
+        "needs_sign_in",
+        "not_installed",
+        "outdated",
+        "blocked",
+        "disabled",
+      ]),
+      version: z.string().nullable(),
+      path: z.string().nullable(),
+      access: z.string(),
+      dataShared: z.string(),
+      nextAction: z.string(),
+      origin: z.enum(["detected", "manual"]),
+      isDefault: z.boolean(),
+      lifecycleEvents: z.boolean(),
+    }),
+  ),
+});
+export type ToolsReport = z.infer<typeof toolsReport>;
 export const workEvent = z.discriminatedUnion("kind", [
+  toolsReport,
   workAttachmentResult,
   planPlacesResult,
   workSnapshot,
