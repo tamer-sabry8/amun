@@ -104,3 +104,39 @@ it("binds Copilot browser handoff to the selected supported GHE.com tenant", asy
       authBrowserUrl("github-copilot", url, "tahaluf.ghe.com"),
     ).toThrow();
 });
+
+import {
+  authBrowserUrl as browserUrl,
+  validateLogin as valid,
+} from "../src/pi-auth.ts";
+import { it as check, expect as want } from "vitest";
+check("opens device sign-ins only on the provider's own domain", () => {
+  want(browserUrl("xai", "https://accounts.x.ai/device?code=AB")).toContain(
+    "accounts.x.ai",
+  );
+  want(browserUrl("kimi-coding", "https://auth.kimi.com/device")).toContain(
+    "auth.kimi.com",
+  );
+  want(browserUrl("meta", "https://auth.meta.com/device")).toContain(
+    "auth.meta.com",
+  );
+  for (const [provider, url] of [
+    ["xai", "https://x.ai.attacker.example/device"],
+    ["xai", "https://notx.ai/device"],
+    ["meta", "https://meta.com.evil.test/"],
+    ["kimi-coding", "http://auth.kimi.com/device"],
+    ["groq", "https://console.groq.com/"],
+  ] as const)
+    want(() => browserUrl(provider, url)).toThrow();
+});
+check(
+  "offers no Claude subscription sign-in, only an Anthropic API key",
+  () => {
+    want(() => valid("anthropic", "oauth")).toThrow();
+    want(() => valid("anthropic", "api_key")).not.toThrow();
+    for (const provider of ["xai", "kimi-coding", "meta"])
+      want(() => valid(provider, "oauth")).not.toThrow();
+    for (const provider of ["google", "groq", "mistral", "deepseek"])
+      want(() => valid(provider, "api_key")).not.toThrow();
+  },
+);

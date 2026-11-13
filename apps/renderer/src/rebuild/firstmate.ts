@@ -213,6 +213,29 @@ function prime() {
   return priming;
 }
 
+const modelListeners = new Set<() => void>();
+/** The models the signed-in providers offer, as Pi lists them. */
+export async function listModels(): Promise<{ id: string; label: string }[]> {
+  await prime();
+  const result = await run("model", "");
+  return result.kind === "choices" && Array.isArray(result.choices)
+    ? (result.choices as { id: string; label: string }[])
+    : [];
+}
+/** Switches Firstmate to another model; true when Pi accepted it. */
+export async function chooseModel(id: string): Promise<boolean> {
+  await prime();
+  if (!session) return false;
+  const result = await run("model", id);
+  if (result.kind !== "message" || !String(result.text).includes(id))
+    return false;
+  session = { ...session, model: id };
+  for (const listener of modelListeners) listener();
+  return true;
+}
+/** The full id of the model in use, e.g. "github-copilot/claude-sonnet-5". */
+export const currentModel = () => session?.model ?? null;
+
 /** The provider and model Firstmate is using, for the prompt box. */
 export function useFirstmateModel() {
   const [model, setModel] = useState<string | null>(session?.model ?? null);
@@ -221,14 +244,17 @@ export function useFirstmateModel() {
     mounted.current = true;
     // Shortly after opening, so the label is right before the first message.
     const first = setTimeout(() => void prime(), 1200);
-    const timer = setInterval(() => {
+    const sync = () => {
       if (mounted.current && (session?.model ?? null) !== model)
         setModel(session?.model ?? null);
-    }, 1500);
+    };
+    const timer = setInterval(sync, 1500);
+    modelListeners.add(sync);
     return () => {
       mounted.current = false;
       clearTimeout(first);
       clearInterval(timer);
+      modelListeners.delete(sync);
     };
   }, [model]);
   return modelDisplay(model);

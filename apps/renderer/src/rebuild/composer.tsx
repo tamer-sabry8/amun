@@ -14,6 +14,7 @@ import {
 } from "../../../../packages/domain/src/work/shell.ts";
 import { councilCommands } from "../../../../packages/domain/src/work/council.ts";
 import { Icon } from "../icons.tsx";
+import { ModelPicker } from "./model-picker.tsx";
 
 export const allCommands: SlashCommand[] = [
   ...builtInCommands,
@@ -338,12 +339,7 @@ export function Composer({
           >
             <span aria-hidden="true">@</span>
           </button>
-          <span
-            className="routing"
-            title="Firstmate picks the model for each task"
-          >
-            {routingLabel(model)}
-          </span>
+          <ModelPicker label={routingLabel(model)} />
           {recognitionFactory() && (
             <button
               className="icon-btn rb-mic"

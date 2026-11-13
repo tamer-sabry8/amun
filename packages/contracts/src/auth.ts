@@ -9,12 +9,31 @@ export const connectionSchema = z.strictObject({
   baseUrl: z.string().url().max(2048),
 });
 const base = { version: z.literal(1), kind: z.literal("auth") };
-const provider = z.enum([
+// Sign-ins the bundled Pi supports. Subscriptions sign in through the
+// provider's own browser page; the rest take an API key.
+// A Claude subscription is deliberately absent: it is used through Claude
+// Code on this Mac, never as a sign-in here (docs/TASKS.md, T009).
+const oauthProviders = [
+  "openai-codex",
   "github-copilot",
   "openrouter",
-  "openai-codex",
+  "xai",
+  "kimi-coding",
+  "meta",
+] as const;
+const keyProviders = [
   "openai",
   "anthropic",
+  "openrouter",
+  "google",
+  "xai",
+  "groq",
+  "mistral",
+  "deepseek",
+] as const;
+const provider = z.enum([...new Set([...oauthProviders, ...keyProviders])] as [
+  string,
+  ...string[],
 ]);
 export const authCommand = z.discriminatedUnion("action", [
   z.strictObject({
@@ -53,10 +72,8 @@ export const authCommand = z.discriminatedUnion("action", [
     })
     .refine((value) =>
       value.type === "oauth"
-        ? ["github-copilot", "openrouter", "openai-codex"].includes(
-            value.provider,
-          )
-        : ["openai", "openrouter", "anthropic"].includes(value.provider),
+        ? (oauthProviders as readonly string[]).includes(value.provider)
+        : (keyProviders as readonly string[]).includes(value.provider),
     ),
   z.strictObject({
     ...base,
@@ -115,10 +132,18 @@ export const modelLoginOptions: readonly {
   type: "oauth" | "api_key";
   label: string;
 }[] = [
+  { provider: "openai-codex", type: "oauth", label: "OpenAI / Codex" },
   { provider: "github-copilot", type: "oauth", label: "GitHub Copilot" },
   { provider: "openrouter", type: "oauth", label: "OpenRouter" },
-  { provider: "openai-codex", type: "oauth", label: "OpenAI / Codex" },
+  { provider: "xai", type: "oauth", label: "xAI (Grok)" },
+  { provider: "kimi-coding", type: "oauth", label: "Kimi Code" },
+  { provider: "meta", type: "oauth", label: "Meta (Muse)" },
   { provider: "openai", type: "api_key", label: "OpenAI API key" },
-  { provider: "openrouter", type: "api_key", label: "OpenRouter API key" },
   { provider: "anthropic", type: "api_key", label: "Anthropic API key" },
+  { provider: "openrouter", type: "api_key", label: "OpenRouter API key" },
+  { provider: "google", type: "api_key", label: "Gemini API key" },
+  { provider: "xai", type: "api_key", label: "xAI API key" },
+  { provider: "groq", type: "api_key", label: "Groq API key" },
+  { provider: "mistral", type: "api_key", label: "Mistral API key" },
+  { provider: "deepseek", type: "api_key", label: "DeepSeek API key" },
 ];

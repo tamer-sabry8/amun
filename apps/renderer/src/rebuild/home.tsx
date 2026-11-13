@@ -556,7 +556,10 @@ export function Home({
         <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
           {/* What was just sent stays visible while Firstmate asks about it. */}
           {pending?.text && <div className="rb-msg you">{pending.text}</div>}
-          {card}
+          <div className="rb-msg firstmate">
+            <span className="who">Firstmate</span>
+            {card}
+          </div>
         </div>
       )}
       <Composer

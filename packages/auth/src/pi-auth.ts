@@ -41,12 +41,24 @@ export function authBrowserUrl(
     openrouter: ["openrouter.ai"],
     "openai-codex": ["auth.openai.com"],
   };
+  // Device sign-ins send the user to a page the provider names at run time.
+  // Only that provider's own domain is ever opened.
+  const domains: Record<string, string> = {
+    xai: "x.ai",
+    "kimi-coding": "kimi.com",
+    meta: "meta.com",
+  };
+  const domain = domains[provider];
   if (
     url.protocol !== "https:" ||
     url.username ||
     url.password ||
     url.port ||
-    !hosts[provider]?.includes(url.hostname)
+    !(
+      hosts[provider]?.includes(url.hostname) ||
+      (domain &&
+        (url.hostname === domain || url.hostname.endsWith("." + domain)))
+    )
   )
     throw Error("Unsupported auth browser destination");
   return url.href;

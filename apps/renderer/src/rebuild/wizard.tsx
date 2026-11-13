@@ -18,6 +18,7 @@ import {
 import { bridge } from "../bridge.ts";
 import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
+import { ToolCards } from "./tool-cards.tsx";
 import { Icon } from "../icons.tsx";
 import { NativePiPanel } from "./lazy.tsx";
 import { work } from "./store.ts";
@@ -48,6 +49,24 @@ export const providers = [
     type: "oauth",
     label: "OpenRouter",
     note: "One account, many models",
+  },
+  {
+    provider: "xai",
+    type: "oauth",
+    label: "xAI",
+    note: "Use your Grok or X subscription",
+  },
+  {
+    provider: "kimi-coding",
+    type: "oauth",
+    label: "Kimi Code",
+    note: "Use your Kimi subscription",
+  },
+  {
+    provider: "meta",
+    type: "oauth",
+    label: "Meta",
+    note: "Use your Muse subscription",
   },
 ] as const;
 export const keyProviders = modelLoginOptions.filter(
@@ -283,6 +302,7 @@ export function Wizard({ connected }: { connected: string[] }) {
               </p>
             )}
             <ModelCards />
+            <ToolCards />
             <p className="row">
               <span className="muted">
                 {ready
