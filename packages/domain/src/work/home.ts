@@ -226,7 +226,7 @@ export function rankWork(
 
 // ── Connection status (Q11–Q12) ──────────────────────────────────────────────
 export type ConnectionState =
-  "checking" | "connected" | "signed_out" | "not_working";
+  "checking" | "signed_in" | "connected" | "signed_out" | "not_working";
 export function connectionStatus(input: {
   state: ConnectionState;
   reason?: "out_of_credits" | "service_down" | "model_not_enabled" | null;
@@ -241,6 +241,15 @@ export function connectionStatus(input: {
       icon: "checking",
       tone: "checking",
       text: "Checking…",
+      action: null,
+    };
+  // Signed in and accepted, but no model has answered yet. Kept apart from
+  // "Connected", which is only claimed after a real reply.
+  if (input.state === "signed_in")
+    return {
+      icon: "check",
+      tone: "connected",
+      text: "Signed in",
       action: null,
     };
   if (input.state === "connected")
@@ -281,9 +290,15 @@ export function shouldAutoTest(
  */
 export function fromLegacyStatus(
   status: string | undefined,
-  history: { everReady?: boolean; attempted?: boolean } = {},
+  history: {
+    everReady?: boolean;
+    attempted?: boolean;
+    /** The stored sign-in has passed its one check since it was made. */
+    checked?: boolean;
+  } = {},
 ): ConnectionState {
   const value = (status ?? "missing").toLowerCase();
+  if (value === "configured" && history.checked) return "signed_in";
   if (value === "checking" || value === "configured") return "checking";
   if (value === "ready" || value === "connected") return "connected";
   if (value === "error" || value === "failed")

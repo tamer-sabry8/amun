@@ -268,7 +268,7 @@ export const workCards = [
   ["task", "Tasks"],
   ["rfp", "RFP tracking"],
 ] as const;
-export const groupCards = ["Employer", "Personal", "Side business"] as const;
+export const groupCards = ["Work", "Personal", "Side business"] as const;
 export const providerCards = [
   ["openai-codex", "ChatGPT Plus/Pro"],
   ["anthropic", "Claude Pro/Max"],

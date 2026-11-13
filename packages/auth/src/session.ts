@@ -59,12 +59,11 @@ export class AuthSession {
       id: provider,
       status: "checking",
     });
-    let status: "ready" | "missing" | "error";
+    // "configured" means the credential is stored and Pi accepts it. It is
+    // not proof that a model answers, so it is never promoted to "ready".
+    let status: "configured" | "missing" | "error";
     try {
-      // "configured" means only that something is stored. A check that
-      // passes is reported as "ready", so nothing has to ask again.
-      const result = await this.readiness(provider);
-      status = result === "configured" ? "ready" : result;
+      status = await this.readiness(provider);
     } catch {
       status = "error";
     }

@@ -678,6 +678,13 @@ describe("connection status (Q11–Q12)", () => {
     expect(shouldAutoTest("2026-11-12T07:59:00Z", now, "sign_in")).toBe(true);
   });
   it("maps the sign-in service's states without crying wolf", () => {
+    // Stored and accepted is "Signed in"; only a real reply is "Connected".
+    expect(fromLegacyStatus("configured")).toBe("checking");
+    expect(fromLegacyStatus("configured", { checked: true })).toBe("signed_in");
+    expect(connectionStatus({ state: "signed_in" })).toMatchObject({
+      text: "Signed in",
+      action: null,
+    });
     expect(fromLegacyStatus(undefined)).toBe("signed_out");
     expect(fromLegacyStatus("missing")).toBe("signed_out");
     expect(fromLegacyStatus("cancelled")).toBe("signed_out");

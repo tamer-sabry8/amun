@@ -44,10 +44,9 @@ test("built Pi login prompts in the UI and stores an API-key canary only in priv
     await page
       .getByRole("button", { name: "Check provider readiness" })
       .click();
-    // A check that passes is reported as ready, not merely stored.
     await expect(
       page.locator(".plain-list li").filter({ hasText: "OpenAI API key" }),
-    ).toContainText("ready");
+    ).toContainText("configured");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

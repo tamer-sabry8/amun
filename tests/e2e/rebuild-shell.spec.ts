@@ -79,7 +79,7 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     ).toBeVisible();
     await page.getByRole("button", { name: "Products", exact: true }).click();
     await page.getByRole("button", { name: "RFP tracking" }).click();
-    await page.getByRole("button", { name: "Employer", exact: true }).click();
+    await page.getByRole("button", { name: "Work", exact: true }).click();
     await page.getByLabel("Client delivery tickets").selectOption("ado");
     await page.getByLabel("Everything in this group").selectOption("notion");
     await shot(page, "03-setup-work");
@@ -138,7 +138,7 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await expect(
       page.getByText("Create a product called Agentic Platform"),
     ).toBeVisible();
-    await expect(page.getByText("Employer").first()).toBeVisible();
+    await expect(page.getByText("Work", { exact: true }).first()).toBeVisible();
     // No model is signed in for this profile: the message is kept, not
     // failed, and waits for a provider.
     await expect(page.getByRole("alert").first()).toBeVisible({

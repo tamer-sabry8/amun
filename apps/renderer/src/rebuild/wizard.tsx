@@ -64,32 +64,83 @@ const everReady = (): string[] => {
   }
 };
 
+// A stored sign-in is checked once, straight after it is made. The check
+// answers "configured" again when it passes, so each provider's progress is
+// followed here from every status change, never re-asked on each one.
+const phases = new Map<string, "asked" | "running" | "passed">();
+let checkedProviders: readonly string[] = [];
+const checkedListeners = new Set<() => void>();
+const publishChecked = () => {
+  checkedProviders = [...phases]
+    .filter(([, phase]) => phase === "passed")
+    .map(([provider]) => provider);
+  for (const listener of checkedListeners) listener();
+};
+/** Asks for a provider's one check and remembers that it was asked. */
+function askCheck(provider: string) {
+  phases.set(provider, "asked");
+  bridge.send({ version: 1, kind: "auth", action: "readiness", provider });
+}
+let watchingSignIns = false;
+function watchSignIns() {
+  if (watchingSignIns) return;
+  watchingSignIns = true;
+  bridge.subscribe(() => {
+    let changed = false;
+    for (const [provider, status] of Object.entries(
+      bridge.getSnapshot().modelStatus,
+    )) {
+      const phase = phases.get(provider);
+      if (status === "configured" && !phase) askCheck(provider);
+      else if (status === "checking" && phase === "asked")
+        phases.set(provider, "running");
+      else if (status === "configured" && phase === "running") {
+        phases.set(provider, "passed");
+        changed = true;
+      } else if (["missing", "error", "cancelled"].includes(status) && phase) {
+        phases.delete(provider);
+        changed = true;
+      }
+    }
+    if (changed) publishChecked();
+  });
+}
+/** Providers whose stored sign-in has passed its check. */
+function useCheckedProviders() {
+  useEffect(watchSignIns, []);
+  return useSyncExternalStore(
+    (listener) => {
+      checkedListeners.add(listener);
+      return () => {
+        checkedListeners.delete(listener);
+      };
+    },
+    () => checkedProviders,
+  );
+}
+
 /** Sign-in cards with the four-state status. Auto-tests at most once a day. */
 export function ModelCards() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [keys, setKeys] = useState(false);
   const [attempted, setAttempted] = useState<string[]>([]);
   const [worked, setWorked] = useState(everReady);
+  const checked = useCheckedProviders();
   useEffect(() => {
     if (state.status !== "Connected") return;
     const last = localStorage.getItem(testedKey);
-    if (!shouldAutoTest(last, Date.now(), "open")) return;
-    localStorage.setItem(testedKey, new Date().toISOString());
+    const due = shouldAutoTest(last, Date.now(), "open");
+    if (due) localStorage.setItem(testedKey, new Date().toISOString());
     for (const provider of new Set(
       modelLoginOptions.map((option) => option.provider),
     ))
-      bridge.send({ version: 1, kind: "auth", action: "readiness", provider });
+      // Once a day for everything; otherwise only what this launch has not
+      // heard about yet, so a signed-in provider is never shown as signed out.
+      if (due || bridge.getSnapshot().modelStatus[provider] === undefined)
+        askCheck(provider);
   }, [state.status]);
   useEffect(() => {
     for (const [provider, status] of Object.entries(state.modelStatus)) {
-      // Stored credentials prove nothing: test once, straight after sign-in.
-      if (status === "configured")
-        bridge.send({
-          version: 1,
-          kind: "auth",
-          action: "readiness",
-          provider,
-        });
       if (status === "ready" && !worked.includes(provider)) {
         const next = [...worked, provider];
         localStorage.setItem(readyKey, JSON.stringify(next));
@@ -98,6 +149,9 @@ export function ModelCards() {
     }
   }, [state.modelStatus]);
   const login = (provider: string, type: string) => {
+    // A new sign-in is checked afresh.
+    phases.delete(provider);
+    publishChecked();
     setAttempted((list) => [...new Set([...list, provider])]);
     bridge.send({ version: 1, kind: "auth", action: "login", provider, type });
   };
@@ -111,6 +165,7 @@ export function ModelCards() {
       state: fromLegacyStatus(state.modelStatus[provider], {
         everReady: worked.includes(provider),
         attempted: attempted.includes(provider),
+        checked: checked.includes(provider),
       }),
     });
     return (
@@ -174,8 +229,13 @@ export function Wizard({ connected }: { connected: string[] }) {
     .filter(([id]) => connected.includes(id))
     .map(([id]) => id);
   const chosenTools = [...new Set([...detected, ...state.tools])];
-  const ready = Object.values(bridgeState.modelStatus).some(
-    (status) => fromLegacyStatus(status) === "connected",
+  const checked = useCheckedProviders();
+  // Signed in is enough to choose models; "connected" needs a real reply.
+  const ready = Object.entries(bridgeState.modelStatus).some(
+    ([provider, status]) =>
+      ["connected", "signed_in"].includes(
+        fromLegacyStatus(status, { checked: checked.includes(provider) }),
+      ),
   );
   useEffect(() => {
     if (!state.done) return;

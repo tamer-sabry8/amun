@@ -130,10 +130,13 @@ function modelSession(
   return { statuses, ask, finish: () => finish() };
 }
 
-it("reports a sign-in that passes its check as ready, so nothing asks again", async () => {
+it("reports a stored sign-in as configured, never as ready", async () => {
   const { statuses, ask } = modelSession(async () => "configured");
   await ask("readiness", "openai-codex");
-  expect(statuses).toEqual(["openai-codex:checking", "openai-codex:ready"]);
+  expect(statuses).toEqual([
+    "openai-codex:checking",
+    "openai-codex:configured",
+  ]);
 });
 
 it("keeps a missing or failing check as it is", async () => {
@@ -162,5 +165,8 @@ it("runs a check asked for during a sign-in once the sign-in ends", async () => 
   finish();
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(checked).toEqual(["openai-codex"]);
-  expect(statuses).toEqual(["openai-codex:checking", "openai-codex:ready"]);
+  expect(statuses).toEqual([
+    "openai-codex:checking",
+    "openai-codex:configured",
+  ]);
 });
