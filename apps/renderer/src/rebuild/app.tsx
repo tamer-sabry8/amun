@@ -19,7 +19,7 @@ import {
 import type { Attention } from "../../../../packages/domain/src/work/home.ts";
 import type { LibraryItem } from "../../../../packages/domain/src/work/planning.ts";
 import { bridge, initializeBridge } from "../bridge.ts";
-import { AuthPrompt } from "../shell.tsx";
+import { AuthPrompt } from "../auth-prompt-view.tsx";
 import { Icon } from "../icons.tsx";
 import "../tokens.css";
 import "../shell.css";
@@ -42,7 +42,8 @@ import {
   Roadmap,
   Sprints,
 } from "./screens.tsx";
-import { Settings, type SettingsSection } from "./settings.tsx";
+import type { SettingsSection } from "./settings.tsx";
+import { Settings } from "./lazy.tsx";
 import {
   connectWorkStore,
   council,
@@ -103,8 +104,13 @@ export function App() {
     return () => window.removeEventListener("message", listener);
   }, []);
   useEffect(() => {
-    if (bridgeState.status === "Connected") council("status");
-  }, [bridgeState.status]);
+    // The Council is installed and read only when one of its screens is open.
+    if (
+      bridgeState.status === "Connected" &&
+      (layout.route === "council" || layout.route === "settings")
+    )
+      council("status");
+  }, [bridgeState.status, layout.route]);
   const choice = snapshot?.setup.theme ?? "system";
   useEffect(() => {
     if (choice !== "system" && choice !== "amun-light")

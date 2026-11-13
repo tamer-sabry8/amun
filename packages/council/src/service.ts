@@ -374,6 +374,8 @@ export class CouncilService {
    */
   async poll() {
     const waitingOn = await pending(this.bridge);
+    // Idle most of the time: do not build a snapshot unless the Chair asked.
+    if (!waitingOn.length) return;
     const attention = this.deps.records.snapshot().attention;
     for (const question of waitingOn) {
       const ref = "council-question:" + question.id;

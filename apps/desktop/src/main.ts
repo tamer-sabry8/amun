@@ -19,6 +19,13 @@ import {
 import { join } from "node:path";
 import { windowPreferences, shellSecurityPolicy } from "./security.js";
 import { restartDelay } from "../../service/src/restart-delay.ts";
+import {
+  afterCleanExit,
+  planGraphics,
+  readGraphicsState,
+  writeGraphicsState,
+  type GraphicsState,
+} from "./graphics-mode.ts";
 
 const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;
@@ -234,9 +241,35 @@ function openWindow(): void {
     },
   });
 }
+let graphics: GraphicsState | undefined;
+/** Must run before the app is ready: the switch is read when graphics start. */
+function chooseGraphics(): void {
+  const file = join(app.getPath("userData"), "graphics-mode.json");
+  graphics = planGraphics(
+    readGraphicsState(file),
+    app.getVersion(),
+    app.commandLine.hasSwitch("amun-separate-graphics") ||
+      process.env.AMUN_SEPARATE_GRAPHICS === "1",
+  );
+  if (graphics.mode === "in-process")
+    app.commandLine.appendSwitch("in-process-gpu");
+  try {
+    writeGraphicsState(file, graphics);
+  } catch {
+    /* Without a record the next launch simply starts as a first launch. */
+  }
+  app.once("quit", () => {
+    try {
+      if (graphics) writeGraphicsState(file, afterCleanExit(graphics));
+    } catch {
+      /* An unrecorded clean exit costs one launch in the separate process. */
+    }
+  });
+}
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  chooseGraphics();
   app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (!window) {

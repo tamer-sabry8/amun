@@ -18,7 +18,7 @@ import {
   minRatio,
 } from "../../../../packages/domain/src/work/shell.ts";
 import { Icon } from "../icons.tsx";
-import { Backlog } from "../backlog.tsx";
+import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { askFirstmate } from "./firstmate.ts";
 import { typeName } from "./rail.tsx";

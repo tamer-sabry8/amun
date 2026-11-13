@@ -35,7 +35,7 @@ import {
 } from "../../../../packages/domain/src/work/council.ts";
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { Icon } from "../icons.tsx";
-import { AgentsPanel } from "../agents-panel.tsx";
+import { AgentsPanel } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { BrowserPane } from "./work-session.tsx";
 import { council as councilCommand, work, workAsync } from "./store.ts";

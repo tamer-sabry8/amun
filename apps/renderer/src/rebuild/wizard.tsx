@@ -19,7 +19,7 @@ import {
 import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import { bridge } from "../bridge.ts";
 import { Icon } from "../icons.tsx";
-import { NativePiPanel } from "../native-pi-panel.tsx";
+import { NativePiPanel } from "./lazy.tsx";
 import { work } from "./store.ts";
 
 export const tools = [
