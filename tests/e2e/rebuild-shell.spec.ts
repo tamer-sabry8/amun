@@ -39,6 +39,8 @@ const launch = (root: string) =>
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
       : {}),
     chromiumSandbox: true,
+    // playwright.config.ts defaults the other suites to the earlier shell.
+    env: { ...(process.env as Record<string, string>), AMUN_LEGACY_SHELL: "0" },
     ...(process.env.AMUN_REBUILD_SCHEME === "dark"
       ? { colorScheme: "dark" as const }
       : {}),
