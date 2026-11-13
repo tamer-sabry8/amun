@@ -10,6 +10,8 @@ interface Session {
   sessionId: string;
   model: string | null;
   text: string;
+  /** Whether the current model can look at an image. */
+  acceptsImage: boolean;
 }
 let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
@@ -77,6 +79,8 @@ export interface Held {
   scoped: string;
   /** Its Activity row, reused so repeated attempts do not add rows. */
   activityId?: string | null;
+  /** One image sent with the message (base64 PNG), if any. */
+  image?: string | undefined;
 }
 const heldKey = "amun.held-messages";
 const held = new Map<string, Held>();
@@ -112,7 +116,10 @@ const providerProblem =
   /sign in|signed in|not ready|no model|could not be verified|could not be completed|reconnect|credential|unauthori[sz]ed|expired/i;
 
 /** Sends one turn and returns Firstmate's reply, or a plain reason it could not. */
-export async function askFirstmate(text: string): Promise<Turn> {
+export async function askFirstmate(
+  text: string,
+  image?: string,
+): Promise<Turn> {
   if (!session) {
     const opened = await run("conversation", "");
     if (opened.kind !== "conversation")
@@ -128,6 +135,7 @@ export async function askFirstmate(text: string): Promise<Turn> {
       sessionId: String(opened.sessionId),
       model: (opened.model as string | null) ?? null,
       text: String(opened.text ?? ""),
+      acceptsImage: opened.acceptsImage === true,
     };
   }
   if (!session.model) {
@@ -140,6 +148,13 @@ export async function askFirstmate(text: string): Promise<Turn> {
         "Firstmate has no model yet. Sign in under Settings › Accounts and models.",
     };
   }
+  if (image && !session.acceptsImage)
+    return {
+      ok: false,
+      needsProvider: false,
+      reason:
+        "The model Firstmate is using can’t look at images. Choose one that can under Accounts and models, or remove the image and send again.",
+    };
   const before = session.text;
   const result = await run(
     "conversation-send",
@@ -147,6 +162,7 @@ export async function askFirstmate(text: string): Promise<Turn> {
       sessionId: session.sessionId,
       model: session.model,
       text,
+      ...(image ? { image } : {}),
     }),
   );
   if (result.kind !== "conversation") {
@@ -162,6 +178,7 @@ export async function askFirstmate(text: string): Promise<Turn> {
     sessionId: String(result.sessionId),
     model: (result.model as string | null) ?? null,
     text: String(result.text ?? ""),
+    acceptsImage: result.acceptsImage === true,
   };
   const reply = replyFromTranscript(before, session.text, text);
   return reply

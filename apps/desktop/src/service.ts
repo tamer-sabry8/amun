@@ -1517,6 +1517,7 @@ process.parentPort?.on("message", (event) => {
             name: request.name,
             format: file.format,
             read: file.read,
+            portion: file.portion,
             text,
             note: file.note,
             recordId,

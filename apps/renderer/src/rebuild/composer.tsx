@@ -50,6 +50,10 @@ export function Composer({
   initial = "",
   onSend,
   onPlus,
+  attached,
+  onPick,
+  onRemoveFile,
+  pickNonce = 0,
 }: {
   placeholder?: string;
   chips?: string[];
@@ -62,9 +66,17 @@ export function Composer({
   initial?: string;
   onSend(text: string, files: string[]): void;
   onPlus?(item: string): void;
+  /** File names to show, when the parent keeps the attachments itself. */
+  attached?: string[];
+  /** Files just chosen. With this set, the parent reads and tracks them. */
+  onPick?(files: File[]): void;
+  onRemoveFile?(name: string): void;
+  /** Changing this opens the file picker, e.g. for "Choose another file". */
+  pickNonce?: number;
 }) {
   const [draft, setDraft] = useState(initial);
-  const [files, setFiles] = useState<string[]>([]);
+  const [own, setFiles] = useState<string[]>([]);
+  const files = attached ?? own;
   const [plus, setPlus] = useState(false);
   const [caret, setCaret] = useState(0);
   const [index, setIndex] = useState(0);
@@ -100,6 +112,9 @@ export function Composer({
     element.style.height = Math.min(element.scrollHeight, 200) + "px";
   }, [draft]);
   useEffect(() => () => recognition.current?.stop(), []);
+  useEffect(() => {
+    if (pickNonce) picker.current?.click();
+  }, [pickNonce]);
 
   const change = (text: string, position = text.length) => {
     setDraft(text);
@@ -240,7 +255,9 @@ export function Composer({
                 <button
                   aria-label={`Remove ${file}`}
                   onClick={() =>
-                    setFiles(files.filter((item) => item !== file))
+                    onRemoveFile
+                      ? onRemoveFile(file)
+                      : setFiles(files.filter((item) => item !== file))
                   }
                 >
                   <Icon name="close" width={12} height={12} />
@@ -273,6 +290,11 @@ export function Composer({
           multiple
           hidden
           onChange={(event) => {
+            if (onPick) {
+              onPick(Array.from(event.target.files ?? []));
+              event.target.value = "";
+              return;
+            }
             setFiles([
               ...new Set([
                 ...files,

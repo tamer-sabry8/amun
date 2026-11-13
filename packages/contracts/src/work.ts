@@ -779,6 +779,8 @@ export const workAttachmentResult = z.strictObject({
   name: z.string(),
   format: z.string(),
   read: z.enum(["all", "part", "none"]),
+  /** Share of the text that was read, 0–1; null unless only part was. */
+  portion: z.number().nullable(),
   /** Redacted text for Firstmate; empty when nothing could be read. */
   text: z.string(),
   /** A limit or unread portion, in plain words. */

@@ -28,6 +28,11 @@ import {
   releaseMessage,
 } from "./firstmate.ts";
 import { bridge } from "../bridge.ts";
+import {
+  attachmentBlock,
+  portionWords,
+  useAttachments,
+} from "./attachments.ts";
 import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
@@ -785,6 +790,7 @@ export function WorkSession({
     text: string,
     scoped: string,
     activityId: string | null = null,
+    image?: string,
   ) => {
     if (delivering.current) return;
     delivering.current = true;
@@ -801,7 +807,7 @@ export function WorkSession({
           state: "running",
         })
       ).ref;
-    const turn = await askFirstmate(scoped);
+    const turn = await askFirstmate(scoped, image);
     setBusy(false);
     delivering.current = false;
     if (turn.ok) {
@@ -815,7 +821,7 @@ export function WorkSession({
       for (const proposed of parsed.actions) raise(proposed);
     } else if (turn.needsProvider) {
       // Kept, not failed: it goes out once a provider is connected.
-      const message = { text, scoped, activityId: row };
+      const message = { text, scoped, activityId: row, image };
       holdMessage(areaId, message);
       setWaiting(message);
       return;
@@ -831,8 +837,14 @@ export function WorkSession({
         silent: true,
       });
   };
-  const send = async (text: string) => {
-    if (!text.trim() || !context) return;
+  const attachments = useAttachments(areaId);
+  const [pickNonce, setPickNonce] = useState(0);
+  const send = async (typed: string) => {
+    if ((!typed.trim() && !attachments.files.length) || !context) return;
+    // Files in the draft travel with this message.
+    const files = await attachments.take();
+    const text =
+      typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
     // One message waits at a time; a new one replaces the wait, not the text.
     releaseMessage(areaId);
     setWaiting(null);
@@ -841,14 +853,24 @@ export function WorkSession({
     const scoped = context.messages.length
       ? text
       : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
-    await deliver(text, scoped);
+    await deliver(
+      text,
+      files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped,
+      null,
+      files.find((file) => file.image)?.image ?? undefined,
+    );
   };
   /** Tries the waiting message again. It leaves the wait before it is sent. */
   const retryWaiting = () => {
     const message = releaseMessage(areaId);
     if (!message) return;
     setWaiting(null);
-    void deliver(message.text, message.scoped, message.activityId ?? null);
+    void deliver(
+      message.text,
+      message.scoped,
+      message.activityId ?? null,
+      message.image,
+    );
   };
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
@@ -1400,6 +1422,59 @@ export function WorkSession({
                   Firstmate is working…
                 </p>
               )}
+              {attachments.problem && (
+                <div className="rb-inline amber" role="status">
+                  {attachments.problem.read === "part" ? (
+                    <span>
+                      I could only read the first part of{" "}
+                      <strong style={{ fontWeight: 600 }}>
+                        {attachments.problem.name}
+                      </strong>
+                      , {portionWords(attachments.problem.portion)} of it. Tell
+                      me which part matters and I’ll read that.
+                    </span>
+                  ) : (
+                    <span>
+                      I couldn’t open{" "}
+                      <strong style={{ fontWeight: 600 }}>
+                        {attachments.problem.name}
+                      </strong>
+                      . It’s saved in your library. A PDF or text version will
+                      work.
+                    </span>
+                  )}
+                  <div className="row">
+                    {attachments.problem.read === "part" ? (
+                      <button
+                        className="btn"
+                        onClick={() =>
+                          attachments.settle(attachments.problem!.id)
+                        }
+                      >
+                        Use what was read
+                      </button>
+                    ) : (
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          attachments.remove(attachments.problem!.name);
+                          setPickNonce((value) => value + 1);
+                        }}
+                      >
+                        Choose another file
+                      </button>
+                    )}
+                    <button
+                      className="btn quiet"
+                      onClick={() =>
+                        attachments.remove(attachments.problem!.name)
+                      }
+                    >
+                      Remove the file
+                    </button>
+                  </div>
+                </div>
+              )}
               {problem && (
                 <div className="rb-inline amber" role="alert">
                   <span>{problem}</span>
@@ -1434,6 +1509,13 @@ export function WorkSession({
             id: item.id,
             name: item.name,
           }))}
+          attached={attachments.files.map((file) => file.name)}
+          onPick={attachments.add}
+          onRemoveFile={attachments.remove}
+          pickNonce={pickNonce}
+          onPlus={(item) => {
+            if (item === "screenshot") attachments.screenshot();
+          }}
           onSend={(text) => {
             const question = questions[0];
             if (question && seed)

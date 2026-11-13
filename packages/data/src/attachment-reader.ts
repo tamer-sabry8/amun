@@ -20,6 +20,8 @@ export interface Attachment {
   /** Plain explanation of a limit or an unread portion; null when whole. */
   note: string | null;
   read: "all" | "part" | "none";
+  /** Share of the text that was read, 0–1; null unless only part was. */
+  portion: number | null;
 }
 /** Characters of one attachment passed to Firstmate in a single message. */
 export const attachmentTextLimit = 100_000;
@@ -147,20 +149,24 @@ async function powerpoint(bytes: Buffer) {
 }
 
 /** Trims text to what one message can carry and says what was left out. */
-function fit(text: string): Pick<Attachment, "text" | "note" | "read"> {
+function fit(
+  text: string,
+): Pick<Attachment, "text" | "note" | "read" | "portion"> {
   const clean = text.replaceAll("\0", "").trim();
   if (!clean)
     return {
       text: "",
       read: "none",
+      portion: null,
       note: "No readable text was found in this file.",
     };
   if (clean.length <= attachmentTextLimit)
-    return { text: clean, read: "all", note: null };
+    return { text: clean, read: "all", note: null, portion: null };
   const percent = Math.floor((attachmentTextLimit / clean.length) * 100);
   return {
     text: clean.slice(0, attachmentTextLimit),
     read: "part",
+    portion: attachmentTextLimit / clean.length,
     note: `Read the first ${attachmentTextLimit.toLocaleString("en")} of ${clean.length.toLocaleString("en")} characters (about ${percent}%). Ask about a section or page range to read further in.`,
   };
 }
@@ -176,6 +182,7 @@ export async function readAttachment(
     ...base,
     text: "",
     read: "none",
+    portion: null,
     note,
   });
   if (!bytes.length) return unread("This file is empty.");
@@ -187,6 +194,7 @@ export async function readAttachment(
         text: image.body,
         image: image.image,
         read: "all",
+        portion: null,
         note: null,
       };
     }

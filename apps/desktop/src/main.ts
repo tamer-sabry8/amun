@@ -1,4 +1,5 @@
 import { installFolderPicker } from "./folder-picker.ts";
+import { installScreenshot } from "./screenshot.ts";
 import { installWorkerLogin } from "./worker-login.ts";
 import { installPiExport } from "./pi-export.ts";
 import { installPiClipboard } from "./pi-clipboard.ts";
@@ -199,6 +200,7 @@ function openWindow(): void {
   installBrowser(window, "m0");
   installPiClipboard(window);
   installFolderPicker(window, mcpModules());
+  installScreenshot(window);
   installPiExport(window);
   installWorkerLogin(window);
   installBackup(
