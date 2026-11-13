@@ -95,3 +95,72 @@ it("validates commands, persists only connection metadata, clears secrets from r
   await session.handle({ version: 1, kind: "auth", action: "list" });
   expect(JSON.stringify(messages)).not.toContain("CANARY");
 });
+
+function modelSession(
+  readiness: (provider: string) => Promise<"configured" | "missing" | "error">,
+) {
+  const statuses: string[] = [];
+  let finish: () => void = () => undefined;
+  const session = new AuthSession(
+    new AuthBroker(
+      "workspace",
+      { get: () => undefined, set: () => undefined, delete: () => undefined },
+      new Redactor(),
+      async () => true,
+    ),
+    { list: () => [], save: () => undefined, remove: () => undefined },
+    (event) => {
+      if (event.kind === "auth-status")
+        statuses.push(event.id + ":" + event.status);
+    },
+    (_command, _send, done) => {
+      finish = done;
+      return { answer: () => undefined, stop: () => undefined };
+    },
+    readiness,
+  );
+  const ask = (action: string, provider: string) =>
+    session.handle({
+      version: 1,
+      kind: "auth",
+      action,
+      provider,
+      ...(action === "login" ? { type: "oauth" } : {}),
+    });
+  return { statuses, ask, finish: () => finish() };
+}
+
+it("reports a sign-in that passes its check as ready, so nothing asks again", async () => {
+  const { statuses, ask } = modelSession(async () => "configured");
+  await ask("readiness", "openai-codex");
+  expect(statuses).toEqual(["openai-codex:checking", "openai-codex:ready"]);
+});
+
+it("keeps a missing or failing check as it is", async () => {
+  const missing = modelSession(async () => "missing");
+  await missing.ask("readiness", "openrouter");
+  expect(missing.statuses.at(-1)).toBe("openrouter:missing");
+  const broken = modelSession(async () => {
+    throw Error("lock timeout");
+  });
+  await broken.ask("readiness", "openrouter");
+  expect(broken.statuses.at(-1)).toBe("openrouter:error");
+});
+
+it("runs a check asked for during a sign-in once the sign-in ends", async () => {
+  const checked: string[] = [];
+  const { statuses, ask, finish } = modelSession(async (provider) => {
+    checked.push(provider);
+    return "configured";
+  });
+  await ask("login", "github-copilot");
+  // Asked while the sign-in holds the credential store: it waits.
+  await ask("readiness", "openai-codex");
+  await ask("readiness", "openai-codex");
+  expect(checked).toEqual([]);
+  expect(statuses).toEqual([]);
+  finish();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(checked).toEqual(["openai-codex"]);
+  expect(statuses).toEqual(["openai-codex:checking", "openai-codex:ready"]);
+});

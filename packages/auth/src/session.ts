@@ -26,6 +26,8 @@ export class AuthSession {
     provider: string,
   ) => Promise<"configured" | "missing" | "error">;
   private login: LoginProcess | undefined;
+  /** Providers whose check was asked for while a sign-in was running. */
+  private readonly deferred = new Set<string>();
   private closed = false;
   private generation = 0;
   constructor(
@@ -50,26 +52,42 @@ export class AuthSession {
       connections: this.broker.describe(this.metadata.list()),
     });
   }
+  private async check(provider: string): Promise<void> {
+    this.send({
+      version: 1,
+      kind: "auth-status",
+      id: provider,
+      status: "checking",
+    });
+    let status: "ready" | "missing" | "error";
+    try {
+      // "configured" means only that something is stored. A check that
+      // passes is reported as "ready", so nothing has to ask again.
+      const result = await this.readiness(provider);
+      status = result === "configured" ? "ready" : result;
+    } catch {
+      status = "error";
+    }
+    this.send({ version: 1, kind: "auth-status", id: provider, status });
+  }
+  /** Runs the checks that waited for a sign-in to finish. */
+  private async drain(): Promise<void> {
+    while (this.deferred.size && !this.login && !this.closed) {
+      const provider = this.deferred.values().next().value as string;
+      this.deferred.delete(provider);
+      await this.check(provider);
+    }
+  }
   async handle(input: unknown): Promise<boolean> {
     const parsed = authCommand.safeParse(input);
     if (!parsed.success || this.closed) return false;
     const command = parsed.data;
     try {
       if (command.action === "readiness") {
-        if (this.login) throw Error("Login active");
-        this.send({
-          version: 1,
-          kind: "auth-status",
-          id: command.provider,
-          status: "checking",
-        });
-        const status = await this.readiness(command.provider);
-        this.send({
-          version: 1,
-          kind: "auth-status",
-          id: command.provider,
-          status,
-        });
+        // A sign-in holds the credential store. The check runs right after
+        // it instead of failing and leaving the provider stuck on "checking".
+        if (this.login) this.deferred.add(command.provider);
+        else await this.check(command.provider);
       } else if (command.action === "list") this.list();
       else if (command.action === "save") {
         if (command.connection.kind === "notion")
@@ -96,7 +114,9 @@ export class AuthSession {
         if (this.login) throw Error("Login already active");
         const generation = ++this.generation;
         this.login = this.start(command, this.send, () => {
-          if (this.generation === generation) this.login = undefined;
+          if (this.generation !== generation) return;
+          this.login = undefined;
+          void this.drain();
         });
       } else if (command.action === "answer")
         this.login?.answer(command.id, command.answer);
@@ -104,6 +124,7 @@ export class AuthSession {
         this.generation++;
         this.login?.stop();
         this.login = undefined;
+        await this.drain();
       }
     } catch {
       this.send({

@@ -220,6 +220,12 @@ export function Wizard({ connected }: { connected: string[] }) {
               One sign-in powers Firstmate and your agents. Codex and Claude
               Code on this Mac are reused when they are already signed in.
             </p>
+            {bridgeState.notice && (
+              // The code or instruction a sign-in is waiting for.
+              <p className="rb-notice" role="alert">
+                <span>{bridgeState.notice}</span>
+              </p>
+            )}
             <ModelCards />
             <p className="row">
               <span className="muted">
