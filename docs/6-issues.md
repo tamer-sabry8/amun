@@ -6,15 +6,15 @@ These are the items from the "Not working yet" list in the handback. There are s
 
 ## Summary
 
-| #   | Issue                                      | Blocked by                                                                                                                            | Needs from you                                                                  | Clear process?                                        |
-| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| 1   | Approved plans are not published           | A hard approval gate and no test destination                                                                                          | A test Azure DevOps project and Notion section, and a go-ahead to write to them | Mostly. One mapping question to settle in code        |
-| 2   | No live model turn was verified            | No signed-in test profile                                                                                                             | One sign-in in a throwaway profile                                              | Yes                                                   |
-| 3   | No real council session, no real room      | This session's safety check; token cost                                                                                               | Run one command yourself, and approve the spend                                 | Yes for the room. The verdict format is an assumption |
-| 4   | Nothing reads Azure DevOps into Sprints    | Depends on 1; needs a live ADO sign-in                                                                                                | The project and team to read, and a sign-in in company Edge                     | Partly. The reader design is not done                 |
-| 5   | Memory is local only                       | Your open decision on memory                                                                                                          | The decision                                                                    | No, not until you decide                              |
-| 6   | The composer's `+` records file names only | Nothing external. I did not get to it                                                                                                 | Which file types and size limit you want                                        | Yes for files. Not for "from GitHub/ADO/Notion"       |
-| 7   | The packaged build                         | Done 13 November. In-process graphics with a crash fallback is now built: Home measures 482 to 501 MiB against 500, usually about 485 | Review of the trade-offs below; nothing is committed                            | Yes                                                   |
+| #   | Issue                                      | Blocked by                                                                                                                                      | Needs from you                                                                  | Clear process?                                        |
+| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | Approved plans are not published           | A hard approval gate and no test destination                                                                                                    | A test Azure DevOps project and Notion section, and a go-ahead to write to them | Mostly. One mapping question to settle in code        |
+| 2   | No live model turn was verified            | No signed-in test profile                                                                                                                       | One sign-in in a throwaway profile                                              | Yes                                                   |
+| 3   | No real council session, no real room      | This session's safety check; token cost                                                                                                         | Run one command yourself, and approve the spend                                 | Yes for the room. The verdict format is an assumption |
+| 4   | Nothing reads Azure DevOps into Sprints    | Depends on 1; needs a live ADO sign-in                                                                                                          | The project and team to read, and a sign-in in company Edge                     | Partly. The reader design is not done                 |
+| 5   | Memory is local only                       | Your open decision on memory                                                                                                                    | The decision                                                                    | No, not until you decide                              |
+| 6   | The composer's `+` records file names only | Nothing external. I did not get to it                                                                                                           | Which file types and size limit you want                                        | Yes for files. Not for "from GitHub/ADO/Notion"       |
+| 7   | The packaged build                         | Done 13 November. Memory passes: Home 479 to 483 MiB against 500 on the combined build. First launch after signing takes 7,564 ms against 3,000 | Whether the first-launch startup time is acceptable for the beta                | Yes                                                   |
 
 Items 6 and 7 were my choice of order, not real blockers. Items 1 to 5 each wait on something only you can give.
 
@@ -164,7 +164,7 @@ Two smaller items ride on this: the room's colours and saving a PDF both need a 
 
 ---
 
-## 7. The packaged build (done 13 November; memory at the limit with in-process graphics)
+## 7. The packaged build (done 13 November; memory passes, first-launch startup fails)
 
 **What it was.** Everything had been run as a development build. The app you install is a packaged build, and the trusted-tester beta has a 500 MiB memory budget that must be measured on the packaged app.
 
@@ -246,7 +246,7 @@ You asked for a real fix first, and in-process graphics only if that failed. It 
 
 The one sizeable item is the validation library (zod), about 14 MiB in the window and a similar share of the service. It is what checks every message between the service and the window, so I did not remove or thin it to pass a memory test. Replacing it with a lighter validator that performs the same checks is possible but touches every contract; it would bring five-process Home to roughly 520 to 535 MiB, still over.
 
-### In-process graphics with a crash fallback (built, not committed)
+### In-process graphics with a crash fallback (merged in PR #16)
 
 Since no fix was reachable, graphics now run inside the main process by default, with a safeguard.
 
@@ -273,11 +273,29 @@ An unclean exit can also be a force-quit or a power cut. Those cost one launch i
 
 **What I need from you.** Whether this result is acceptable for the beta gate as measured (it is at the limit, not comfortably under it), and whether you want the lighter-validator work for real margin.
 
+### Memory margin fix (PR #17) and combined measurement, 13 November
+
+PR #17 added about 20 MiB of margin on Home. It caps JavaScript compilation at V8's baseline tier in the service and the rebuilt shell's window, and paints the rebuilt shell straight into a visible window instead of a hidden one. Detail is in [the handoff](2026-11-13-PACKAGED-MEMORY-HANDOFF.md). This branch now contains that fix; the merge had no conflicts.
+
+Measured on the combined ad-hoc-signed package, disposable profiles, signed out ([evidence](evidence/T056/combined-branch-memory.json)):
+
+| Check                                          | Result                                                                                         |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Memory proof, 12 launches (four runs of three) | First screen 457 to 462 MiB. Home 479 to 483 MiB. All 12 under 500                             |
+| Startup                                        | First launch after signing 7,564 ms: fails the 3,000 ms limit. The other 11 took 369 to 421 ms |
+| Combined proof                                 | Three of four runs pass; the first fails on startup only                                       |
+| Fallback proof, six launches, two killed       | Passes every step                                                                              |
+| Soak, 280 screen changes                       | No crash, median frame 8.3 ms, 99th percentile 9.3 ms, no frame over 50 ms, 576 MiB at the end |
+| Packaged rebuild journey                       | Passes                                                                                         |
+| Unit tests, lint, types, formatting            | 938 pass; clean                                                                                |
+
+The earlier sections above record the state before this fix. The memory question in "What I need from you" is settled; the open one is the first launch after signing.
+
 ---
 
 ## Suggested order
 
-1. **7, packaged build.** Done; memory budget fails (see above).
+1. **7, packaged build.** Done; memory passes, first-launch startup fails (see above).
 2. **6, file contents.** Needs three small answers.
 3. **2, live model turn.** Needs one sign-in; unblocks smarter intake.
 4. **3, room and one quick council.** Needs your run or permission, and the spend.
