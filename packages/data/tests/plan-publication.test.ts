@@ -241,3 +241,79 @@ describe("a write that never left the Mac", () => {
     expect(offline.writes(id)[0]).toMatchObject({ note: "Reconnect Notion" });
   });
 });
+
+describe("approving only some items", () => {
+  it("approves and publishes the ticked item and leaves the other waiting", async () => {
+    const proposed = send("propose-plan", {
+      groupId: null,
+      workAreaId: null,
+      planKind: "stories",
+      destination: "ado",
+      summary: "Pilot sample",
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          summary: "Sample story",
+          fields: {},
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000002",
+          summary: "Sample page",
+          fields: { destination: "notion" },
+        },
+      ],
+    });
+    const id = proposed.ref!;
+    const approved = send("approve-plan", {
+      planId: id,
+      fingerprint: plan(id).fingerprint,
+      itemIds: ["00000000-0000-4000-8000-000000000001"],
+    });
+    expect(approved.ok).toBe(true);
+    await publisher.publish(id);
+    expect(ado.writes).toEqual(["Sample story"]);
+    expect(notion.writes).toEqual([]);
+    expect(plan(id).state).toBe("published");
+    const waiting = store
+      .snapshot()
+      .plans.find((entry) => entry.splitFrom === id)!;
+    expect(waiting).toMatchObject({ state: "proposed", destination: "ado" });
+    expect(waiting.items.map((item) => item.summary)).toEqual(["Sample page"]);
+    expect(
+      store
+        .snapshot()
+        .attention.some((item) => item.ref === "plan:" + waiting.id),
+    ).toBe(true);
+    // The waiting item is approved later on its own and only then sent.
+    send("approve-plan", {
+      planId: waiting.id,
+      fingerprint: waiting.fingerprint,
+    });
+    await publisher.publish(waiting.id);
+    expect(notion.writes).toEqual(["Sample page"]);
+  });
+
+  it("refuses an item that is not in the plan", () => {
+    const proposed = send("propose-plan", {
+      groupId: null,
+      workAreaId: null,
+      planKind: "stories",
+      destination: "ado",
+      summary: "",
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          summary: "Only item",
+          fields: {},
+        },
+      ],
+    });
+    const result = send("approve-plan", {
+      planId: proposed.ref!,
+      fingerprint: plan(proposed.ref!).fingerprint,
+      itemIds: ["00000000-0000-4000-8000-000000000009"],
+    });
+    expect(result.ok).toBe(false);
+    expect(plan(proposed.ref!).state).toBe("proposed");
+  });
+});

@@ -70,6 +70,8 @@ The owner's workflow handoff is `Amun-Claude-Code-workflow-handoff.md` in the ow
 
 Every UI change needs the owner's approval before implementation. Show the actual current screen beside the proposed change in an annotatable preview, say which workflow it enables, and wait. Run every UI change through the `/impeccable` skill. Approval of a workflow does not approve its visual design.
 
+The owner's standing design preferences from the first review round (13 November 2026): keep existing screens as they are and add as little as possible; reuse a pattern already on that screen (for example the amber conversation card) before drawing anything new; add nothing to the prompt box; write messages and button labels in plain, friendly words, never technical ones. Sprints keeps its current screen with no visual change, so team switch, set default and refresh go through its composer as `/sprint` commands.
+
 Live-test destinations chosen by the owner:
 
 - Azure DevOps: project `TahalufCollection / POCs` only. Stories go to the `POCs Team` board, level `Backlog items`. Repository and wiki tests use the `tamer-test1` repository in that project. The read-only sprint check uses `POCs\\2021-Q1\\Sprint 5`.

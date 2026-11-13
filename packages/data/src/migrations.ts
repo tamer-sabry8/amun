@@ -1008,4 +1008,7 @@ CREATE TABLE work_messages (
   note TEXT,
   PRIMARY KEY (plan_id, item_id)
 );`,
+  // 31 · Items left unticked at approval wait in their own proposal, which
+  // remembers the plan it was split from.
+  `ALTER TABLE work_plans ADD COLUMN split_from TEXT REFERENCES work_plans(id);`,
 ] as const;

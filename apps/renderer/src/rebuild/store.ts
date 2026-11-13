@@ -35,6 +35,7 @@ export function receive(raw: unknown) {
     state = { ...state, snapshot: parsed.data };
   else if (parsed.data.kind === "council-status")
     state = { ...state, council: parsed.data };
+  else if (parsed.data.kind !== "work-result") return false;
   else {
     const { action, ok, message, ref, step } = parsed.data;
     const result = { action, ok, message, ref, step };

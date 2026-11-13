@@ -85,6 +85,9 @@ import { Room } from "../../../packages/council/src/room.ts";
 import { readFileSync } from "node:fs";
 import {
   councilCommand,
+  planOpen,
+  planPlaces,
+  planPublish,
   workAttachment,
 } from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
@@ -1352,6 +1355,126 @@ process.parentPort?.on("message", (event) => {
               message: error instanceof Error ? error.message : "",
             }),
           );
+    } else if (message.data?.kind === "plan-publish") {
+      const parsed = planPublish.safeParse(message.data);
+      if (!parsed.success) return;
+      // Continues an approval already given: looks up, then retries within
+      // the budget. A plan that was never approved is left alone.
+      void planPublisher
+        .publish(parsed.data.planId)
+        .then((published) => {
+          if (closed) return;
+          for (const event of published) port.postMessage(event);
+          port.postMessage(workStore.snapshot());
+        })
+        .catch(() => undefined);
+    } else if (message.data?.kind === "plan-open") {
+      const parsed = planOpen.safeParse(message.data);
+      if (!parsed.success) return;
+      const written = planPublisher
+        .writes(parsed.data.planId)
+        .find((item) => item.id === parsed.data.itemId);
+      // Only a link Amun itself recorded for a created item is opened.
+      if (written?.state !== "created" || !written.url) return;
+      let url: URL;
+      try {
+        url = new URL(written.url);
+      } catch {
+        return;
+      }
+      if (url.protocol !== "https:") return;
+      // Company sign-ins use Microsoft Edge; anything else, the default browser.
+      const open = (args: string[]) =>
+        new Promise<boolean>((resolve) =>
+          execFile("/usr/bin/open", args, (error) => resolve(!error)),
+        );
+      void (async () => {
+        if (
+          written.destination === "ado" &&
+          (await open(["-b", "com.microsoft.edgemac", url.href]))
+        )
+          return;
+        await open([url.href]);
+      })();
+    } else if (message.data?.kind === "plan-places") {
+      const parsed = planPlaces.safeParse(message.data);
+      if (!parsed.success) return;
+      const plan = workStore
+        .snapshot()
+        .plans.find((item) => item.id === parsed.data.planId);
+      if (!plan) return;
+      const setting = (id: string) => {
+        const saved = workspace
+          .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+          .pluck()
+          .get(id);
+        try {
+          const value: unknown =
+            typeof saved === "string" ? JSON.parse(saved) : null;
+          return typeof value === "string" ? value : null;
+        } catch {
+          return null;
+        }
+      };
+      const ado = () => {
+        const reference =
+          (plan.workAreaId
+            ? (workspace
+                .prepare(
+                  "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
+                )
+                .pluck()
+                .get(plan.workAreaId) as string | undefined)
+            : undefined) ?? setting("work.ado.project");
+        if (!reference) return null;
+        try {
+          const path = new URL(reference).pathname
+            .split("/")
+            .filter(Boolean)
+            .map(decodeURIComponent);
+          return path.length ? path.join(" / ") : null;
+        } catch {
+          return null;
+        }
+      };
+      port.postMessage({
+        version: 1,
+        kind: "plan-places-result",
+        planId: plan.id,
+        places: plan.items.map((item) => {
+          const own = item.fields.destination;
+          const destination =
+            typeof own === "string" && own.trim()
+              ? own.trim().toLowerCase()
+              : plan.destination;
+          const area = item.fields.area;
+          const place =
+            destination === "ado"
+              ? ado()
+              : destination === "notion"
+                ? setting("notion.destination.title")
+                : destination === "amun"
+                  ? "Amun"
+                  : null;
+          return {
+            id: item.id,
+            destination,
+            place:
+              place && destination === "ado" && typeof area === "string"
+                ? `${place} · ${area}`
+                : place && destination === "notion"
+                  ? `New page under “${place}”`
+                  : place,
+            problem: place
+              ? null
+              : destination === "ado"
+                ? "No Azure DevOps project is chosen for this work yet."
+                : destination === "notion"
+                  ? "No Notion destination is chosen yet."
+                  : `Publishing to ${trackerName(destination)} is not available yet.`,
+          };
+        }),
+      });
     } else if (message.data?.kind === "work-attachment") {
       const parsed = workAttachment.safeParse(message.data);
       if (!parsed.success) return;
@@ -2233,6 +2356,12 @@ process.parentPort?.on("message", (event) => {
                   "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.destination',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
                 )
                 .run(JSON.stringify(command.url));
+              // Shown beside a plan item so its destination can be checked.
+              workspace
+                .prepare(
+                  "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.destination.title',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+                )
+                .run(JSON.stringify(destination.title));
               port.postMessage({
                 version: 1,
                 kind: "auth-notice",

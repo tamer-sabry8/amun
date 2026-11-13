@@ -11,6 +11,7 @@ import { approveLabel } from "../../../../packages/domain/src/work/permissions.t
 import {
   rfpAuthoringBoundary,
   scopeCheck,
+  planDestinations,
   trackerName,
 } from "../../../../packages/domain/src/work/flows.ts";
 import {
@@ -27,6 +28,7 @@ import {
   releaseMessage,
 } from "./firstmate.ts";
 import { bridge } from "../bridge.ts";
+import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
@@ -254,6 +256,132 @@ function InlineCard({
   return null;
 }
 
+interface Place {
+  id: string;
+  destination: string;
+  place: string | null;
+  problem: string | null;
+}
+/** Where each item of a plan would go, asked from the service. */
+function usePlaces(planId: string, fingerprint: string) {
+  const [places, setPlaces] = useState<Place[]>([]);
+  useEffect(() => {
+    const stop = bridge.onEvent((raw) => {
+      const event = planPlacesResult.safeParse(raw);
+      if (event.success && event.data.planId === planId)
+        setPlaces(event.data.places);
+    });
+    bridge.send({ version: 1, kind: "plan-places", planId });
+    return stop;
+  }, [planId, fingerprint]);
+  return places;
+}
+
+type PlanEntry = Snapshot["plans"][number];
+function PlanItem({
+  plan,
+  item,
+  place,
+}: {
+  plan: PlanEntry;
+  item: PlanEntry["items"][number];
+  place: Place | undefined;
+}) {
+  const result = plan.results.find((entry) => entry.id === item.id);
+  const destination =
+    place?.destination ??
+    (typeof item.fields.destination === "string"
+      ? item.fields.destination
+      : plan.destination);
+  const fields = Object.entries(item.fields)
+    .filter(
+      ([key, value]) => key !== "destination" && value !== null && value !== "",
+    )
+    .map(
+      ([key, value]) =>
+        `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
+    )
+    .join(" · ");
+  const settled = plan.state !== "proposed" && plan.state !== "approved";
+  return (
+    <span style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontWeight: 600 }}>{item.summary}</span>
+      {plan.kind !== "roadmap" && !result && (
+        <>
+          <span className="row wrap small">
+            <span className="tag">{trackerName(destination)}</span>
+            {place?.place && <span className="muted">{place.place}</span>}
+            {place?.problem && (
+              <span style={{ color: "var(--amun-status-signed-out)" }}>
+                {place.problem}
+              </span>
+            )}
+          </span>
+          <span className="muted small">{fields || "No field changes"}</span>
+        </>
+      )}
+      {result?.state === "created" && (
+        <span className="row wrap small">
+          <span className="tag good">
+            Created
+            {result.externalId && /^\d+$/.test(result.externalId)
+              ? " #" + result.externalId
+              : ""}
+          </span>
+          {result.url && (
+            <button
+              className="link"
+              onClick={() =>
+                bridge.send({
+                  version: 1,
+                  kind: "plan-open",
+                  planId: plan.id,
+                  itemId: item.id,
+                })
+              }
+            >
+              Open in {trackerName(destination)}
+            </button>
+          )}
+        </span>
+      )}
+      {result && result.state !== "created" && (
+        <>
+          <span className="row wrap small">
+            <span
+              className={"tag " + (result.state === "failed" ? "bad" : "warn")}
+            >
+              {result.state === "failed" ? "Not created" : "Being checked"}
+            </span>
+            <span className="muted">
+              {result.state === "failed"
+                ? (place?.problem ??
+                  `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
+                : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
+            </span>
+          </span>
+          {settled && (
+            <span>
+              <button
+                className="btn"
+                onClick={() =>
+                  bridge.send({
+                    version: 1,
+                    kind: "plan-publish",
+                    planId: plan.id,
+                  })
+                }
+              >
+                {result.state === "failed" ? "Retry" : "Check now"}
+              </button>
+            </span>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
 function PlanReview({
   snapshot,
   planId,
@@ -264,57 +392,108 @@ function PlanReview({
   const plan = snapshot.plans.find((item) => item.id === planId);
   // What the user saw when the review opened. Approval is bound to it.
   const [seen, setSeen] = useState(plan?.fingerprint ?? "");
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const places = usePlaces(planId, plan?.fingerprint ?? "");
   if (!plan) return <p className="muted">That plan is no longer available.</p>;
   const changed = plan.state === "proposed" && seen !== plan.fingerprint;
   const noun = plan.kind === "stories" ? "story" : "change";
+  const proposed = plan.state === "proposed";
+  const ticked = plan.items.filter((item) => !skipped.includes(item.id));
+  // Items left out of an earlier approval of this plan, still waiting.
+  const waiting = snapshot.plans.filter(
+    (item) => item.splitFrom === plan.id && item.state === "proposed",
+  );
+  const pick = proposed && plan.items.length > 1;
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ fontSize: 20 }}>{plan.summary || "Proposed changes"}</h2>
       <p className="muted">
-        To {trackerName(plan.destination)} · {plan.items.length}{" "}
+        To {planDestinations(plan)} · {plan.items.length}{" "}
         {plan.items.length === 1 ? "item" : "items"} ·{" "}
-        {plan.state === "proposed" ? previewNote(plan.destination) : "Approved"}
+        {proposed ? previewNote(plan.destination) : "Approved"}
       </p>
-      <ol style={{ margin: 0, paddingLeft: 22, display: "grid", gap: 10 }}>
+      <div style={{ display: "grid", gap: 14 }}>
         {plan.items.map((item) => {
-          const result = plan.results.find((entry) => entry.id === item.id);
-          return (
-            <li key={item.id}>
-              <div style={{ fontWeight: 600 }}>{item.summary}</div>
-              {plan.kind !== "roadmap" && (
-                <div className="muted small">
-                  {Object.entries(item.fields)
-                    .filter(([, value]) => value !== null && value !== "")
-                    .map(
-                      ([key, value]) =>
-                        `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
-                    )
-                    .join(" · ") || "No field changes"}
-                </div>
-              )}
-              {result && (
-                <span
-                  className={
-                    "tag " +
-                    (result.state === "created"
-                      ? "good"
-                      : result.state === "failed"
-                        ? "bad"
-                        : "warn")
-                  }
-                >
-                  {result.state === "created"
-                    ? `Created${result.externalId ? " #" + result.externalId : ""}`
-                    : result.state === "failed"
-                      ? "Not created"
-                      : "Being checked"}
-                </span>
-              )}
-            </li>
+          const body = (
+            <PlanItem
+              plan={plan}
+              item={item}
+              place={places.find((entry) => entry.id === item.id)}
+            />
+          );
+          return pick ? (
+            <label
+              key={item.id}
+              className="row"
+              style={{ gap: 10, alignItems: "flex-start", cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                style={{ marginTop: 4, width: 15, height: 15 }}
+                checked={!skipped.includes(item.id)}
+                onChange={(event) =>
+                  setSkipped(
+                    event.target.checked
+                      ? skipped.filter((id) => id !== item.id)
+                      : [...skipped, item.id],
+                  )
+                }
+              />
+              {body}
+            </label>
+          ) : (
+            <div key={item.id}>{body}</div>
           );
         })}
-      </ol>
-      {plan.state === "proposed" && (
+        {waiting.flatMap((left) =>
+          left.items.map((item) => (
+            <div key={item.id} style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{item.summary}</span>
+              <span className="row wrap small">
+                <span className="tag">Not approved yet</span>
+                <span className="muted">
+                  {trackerName(
+                    typeof item.fields.destination === "string"
+                      ? item.fields.destination
+                      : left.destination,
+                  )}{" "}
+                  · still waiting under Needs your attention
+                </span>
+              </span>
+              <span className="row">
+                <button
+                  className="btn"
+                  onClick={() =>
+                    work("approve-plan", {
+                      planId: left.id,
+                      fingerprint: left.fingerprint,
+                      itemIds: [item.id],
+                    })
+                  }
+                >
+                  Approve and publish
+                </button>
+                <button
+                  className="btn quiet"
+                  onClick={() =>
+                    left.items.length === 1
+                      ? work("request-changes", { planId: left.id })
+                      : work("update-plan", {
+                          planId: left.id,
+                          items: left.items.filter(
+                            (entry) => entry.id !== item.id,
+                          ),
+                        })
+                  }
+                >
+                  Remove from plan
+                </button>
+              </span>
+            </div>
+          )),
+        )}
+      </div>
+      {proposed && (
         <div style={{ display: "grid", gap: 8 }}>
           {changed && (
             <p className="rb-notice" role="status">
@@ -330,12 +509,20 @@ function PlanReview({
           <div className="row">
             <button
               className="btn primary"
-              disabled={changed}
+              disabled={changed || !ticked.length}
               onClick={() =>
-                work("approve-plan", { planId: plan.id, fingerprint: seen })
+                work("approve-plan", {
+                  planId: plan.id,
+                  fingerprint: seen,
+                  ...(ticked.length < plan.items.length
+                    ? { itemIds: ticked.map((item) => item.id) }
+                    : {}),
+                })
               }
             >
-              {approveLabel(plan.items.length, noun)}
+              {ticked.length < plan.items.length
+                ? `Approve and publish ${ticked.length} of ${plan.items.length}`
+                : approveLabel(plan.items.length, noun)}
             </button>
             <button
               className="btn"
@@ -345,8 +532,9 @@ function PlanReview({
             </button>
           </div>
           <p className="muted small">
-            Approval covers exactly the items listed here. Anything added later
-            is asked again.
+            {pick
+              ? "Approval covers exactly the ticked items. An unticked item is not approved and stays here waiting for you."
+              : "Approval covers exactly the items listed here. Anything added later is asked again."}
           </p>
         </div>
       )}

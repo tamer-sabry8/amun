@@ -69,6 +69,23 @@ export function route(input: {
     };
   return { step: "write", tracker: rule.tracker, ruleId: rule.id };
 }
+/** "Azure DevOps", or "2 destinations" when a plan's items go to several. */
+export function planDestinations(plan: {
+  destination: string;
+  items: { fields: Record<string, unknown> }[];
+}) {
+  const all = new Set(
+    plan.items.map((item) =>
+      typeof item.fields.destination === "string" &&
+      item.fields.destination.trim()
+        ? item.fields.destination.trim().toLowerCase()
+        : plan.destination,
+    ),
+  );
+  return all.size === 1
+    ? trackerName([...all][0]!)
+    : `${all.size} destinations`;
+}
 export function trackerName(tracker: string) {
   return (
     {

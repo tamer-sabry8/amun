@@ -239,6 +239,8 @@ export const workSnapshot = z.strictObject({
         "failed",
       ]),
       results: z.array(writeResult),
+      /** The plan these items were left out of at approval, if any. */
+      splitFrom: id.nullable(),
       createdAt: stamp,
     }),
   ),
@@ -529,7 +531,12 @@ export const workCommand = z.discriminatedUnion("action", [
     items: z.array(planItem).min(1).max(500),
   }),
   act("update-plan", { planId: id, items: z.array(planItem).min(1).max(500) }),
-  act("approve-plan", { planId: id, fingerprint: z.string().max(200000) }),
+  act("approve-plan", {
+    planId: id,
+    fingerprint: z.string().max(200000),
+    /** Approve only these items; the rest stay proposed. Omit for all. */
+    itemIds: z.array(id).min(1).max(500).optional(),
+  }),
   act("request-changes", { planId: id, note: text.default("") }),
   act("record-results", { planId: id, results: z.array(writeResult).max(500) }),
   act("attention", {
@@ -752,21 +759,6 @@ export const councilCommand = z.discriminatedUnion("action", [
     action: z.enum(["check-update", "rollback", "room", "close-room"]),
   }),
 ]);
-export const workEvent = z.discriminatedUnion("kind", [
-  workSnapshot,
-  councilStatus,
-  z.strictObject({
-    version: z.literal(1),
-    kind: z.literal("work-result"),
-    action: z.string().max(64),
-    ok: z.boolean(),
-    message: z.string().max(1024),
-    ref: z.string().max(256).nullable(),
-    step: z.json().nullable(),
-  }),
-]);
-export type WorkEvent = z.infer<typeof workEvent>;
-
 /** A file added from the composer: read on the Mac and filed in the Library. */
 export const workAttachment = z.strictObject({
   version: z.literal(1),
@@ -794,3 +786,54 @@ export const workAttachmentResult = z.strictObject({
   /** The Library record holding it, when it could be filed. */
   recordId: z.string().nullable(),
 });
+
+/** Where each item of a plan would be written, in words the owner can check. */
+export const planPlaces = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-places"),
+  planId: id,
+});
+export const planPlacesResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-places-result"),
+  planId: id,
+  places: z.array(
+    z.strictObject({
+      id,
+      destination: z.string(),
+      /** The exact place, or null when none is chosen or connected yet. */
+      place: z.string().nullable(),
+      /** What to do when there is no place. */
+      problem: z.string().nullable(),
+    }),
+  ),
+});
+/** Check or retry an approved plan's outstanding items; never a new approval. */
+export const planPublish = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-publish"),
+  planId: id,
+});
+/** Open a created item in the browser. Only links Amun recorded are opened. */
+export const planOpen = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-open"),
+  planId: id,
+  itemId: id,
+});
+export const workEvent = z.discriminatedUnion("kind", [
+  workAttachmentResult,
+  planPlacesResult,
+  workSnapshot,
+  councilStatus,
+  z.strictObject({
+    version: z.literal(1),
+    kind: z.literal("work-result"),
+    action: z.string().max(64),
+    ok: z.boolean(),
+    message: z.string().max(1024),
+    ref: z.string().max(256).nullable(),
+    step: z.json().nullable(),
+  }),
+]);
+export type WorkEvent = z.infer<typeof workEvent>;
