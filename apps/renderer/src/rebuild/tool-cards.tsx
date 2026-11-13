@@ -29,8 +29,8 @@ const icon: Record<Tool["status"], string> = {
   disabled: "close",
   not_installed: "close",
 };
-/** Tools that can do delegated work, as opposed to ones Amun merely needs. */
-const helpers = new Set(["tmux", "git"]);
+/** The workers whose switch is honoured when work is handed out. */
+const switchable = new Set(["claude_code", "codex"]);
 
 export function ToolCards() {
   const [report, setReport] = useState<ToolsReport | null>(null);
@@ -80,17 +80,7 @@ export function ToolCards() {
         {tool.status === "ready" ? tool.access : tool.nextAction}
       </span>
       <span className="row">
-        {tool.status === "ready" &&
-          !tool.isDefault &&
-          !helpers.has(tool.id) && (
-            <button
-              className="btn quiet"
-              onClick={() => send({ action: "default", id: tool.id })}
-            >
-              Make default
-            </button>
-          )}
-        {tool.status !== "not_installed" && !helpers.has(tool.id) && (
+        {tool.status !== "not_installed" && switchable.has(tool.id) && (
           <button
             className="btn quiet"
             onClick={() =>
@@ -125,8 +115,8 @@ export function ToolCards() {
         </button>
       </div>
       <p className="muted small">
-        Amun only checks each tool’s version. Firstmate hands work to the ones
-        you leave on.
+        Amun only checks each tool’s version. A tool you turn off is never
+        handed work.
       </p>
       {report?.message && (
         <p className="rb-notice" role="alert">

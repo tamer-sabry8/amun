@@ -230,6 +230,16 @@ export async function chooseModel(id: string): Promise<boolean> {
   if (result.kind !== "message" || !String(result.text).includes(id))
     return false;
   session = { ...session, model: id };
+  // What the new model can do (look at images, for one) is the conversation's
+  // to say, so it is read again rather than carried over from the old model.
+  const refreshed = await run("conversation", "");
+  if (refreshed.kind === "conversation")
+    session = {
+      sessionId: String(refreshed.sessionId),
+      model: (refreshed.model as string | null) ?? id,
+      text: String(refreshed.text ?? ""),
+      acceptsImage: refreshed.acceptsImage === true,
+    };
   for (const listener of modelListeners) listener();
   return true;
 }

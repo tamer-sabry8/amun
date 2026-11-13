@@ -250,6 +250,22 @@ function councilPin() {
     return null;
   }
 }
+/** The detected-tool name for a worker harness. */
+const workerTool = { claude: "claude_code", codex: "codex" } as const;
+/**
+ * A worker the person turned off under "Tools already on this Mac" is never
+ * started, whatever asked for it.
+ */
+function requireWorkerOn(harness: unknown) {
+  const tool =
+    typeof harness === "string"
+      ? workerTool[harness as keyof typeof workerTool]
+      : undefined;
+  if (tool && !new ToolRegistry(workspace).enabled(tool))
+    throw new WorkerTurnedOff(harness === "claude" ? "Claude Code" : "Codex");
+}
+class WorkerTurnedOff extends Error {}
+
 // After a restart, a write that was sent and never confirmed is looked up
 // once the connections are ready. Nothing new is sent from here.
 setTimeout(() => {
@@ -756,6 +772,7 @@ process.parentPort?.on("message", (event) => {
         workspaceRoot!,
         process.env.AMUN_FIRSTMATE_ARCHIVES!,
       );
+      requireWorkerOn("claude");
       await supervisor.ensureRunning();
       return sendDelivery(
         releases,
@@ -1044,6 +1061,7 @@ process.parentPort?.on("message", (event) => {
             workspaceRoot!,
             process.env.AMUN_FIRSTMATE_ARCHIVES!,
           );
+          requireWorkerOn("codex");
           await supervisor.ensureRunning();
           return sendDelivery(
             releases,
@@ -1883,11 +1901,15 @@ process.parentPort?.on("message", (event) => {
                 workspaceRoot!,
                 process.env.AMUN_FIRSTMATE_ARCHIVES!,
               );
+              const dispatch: unknown = JSON.parse(request.argument);
+              requireWorkerOn(
+                (dispatch as { harness?: unknown } | null)?.harness,
+              );
               const text = await dispatchFirstmate(
                 releases,
                 process.env.AMUN_CREW_RECEIPTS!,
                 process.env.AMUN_TMUX_BINARY!,
-                JSON.parse(request.argument),
+                dispatch as Parameters<typeof dispatchFirstmate>[3],
               );
               try {
                 await supervisor.ensureRunning();
@@ -1900,10 +1922,13 @@ process.parentPort?.on("message", (event) => {
                     " Primary supervision could not start. Use /ahoy to retry.",
                 });
               }
-            } catch {
+            } catch (error) {
               sendNative(request.id, {
                 kind: "message",
-                text: "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
+                text:
+                  error instanceof WorkerTurnedOff
+                    ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
+                    : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
               });
             } finally {
               crewDispatchBusy = false;
