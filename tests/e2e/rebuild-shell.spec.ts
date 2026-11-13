@@ -80,14 +80,33 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await page.getByRole("button", { name: "Products", exact: true }).click();
     await page.getByRole("button", { name: "RFP tracking" }).click();
     await page.getByRole("button", { name: "Work", exact: true }).click();
-    await page.getByLabel("Client delivery tickets").selectOption("ado");
-    await page.getByLabel("Everything in this group").selectOption("notion");
+    // Tracking is not asked here: Firstmate asks the first time it matters.
+    await expect(page.getByLabel("Everything in this group")).toHaveCount(0);
+    await expect(page.getByLabel("Group name")).toHaveCount(0);
+    await expect(
+      page.getByText("I’ll ask where to track work the first time it matters."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Work", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.mouse.move(4, 4);
     await shot(page, "03-setup-work");
     await page.getByRole("button", { name: "Continue" }).click();
-    // 4 · Agents: recommended ones preselected, no Engineer
-    await expect(
-      page.getByRole("button", { name: /Researcher/ }),
-    ).toHaveAttribute("aria-pressed", "true");
+    // 4 · Agents: the day-one agents, all selected, no Engineer
+    await expect(page.getByText("20 of 20 selected")).toBeVisible();
+    const research = page.getByRole("button", { name: /Research & Insights/ });
+    await expect(research).toHaveAttribute("aria-pressed", "true");
+    await expect(research.locator("img")).toHaveJSProperty("complete", true);
+    expect(
+      await research
+        .locator("img")
+        .evaluate((image: HTMLImageElement) => image.naturalWidth),
+    ).toBeGreaterThan(0);
+    // Choosing is a toggle and the count follows.
+    await research.click();
+    await expect(research).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("19 of 20 selected")).toBeVisible();
+    await research.click();
     await expect(page.getByRole("button", { name: /Engineer/ })).toHaveCount(0);
     await shot(page, "04-setup-agents");
     await page.getByRole("button", { name: "Finish setup" }).click();

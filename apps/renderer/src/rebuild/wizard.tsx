@@ -6,7 +6,6 @@ import {
   groupCards,
   initialWizard,
   suggestedAgents,
-  unresolvedRoutes,
   wizardReducer,
   wizardSteps,
   workCards,
@@ -16,8 +15,9 @@ import {
   fromLegacyStatus,
   shouldAutoTest,
 } from "../../../../packages/domain/src/work/home.ts";
-import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import { bridge } from "../bridge.ts";
+import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
+import { AgentAvatar } from "./agent-avatar.tsx";
 import { Icon } from "../icons.tsx";
 import { NativePiPanel } from "./lazy.tsx";
 import { work } from "./store.ts";
@@ -253,10 +253,6 @@ export function Wizard({ connected }: { connected: string[] }) {
       })),
     });
   }, [state.done]);
-  const trackers = [
-    ...chosenTools.filter((tool) => tool !== "obsidian"),
-    "amun",
-  ];
   return (
     <div className="rb-wizard">
       <ol className="rb-steps" style={{ listStyle: "none", margin: 0 }}>
@@ -397,77 +393,9 @@ export function Wizard({ connected }: { connected: string[] }) {
                 Add
               </button>
             </form>
-            {state.groups.map((group) => (
-              <section
-                className="rb-inline"
-                key={group.name}
-                style={{ maxWidth: "none" }}
-              >
-                <label className="field">
-                  Group name
-                  <input
-                    type="text"
-                    defaultValue={group.name}
-                    maxLength={64}
-                    onBlur={(event) =>
-                      dispatch({
-                        type: "rename_group",
-                        from: group.name,
-                        to: event.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <strong>Where should actionable work be tracked?</strong>
-                <div className="rb-route">
-                  {(
-                    [
-                      [null, "Everything in this group"],
-                      ["delivery", "Client delivery tickets"],
-                    ] as const
-                  ).map(([condition, label]) => (
-                    <label className="field" key={label}>
-                      {label}
-                      <select
-                        value={
-                          group.routes.find(
-                            (route) => route.condition === condition,
-                          )?.tracker ?? ""
-                        }
-                        onChange={(event) =>
-                          event.target.value &&
-                          dispatch({
-                            type: "route",
-                            group: group.name,
-                            condition,
-                            tracker: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {condition
-                            ? "Same as the rest"
-                            : "Ask me when it matters"}
-                        </option>
-                        {trackers.map((tracker) => (
-                          <option key={tracker} value={tracker}>
-                            {tracker === "amun"
-                              ? "Keep it in Amun"
-                              : trackerName(tracker)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              </section>
-            ))}
-            {unresolvedRoutes(state).length > 0 && (
-              <p className="muted small">
-                I’ll ask where to track work for{" "}
-                {unresolvedRoutes(state).join(", ")} the first time it matters.
-              </p>
-            )}
+            <p className="muted small">
+              I’ll ask where to track work the first time it matters.
+            </p>
           </>
         )}
         {state.step === "agents" && (
@@ -476,28 +404,71 @@ export function Wizard({ connected }: { connected: string[] }) {
               Firstmate leads. These agents help with the work you delegate; tap
               to choose.
             </p>
-            <div className="rb-cards">
+            <div className="row">
+              <span className="muted small" role="status">
+                {state.agents.length} of{" "}
+                {suggestedAgents.length + extraAgents.length} selected
+              </span>
+              <span className="grow" />
+              <button
+                className="btn quiet"
+                onClick={() => {
+                  const all = [
+                    ...suggestedAgents.map((item) => item.role),
+                    ...extraAgents,
+                  ];
+                  const every = all.every((role) =>
+                    state.agents.includes(role),
+                  );
+                  for (const role of all)
+                    if (state.agents.includes(role) === every)
+                      dispatch({
+                        type: "toggle",
+                        field: "agents",
+                        value: role,
+                      });
+                }}
+              >
+                {state.agents.length ===
+                suggestedAgents.length + extraAgents.length
+                  ? "Clear all"
+                  : "Select all"}
+              </button>
+            </div>
+            <div className="rb-agent-cards">
               {[
                 ...suggestedAgents.map((item) => item.role),
                 ...extraAgents,
-              ].map((role) => (
-                <button
-                  key={role}
-                  className="rb-card"
-                  aria-pressed={state.agents.includes(role)}
-                  onClick={() =>
-                    dispatch({ type: "toggle", field: "agents", value: role })
-                  }
-                >
-                  <strong>{role}</strong>
-                  <span>
-                    {suggestedAgents.find((item) => item.role === role)
-                      ?.recommended
-                      ? "Recommended"
-                      : "Optional"}
-                  </span>
-                </button>
-              ))}
+              ].map((role) => {
+                const profile = agentProfile(role);
+                const chosen = state.agents.includes(role);
+                return (
+                  <button
+                    key={role}
+                    className="rb-agent-card"
+                    aria-pressed={chosen}
+                    onClick={() =>
+                      dispatch({ type: "toggle", field: "agents", value: role })
+                    }
+                  >
+                    <AgentAvatar role={role} />
+                    <span className="text">
+                      <strong>{role}</strong>
+                      <span>{profile?.summary ?? "Added by you"}</span>
+                    </span>
+                    <span className="mark" aria-hidden="true">
+                      {chosen && (
+                        <Icon
+                          name="check"
+                          width={13}
+                          height={13}
+                          strokeWidth={2.6}
+                        />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <form
               className="row"
