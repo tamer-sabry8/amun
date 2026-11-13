@@ -46,6 +46,8 @@ const writeResult = z.strictObject({
   id,
   state: z.enum(["created", "failed", "unknown"]),
   externalId: z.string().max(256).optional(),
+  /** Where the created item can be opened. */
+  url: z.string().max(2048).optional(),
 });
 const planStory = z.strictObject({
   id,

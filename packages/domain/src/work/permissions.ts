@@ -159,6 +159,7 @@ export interface WriteResult {
   id: string;
   state: "created" | "failed" | "unknown";
   externalId?: string | undefined;
+  url?: string | undefined;
 }
 /** Partial writes are reported per item; an uncertain write is never replayed blind (UC21). */
 export function writeSummary(results: WriteResult[]) {

@@ -1998,6 +1998,7 @@ export class WorkStore {
       id: string;
       state: "created" | "failed" | "unknown";
       externalId?: string | undefined;
+      url?: string | undefined;
     }[],
   ) {
     const row = this.get("SELECT * FROM work_plans WHERE id=?", planId);
