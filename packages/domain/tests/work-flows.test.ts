@@ -547,15 +547,32 @@ describe("Home attention (Q50–Q51)", () => {
     ]);
     expect(islandItem(items)).toMatchObject({ top: { id: "f" }, count: 4 });
     expect(islandItem([])).toEqual({ top: null, count: 0, held: 0 });
-    // The chat for a work is already asking about its own items, so the
-    // sidebar card leaves them out and counts what it left.
+    // The chat for a work already asks about its own plan, question or
+    // failure, so the sidebar card leaves those out and counts them. A result
+    // or an offer has no control in the chat, so it stays on the card.
     const area = items[0]!.workAreaId;
-    const beside = islandItem(items, area);
-    expect(beside.top?.workAreaId).not.toBe(area);
-    expect(beside.count + beside.held).toBe(4);
-    expect(beside.held).toBeGreaterThan(0);
-    const only = items.filter((item) => item.workAreaId === area);
-    expect(islandItem(only, area)).toMatchObject({ top: null, count: 0 });
+    expect(islandItem(items, area)).toMatchObject({
+      top: { id: "r" },
+      count: 1,
+      held: 3,
+    });
+    const offer = item({ id: "o", kind: "offer" });
+    expect(islandItem([offer], offer.workAreaId)).toMatchObject({
+      top: { id: "o" },
+      count: 1,
+      held: 0,
+    });
+    const asked = items.filter((entry) => entry.kind !== "result");
+    expect(islandItem(asked, area)).toMatchObject({
+      top: null,
+      count: 0,
+      held: 3,
+    });
+    // Another work's chat being open hides nothing.
+    expect(islandItem(items, "somewhere-else")).toMatchObject({
+      count: 4,
+      held: 0,
+    });
   });
   it("summarises what arrived while away", () => {
     const items = [

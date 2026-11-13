@@ -109,16 +109,28 @@ export function attentionList(
     );
 }
 /** The Island shows the single most urgent open item plus a count badge. */
+/** The kinds a work's chat shows its own control for: a plan to review, a
+    question to answer, a failure to retry. An offer, a result, a risk or a
+    linking request has its button only on the card and on Home. */
+const askedInChat: ReadonlySet<AttentionKind> = new Set([
+  "approval",
+  "question",
+  "failure",
+]);
 /**
- * What Firstmate's card in the sidebar shows. Things raised in the work whose
- * chat is open are left out: the chat is already asking, so repeating it
- * beside the chat is noise. `held` counts what was left out, so the card can
- * stay away instead of claiming nothing needs the owner.
+ * What Firstmate's card in the sidebar shows. Things the open chat is already
+ * asking about are left out, since repeating them beside the chat is noise.
+ * Anything the chat has no control for stays on the card, or it could not be
+ * acted on without leaving the chat. `held` counts what was left out, so the
+ * card can stay away instead of claiming nothing needs the owner.
  */
 export function islandItem(items: Attention[], openWorkAreaId?: string | null) {
   const open = attentionList(items);
   const shown = openWorkAreaId
-    ? open.filter((item) => item.workAreaId !== openWorkAreaId)
+    ? open.filter(
+        (item) =>
+          item.workAreaId !== openWorkAreaId || !askedInChat.has(item.kind),
+      )
     : open;
   return {
     top: shown[0] ?? null,
