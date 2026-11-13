@@ -766,3 +766,31 @@ export const workEvent = z.discriminatedUnion("kind", [
   }),
 ]);
 export type WorkEvent = z.infer<typeof workEvent>;
+
+/** A file added from the composer: read on the Mac and filed in the Library. */
+export const workAttachment = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-attachment"),
+  requestId: id,
+  workAreaId: id,
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[^/\\\x00-\x1f]+$/),
+  bytes: z.instanceof(Uint8Array),
+});
+export const workAttachmentResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-attachment-result"),
+  requestId: id,
+  name: z.string(),
+  format: z.string(),
+  read: z.enum(["all", "part", "none"]),
+  /** Redacted text for Firstmate; empty when nothing could be read. */
+  text: z.string(),
+  /** A limit or unread portion, in plain words. */
+  note: z.string().nullable(),
+  /** The Library record holding it, when it could be filed. */
+  recordId: z.string().nullable(),
+});

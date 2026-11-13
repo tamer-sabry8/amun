@@ -72,7 +72,7 @@ Every UI change needs the owner's approval before implementation. Show the actua
 
 Live-test destinations chosen by the owner:
 
-- Azure DevOps: project `TahalufCollection / POCs` only. Stories go to the `POCs Team` board, level `Backlog items`. Repository and wiki tests use the `tamer-test1` repository in that project.
+- Azure DevOps: project `TahalufCollection / POCs` only. Stories go to the `POCs Team` board, level `Backlog items`. Repository and wiki tests use the `tamer-test1` repository in that project. The read-only sprint check uses `POCs\\2021-Q1\\Sprint 5`.
 - Notion: child pages under `test for Amun to use`. That page is the publishing-test destination only, not a memory parent unless the owner selects it.
 
 Several agents work in this repository at once, including a crash investigation on other branches. Stay on this branch and its worktree; do not touch other worktrees or branches.

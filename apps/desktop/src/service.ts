@@ -83,7 +83,10 @@ import { CouncilService } from "../../../packages/council/src/service.ts";
 import { gitFetcher } from "../../../packages/council/src/git-fetcher.ts";
 import { Room } from "../../../packages/council/src/room.ts";
 import { readFileSync } from "node:fs";
-import { councilCommand } from "../../../packages/contracts/src/work.ts";
+import {
+  councilCommand,
+  workAttachment,
+} from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -93,6 +96,7 @@ import {
   PlanPublisher,
 } from "../../../packages/data/src/plan-publication.ts";
 import { adoPlanTarget, notionPlanTarget } from "./plan-targets.ts";
+import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
 import { trackerName } from "../../../packages/domain/src/work/flows.ts";
 import {
   AuthBroker,
@@ -1348,6 +1352,55 @@ process.parentPort?.on("message", (event) => {
               message: error instanceof Error ? error.message : "",
             }),
           );
+    } else if (message.data?.kind === "work-attachment") {
+      const parsed = workAttachment.safeParse(message.data);
+      if (!parsed.success) return;
+      const request = parsed.data;
+      void readAttachment(request.name, Buffer.from(request.bytes))
+        .then((file) => {
+          const text = redactor.text(file.text);
+          const area = workStore
+            .snapshot()
+            .areas.find((item) => item.id === request.workAreaId);
+          // Every attachment joins its work area's library, read or not.
+          const saved = area
+            ? workStore
+                .handle({
+                  version: 1,
+                  kind: "work",
+                  action: "save-record",
+                  groupId: area.groupId,
+                  type: "document",
+                  title: request.name,
+                  body: text || file.note || "",
+                })
+                .find((event) => event.kind === "work-result")
+            : undefined;
+          const recordId = saved?.ok ? saved.ref : null;
+          if (recordId)
+            workStore.handle({
+              version: 1,
+              kind: "work",
+              action: "link-record",
+              recordId,
+              choice: "link",
+              workAreaIds: [request.workAreaId],
+            });
+          if (closed) return;
+          port.postMessage({
+            version: 1,
+            kind: "work-attachment-result",
+            requestId: request.requestId,
+            name: request.name,
+            format: file.format,
+            read: file.read,
+            text,
+            note: file.note,
+            recordId,
+          });
+          port.postMessage(workStore.snapshot());
+        })
+        .catch(() => undefined);
     } else if (message.data?.kind === "council") {
       const parsed = councilCommand.safeParse(message.data);
       if (!parsed.success) return;
