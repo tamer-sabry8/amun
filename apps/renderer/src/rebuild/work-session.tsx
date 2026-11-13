@@ -20,7 +20,13 @@ import {
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
-import { askFirstmate } from "./firstmate.ts";
+import {
+  askFirstmate,
+  heldMessage,
+  holdMessage,
+  releaseMessage,
+} from "./firstmate.ts";
+import { bridge } from "../bridge.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
@@ -584,23 +590,32 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const send = async (text: string) => {
-    if (!text.trim() || !context) return;
+  const [waiting, setWaiting] = useState(() => heldMessage(areaId));
+  const delivering = useRef(false);
+  /** Sends one turn to Firstmate. The user's message is already in the thread. */
+  const deliver = async (
+    text: string,
+    scoped: string,
+    activityId: string | null = null,
+  ) => {
+    if (delivering.current) return;
+    delivering.current = true;
     setProblem("");
-    await workAsync("message", { workAreaId: areaId, role: "you", text });
     setBusy(true);
-    const activity = await workAsync("activity", {
-      groupId: null,
-      workAreaId: areaId,
-      text: text.length > 80 ? text.slice(0, 77) + "…" : text,
-      state: "running",
-    });
-    // The first message for a work area carries its context and the protocol.
-    const scoped = context.messages.length
-      ? text
-      : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
+    const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
+    const row =
+      activityId ??
+      (
+        await workAsync("activity", {
+          groupId: null,
+          workAreaId: areaId,
+          text: label,
+          state: "running",
+        })
+      ).ref;
     const turn = await askFirstmate(scoped);
     setBusy(false);
+    delivering.current = false;
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       if (parsed.text)
@@ -610,23 +625,64 @@ export function WorkSession({
           text: parsed.text,
         });
       for (const proposed of parsed.actions) raise(proposed);
-    } else
-      setProblem(
-        /could not be verified|could not be completed/i.test(turn.reason)
-          ? "Firstmate could not answer. If you have not signed in yet, do that under Accounts and models, then send it again."
-          : turn.reason,
-      );
+    } else if (turn.needsProvider) {
+      // Kept, not failed: it goes out once a provider is connected.
+      const message = { text, scoped, activityId: row };
+      holdMessage(areaId, message);
+      setWaiting(message);
+      return;
+    } else setProblem(turn.reason);
     // The outcome is already on screen, so the Activity row closes quietly.
-    if (activity.ref)
+    if (row)
       work("activity", {
-        activityId: activity.ref,
+        activityId: row,
         groupId: null,
         workAreaId: areaId,
-        text: text.length > 80 ? text.slice(0, 77) + "…" : text,
+        text: label,
         state: turn.ok ? "finished" : "failed",
         silent: true,
       });
   };
+  const send = async (text: string) => {
+    if (!text.trim() || !context) return;
+    // One message waits at a time; a new one replaces the wait, not the text.
+    releaseMessage(areaId);
+    setWaiting(null);
+    await workAsync("message", { workAreaId: areaId, role: "you", text });
+    // The first message for a work area carries its context and the protocol.
+    const scoped = context.messages.length
+      ? text
+      : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
+    await deliver(text, scoped);
+  };
+  /** Tries the waiting message again. It leaves the wait before it is sent. */
+  const retryWaiting = () => {
+    const message = releaseMessage(areaId);
+    if (!message) return;
+    setWaiting(null);
+    void deliver(message.text, message.scoped, message.activityId ?? null);
+  };
+  useEffect(() => {
+    // Returning to this conversation: one attempt for a message left waiting.
+    setWaiting(heldMessage(areaId));
+    if (heldMessage(areaId)) retryWaiting();
+  }, [areaId]);
+  useEffect(() => {
+    if (!waiting) return;
+    // Coming back from sign-in, or a change in the connected providers.
+    let providers = JSON.stringify(bridge.getSnapshot().modelStatus);
+    const stop = bridge.subscribe(() => {
+      const next = JSON.stringify(bridge.getSnapshot().modelStatus);
+      if (next === providers) return;
+      providers = next;
+      retryWaiting();
+    });
+    window.addEventListener("focus", retryWaiting);
+    return () => {
+      stop();
+      window.removeEventListener("focus", retryWaiting);
+    };
+  }, [areaId, !!waiting]);
   useEffect(() => {
     if (first && context && sentFirst.current !== first) {
       sentFirst.current = first;
@@ -937,6 +993,40 @@ export function WorkSession({
                     {message.text}
                   </div>
                 ),
+              )}
+              {waiting && !busy && (
+                <>
+                  <span
+                    className="tag warn"
+                    style={{ justifySelf: "end" }}
+                    role="status"
+                  >
+                    Waiting to send
+                  </span>
+                  <div className="rb-inline amber" role="alert">
+                    <span>
+                      <strong style={{ fontWeight: 600 }}>
+                        Connect an AI provider to send this.
+                      </strong>{" "}
+                      Your message is saved and goes out once, as soon as a
+                      provider is connected.
+                    </span>
+                    <div className="row">
+                      <button className="btn primary" onClick={onSettings}>
+                        Connect a provider
+                      </button>
+                      <button
+                        className="btn quiet"
+                        onClick={() => {
+                          releaseMessage(areaId);
+                          setWaiting(null);
+                        }}
+                      >
+                        Discard message
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
               {steps.length > 0 && (
                 <>

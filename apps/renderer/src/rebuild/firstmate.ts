@@ -62,7 +62,54 @@ function run(command: string, argument: string) {
 
 export type Turn =
   | { ok: true; reply: string; model: string | null }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /** No usable AI provider: the message can wait and be sent later. */
+      needsProvider: boolean;
+    };
+
+/** One message per work area that is waiting for an AI provider. */
+export interface Held {
+  /** What the user typed, as shown in the conversation. */
+  text: string;
+  /** What is sent to Firstmate (may carry the work area's context). */
+  scoped: string;
+  /** Its Activity row, reused so repeated attempts do not add rows. */
+  activityId?: string | null;
+}
+const heldKey = "amun.held-messages";
+const held = new Map<string, Held>();
+try {
+  for (const [areaId, value] of Object.entries(
+    JSON.parse(localStorage.getItem(heldKey) ?? "{}") as Record<string, Held>,
+  ))
+    if (typeof value?.text === "string" && typeof value?.scoped === "string")
+      held.set(areaId, value);
+} catch {
+  // A damaged entry only loses the waiting state, never the message itself.
+}
+const saveHeld = () => {
+  try {
+    localStorage.setItem(heldKey, JSON.stringify(Object.fromEntries(held)));
+  } catch {
+    // Storage is best effort; the in-memory copy still holds for this run.
+  }
+};
+export const heldMessage = (areaId: string) => held.get(areaId) ?? null;
+export function holdMessage(areaId: string, message: Held) {
+  held.set(areaId, message);
+  saveHeld();
+}
+/** Removes and returns the waiting message, so it can be sent exactly once. */
+export function releaseMessage(areaId: string) {
+  const message = held.get(areaId) ?? null;
+  held.delete(areaId);
+  saveHeld();
+  return message;
+}
+const providerProblem =
+  /sign in|signed in|not ready|no model|could not be verified|could not be completed|reconnect|credential|unauthori[sz]ed|expired/i;
 
 /** Sends one turn and returns Firstmate's reply, or a plain reason it could not. */
 export async function askFirstmate(text: string): Promise<Turn> {
@@ -71,6 +118,7 @@ export async function askFirstmate(text: string): Promise<Turn> {
     if (opened.kind !== "conversation")
       return {
         ok: false,
+        needsProvider: true,
         reason:
           typeof opened.text === "string" && opened.text
             ? opened.text
@@ -82,12 +130,16 @@ export async function askFirstmate(text: string): Promise<Turn> {
       text: String(opened.text ?? ""),
     };
   }
-  if (!session.model)
+  if (!session.model) {
+    // Ask again next time: a provider may have been connected since.
+    session = null;
     return {
       ok: false,
+      needsProvider: true,
       reason:
         "Firstmate has no model yet. Sign in under Settings › Accounts and models.",
     };
+  }
   const before = session.text;
   const result = await run(
     "conversation-send",
@@ -97,14 +149,15 @@ export async function askFirstmate(text: string): Promise<Turn> {
       text,
     }),
   );
-  if (result.kind !== "conversation")
-    return {
-      ok: false,
-      reason:
-        typeof result.text === "string" && result.text
-          ? result.text
-          : "Firstmate could not answer.",
-    };
+  if (result.kind !== "conversation") {
+    const reason =
+      typeof result.text === "string" && result.text
+        ? result.text
+        : "Firstmate could not answer.";
+    const needsProvider = providerProblem.test(reason);
+    if (needsProvider) session = null;
+    return { ok: false, reason, needsProvider };
+  }
   session = {
     sessionId: String(result.sessionId),
     model: (result.model as string | null) ?? null,
@@ -115,6 +168,7 @@ export async function askFirstmate(text: string): Promise<Turn> {
     ? { ok: true, reply, model: session.model }
     : {
         ok: false,
+        needsProvider: false,
         reason: "Firstmate finished without a reply. Try rephrasing.",
       };
 }
