@@ -92,13 +92,15 @@ export function AuthPrompt() {
             </p>
           )}
           <div className="button-row">
+            {/* "btn" is the rebuilt shell's button; the earlier shell styles
+                bare buttons and ignores it. */}
             <button
-              className="primary"
+              className="btn primary"
               disabled={!canSubmitAuthPrompt(prompt, value)}
             >
               Continue
             </button>
-            <button type="button" onClick={cancel}>
+            <button type="button" className="btn" onClick={cancel}>
               Cancel sign-in
             </button>
           </div>

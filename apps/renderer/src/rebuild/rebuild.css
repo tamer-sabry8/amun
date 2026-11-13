@@ -1784,3 +1784,17 @@
     transition: none;
   }
 }
+
+/* Sign-in prompt inside the rebuilt shell: real buttons, side by side. */
+.rb .auth-dialog .button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.rb .auth-dialog .btn {
+  padding: 8px 16px;
+}
+.rb .auth-dialog .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

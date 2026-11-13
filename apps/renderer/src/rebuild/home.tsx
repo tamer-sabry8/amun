@@ -552,7 +552,13 @@ export function Home({
           {note}
         </p>
       )}
-      {card && <div style={{ marginTop: 16 }}>{card}</div>}
+      {card && (
+        <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+          {/* What was just sent stays visible while Firstmate asks about it. */}
+          {pending?.text && <div className="rb-msg you">{pending.text}</div>}
+          {card}
+        </div>
+      )}
       <Composer
         key={seed?.nonce ?? "composer"}
         initial={seed?.text ?? ""}

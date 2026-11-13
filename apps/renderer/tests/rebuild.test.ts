@@ -456,7 +456,7 @@ describe("Home", () => {
     ])
       expect(html).toContain(card);
     expect(html).not.toContain("Respond to an RFP");
-    expect(html).toContain("Auto · claude-sonnet-5-5");
+    expect(html).toContain("claude-sonnet-5-5");
   });
   it("lists attention with at most one primary button per row, then Your work", () => {
     const html = renderToStaticMarkup(

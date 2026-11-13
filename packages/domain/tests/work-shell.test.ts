@@ -12,6 +12,7 @@ import {
   modelsLine,
   railItems,
   resolveTheme,
+  modelDisplay,
   routingLabel,
   shellReducer,
   sidebarCollapsed,
@@ -221,7 +222,16 @@ describe("composer (Q27, Q70)", () => {
     ]);
   });
   it("shows the routing state and keeps dictation in the box", () => {
-    expect(routingLabel("Sonnet 5.5")).toBe("Auto · Sonnet 5.5");
+    expect(routingLabel("Sonnet 5.5")).toBe("Sonnet 5.5");
+    expect(modelDisplay("github-copilot/claude-sonnet-5")).toBe(
+      "GitHub Copilot · Claude Sonnet 5",
+    );
+    expect(modelDisplay("openai-codex/gpt-5.2-codex")).toBe(
+      "ChatGPT · GPT 5.2 Codex",
+    );
+    expect(modelDisplay("mistral-large")).toBe("Mistral Large");
+    expect(modelDisplay("openai/unknown")).toBeNull();
+    expect(modelDisplay(null)).toBeNull();
     expect(routingLabel("Opus 5.5", true)).toBe("Chosen · Opus 5.5");
     expect(routingLabel(null)).toBe("Auto");
     expect(dictation("Plan ", " sprint 15 ")).toEqual({

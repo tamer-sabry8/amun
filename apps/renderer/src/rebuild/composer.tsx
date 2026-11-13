@@ -42,7 +42,6 @@ const recognitionFactory = () => {
 export function Composer({
   placeholder = "Ask Firstmate…",
   chips = [],
-  agents = [],
   workAreas = [],
   model = null,
   busy = false,
@@ -96,7 +95,9 @@ export function Composer({
           insert: "/" + command.name + " ",
         }))
       : trigger?.trigger === "@"
-        ? matchMentions(trigger.query, agents, workAreas).map((mention) => ({
+        ? // The owner talks to Firstmate only; it decides which agents help.
+          // So "@" offers work areas, never agents.
+          matchMentions(trigger.query, [], workAreas).map((mention) => ({
             key: mention.kind + mention.id,
             label: "@" + mention.name,
             hint: mention.kind === "agent" ? "Agent" : "Work area",
@@ -328,7 +329,7 @@ export function Composer({
           </button>
           <button
             className="icon-btn"
-            aria-label="Mention an agent or work area"
+            aria-label="Mention a work area"
             onClick={() => {
               const next = draft + (draft && !draft.endsWith(" ") ? " @" : "@");
               change(next);

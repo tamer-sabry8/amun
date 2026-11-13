@@ -13,6 +13,7 @@ import {
   type WorkSnapshot,
 } from "../../contracts/src/work.ts";
 import {
+  groupMentioned,
   intake,
   linkRecord,
   nameFromRequest,
@@ -1854,7 +1855,11 @@ export class WorkStore {
     const groups = this.all(
       "SELECT id,name FROM work_groups ORDER BY position",
     ).map((row) => ({ id: String(row.id), name: String(row.name) }));
-    const groupId = command.groupId ?? setup.activeGroupId;
+    // A message that names its own group ("for work") is not asked again.
+    const groupId =
+      command.groupId ??
+      setup.activeGroupId ??
+      groupMentioned(command.text, groups);
     const step = intake({
       text: command.text,
       fileNames: command.fileNames,
