@@ -66,7 +66,9 @@ Acceptance harnesses must retain a temporary real-provider entry throughout the 
 
 ## Workflow wiring (13 November 2026 handoff)
 
-The owner's workflow handoff is `Amun-Claude-Code-workflow-handoff.md` in the owner's Amun folder; it takes precedence over older documents that describe a broader rebuild. The work is wiring existing capabilities into the current interface, on branch `claude/amun-workflow-wiring-e0ccc3`.
+The owner's workflow handoff is `Amun-Claude-Code-workflow-handoff.md` in the owner's Amun folder; it takes precedence over older documents that describe a broader rebuild. The work is wiring existing capabilities into the current interface. The current state and the next assignment are in `docs/HANDOFF-NEXT-AGENT.md`; start new work on a new branch from `main`.
+
+Pull request 10 ("R1 beta bug fixes") was closed by the owner's decision on 13 November 2026. Do not reopen it, merge it, or raise it.
 
 Every UI change needs the owner's approval before implementation. Show the actual current screen beside the proposed change in an annotatable preview, say which workflow it enables, and wait. Run every UI change through the `/impeccable` skill. Approval of a workflow does not approve its visual design.
 
@@ -77,4 +79,4 @@ Live-test destinations chosen by the owner:
 - Azure DevOps: project `TahalufCollection / POCs` only. Stories go to the `POCs Team` board, level `Backlog items`. Repository and wiki tests use the `tamer-test1` repository in that project. The read-only sprint check uses `POCs\\2021-Q1\\Sprint 5`.
 - Notion: child pages under `test for Amun to use`. That page is the publishing-test destination only, not a memory parent unless the owner selects it.
 
-Several agents work in this repository at once, including a crash investigation on other branches. Stay on this branch and its worktree; do not touch other worktrees or branches.
+Several agents work in this repository at once, including a crash investigation on other branches. Stay on your own branch and worktree; do not touch other worktrees or branches.
