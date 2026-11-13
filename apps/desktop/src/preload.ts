@@ -88,3 +88,11 @@ window.addEventListener("message", (event) => {
 ipcRenderer.on("amun-folder-result", (_event, result: unknown) =>
   window.postMessage({ kind: "amun-folder-result", result }, "*"),
 );
+
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data?.kind === "amun-screenshot")
+    ipcRenderer.send("amun-screenshot", event.data.id);
+});
+ipcRenderer.on("amun-screenshot-result", (_event, result: unknown) =>
+  window.postMessage({ kind: "amun-screenshot-result", result }, "*"),
+);

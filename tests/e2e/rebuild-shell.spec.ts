@@ -139,8 +139,25 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       page.getByText("Create a product called Agentic Platform"),
     ).toBeVisible();
     await expect(page.getByText("Employer").first()).toBeVisible();
-    // No model is signed in for this profile: the turn fails plainly, in place.
+    // No model is signed in for this profile: the message is kept, not
+    // failed, and waits for a provider.
     await expect(page.getByRole("alert").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("Waiting to send")).toBeVisible();
+    await expect(
+      page.getByText("Connect an AI provider to send this."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Connect a provider" }),
+    ).toBeVisible();
+    // It is still waiting after leaving the conversation and coming back.
+    await page.getByRole("button", { name: "Home" }).click();
+    await page
+      .getByRole("button", { name: /Agentic Platform/ })
+      .first()
+      .click();
+    await expect(page.getByText("Waiting to send")).toBeVisible({
       timeout: 30_000,
     });
     await shot(page, "07-work-session");

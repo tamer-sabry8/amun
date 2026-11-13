@@ -994,4 +994,21 @@ CREATE TABLE work_messages (
   card_json TEXT,
   created_at TEXT NOT NULL
 );`,
+  // 30 · One row per approved plan item: its stable marker and what happened
+  // when it was written, so an uncertain write is looked up, never repeated.
+  `CREATE TABLE plan_writes (
+  plan_id TEXT NOT NULL REFERENCES work_plans(id),
+  item_id TEXT NOT NULL,
+  marker TEXT NOT NULL UNIQUE,
+  destination TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('pending','sent','created','missing','unknown')),
+  external_id TEXT,
+  url TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  PRIMARY KEY (plan_id, item_id)
+);`,
+  // 31 · Items left unticked at approval wait in their own proposal, which
+  // remembers the plan it was split from.
+  `ALTER TABLE work_plans ADD COLUMN split_from TEXT REFERENCES work_plans(id);`,
 ] as const;

@@ -10,6 +10,8 @@ interface Session {
   sessionId: string;
   model: string | null;
   text: string;
+  /** Whether the current model can look at an image. */
+  acceptsImage: boolean;
 }
 let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
@@ -62,15 +64,70 @@ function run(command: string, argument: string) {
 
 export type Turn =
   | { ok: true; reply: string; model: string | null }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /** No usable AI provider: the message can wait and be sent later. */
+      needsProvider: boolean;
+    };
+
+/** One message per work area that is waiting for an AI provider. */
+export interface Held {
+  /** What the user typed, as shown in the conversation. */
+  text: string;
+  /** What is sent to Firstmate (may carry the work area's context). */
+  scoped: string;
+  /** Its Activity row, reused so repeated attempts do not add rows. */
+  activityId?: string | null;
+  /** One image sent with the message (base64 PNG), if any. */
+  image?: string | undefined;
+}
+const heldKey = "amun.held-messages";
+const held = new Map<string, Held>();
+try {
+  for (const [areaId, value] of Object.entries(
+    JSON.parse(localStorage.getItem(heldKey) ?? "{}") as Record<string, Held>,
+  ))
+    if (typeof value?.text === "string" && typeof value?.scoped === "string")
+      held.set(areaId, value);
+} catch {
+  // A damaged entry only loses the waiting state, never the message itself.
+}
+const saveHeld = () => {
+  try {
+    localStorage.setItem(heldKey, JSON.stringify(Object.fromEntries(held)));
+  } catch {
+    // Storage is best effort; the in-memory copy still holds for this run.
+  }
+};
+/** Work areas with a turn in flight, so a waiting message is never sent twice. */
+export const inFlight = new Set<string>();
+export const heldMessage = (areaId: string) => held.get(areaId) ?? null;
+export function holdMessage(areaId: string, message: Held) {
+  held.set(areaId, message);
+  saveHeld();
+}
+/** Removes and returns the waiting message, so it can be sent exactly once. */
+export function releaseMessage(areaId: string) {
+  const message = held.get(areaId) ?? null;
+  held.delete(areaId);
+  saveHeld();
+  return message;
+}
+const providerProblem =
+  /sign in|signed in|not ready|no model|could not be verified|could not be completed|reconnect|credential|unauthori[sz]ed|expired/i;
 
 /** Sends one turn and returns Firstmate's reply, or a plain reason it could not. */
-export async function askFirstmate(text: string): Promise<Turn> {
+export async function askFirstmate(
+  text: string,
+  image?: string,
+): Promise<Turn> {
   if (!session) {
     const opened = await run("conversation", "");
     if (opened.kind !== "conversation")
       return {
         ok: false,
+        needsProvider: true,
         reason:
           typeof opened.text === "string" && opened.text
             ? opened.text
@@ -80,13 +137,25 @@ export async function askFirstmate(text: string): Promise<Turn> {
       sessionId: String(opened.sessionId),
       model: (opened.model as string | null) ?? null,
       text: String(opened.text ?? ""),
+      acceptsImage: opened.acceptsImage === true,
     };
   }
-  if (!session.model)
+  if (!session.model) {
+    // Ask again next time: a provider may have been connected since.
+    session = null;
     return {
       ok: false,
+      needsProvider: true,
       reason:
         "Firstmate has no model yet. Sign in under Settings › Accounts and models.",
+    };
+  }
+  if (image && !session.acceptsImage)
+    return {
+      ok: false,
+      needsProvider: false,
+      reason:
+        "The model Firstmate is using can’t look at images. Choose one that can under Accounts and models, or remove the image and send again.",
     };
   const before = session.text;
   const result = await run(
@@ -95,26 +164,30 @@ export async function askFirstmate(text: string): Promise<Turn> {
       sessionId: session.sessionId,
       model: session.model,
       text,
+      ...(image ? { image } : {}),
     }),
   );
-  if (result.kind !== "conversation")
-    return {
-      ok: false,
-      reason:
-        typeof result.text === "string" && result.text
-          ? result.text
-          : "Firstmate could not answer.",
-    };
+  if (result.kind !== "conversation") {
+    const reason =
+      typeof result.text === "string" && result.text
+        ? result.text
+        : "Firstmate could not answer.";
+    const needsProvider = providerProblem.test(reason);
+    if (needsProvider) session = null;
+    return { ok: false, reason, needsProvider };
+  }
   session = {
     sessionId: String(result.sessionId),
     model: (result.model as string | null) ?? null,
     text: String(result.text ?? ""),
+    acceptsImage: result.acceptsImage === true,
   };
   const reply = replyFromTranscript(before, session.text, text);
   return reply
     ? { ok: true, reply, model: session.model }
     : {
         ok: false,
+        needsProvider: false,
         reason: "Firstmate finished without a reply. Try rephrasing.",
       };
 }

@@ -115,6 +115,7 @@ const plan = (
   workAreaId: "ticao",
   kind: "stories",
   destination: "ado",
+  splitFrom: null,
   summary: "6 new stories → Sprint 14",
   items: Array.from({ length: 6 }, (_, index) => ({
     id: "s" + index,

@@ -83,11 +83,24 @@ import { CouncilService } from "../../../packages/council/src/service.ts";
 import { gitFetcher } from "../../../packages/council/src/git-fetcher.ts";
 import { Room } from "../../../packages/council/src/room.ts";
 import { readFileSync } from "node:fs";
-import { councilCommand } from "../../../packages/contracts/src/work.ts";
+import {
+  councilCommand,
+  planOpen,
+  planPlaces,
+  planPublish,
+  workAttachment,
+} from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
+import {
+  PlanBlocked,
+  PlanPublisher,
+} from "../../../packages/data/src/plan-publication.ts";
+import { adoPlanTarget, notionPlanTarget } from "./plan-targets.ts";
+import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
+import { trackerName } from "../../../packages/domain/src/work/flows.ts";
 import {
   AuthBroker,
   connectionId,
@@ -140,6 +153,83 @@ let syncingMemory = false;
 const workspaceService = new WorkspaceService(workspace, redactor);
 // UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
 const workStore = new WorkStore(workspace, redactor);
+// An approved plan is written to its destinations here. Each destination
+// reuses its existing connection; a missing one blocks that item only.
+const planPublisher = new PlanPublisher(
+  workspace,
+  workStore,
+  async (destination, scope) => {
+    if (destination === "ado") {
+      const mapped = scope.workAreaId
+        ? (workspace
+            .prepare(
+              "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
+            )
+            .pluck()
+            .get(scope.workAreaId) as string | undefined)
+        : undefined;
+      const saved = workspace
+        .prepare(
+          "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
+        )
+        .pluck()
+        .get() as string | undefined;
+      const reference = mapped ?? (saved ? JSON.parse(saved) : undefined);
+      if (typeof reference !== "string")
+        throw new PlanBlocked(
+          "Choose the Azure DevOps project for this work before publishing.",
+        );
+      let source: ReturnType<typeof projectSource<Connection>>;
+      try {
+        source = projectSource(reference, authMetadata.list());
+      } catch {
+        throw new PlanBlocked(
+          "Connect the Azure DevOps collection in Settings, then retry.",
+        );
+      }
+      const secret = authKeyring().get(
+        workspaceIdentity(workspace) + "/" + connectionId(source.connection),
+      );
+      if (!secret)
+        throw new PlanBlocked(
+          "Connect the Azure DevOps collection in Settings, then retry.",
+        );
+      redactor.register(secret);
+      const transport = azureTransport(source.collection, secret);
+      return adoPlanTarget(
+        source.collection,
+        source.project,
+        new BoardDiscovery(source.collection, source.project, transport),
+        new AdoWriteClient(source.collection, source.project, transport),
+      );
+    }
+    if (destination === "notion") {
+      const saved = workspace
+        .prepare(
+          "SELECT value_json FROM workspace_settings WHERE id='notion.destination'",
+        )
+        .pluck()
+        .get();
+      if (typeof saved !== "string")
+        throw new PlanBlocked(
+          "Choose a Notion destination in Settings, then retry.",
+        );
+      let target: Awaited<ReturnType<typeof notionConnection.inspectTarget>>;
+      try {
+        target = await notionConnection.inspectTarget(JSON.parse(saved));
+      } catch {
+        throw new PlanBlocked("Reconnect Notion in Settings, then retry.");
+      }
+      const workspaceId = notionConnection.identity?.workspaceId;
+      if (!workspaceId)
+        throw new PlanBlocked("Reconnect Notion in Settings, then retry.");
+      return notionPlanTarget(target, workspaceId, notionConnection);
+    }
+    throw new PlanBlocked(
+      `Publishing to ${trackerName(destination)} is not available yet.`,
+    );
+  },
+);
 /** The Roast Room version staged with this build (scripts/stage-roast-room.ts). */
 function councilPin() {
   const directory = process.env.AMUN_COUNCIL_VENDOR;
@@ -157,6 +247,14 @@ function councilPin() {
     return null;
   }
 }
+// After a restart, a write that was sent and never confirmed is looked up
+// once the connections are ready. Nothing new is sent from here.
+setTimeout(() => {
+  for (const planId of planPublisher.uncertain())
+    void planPublisher
+      .publish(planId, { reconcileOnly: true })
+      .catch(() => undefined);
+}, 5_000).unref();
 // Council (Roast Room): runs on the Mac's own Claude Code; questions from the
 // Chair reach the Island through an Amun-owned tool, never a terminal prompt.
 const councilService = new CouncilService({
@@ -1222,8 +1320,211 @@ process.parentPort?.on("message", (event) => {
           updatingStakeholder = false;
         });
     } else if (message.data?.kind === "work") {
-      for (const event of workStore.handle(message.data))
-        port.postMessage(event);
+      // Retrying or checking a failed publication continues the same plan.
+      const retried =
+        message.data.action === "resolve-attention" &&
+        message.data.resolution !== "snooze"
+          ? workStore
+              .snapshot()
+              .attention.find(
+                (item) =>
+                  item.id === message.data.attentionId &&
+                  item.ref?.startsWith("failure:"),
+              )
+              ?.ref?.slice(8)
+          : undefined;
+      const events = workStore.handle(message.data);
+      for (const event of events) port.postMessage(event);
+      const result = events.find((event) => event.kind === "work-result");
+      const planId =
+        result?.ok && result.action === "approve-plan"
+          ? (result.step as { published?: boolean } | null)?.published === false
+            ? result.ref
+            : null
+          : result?.ok
+            ? retried
+            : null;
+      if (planId)
+        void planPublisher
+          .publish(planId)
+          .then((published) => {
+            if (!closed) for (const event of published) port.postMessage(event);
+          })
+          .catch((error: unknown) =>
+            logger.error("plan.publish.failed", {
+              message: error instanceof Error ? error.message : "",
+            }),
+          );
+    } else if (message.data?.kind === "plan-publish") {
+      const parsed = planPublish.safeParse(message.data);
+      if (!parsed.success) return;
+      // Continues an approval already given: looks up, then retries within
+      // the budget. A plan that was never approved is left alone.
+      void planPublisher
+        .publish(parsed.data.planId)
+        .then((published) => {
+          if (closed) return;
+          for (const event of published) port.postMessage(event);
+          port.postMessage(workStore.snapshot());
+        })
+        .catch(() => undefined);
+    } else if (message.data?.kind === "plan-open") {
+      const parsed = planOpen.safeParse(message.data);
+      if (!parsed.success) return;
+      const written = planPublisher
+        .writes(parsed.data.planId)
+        .find((item) => item.id === parsed.data.itemId);
+      // Only a link Amun itself recorded for a created item is opened.
+      if (written?.state !== "created" || !written.url) return;
+      let url: URL;
+      try {
+        url = new URL(written.url);
+      } catch {
+        return;
+      }
+      if (url.protocol !== "https:") return;
+      // Company sign-ins use Microsoft Edge; anything else, the default browser.
+      const open = (args: string[]) =>
+        new Promise<boolean>((resolve) =>
+          execFile("/usr/bin/open", args, (error) => resolve(!error)),
+        );
+      void (async () => {
+        if (
+          written.destination === "ado" &&
+          (await open(["-b", "com.microsoft.edgemac", url.href]))
+        )
+          return;
+        await open([url.href]);
+      })();
+    } else if (message.data?.kind === "plan-places") {
+      const parsed = planPlaces.safeParse(message.data);
+      if (!parsed.success) return;
+      const plan = workStore
+        .snapshot()
+        .plans.find((item) => item.id === parsed.data.planId);
+      if (!plan) return;
+      const setting = (id: string) => {
+        const saved = workspace
+          .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+          .pluck()
+          .get(id);
+        try {
+          const value: unknown =
+            typeof saved === "string" ? JSON.parse(saved) : null;
+          return typeof value === "string" ? value : null;
+        } catch {
+          return null;
+        }
+      };
+      const ado = () => {
+        const reference =
+          (plan.workAreaId
+            ? (workspace
+                .prepare(
+                  "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
+                )
+                .pluck()
+                .get(plan.workAreaId) as string | undefined)
+            : undefined) ?? setting("work.ado.project");
+        if (!reference) return null;
+        try {
+          const path = new URL(reference).pathname
+            .split("/")
+            .filter(Boolean)
+            .map(decodeURIComponent);
+          return path.length ? path.join(" / ") : null;
+        } catch {
+          return null;
+        }
+      };
+      port.postMessage({
+        version: 1,
+        kind: "plan-places-result",
+        planId: plan.id,
+        places: plan.items.map((item) => {
+          const own = item.fields.destination;
+          const destination =
+            typeof own === "string" && own.trim()
+              ? own.trim().toLowerCase()
+              : plan.destination;
+          const area = item.fields.area;
+          const place =
+            destination === "ado"
+              ? ado()
+              : destination === "notion"
+                ? setting("notion.destination.title")
+                : destination === "amun"
+                  ? "Amun"
+                  : null;
+          return {
+            id: item.id,
+            destination,
+            place:
+              place && destination === "ado" && typeof area === "string"
+                ? `${place} · ${area}`
+                : place && destination === "notion"
+                  ? `New page under “${place}”`
+                  : place,
+            problem: place
+              ? null
+              : destination === "ado"
+                ? "No Azure DevOps project is chosen for this work yet."
+                : destination === "notion"
+                  ? "No Notion destination is chosen yet."
+                  : `Publishing to ${trackerName(destination)} is not available yet.`,
+          };
+        }),
+      });
+    } else if (message.data?.kind === "work-attachment") {
+      const parsed = workAttachment.safeParse(message.data);
+      if (!parsed.success) return;
+      const request = parsed.data;
+      void readAttachment(request.name, Buffer.from(request.bytes))
+        .then((file) => {
+          const text = redactor.text(file.text);
+          const area = workStore
+            .snapshot()
+            .areas.find((item) => item.id === request.workAreaId);
+          // Every attachment joins its work area's library, read or not.
+          const saved = area
+            ? workStore
+                .handle({
+                  version: 1,
+                  kind: "work",
+                  action: "save-record",
+                  groupId: area.groupId,
+                  type: "document",
+                  title: request.name,
+                  body: text || file.note || "",
+                })
+                .find((event) => event.kind === "work-result")
+            : undefined;
+          const recordId = saved?.ok ? saved.ref : null;
+          if (recordId)
+            workStore.handle({
+              version: 1,
+              kind: "work",
+              action: "link-record",
+              recordId,
+              choice: "link",
+              workAreaIds: [request.workAreaId],
+            });
+          if (closed) return;
+          port.postMessage({
+            version: 1,
+            kind: "work-attachment-result",
+            requestId: request.requestId,
+            name: request.name,
+            format: file.format,
+            read: file.read,
+            portion: file.portion,
+            text,
+            note: file.note,
+            recordId,
+          });
+          port.postMessage(workStore.snapshot());
+        })
+        .catch(() => undefined);
     } else if (message.data?.kind === "council") {
       const parsed = councilCommand.safeParse(message.data);
       if (!parsed.success) return;
@@ -2056,6 +2357,12 @@ process.parentPort?.on("message", (event) => {
                   "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.destination',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
                 )
                 .run(JSON.stringify(command.url));
+              // Shown beside a plan item so its destination can be checked.
+              workspace
+                .prepare(
+                  "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.destination.title',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+                )
+                .run(JSON.stringify(destination.title));
               port.postMessage({
                 version: 1,
                 kind: "auth-notice",

@@ -46,6 +46,8 @@ const writeResult = z.strictObject({
   id,
   state: z.enum(["created", "failed", "unknown"]),
   externalId: z.string().max(256).optional(),
+  /** Where the created item can be opened. */
+  url: z.string().max(2048).optional(),
 });
 const planStory = z.strictObject({
   id,
@@ -237,6 +239,8 @@ export const workSnapshot = z.strictObject({
         "failed",
       ]),
       results: z.array(writeResult),
+      /** The plan these items were left out of at approval, if any. */
+      splitFrom: id.nullable(),
       createdAt: stamp,
     }),
   ),
@@ -527,7 +531,12 @@ export const workCommand = z.discriminatedUnion("action", [
     items: z.array(planItem).min(1).max(500),
   }),
   act("update-plan", { planId: id, items: z.array(planItem).min(1).max(500) }),
-  act("approve-plan", { planId: id, fingerprint: z.string().max(200000) }),
+  act("approve-plan", {
+    planId: id,
+    fingerprint: z.string().max(200000),
+    /** Approve only these items; the rest stay proposed. Omit for all. */
+    itemIds: z.array(id).min(1).max(500).optional(),
+  }),
   act("request-changes", { planId: id, note: text.default("") }),
   act("record-results", { planId: id, results: z.array(writeResult).max(500) }),
   act("attention", {
@@ -750,7 +759,73 @@ export const councilCommand = z.discriminatedUnion("action", [
     action: z.enum(["check-update", "rollback", "room", "close-room"]),
   }),
 ]);
+/** A file added from the composer: read on the Mac and filed in the Library. */
+export const workAttachment = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-attachment"),
+  requestId: id,
+  workAreaId: id,
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[^/\\\x00-\x1f]+$/),
+  bytes: z.instanceof(Uint8Array),
+});
+export const workAttachmentResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-attachment-result"),
+  requestId: id,
+  name: z.string(),
+  format: z.string(),
+  read: z.enum(["all", "part", "none"]),
+  /** Share of the text that was read, 0–1; null unless only part was. */
+  portion: z.number().nullable(),
+  /** Redacted text for Firstmate; empty when nothing could be read. */
+  text: z.string(),
+  /** A limit or unread portion, in plain words. */
+  note: z.string().nullable(),
+  /** The Library record holding it, when it could be filed. */
+  recordId: z.string().nullable(),
+});
+
+/** Where each item of a plan would be written, in words the owner can check. */
+export const planPlaces = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-places"),
+  planId: id,
+});
+export const planPlacesResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-places-result"),
+  planId: id,
+  places: z.array(
+    z.strictObject({
+      id,
+      destination: z.string(),
+      /** The exact place, or null when none is chosen or connected yet. */
+      place: z.string().nullable(),
+      /** What to do when there is no place. */
+      problem: z.string().nullable(),
+    }),
+  ),
+});
+/** Check or retry an approved plan's outstanding items; never a new approval. */
+export const planPublish = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-publish"),
+  planId: id,
+});
+/** Open a created item in the browser. Only links Amun recorded are opened. */
+export const planOpen = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("plan-open"),
+  planId: id,
+  itemId: id,
+});
 export const workEvent = z.discriminatedUnion("kind", [
+  workAttachmentResult,
+  planPlacesResult,
   workSnapshot,
   councilStatus,
   z.strictObject({

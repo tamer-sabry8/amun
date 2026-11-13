@@ -8,6 +8,7 @@ import {
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
 import {
   route,
+  planDestinations,
   trackerName,
 } from "../../../../packages/domain/src/work/flows.ts";
 import {
@@ -447,8 +448,8 @@ function Row({
         <div className="rb-tray">
           <strong>{tray.plan.summary}</strong>
           <span className="muted small">
-            To {trackerName(tray.plan.destination)} · nothing is published until
-            you approve
+            To {planDestinations(tray.plan)} · nothing is published until you
+            approve
           </span>
           {all ? (
             <ol>

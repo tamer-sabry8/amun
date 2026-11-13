@@ -133,6 +133,7 @@ export class WorkStore {
           }),
           state: row.state as WorkSnapshot["plans"][number]["state"],
           results: list(row.results_json),
+          splitFrom: (row.split_from as string | null) ?? null,
           createdAt: String(row.created_at),
         };
       },
@@ -1021,7 +1022,11 @@ export class WorkStore {
         return { ref: command.planId };
       }
       case "approve-plan":
-        return this.approvePlan(command.planId, command.fingerprint);
+        return this.approvePlan(
+          command.planId,
+          command.fingerprint,
+          command.itemIds,
+        );
       case "request-changes": {
         this.run(
           "UPDATE work_plans SET state='changes_requested' WHERE id=? AND state IN ('proposed','approved')",
@@ -1912,7 +1917,7 @@ export class WorkStore {
     return { step: { ...step, title, groupId: resolvedGroup } };
   }
 
-  private approvePlan(planId: string, fingerprint: string) {
+  private approvePlan(planId: string, fingerprint: string, itemIds?: string[]) {
     const row = this.get("SELECT * FROM work_plans WHERE id=?", planId);
     if (!row) throw new WorkError("That plan no longer exists.");
     if (row.state !== "proposed")
@@ -1933,6 +1938,47 @@ export class WorkStore {
         { reason: "changed" },
       );
     const now = this.stamp();
+    if (itemIds) {
+      const chosen = new Set(itemIds);
+      if (itemIds.some((id) => !current.items.some((item) => item.id === id)))
+        throw new WorkError("Those items are not in this plan.");
+      const rest = current.items.filter((item) => !chosen.has(item.id));
+      if (rest.length) {
+        // Approval covers exactly the ticked items. The others are not
+        // approved: they wait in their own proposal.
+        current.items = current.items.filter((item) => chosen.has(item.id));
+        row.items_json = JSON.stringify(current.items);
+        this.run(
+          "UPDATE work_plans SET items_json=? WHERE id=?",
+          row.items_json,
+          planId,
+        );
+        const waiting = randomUUID();
+        this.run(
+          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at,split_from) VALUES (?,?,?,?,?,?,?,'proposed',?,?)",
+          waiting,
+          row.group_id,
+          row.work_area_id,
+          row.kind,
+          row.destination,
+          row.summary,
+          JSON.stringify(rest),
+          now,
+          planId,
+        );
+        this.attend({
+          kind: "approval",
+          groupId: (row.group_id as string | null) ?? null,
+          workAreaId: (row.work_area_id as string | null) ?? null,
+          title:
+            rest.length === 1
+              ? rest[0]!.summary
+              : `${rest.length} changes not approved yet`,
+          detail: "Left out of your last approval; still waiting for you",
+          ref: "plan:" + waiting,
+        });
+      }
+    }
     this.run(
       "UPDATE work_plans SET state='approved',approved_json=?,approved_at=? WHERE id=?",
       row.items_json,
@@ -1998,6 +2044,7 @@ export class WorkStore {
       id: string;
       state: "created" | "failed" | "unknown";
       externalId?: string | undefined;
+      url?: string | undefined;
     }[],
   ) {
     const row = this.get("SELECT * FROM work_plans WHERE id=?", planId);

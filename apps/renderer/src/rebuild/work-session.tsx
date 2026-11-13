@@ -11,6 +11,7 @@ import { approveLabel } from "../../../../packages/domain/src/work/permissions.t
 import {
   rfpAuthoringBoundary,
   scopeCheck,
+  planDestinations,
   trackerName,
 } from "../../../../packages/domain/src/work/flows.ts";
 import {
@@ -20,7 +21,20 @@ import {
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
-import { askFirstmate } from "./firstmate.ts";
+import {
+  askFirstmate,
+  heldMessage,
+  inFlight,
+  holdMessage,
+  releaseMessage,
+} from "./firstmate.ts";
+import { bridge } from "../bridge.ts";
+import {
+  attachmentBlock,
+  portionWords,
+  useAttachments,
+} from "./attachments.ts";
+import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
@@ -248,6 +262,132 @@ function InlineCard({
   return null;
 }
 
+interface Place {
+  id: string;
+  destination: string;
+  place: string | null;
+  problem: string | null;
+}
+/** Where each item of a plan would go, asked from the service. */
+function usePlaces(planId: string, fingerprint: string) {
+  const [places, setPlaces] = useState<Place[]>([]);
+  useEffect(() => {
+    const stop = bridge.onEvent((raw) => {
+      const event = planPlacesResult.safeParse(raw);
+      if (event.success && event.data.planId === planId)
+        setPlaces(event.data.places);
+    });
+    bridge.send({ version: 1, kind: "plan-places", planId });
+    return stop;
+  }, [planId, fingerprint]);
+  return places;
+}
+
+type PlanEntry = Snapshot["plans"][number];
+function PlanItem({
+  plan,
+  item,
+  place,
+}: {
+  plan: PlanEntry;
+  item: PlanEntry["items"][number];
+  place: Place | undefined;
+}) {
+  const result = plan.results.find((entry) => entry.id === item.id);
+  const destination =
+    place?.destination ??
+    (typeof item.fields.destination === "string"
+      ? item.fields.destination
+      : plan.destination);
+  const fields = Object.entries(item.fields)
+    .filter(
+      ([key, value]) => key !== "destination" && value !== null && value !== "",
+    )
+    .map(
+      ([key, value]) =>
+        `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
+    )
+    .join(" · ");
+  const settled = plan.state !== "proposed" && plan.state !== "approved";
+  return (
+    <span style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontWeight: 600 }}>{item.summary}</span>
+      {plan.kind !== "roadmap" && !result && (
+        <>
+          <span className="row wrap small">
+            <span className="tag">{trackerName(destination)}</span>
+            {place?.place && <span className="muted">{place.place}</span>}
+            {place?.problem && (
+              <span style={{ color: "var(--amun-status-signed-out)" }}>
+                {place.problem}
+              </span>
+            )}
+          </span>
+          <span className="muted small">{fields || "No field changes"}</span>
+        </>
+      )}
+      {result?.state === "created" && (
+        <span className="row wrap small">
+          <span className="tag good">
+            Created
+            {result.externalId && /^\d+$/.test(result.externalId)
+              ? " #" + result.externalId
+              : ""}
+          </span>
+          {result.url && (
+            <button
+              className="link"
+              onClick={() =>
+                bridge.send({
+                  version: 1,
+                  kind: "plan-open",
+                  planId: plan.id,
+                  itemId: item.id,
+                })
+              }
+            >
+              Open in {trackerName(destination)}
+            </button>
+          )}
+        </span>
+      )}
+      {result && result.state !== "created" && (
+        <>
+          <span className="row wrap small">
+            <span
+              className={"tag " + (result.state === "failed" ? "bad" : "warn")}
+            >
+              {result.state === "failed" ? "Not created" : "Being checked"}
+            </span>
+            <span className="muted">
+              {result.state === "failed"
+                ? (place?.problem ??
+                  `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
+                : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
+            </span>
+          </span>
+          {settled && (
+            <span>
+              <button
+                className="btn"
+                onClick={() =>
+                  bridge.send({
+                    version: 1,
+                    kind: "plan-publish",
+                    planId: plan.id,
+                  })
+                }
+              >
+                {result.state === "failed" ? "Retry" : "Check now"}
+              </button>
+            </span>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
 function PlanReview({
   snapshot,
   planId,
@@ -258,57 +398,108 @@ function PlanReview({
   const plan = snapshot.plans.find((item) => item.id === planId);
   // What the user saw when the review opened. Approval is bound to it.
   const [seen, setSeen] = useState(plan?.fingerprint ?? "");
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const places = usePlaces(planId, plan?.fingerprint ?? "");
   if (!plan) return <p className="muted">That plan is no longer available.</p>;
   const changed = plan.state === "proposed" && seen !== plan.fingerprint;
   const noun = plan.kind === "stories" ? "story" : "change";
+  const proposed = plan.state === "proposed";
+  const ticked = plan.items.filter((item) => !skipped.includes(item.id));
+  // Items left out of an earlier approval of this plan, still waiting.
+  const waiting = snapshot.plans.filter(
+    (item) => item.splitFrom === plan.id && item.state === "proposed",
+  );
+  const pick = proposed && plan.items.length > 1;
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ fontSize: 20 }}>{plan.summary || "Proposed changes"}</h2>
       <p className="muted">
-        To {trackerName(plan.destination)} · {plan.items.length}{" "}
+        To {planDestinations(plan)} · {plan.items.length}{" "}
         {plan.items.length === 1 ? "item" : "items"} ·{" "}
-        {plan.state === "proposed" ? previewNote(plan.destination) : "Approved"}
+        {proposed ? previewNote(plan.destination) : "Approved"}
       </p>
-      <ol style={{ margin: 0, paddingLeft: 22, display: "grid", gap: 10 }}>
+      <div style={{ display: "grid", gap: 14 }}>
         {plan.items.map((item) => {
-          const result = plan.results.find((entry) => entry.id === item.id);
-          return (
-            <li key={item.id}>
-              <div style={{ fontWeight: 600 }}>{item.summary}</div>
-              {plan.kind !== "roadmap" && (
-                <div className="muted small">
-                  {Object.entries(item.fields)
-                    .filter(([, value]) => value !== null && value !== "")
-                    .map(
-                      ([key, value]) =>
-                        `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
-                    )
-                    .join(" · ") || "No field changes"}
-                </div>
-              )}
-              {result && (
-                <span
-                  className={
-                    "tag " +
-                    (result.state === "created"
-                      ? "good"
-                      : result.state === "failed"
-                        ? "bad"
-                        : "warn")
-                  }
-                >
-                  {result.state === "created"
-                    ? `Created${result.externalId ? " #" + result.externalId : ""}`
-                    : result.state === "failed"
-                      ? "Not created"
-                      : "Being checked"}
-                </span>
-              )}
-            </li>
+          const body = (
+            <PlanItem
+              plan={plan}
+              item={item}
+              place={places.find((entry) => entry.id === item.id)}
+            />
+          );
+          return pick ? (
+            <label
+              key={item.id}
+              className="row"
+              style={{ gap: 10, alignItems: "flex-start", cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                style={{ marginTop: 4, width: 15, height: 15 }}
+                checked={!skipped.includes(item.id)}
+                onChange={(event) =>
+                  setSkipped(
+                    event.target.checked
+                      ? skipped.filter((id) => id !== item.id)
+                      : [...skipped, item.id],
+                  )
+                }
+              />
+              {body}
+            </label>
+          ) : (
+            <div key={item.id}>{body}</div>
           );
         })}
-      </ol>
-      {plan.state === "proposed" && (
+        {waiting.flatMap((left) =>
+          left.items.map((item) => (
+            <div key={item.id} style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{item.summary}</span>
+              <span className="row wrap small">
+                <span className="tag">Not approved yet</span>
+                <span className="muted">
+                  {trackerName(
+                    typeof item.fields.destination === "string"
+                      ? item.fields.destination
+                      : left.destination,
+                  )}{" "}
+                  · still waiting under Needs your attention
+                </span>
+              </span>
+              <span className="row">
+                <button
+                  className="btn"
+                  onClick={() =>
+                    work("approve-plan", {
+                      planId: left.id,
+                      fingerprint: left.fingerprint,
+                      itemIds: [item.id],
+                    })
+                  }
+                >
+                  Approve and publish
+                </button>
+                <button
+                  className="btn quiet"
+                  onClick={() =>
+                    left.items.length === 1
+                      ? work("request-changes", { planId: left.id })
+                      : work("update-plan", {
+                          planId: left.id,
+                          items: left.items.filter(
+                            (entry) => entry.id !== item.id,
+                          ),
+                        })
+                  }
+                >
+                  Remove from plan
+                </button>
+              </span>
+            </div>
+          )),
+        )}
+      </div>
+      {proposed && (
         <div style={{ display: "grid", gap: 8 }}>
           {changed && (
             <p className="rb-notice" role="status">
@@ -324,12 +515,20 @@ function PlanReview({
           <div className="row">
             <button
               className="btn primary"
-              disabled={changed}
+              disabled={changed || !ticked.length}
               onClick={() =>
-                work("approve-plan", { planId: plan.id, fingerprint: seen })
+                work("approve-plan", {
+                  planId: plan.id,
+                  fingerprint: seen,
+                  ...(ticked.length < plan.items.length
+                    ? { itemIds: ticked.map((item) => item.id) }
+                    : {}),
+                })
               }
             >
-              {approveLabel(plan.items.length, noun)}
+              {ticked.length < plan.items.length
+                ? `Approve and publish ${ticked.length} of ${plan.items.length}`
+                : approveLabel(plan.items.length, noun)}
             </button>
             <button
               className="btn"
@@ -339,8 +538,9 @@ function PlanReview({
             </button>
           </div>
           <p className="muted small">
-            Approval covers exactly the items listed here. Anything added later
-            is asked again.
+            {pick
+              ? "Approval covers exactly the ticked items. An unticked item is not approved and stays here waiting for you."
+              : "Approval covers exactly the items listed here. Anything added later is asked again."}
           </p>
         </div>
       )}
@@ -584,23 +784,34 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const send = async (text: string) => {
-    if (!text.trim() || !context) return;
+  const [waiting, setWaiting] = useState(() => heldMessage(areaId));
+  /** Sends one turn to Firstmate. The user's message is already in the thread. */
+  const deliver = async (
+    text: string,
+    scoped: string,
+    activityId: string | null = null,
+    image?: string,
+    /** A message that was already waiting stays waiting unless it is sent. */
+    retry = false,
+  ) => {
+    if (inFlight.has(areaId)) return;
+    inFlight.add(areaId);
     setProblem("");
-    await workAsync("message", { workAreaId: areaId, role: "you", text });
     setBusy(true);
-    const activity = await workAsync("activity", {
-      groupId: null,
-      workAreaId: areaId,
-      text: text.length > 80 ? text.slice(0, 77) + "…" : text,
-      state: "running",
-    });
-    // The first message for a work area carries its context and the protocol.
-    const scoped = context.messages.length
-      ? text
-      : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
-    const turn = await askFirstmate(scoped);
+    const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
+    const row =
+      activityId ??
+      (
+        await workAsync("activity", {
+          groupId: null,
+          workAreaId: areaId,
+          text: label,
+          state: "running",
+        })
+      ).ref;
+    const turn = await askFirstmate(scoped, image);
     setBusy(false);
+    inFlight.delete(areaId);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       if (parsed.text)
@@ -610,23 +821,86 @@ export function WorkSession({
           text: parsed.text,
         });
       for (const proposed of parsed.actions) raise(proposed);
-    } else
-      setProblem(
-        /could not be verified|could not be completed/i.test(turn.reason)
-          ? "Firstmate could not answer. If you have not signed in yet, do that under Accounts and models, then send it again."
-          : turn.reason,
-      );
+      if (retry) {
+        releaseMessage(areaId);
+        setWaiting(null);
+      }
+    } else if (turn.needsProvider || retry) {
+      // Kept, not failed: it goes out once a provider is connected.
+      const message = { text, scoped, activityId: row, image };
+      holdMessage(areaId, message);
+      setWaiting(message);
+      return;
+    } else setProblem(turn.reason);
     // The outcome is already on screen, so the Activity row closes quietly.
-    if (activity.ref)
+    if (row)
       work("activity", {
-        activityId: activity.ref,
+        activityId: row,
         groupId: null,
         workAreaId: areaId,
-        text: text.length > 80 ? text.slice(0, 77) + "…" : text,
+        text: label,
         state: turn.ok ? "finished" : "failed",
         silent: true,
       });
   };
+  const attachments = useAttachments(areaId);
+  const [pickNonce, setPickNonce] = useState(0);
+  const send = async (typed: string) => {
+    if ((!typed.trim() && !attachments.files.length) || !context) return;
+    // Files in the draft travel with this message.
+    const files = await attachments.take();
+    const text =
+      typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
+    // One message waits at a time; a new one replaces the wait, not the text.
+    releaseMessage(areaId);
+    setWaiting(null);
+    await workAsync("message", { workAreaId: areaId, role: "you", text });
+    // The first message for a work area carries its context and the protocol.
+    const scoped = context.messages.length
+      ? text
+      : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
+    await deliver(
+      text,
+      files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped,
+      null,
+      files.find((file) => file.image)?.image ?? undefined,
+    );
+  };
+  /** Tries the waiting message again. It leaves the wait before it is sent. */
+  const retryWaiting = () => {
+    // One attempt at a time per work area, so it can only go out once. It
+    // stays saved and on screen as waiting until Firstmate has answered.
+    const message = heldMessage(areaId);
+    if (!message || inFlight.has(areaId)) return;
+    void deliver(
+      message.text,
+      message.scoped,
+      message.activityId ?? null,
+      message.image,
+      true,
+    );
+  };
+  useEffect(() => {
+    // Returning to this conversation: one attempt for a message left waiting.
+    setWaiting(heldMessage(areaId));
+    if (heldMessage(areaId)) retryWaiting();
+  }, [areaId]);
+  useEffect(() => {
+    if (!waiting) return;
+    // Coming back from sign-in, or a change in the connected providers.
+    let providers = JSON.stringify(bridge.getSnapshot().modelStatus);
+    const stop = bridge.subscribe(() => {
+      const next = JSON.stringify(bridge.getSnapshot().modelStatus);
+      if (next === providers) return;
+      providers = next;
+      retryWaiting();
+    });
+    window.addEventListener("focus", retryWaiting);
+    return () => {
+      stop();
+      window.removeEventListener("focus", retryWaiting);
+    };
+  }, [areaId, !!waiting]);
   useEffect(() => {
     if (first && context && sentFirst.current !== first) {
       sentFirst.current = first;
@@ -938,6 +1212,40 @@ export function WorkSession({
                   </div>
                 ),
               )}
+              {waiting && (
+                <>
+                  <span
+                    className="tag warn"
+                    style={{ justifySelf: "end" }}
+                    role="status"
+                  >
+                    Waiting to send
+                  </span>
+                  <div className="rb-inline amber" role="alert">
+                    <span>
+                      <strong style={{ fontWeight: 600 }}>
+                        Connect an AI provider to send this.
+                      </strong>{" "}
+                      Your message is saved and goes out once, as soon as a
+                      provider is connected.
+                    </span>
+                    <div className="row">
+                      <button className="btn primary" onClick={onSettings}>
+                        Connect a provider
+                      </button>
+                      <button
+                        className="btn quiet"
+                        onClick={() => {
+                          releaseMessage(areaId);
+                          setWaiting(null);
+                        }}
+                      >
+                        Discard message
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
               {steps.length > 0 && (
                 <>
                   <button
@@ -1122,6 +1430,59 @@ export function WorkSession({
                   Firstmate is working…
                 </p>
               )}
+              {attachments.problem && (
+                <div className="rb-inline amber" role="status">
+                  {attachments.problem.read === "part" ? (
+                    <span>
+                      I could only read the first part of{" "}
+                      <strong style={{ fontWeight: 600 }}>
+                        {attachments.problem.name}
+                      </strong>
+                      , {portionWords(attachments.problem.portion)} of it. Tell
+                      me which part matters and I’ll read that.
+                    </span>
+                  ) : (
+                    <span>
+                      I couldn’t open{" "}
+                      <strong style={{ fontWeight: 600 }}>
+                        {attachments.problem.name}
+                      </strong>
+                      . It’s saved in your library. A PDF or text version will
+                      work.
+                    </span>
+                  )}
+                  <div className="row">
+                    {attachments.problem.read === "part" ? (
+                      <button
+                        className="btn"
+                        onClick={() =>
+                          attachments.settle(attachments.problem!.id)
+                        }
+                      >
+                        Use what was read
+                      </button>
+                    ) : (
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          attachments.remove(attachments.problem!.name);
+                          setPickNonce((value) => value + 1);
+                        }}
+                      >
+                        Choose another file
+                      </button>
+                    )}
+                    <button
+                      className="btn quiet"
+                      onClick={() =>
+                        attachments.remove(attachments.problem!.name)
+                      }
+                    >
+                      Remove the file
+                    </button>
+                  </div>
+                </div>
+              )}
               {problem && (
                 <div className="rb-inline amber" role="alert">
                   <span>{problem}</span>
@@ -1156,6 +1517,13 @@ export function WorkSession({
             id: item.id,
             name: item.name,
           }))}
+          attached={attachments.files.map((file) => file.name)}
+          onPick={attachments.add}
+          onRemoveFile={attachments.remove}
+          pickNonce={pickNonce}
+          onPlus={(item) => {
+            if (item === "screenshot") attachments.screenshot();
+          }}
           onSend={(text) => {
             const question = questions[0];
             if (question && seed)
