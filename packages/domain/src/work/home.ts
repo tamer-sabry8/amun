@@ -109,9 +109,22 @@ export function attentionList(
     );
 }
 /** The Island shows the single most urgent open item plus a count badge. */
-export function islandItem(items: Attention[]) {
+/**
+ * What Firstmate's card in the sidebar shows. Things raised in the work whose
+ * chat is open are left out: the chat is already asking, so repeating it
+ * beside the chat is noise. `held` counts what was left out, so the card can
+ * stay away instead of claiming nothing needs the owner.
+ */
+export function islandItem(items: Attention[], openWorkAreaId?: string | null) {
   const open = attentionList(items);
-  return { top: open[0] ?? null, count: open.length };
+  const shown = openWorkAreaId
+    ? open.filter((item) => item.workAreaId !== openWorkAreaId)
+    : open;
+  return {
+    top: shown[0] ?? null,
+    count: shown.length,
+    held: open.length - shown.length,
+  };
 }
 
 const plural = (count: number, noun: string) =>

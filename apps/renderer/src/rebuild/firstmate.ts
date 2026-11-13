@@ -118,6 +118,17 @@ export function releaseMessage(areaId: string) {
 const providerProblem =
   /sign in|signed in|not ready|no model|could not be verified|could not be completed|reconnect|credential|unauthori[sz]ed|expired/i;
 
+// Which conversations have been told how to act inside Amun. A new
+// conversation (after a restart, a model change or a sign-in) knows nothing
+// of it, whatever the work area's own history says.
+const briefed = new Set<string>();
+/** True until the conversation in use has been given Amun's rules. */
+export const needsBriefing = () => !session || !briefed.has(session.sessionId);
+/** Records that the conversation in use has now been given them. */
+export function markBriefed() {
+  if (session) briefed.add(session.sessionId);
+}
+
 /** Sends one turn and returns Firstmate's reply, or a plain reason it could not. */
 export async function askFirstmate(
   text: string,

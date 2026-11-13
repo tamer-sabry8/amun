@@ -548,7 +548,10 @@ describe("plans: approve plans, not clicks", () => {
       snap().attention.find((item) => item.kind === "failure"),
     ).toMatchObject({
       state: "open",
-      detail: "4 created, 2 not created, nothing duplicated",
+      // Names what failed, not only how many.
+      detail: expect.stringMatching(
+        /^“.+” and 1 more were not created\. Nothing was duplicated\.$/,
+      ),
       options: ["Retry the 2"],
     });
     expect(
@@ -1340,5 +1343,60 @@ describe("memory updates (F10)", () => {
     expect(
       send("record-claim", claim(side, "Someone else", false)).step,
     ).toEqual({ step: "record" });
+  });
+});
+
+describe("renaming a work", () => {
+  it("changes the name at once, with no plan and nothing to approve", () => {
+    const { employer } = setup();
+    const id = area(employer, "product", "Test Product 1");
+    const result = send("update-area", {
+      areaId: id,
+      patch: { name: "Arabic Voice" },
+    });
+    expect(result.ok).toBe(true);
+    expect(snap().areas.find((item) => item.id === id)?.name).toBe(
+      "Arabic Voice",
+    );
+    expect(snap().plans).toEqual([]);
+    expect(snap().attention).toEqual([]);
+  });
+});
+
+describe("a failed publication says what failed and why", () => {
+  it("names the item and gives the destination's reason", () => {
+    const { employer } = setup();
+    const id = area(employer, "product", "Test Product 1");
+    const planId = send("propose-plan", {
+      groupId: null,
+      workAreaId: id,
+      planKind: "edit",
+      destination: "amun",
+      summary: "Rename product",
+      items: [{ id: "i1", summary: "Change product name", fields: {} }],
+    }).ref!;
+    const plan = snap().plans.find((item) => item.id === planId)!;
+    send("approve-plan", { planId, fingerprint: plan.fingerprint });
+    // What the publisher records when a destination cannot be written to.
+    db.prepare(
+      "INSERT INTO plan_writes(plan_id,item_id,marker,destination,state,attempts,note) VALUES (?,?,?,?,'pending',0,?)",
+    ).run(
+      planId,
+      "i1",
+      "m1",
+      "amun",
+      "Publishing to Amun is not available yet.",
+    );
+    send("record-results", {
+      planId,
+      results: [{ id: "i1", state: "failed" }],
+    });
+    expect(
+      snap().attention.find((item) => item.kind === "failure"),
+    ).toMatchObject({
+      title: "Some approved changes were not published",
+      detail:
+        "“Change product name” was not created. Publishing to Amun is not available yet. Nothing was duplicated.",
+    });
   });
 });

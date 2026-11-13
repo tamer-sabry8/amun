@@ -9,6 +9,7 @@ import { DecisionsPanel, LibraryPanel, Rail } from "../src/rebuild/rail.tsx";
 import { Portfolio, Rfps, Roadmap, Sprints } from "../src/rebuild/screens.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
+  amunProtocol,
   attentionItems,
   homeModel,
   parseAmunActions,
@@ -924,5 +925,73 @@ describe("Firstmate proposals", () => {
         items: [{ summary: "Item", fields: {} }],
       },
     ]);
+  });
+});
+
+describe("renaming from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("is an action Firstmate can take directly, not a plan", () => {
+    const parsed = parseAmunActions(
+      [
+        "Done. It is now called Arabic Voice.",
+        block({ do: "rename", name: "  Arabic\n Voice " }),
+      ].join("\n\n"),
+    );
+    expect(parsed.text).toBe("Done. It is now called Arabic Voice.");
+    expect(parsed.actions).toEqual([{ do: "rename", name: "Arabic Voice" }]);
+  });
+  it("ignores a rename with no name", () => {
+    expect(
+      parseAmunActions(block({ do: "rename", name: "  " })).actions,
+    ).toEqual([]);
+    expect(parseAmunActions(block({ do: "rename" })).actions).toEqual([]);
+  });
+  it("is in what Firstmate is told, and plans no longer offer Amun as a place", () => {
+    expect(amunProtocol).toContain('{"do":"rename","name":"…"}');
+    expect(amunProtocol).toContain("needs no approval");
+    expect(amunProtocol).toContain('"destination":"ado|notion"');
+  });
+});
+
+describe("Firstmate's card beside an open chat", () => {
+  const noop = () => undefined;
+  const failed = {
+    id: "f",
+    kind: "failure" as const,
+    groupName: null,
+    workAreaId: "ticao",
+    workAreaName: "TICAO",
+    title: "Some approved changes were not published",
+    detail: "“Change product name” was not created. Nothing was duplicated.",
+    state: "open" as const,
+    createdAt: "2026-11-12T07:00:00Z",
+  };
+  it("stays away when everything waiting is in the chat on screen", () => {
+    const html = renderToStaticMarkup(
+      createElement(Island, {
+        top: null,
+        count: 0,
+        held: 1,
+        options: [],
+        collapsed: false,
+        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+      }),
+    );
+    expect(html).toBe("");
+  });
+  it("says what failed, not only that something did", () => {
+    const html = renderToStaticMarkup(
+      createElement(Island, {
+        top: failed,
+        count: 1,
+        options: [],
+        collapsed: false,
+        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+      }),
+    );
+    expect(html).toContain("Something failed");
+    expect(html).toContain("Change product name");
+    expect(html).toContain("was not created");
   });
 });

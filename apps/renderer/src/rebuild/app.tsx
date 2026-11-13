@@ -247,7 +247,11 @@ export function App() {
     if (step.step === "unreadable") return setNote(result.message);
     setPending({ ...step, step: step.step ?? "", text, files });
   };
-  const view = homeModel(snapshot, now);
+  const view = homeModel(
+    snapshot,
+    now,
+    layout.route === "work" ? layout.workAreaId : null,
+  );
   const topRaw = view.island.top
     ? snapshot.attention.find((item) => item.id === view.island.top!.id)
     : undefined;
@@ -346,6 +350,7 @@ export function App() {
           <Island
             top={view.island.top}
             count={view.island.count}
+            held={view.island.held}
             options={topRaw?.options ?? []}
             collapsed={collapsed}
             actions={{

@@ -546,7 +546,16 @@ describe("Home attention (Q50–Q51)", () => {
       "r",
     ]);
     expect(islandItem(items)).toMatchObject({ top: { id: "f" }, count: 4 });
-    expect(islandItem([])).toEqual({ top: null, count: 0 });
+    expect(islandItem([])).toEqual({ top: null, count: 0, held: 0 });
+    // The chat for a work is already asking about its own items, so the
+    // sidebar card leaves them out and counts what it left.
+    const area = items[0]!.workAreaId;
+    const beside = islandItem(items, area);
+    expect(beside.top?.workAreaId).not.toBe(area);
+    expect(beside.count + beside.held).toBe(4);
+    expect(beside.held).toBeGreaterThan(0);
+    const only = items.filter((item) => item.workAreaId === area);
+    expect(islandItem(only, area)).toMatchObject({ top: null, count: 0 });
   });
   it("summarises what arrived while away", () => {
     const items = [
