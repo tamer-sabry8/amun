@@ -57,6 +57,8 @@ function startService(): void {
     [],
     {
       serviceName: "Amun Service",
+      // Use the baseline JS compiler for this long-lived message handler.
+      execArgv: ["--js-flags=--max-opt=1"],
       env: {
         ...process.env,
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
@@ -186,13 +188,29 @@ function startService(): void {
   });
 }
 function openWindow(): void {
+  const shellQuery: Record<string, string> = {};
+  if (app.commandLine.hasSwitch("amun-proof")) shellQuery.proof = "1";
+  else if (!app.isPackaged && app.commandLine.hasSwitch("amun-gallery"))
+    shellQuery.gallery = "1";
+  else if (
+    app.commandLine.hasSwitch("amun-legacy-shell") ||
+    process.env.AMUN_LEGACY_SHELL === "1"
+  )
+    shellQuery.legacy = "1";
+  const rebuiltShell = Object.keys(shellQuery).length === 0;
   const window = new BrowserWindow({
     title: "Amun",
     width: 1200,
     height: 800,
-    show: false,
+    // Match the initial canvas and paint directly into a visible window. A
+    // hidden first paint followed by show() had higher measured peak working sets.
+    show: rebuiltShell,
+    ...(rebuiltShell && { backgroundColor: "#0b0e14" }),
     webPreferences: {
       ...windowPreferences,
+      // The shell's event-driven UI uses V8's baseline compiler. Embedded web
+      // previews have their own web preferences and retain normal JS tiering.
+      ...(rebuiltShell && { additionalArguments: ["--js-flags=--max-opt=1"] }),
       preload: join(app.getAppPath(), "dist/preload.cjs"),
     },
   });
@@ -224,20 +242,11 @@ function openWindow(): void {
     attach(window);
   });
   window.once("closed", () => loadedWindows.delete(window));
-  window.once("ready-to-show", () => window.show());
+  if (!rebuiltShell) window.once("ready-to-show", () => window.show());
   void window.loadFile(join(app.getAppPath(), "renderer/index.html"), {
     query: {
       styleNonce,
-      ...(app.commandLine.hasSwitch("amun-proof")
-        ? { proof: "1" }
-        : !app.isPackaged && app.commandLine.hasSwitch("amun-gallery")
-          ? { gallery: "1" }
-          : // UX rebuild: the earlier shell stays available for comparison and
-            // for its own end-to-end suites. See docs/UX-REBUILD.md.
-            app.commandLine.hasSwitch("amun-legacy-shell") ||
-              process.env.AMUN_LEGACY_SHELL === "1"
-            ? { legacy: "1" }
-            : {}),
+      ...shellQuery,
     },
   });
 }
