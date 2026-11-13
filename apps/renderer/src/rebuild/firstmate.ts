@@ -100,6 +100,8 @@ const saveHeld = () => {
     // Storage is best effort; the in-memory copy still holds for this run.
   }
 };
+/** Work areas with a turn in flight, so a waiting message is never sent twice. */
+export const inFlight = new Set<string>();
 export const heldMessage = (areaId: string) => held.get(areaId) ?? null;
 export function holdMessage(areaId: string, message: Held) {
   held.set(areaId, message);

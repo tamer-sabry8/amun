@@ -24,6 +24,7 @@ import { Composer } from "./composer.tsx";
 import {
   askFirstmate,
   heldMessage,
+  inFlight,
   holdMessage,
   releaseMessage,
 } from "./firstmate.ts";
@@ -784,16 +785,17 @@ export function WorkSession({
       });
   };
   const [waiting, setWaiting] = useState(() => heldMessage(areaId));
-  const delivering = useRef(false);
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
     scoped: string,
     activityId: string | null = null,
     image?: string,
+    /** A message that was already waiting stays waiting unless it is sent. */
+    retry = false,
   ) => {
-    if (delivering.current) return;
-    delivering.current = true;
+    if (inFlight.has(areaId)) return;
+    inFlight.add(areaId);
     setProblem("");
     setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
@@ -809,7 +811,7 @@ export function WorkSession({
       ).ref;
     const turn = await askFirstmate(scoped, image);
     setBusy(false);
-    delivering.current = false;
+    inFlight.delete(areaId);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       if (parsed.text)
@@ -819,7 +821,11 @@ export function WorkSession({
           text: parsed.text,
         });
       for (const proposed of parsed.actions) raise(proposed);
-    } else if (turn.needsProvider) {
+      if (retry) {
+        releaseMessage(areaId);
+        setWaiting(null);
+      }
+    } else if (turn.needsProvider || retry) {
       // Kept, not failed: it goes out once a provider is connected.
       const message = { text, scoped, activityId: row, image };
       holdMessage(areaId, message);
@@ -862,14 +868,16 @@ export function WorkSession({
   };
   /** Tries the waiting message again. It leaves the wait before it is sent. */
   const retryWaiting = () => {
-    const message = releaseMessage(areaId);
-    if (!message) return;
-    setWaiting(null);
+    // One attempt at a time per work area, so it can only go out once. It
+    // stays saved and on screen as waiting until Firstmate has answered.
+    const message = heldMessage(areaId);
+    if (!message || inFlight.has(areaId)) return;
     void deliver(
       message.text,
       message.scoped,
       message.activityId ?? null,
       message.image,
+      true,
     );
   };
   useEffect(() => {
@@ -1204,7 +1212,7 @@ export function WorkSession({
                   </div>
                 ),
               )}
-              {waiting && !busy && (
+              {waiting && (
                 <>
                   <span
                     className="tag warn"
