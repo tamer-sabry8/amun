@@ -63,6 +63,22 @@ it("validates native preview bounds and visibility without permitting out-of-win
     visible: true,
     bounds: { x: 400, y: 150, width: 300, height: 400 },
   });
+  const fits = { x: 0, y: 0, width: 100, height: 100 };
+  expect(
+    browserLayout(
+      { action: "layout", visible: true, bounds: fits, zoom: 0.7 },
+      1200,
+      800,
+    ),
+  ).toEqual({ visible: true, bounds: fits, zoom: 0.7 });
+  for (const zoom of [0.1, 1.5, NaN, "0.7"])
+    expect(
+      browserLayout(
+        { action: "layout", visible: true, bounds: fits, zoom },
+        1200,
+        800,
+      ),
+    ).toBeNull();
   for (const bounds of [
     { x: -1, y: 0, width: 100, height: 100 },
     { x: 1100, y: 0, width: 300, height: 100 },

@@ -15,6 +15,7 @@ import {
   gateLabels,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
+import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Composer } from "./composer.tsx";
 import { work, workAsync } from "./store.ts";
@@ -557,7 +558,10 @@ export function Home({
           {/* What was just sent stays visible while Firstmate asks about it. */}
           {pending?.text && <div className="rb-msg you">{pending.text}</div>}
           <div className="rb-msg firstmate">
-            <span className="who">Firstmate</span>
+            <span className="who">
+              <FirstmateMark size={18} />
+              Firstmate
+            </span>
             {card}
           </div>
         </div>

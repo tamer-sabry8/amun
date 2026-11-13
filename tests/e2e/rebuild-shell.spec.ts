@@ -20,6 +20,19 @@ async function shot(page: Page, name: string) {
 }
 /** WCAG A/AA scan of the current screen; serious and critical issues fail. */
 async function scan(page: Page, label: string) {
+  // Entrance motion fades items in; contrast is judged once they have landed.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            // Short entrances only; the slow attention pulse does not fade.
+            Number(animation.effect?.getComputedTiming().endTime) <= 1000,
+        )
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze();
   const violations = results.violations
     .filter((item) => item.impact === "serious" || item.impact === "critical")

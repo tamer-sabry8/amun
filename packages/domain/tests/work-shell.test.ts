@@ -29,6 +29,7 @@ import {
   library,
   moveStory,
   orgChart,
+  teamUnder,
   planSummary,
   pullStats,
   releaseGroups,
@@ -744,6 +745,14 @@ describe("Agents org chart (Q36)", () => {
       status: "Finished",
     });
     expect(chart.children[1]!.status).toBe("Working");
+    // The Agents screen lists the whole team, including the helper that sits
+    // under the agent that started it.
+    expect(teamUnder(chart).map((member) => member.id)).toEqual([
+      "w",
+      "r",
+      "t",
+      "q",
+    ]);
   });
   it("needs a lead agent", () => {
     expect(orgChart([agent({})])).toBeNull();

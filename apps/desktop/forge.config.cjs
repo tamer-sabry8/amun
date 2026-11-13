@@ -23,6 +23,8 @@ module.exports = {
     asar: true,
     download: { checksums: require("electron/checksums.json") },
     appBundleId: "ai.amun.desktop",
+    // The ram on a black tile, for the Dock, Finder and the app switcher.
+    icon: "assets/icon",
     ...(release
       ? {
           osxSign: {
@@ -50,6 +52,7 @@ module.exports = {
       /^\/\.runtime(?:\/|$)/,
       /^\/src(?:\/|$)/,
       /^\/tests(?:\/|$)/,
+      /^\/assets(?:\/|$)/,
     ],
     extraResource: [
       ".runtime/pi",
