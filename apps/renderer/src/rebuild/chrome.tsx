@@ -36,18 +36,49 @@ export interface IslandActions {
   onAnswer(item: Attention, answer: string): void;
 }
 
+/** Where an item stands, in three steps. Only what is known is claimed. */
+const islandSteps: Partial<
+  Record<Attention["kind"], [string, string, string]>
+> = {
+  approval: ["Drafted", "Review", "Publish"],
+  result: ["Asked", "Worked", "Read"],
+  offer: ["Noticed", "You decide", "Draft"],
+  risk: ["Spotted", "Review", "Resolve"],
+};
+const islandFoot: Partial<Record<Attention["kind"], string>> = {
+  approval: "Nothing is published until you approve",
+  offer: "Drafts only · nothing is sent",
+  risk: "Your teammate’s change is left in place",
+};
+const waitingLine = (count: number) =>
+  `${count} more ${count === 1 ? "thing is" : "things are"} waiting`;
+
+function FirstmateMark({ size = 36 }: { size?: number }) {
+  return (
+    <span
+      className="rb-fm-mark"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.5) }}
+      aria-hidden="true"
+    >
+      F
+    </span>
+  );
+}
+
 function IslandCard({
   item,
   count,
   options,
   floating,
   actions,
+  onMinimise,
 }: {
   item: Attention;
   count: number;
   options: string[];
   floating: boolean;
   actions: IslandActions;
+  onMinimise?: (() => void) | undefined;
 }) {
   const [writing, setWriting] = useState(false);
   const [answer, setAnswer] = useState("");
@@ -56,19 +87,31 @@ function IslandCard({
     setAnswer("");
   }, [item.id]);
   const primary = islandAction[item.kind];
+  const steps = islandSteps[item.kind];
   return (
     <section
       className={"rb-island" + (floating ? " floating" : "")}
       aria-label="Needs you"
     >
       <div className="head">
-        <span>{kindLabel[item.kind]}</span>
-        {item.workAreaName && <span>· {item.workAreaName}</span>}
-        <span className="grow" />
+        <FirstmateMark />
+        <span className="who">
+          <strong>Firstmate</strong>
+          <span className={"state " + item.kind}>{kindLabel[item.kind]}</span>
+        </span>
         {count > 1 && (
           <span className="count" title={`${count} items need you`}>
             {count}
           </span>
+        )}
+        {onMinimise && (
+          <button
+            className="icon-btn"
+            aria-label="Minimise"
+            onClick={onMinimise}
+          >
+            <Icon name="chevron" width={14} height={14} />
+          </button>
         )}
       </div>
       <button
@@ -78,6 +121,42 @@ function IslandCard({
       >
         {item.title}
       </button>
+      {steps && (
+        <ol className="steps" aria-label="Progress">
+          {steps.map((step, position) => (
+            <li
+              key={step}
+              className={
+                position === 0 ? "done" : position === 1 ? "now" : "next"
+              }
+            >
+              <span className="dot" aria-hidden="true">
+                {position === 0 && (
+                  <Icon name="check" width={10} height={10} strokeWidth={3} />
+                )}
+              </span>
+              {step}
+            </li>
+          ))}
+        </ol>
+      )}
+      {(item.workAreaName || item.batch || count > 1) && (
+        <ul className="facts">
+          {item.batch && (
+            <li className="good">
+              {item.batch.count}{" "}
+              {item.batch.count === 1
+                ? item.batch.noun
+                : item.batch.noun.endsWith("y")
+                  ? item.batch.noun.slice(0, -1) + "ies"
+                  : item.batch.noun + "s"}{" "}
+              ready for your review
+            </li>
+          )}
+          {item.workAreaName && <li>In {item.workAreaName}</li>}
+          {count > 1 && <li className="warn">{waitingLine(count - 1)}</li>}
+        </ul>
+      )}
       {writing ? (
         <form
           onSubmit={(event) => {
@@ -136,10 +215,12 @@ function IslandCard({
           )}
         </>
       )}
+      {islandFoot[item.kind] && <p className="foot">{islandFoot[item.kind]}</p>}
     </section>
   );
 }
 
+const minimisedKey = "amun.island.minimised";
 export function Island({
   top,
   count,
@@ -156,6 +237,21 @@ export function Island({
   const [arrivedAt, setArrivedAt] = useState<number | null>(null);
   const [hovered, setHovered] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [minimised, setMinimised] = useState(() => {
+    try {
+      return localStorage.getItem(minimisedKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const minimise = (value: boolean) => {
+    setMinimised(value);
+    try {
+      localStorage.setItem(minimisedKey, value ? "1" : "0");
+    } catch {
+      // Remembering this is a convenience only.
+    }
+  };
   const seen = useRef<string | null>(top?.id ?? null);
   useEffect(() => {
     if (top && top.id !== seen.current) {
@@ -169,7 +265,10 @@ export function Island({
   }, [top?.id]);
   if (!top)
     return collapsed ? null : (
-      <div className="rb-island empty">Nothing needs you right now.</div>
+      <div className="rb-island empty">
+        <FirstmateMark size={28} />
+        <span>Nothing needs you right now.</span>
+      </div>
     );
   const view = islandPresentation({
     collapsed,
@@ -180,7 +279,8 @@ export function Island({
       typeof matchMedia === "function" &&
       matchMedia("(prefers-reduced-motion: reduce)").matches,
   });
-  if (view.mode === "card")
+  const needs = `Firstmate · ${count} ${count === 1 ? "thing needs" : "things need"} you`;
+  if (view.mode === "card" && !minimised)
     return (
       <IslandCard
         item={top}
@@ -188,7 +288,26 @@ export function Island({
         options={options}
         floating={false}
         actions={actions}
+        onMinimise={() => minimise(true)}
       />
+    );
+  if (view.mode === "card")
+    // Minimised in the open sidebar: one line that opens the card again.
+    return (
+      <button
+        className="rb-island-line"
+        aria-label={needs}
+        aria-expanded={false}
+        onClick={() => minimise(false)}
+      >
+        <FirstmateMark size={28} />
+        <span className="text">
+          <strong>Firstmate</strong>
+          <span>{kindLabel[top.kind]}</span>
+        </span>
+        <span className="count">{count}</span>
+        <Icon name="chevron" width={14} height={14} />
+      </button>
     );
   return (
     <div
@@ -199,10 +318,12 @@ export function Island({
         className="rb-island-badge"
         aria-label={`${count} ${count === 1 ? "item needs" : "items need"} you`}
         aria-expanded={view.mode === "floating"}
+        title={needs}
         onClick={() => setHovered((value) => !value)}
       >
-        <Icon name="requests" />
+        <FirstmateMark size={30} />
         <span className="count">{count}</span>
+        <Icon name="chevron" width={12} height={12} />
       </button>
       {view.mode === "floating" && (
         // Never takes focus: it is announced politely and waits to be opened.
@@ -235,17 +356,18 @@ export function Sidebar({
   onToggle(): void;
   island: React.ReactNode;
 }) {
+  // Icon tiles; the name stays in the button for assistive technology and
+  // shows as a tooltip.
   const item = (id: Exclude<Route, "work" | "setup">, label: string) => (
     <button
       key={id}
       className="rb-nav"
       aria-current={route === id ? "page" : undefined}
-      aria-label={collapsed ? label : undefined}
-      title={collapsed ? label : undefined}
+      aria-label={label}
+      title={label}
       onClick={() => onRoute(id)}
     >
-      <Icon name={id} width={18} height={18} />
-      <span>{label}</span>
+      <Icon name={id} width={20} height={20} />
     </button>
   );
   return (
@@ -256,37 +378,37 @@ export function Sidebar({
         </span>
         <strong>Amun</strong>
       </div>
-      {item("home", "Home")}
-      <button
-        className="rb-nav"
-        onClick={onSearch}
-        aria-label={collapsed ? "Search" : undefined}
-        title={collapsed ? "Search" : undefined}
-      >
-        <Icon name="search" width={18} height={18} />
-        <span>Search</span>
-        <kbd>⌘K</kbd>
-      </button>
-      <div className="rb-sep" />
-      {tiles.map(([id, label]) => item(id, label))}
+      <div className="rb-tiles">
+        {item("home", "Home")}
+        <button
+          className="rb-nav"
+          onClick={onSearch}
+          aria-label="Search"
+          title="Search  ⌘K"
+        >
+          <Icon name="search" width={20} height={20} />
+        </button>
+        {tiles.map(([id, label]) => item(id, label))}
+      </div>
       <div className="spacer" />
       {island}
       <div className="rb-user">
-        <span className="avatar" aria-hidden="true">
+        <span className="avatar" aria-hidden="true" title="You">
           Y
         </span>
-        <span className="grow">You</span>
+        <span className="grow" />
         <button
-          className="icon-btn"
+          className="rb-nav small"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title="⌘\"
+          title="⌘\\"
           onClick={onToggle}
         >
           <Icon name="sidebar" width={18} height={18} />
         </button>
         <button
-          className="icon-btn"
+          className="rb-nav small"
           aria-label="Settings"
+          title="Settings"
           aria-current={route === "settings" ? "page" : undefined}
           onClick={() => onRoute("settings")}
         >

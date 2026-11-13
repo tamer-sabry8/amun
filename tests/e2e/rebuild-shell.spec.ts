@@ -116,7 +116,8 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       page.getByRole("heading", { name: "Welcome to Amun" }),
     ).toBeVisible();
     const nav = page.getByRole("navigation", { name: "Amun" });
-    await expect(nav.getByRole("button")).toContainText([
+    // Icon tiles, each named for assistive technology.
+    for (const name of [
       "Home",
       "Search",
       "Agents",
@@ -125,7 +126,10 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       "Sprints",
       "Portfolio",
       "RFPs",
-    ]);
+    ])
+      await expect(
+        nav.getByRole("button", { name, exact: true }),
+      ).toBeVisible();
     await expect(nav.getByText("Nothing needs you right now.")).toBeVisible();
     await expect(
       page
@@ -214,9 +218,8 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       page.getByRole("region", { name: "Conversation" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Close the document" }).click();
-    await expect(
-      nav.getByRole("button", { name: "Roadmap" }),
-    ).not.toHaveAttribute("title", "Roadmap");
+    // The sidebar is back to its full width.
+    await expect(page.locator(".rb")).not.toHaveClass(/collapsed/);
 
     // RFPs: tracking only; a won RFP waits for signature and BRD
     await nav.getByRole("button", { name: "RFPs" }).click();

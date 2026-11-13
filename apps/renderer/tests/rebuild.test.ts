@@ -316,7 +316,10 @@ describe("shell chrome", () => {
       }),
     );
     expect(
-      [...html.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]),
+      // Icon tiles: each is named for assistive technology.
+      [...html.matchAll(/class="rb-nav"[^>]*aria-label="([^"]+)"/g)].map(
+        (match) => match[1],
+      ),
     ).toEqual([
       "Home",
       "Search",
@@ -327,7 +330,7 @@ describe("shell chrome", () => {
       "Portfolio",
       "RFPs",
     ]);
-    expect(html).toMatch(/aria-current="page"[^>]*>.*?Roadmap/);
+    expect(html).toMatch(/aria-current="page" aria-label="Roadmap"/);
     expect(html).not.toMatch(/Requests|Terminal|Priorities|Crew/);
   });
   it("names the collapsed strip's icons for assistive technology", () => {
