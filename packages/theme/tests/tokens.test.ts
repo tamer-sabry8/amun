@@ -1,7 +1,7 @@
 import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { contrast, colorHex } from "../src/contrast.ts";
-const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan"];
+const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan", "amun-light"];
 it("meets text and interactive contrast in every theme and never overrides locked safety tokens", () => {
   const safety = JSON.parse(readFileSync("tokens/safety.json", "utf8"));
   for (const name of themes) {
@@ -37,4 +37,31 @@ it("validates colour inputs and exact contrast extremes", () => {
   expect(() =>
     colorHex({ colorSpace: "srgb", components: [2, 0, 0] }),
   ).toThrow();
+});
+it("keeps every connection status colour readable in all four themes (Q69)", () => {
+  for (const name of themes) {
+    const tokens = JSON.parse(readFileSync(`tokens/${name}.json`, "utf8"));
+    for (const status of [
+      "connected",
+      "signed-out",
+      "error",
+      "checking",
+      "info",
+    ])
+      for (const background of ["canvas", "navigation", "card"])
+        expect(
+          contrast(
+            colorHex(tokens.status[status].$value),
+            colorHex(tokens.color[background].$value),
+          ),
+          `${name} ${status} on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrast(
+        colorHex(tokens.color.accent.$value),
+        colorHex(tokens.color.canvas.$value),
+      ),
+      `${name} accent`,
+    ).toBeGreaterThanOrEqual(4.5);
+  }
 });

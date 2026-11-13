@@ -19,6 +19,13 @@ import {
 import { join } from "node:path";
 import { windowPreferences, shellSecurityPolicy } from "./security.js";
 import { restartDelay } from "../../service/src/restart-delay.ts";
+import {
+  afterCleanExit,
+  planGraphics,
+  readGraphicsState,
+  writeGraphicsState,
+  type GraphicsState,
+} from "./graphics-mode.ts";
 
 const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;
@@ -69,6 +76,12 @@ function startService(): void {
           ? join(process.resourcesPath, "firstmate-archives")
           : join(app.getAppPath(), ".runtime/firstmate-archives"),
         AMUN_WORKSPACE_ROOT: join(app.getPath("userData"), "workspace"),
+        // Council (Roast Room): Amun-owned runtime, registry and sessions.
+        AMUN_COUNCIL_ROOT: join(app.getPath("userData"), "roast-room"),
+        AMUN_COUNCIL_ASK: join(app.getAppPath(), "dist/council-ask-server.cjs"),
+        AMUN_COUNCIL_VENDOR: app.isPackaged
+          ? join(process.resourcesPath, "roast-room")
+          : join(app.getAppPath(), ".runtime/roast-room"),
         AMUN_DATABASE_MODULE: app.isPackaged
           ? join(process.resourcesPath, "database/node_modules/better-sqlite3")
           : join(
@@ -219,13 +232,44 @@ function openWindow(): void {
         ? { proof: "1" }
         : !app.isPackaged && app.commandLine.hasSwitch("amun-gallery")
           ? { gallery: "1" }
-          : {}),
+          : // UX rebuild: the earlier shell stays available for comparison and
+            // for its own end-to-end suites. See docs/UX-REBUILD.md.
+            app.commandLine.hasSwitch("amun-legacy-shell") ||
+              process.env.AMUN_LEGACY_SHELL === "1"
+            ? { legacy: "1" }
+            : {}),
     },
+  });
+}
+let graphics: GraphicsState | undefined;
+/** Must run before the app is ready: the switch is read when graphics start. */
+function chooseGraphics(): void {
+  const file = join(app.getPath("userData"), "graphics-mode.json");
+  graphics = planGraphics(
+    readGraphicsState(file),
+    app.getVersion(),
+    app.commandLine.hasSwitch("amun-separate-graphics") ||
+      process.env.AMUN_SEPARATE_GRAPHICS === "1",
+  );
+  if (graphics.mode === "in-process")
+    app.commandLine.appendSwitch("in-process-gpu");
+  try {
+    writeGraphicsState(file, graphics);
+  } catch {
+    /* Without a record the next launch simply starts as a first launch. */
+  }
+  app.once("quit", () => {
+    try {
+      if (graphics) writeGraphicsState(file, afterCleanExit(graphics));
+    } catch {
+      /* An unrecorded clean exit costs one launch in the separate process. */
+    }
   });
 }
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  chooseGraphics();
   app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (!window) {

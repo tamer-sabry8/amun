@@ -7,6 +7,7 @@ export default defineConfig({
         service: "src/service.ts",
         "auth-worker": "src/auth-worker.ts",
         "native-pi-worker": "src/native-pi-worker.ts",
+        "council-ask-server": "src/council-ask-server.ts",
         "worker-login-helper": "../../scripts/worker-login.ts",
       },
       formats: ["cjs"],

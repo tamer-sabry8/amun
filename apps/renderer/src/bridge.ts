@@ -1,4 +1,5 @@
 import { updateResult } from "../../../packages/contracts/src/stakeholder.ts";
+import { workEvent } from "../../../packages/contracts/src/work.ts";
 import {
   chatResult,
   backlogResult,
@@ -100,6 +101,13 @@ export function initializeBridge() {
         update({ status: "Connected", generation: id });
         bridge.send({ version: 1, kind: "workspace", action: "snapshot" });
         bridge.send({ version: 1, kind: "auth", action: "list" });
+        bridge.send({ version: 1, kind: "work", action: "snapshot" });
+        return;
+      }
+      // UX rebuild model events go straight to their own store.
+      const work = workEvent.safeParse(message.data);
+      if (work.success) {
+        for (const listener of eventListeners) listener(work.data);
         return;
       }
       const workspace = workspaceEvent.safeParse(message.data);
@@ -191,7 +199,9 @@ export function initializeBridge() {
     timer = setTimeout(() => update({ status: "Reconnecting" }), 3000);
   });
   setInterval(() => {
-    if (state.status === "Connected")
+    if (state.status === "Connected") {
       bridge.send({ version: 1, kind: "workspace", action: "snapshot" });
+      bridge.send({ version: 1, kind: "work", action: "snapshot" });
+    }
   }, 5000);
 }

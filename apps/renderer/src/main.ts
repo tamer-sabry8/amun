@@ -11,9 +11,15 @@ async function start() {
   } else if (mode.get("gallery") === "1") {
     const { startGallery } = await import("./gallery.tsx");
     startGallery();
-  } else {
+  } else if (mode.get("legacy") === "1") {
+    // UX rebuild: the earlier shell is kept whole and reachable with ?legacy=1.
+    // To make it the default again, swap this branch with the one below.
+    // See docs/UX-REBUILD.md § "Switched off, and how to restore".
     const { startShell } = await import("./shell.tsx");
     startShell();
+  } else {
+    const { startRebuiltShell } = await import("./rebuild/app.tsx");
+    startRebuiltShell();
   }
   window.postMessage({ kind: "amun-renderer-ready" }, "*");
 }

@@ -698,4 +698,300 @@ CREATE TABLE git_checkpoints (
   created_at TEXT NOT NULL,
   rolled_back_at TEXT
 );`,
+  // 29 · UX rebuild: groups, work areas, records, objectives, routing,
+  // permissions, plans, RFPs, roadmap, sprints, Library, Decisions, Council.
+  // Additive only. Existing products become product work areas with no group
+  // (asked when it first matters); nothing in earlier tables is altered.
+  `CREATE TABLE work_groups (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL UNIQUE,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE work_areas (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  type TEXT NOT NULL CHECK (type IN ('product','project','task','rfp')),
+  name TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  product_id TEXT REFERENCES products(id),
+  stakeholder INTEGER NOT NULL DEFAULT 0,
+  client TEXT,
+  client_weight INTEGER NOT NULL DEFAULT 0,
+  due_at TEXT,
+  effort TEXT CHECK (effort IS NULL OR effort IN ('XS','S','M','L')),
+  milestones INTEGER NOT NULL DEFAULT 0,
+  people INTEGER NOT NULL DEFAULT 0,
+  steps INTEGER NOT NULL DEFAULT 0,
+  declined_shape_json TEXT,
+  converted_from TEXT,
+  last_context_at TEXT,
+  interest INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX work_areas_product ON work_areas(product_id) WHERE product_id IS NOT NULL;
+INSERT INTO work_areas(id,type,name,product_id,last_context_at,created_at)
+  SELECT 'area-' || id, 'product', name, id, created_at, created_at FROM products;
+CREATE TABLE work_area_relations (
+  from_id TEXT NOT NULL REFERENCES work_areas(id),
+  to_id TEXT NOT NULL REFERENCES work_areas(id),
+  kind TEXT NOT NULL CHECK (kind IN ('implements','handoff')),
+  PRIMARY KEY (from_id, to_id, kind)
+);
+CREATE TABLE work_records (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  type TEXT NOT NULL CHECK (type IN ('idea','problem','interview','document')),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  linkage TEXT NOT NULL CHECK (linkage IN ('linked','link_later','unlinked','unresolved')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE work_record_links (
+  record_id TEXT NOT NULL REFERENCES work_records(id),
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  PRIMARY KEY (record_id, work_area_id)
+);
+CREATE TABLE work_objectives (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  metric TEXT NOT NULL,
+  baseline REAL,
+  target REAL,
+  current REAL,
+  evidence_date TEXT,
+  review_date TEXT,
+  conflict INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE work_objective_links (
+  objective_id TEXT NOT NULL REFERENCES work_objectives(id),
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  PRIMARY KEY (objective_id, work_area_id)
+);
+CREATE TABLE routing_rules (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT NOT NULL REFERENCES work_groups(id),
+  condition TEXT CHECK (condition IS NULL OR condition IN ('delivery','product','task','rfp')),
+  tracker TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX routing_rules_scope ON routing_rules(group_id, ifnull(condition,''));
+CREATE TABLE standing_permissions (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT NOT NULL REFERENCES work_groups(id),
+  destination TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE TABLE cross_group_grants (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_group_id TEXT NOT NULL REFERENCES work_groups(id),
+  target_group_id TEXT NOT NULL REFERENCES work_groups(id),
+  information TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  target_ref TEXT,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  CHECK (source_group_id <> target_group_id)
+);
+CREATE TABLE learned_rules (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT NOT NULL REFERENCES work_groups(id),
+  situation TEXT NOT NULL,
+  resolution TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('active','declined','never','revoked')),
+  uses INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX learned_rules_scope ON learned_rules(group_id, situation);
+CREATE TABLE rule_cases (
+  group_id TEXT NOT NULL REFERENCES work_groups(id),
+  situation TEXT NOT NULL,
+  resolution TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (group_id, situation, event_id)
+);
+CREATE TABLE work_attention (
+  id TEXT PRIMARY KEY NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('approval','question','risk','failure','result','offer','linking')),
+  group_id TEXT REFERENCES work_groups(id),
+  work_area_id TEXT REFERENCES work_areas(id),
+  title TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL CHECK (state IN ('open','done','snoozed')),
+  ref TEXT,
+  options_json TEXT NOT NULL DEFAULT '[]',
+  answer TEXT,
+  snoozed_until TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE TABLE work_plans (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  work_area_id TEXT REFERENCES work_areas(id),
+  kind TEXT NOT NULL CHECK (kind IN ('stories','sprint_plan','roadmap','edit')),
+  destination TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  items_json TEXT NOT NULL,
+  approved_json TEXT,
+  state TEXT NOT NULL CHECK (state IN ('proposed','approved','changes_requested','published','partial','failed')),
+  results_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  approved_at TEXT
+);
+CREATE TABLE rfps (
+  work_area_id TEXT PRIMARY KEY NOT NULL REFERENCES work_areas(id),
+  client TEXT NOT NULL DEFAULT '',
+  stage TEXT NOT NULL CHECK (stage IN ('received','in_response','submitted','won','handed_to_delivery','lost','withdrawn')),
+  deadline TEXT,
+  response_owner TEXT,
+  account_owner TEXT,
+  presales TEXT,
+  proposal_signed INTEGER NOT NULL DEFAULT 0,
+  brd_approved INTEGER NOT NULL DEFAULT 0,
+  delivery_project_id TEXT REFERENCES work_areas(id),
+  loss_reason TEXT
+);
+CREATE TABLE roadmap_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  title TEXT NOT NULL,
+  horizon TEXT NOT NULL CHECK (horizon IN ('now','next','later')),
+  position INTEGER NOT NULL,
+  committed INTEGER NOT NULL DEFAULT 0,
+  estimated INTEGER NOT NULL DEFAULT 0,
+  release TEXT,
+  start TEXT,
+  end TEXT,
+  reach REAL,
+  impact REAL,
+  confidence REAL,
+  effort REAL
+);
+CREATE TABLE work_sprints (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  name TEXT NOT NULL,
+  team TEXT,
+  start TEXT NOT NULL,
+  end TEXT NOT NULL,
+  goal TEXT NOT NULL DEFAULT '',
+  draft INTEGER NOT NULL DEFAULT 1,
+  done INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  blocked INTEGER NOT NULL DEFAULT 0,
+  changed_in_ado INTEGER NOT NULL DEFAULT 0,
+  capacity REAL,
+  stories_json TEXT NOT NULL DEFAULT '[]',
+  out_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE TABLE calendar_exceptions (
+  date TEXT PRIMARY KEY NOT NULL,
+  label TEXT NOT NULL
+);
+CREATE TABLE library_outputs (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'Draft',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE library_output_links (
+  output_id TEXT NOT NULL REFERENCES library_outputs(id),
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  PRIMARY KEY (output_id, work_area_id)
+);
+CREATE TABLE decision_log (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  work_area_id TEXT REFERENCES work_areas(id),
+  what TEXT NOT NULL,
+  options_json TEXT NOT NULL DEFAULT '[]',
+  decided_by TEXT CHECK (decided_by IS NULL OR decided_by IN ('you','client','firstmate_recommended')),
+  decided_at TEXT,
+  outcome TEXT,
+  affected_json TEXT NOT NULL DEFAULT '[]',
+  source TEXT NOT NULL CHECK (source IN ('conversation','council','exception')),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE scope_answers (
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  item TEXT NOT NULL,
+  answer TEXT NOT NULL CHECK (answer IN ('add_anyway','link_cr','keep_out')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (work_area_id, item)
+);
+CREATE TABLE work_agents (
+  id TEXT PRIMARY KEY NOT NULL,
+  role TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('lead','always_on','temporary')),
+  launcher_id TEXT REFERENCES work_agents(id),
+  state TEXT NOT NULL CHECK (state IN ('working','waiting','idle','done')),
+  now_doing TEXT,
+  output TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE work_activity (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  work_area_id TEXT REFERENCES work_areas(id),
+  text TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('running','finished','failed')),
+  progress REAL,
+  ref TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE council_sessions (
+  id TEXT PRIMARY KEY NOT NULL,
+  decision TEXT NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  work_area_id TEXT REFERENCES work_areas(id),
+  mode TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('running','waiting_on_you','finished','failed')),
+  recommendation TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE findings (
+  id TEXT PRIMARY KEY NOT NULL,
+  record_id TEXT NOT NULL REFERENCES work_records(id),
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE finding_plans (
+  finding_id TEXT NOT NULL REFERENCES findings(id),
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  plan_id TEXT NOT NULL REFERENCES work_plans(id),
+  deferred INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (finding_id, work_area_id)
+);
+CREATE TABLE memory_claims (
+  id TEXT PRIMARY KEY NOT NULL,
+  group_id TEXT REFERENCES work_groups(id),
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  source TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL CHECK (state IN ('current','superseded','disputed')),
+  superseded_by TEXT REFERENCES memory_claims(id),
+  synced INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE work_messages (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  role TEXT NOT NULL CHECK (role IN ('you','firstmate','card')),
+  text TEXT NOT NULL,
+  card_json TEXT,
+  created_at TEXT NOT NULL
+);`,
 ] as const;
