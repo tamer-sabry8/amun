@@ -21,7 +21,7 @@ These come from `AGENTS.md` and the owner's instructions. Read `AGENTS.md` first
 - Use throwaway profiles only (`--user-data-dir=<temp folder>`). Never use or modify the owner's personal Firstmate, Herdr or Pi homes, sessions, locks or configuration. Never enter credentials.
 - Do not switch or reset the owner's checkout. Work in an isolated worktree.
 - The beta is ad-hoc signed for Apple-chip Macs. Do not claim notarization or public-release readiness.
-- Do not merge PR #10. Do not start T022c without the owner's approval.
+- Do not start T022c without the owner's approval.
 - Commit, push or open a PR only when the owner asks.
 
 ## How to build and measure

@@ -25,9 +25,7 @@ plan, RFP, roadmap, sprint, Library, Decisions, Council, findings and memory-cla
 every existing product as a product work area with no group. No earlier table is altered and no
 earlier migration is edited. The beta shipped at migration 24; main was at 28.
 
-PR #10 (`fix/r1-beta-bugs`) adds its `diagnostic_events` migration at position 25, which main has
-since used for another change. If that work is brought in, its migration must be re-appended after
-29, never inserted at 25.
+Migrations are append-only: a later change is added after the newest one, never inserted earlier.
 
 ## Switched off, and how to restore
 

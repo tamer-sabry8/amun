@@ -1,6 +1,6 @@
 # Amun · handoff for the next agent
 
-13 November 2026. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This file replaces `docs/HANDOFF-WORKFLOW-WIRING.md`.
+13 November 2026, updated after pull request 22. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This is the only current handoff; the other `docs/*HANDOFF*.md` files are history, except the two memory documents named below.
 
 ## What Amun is
 
@@ -13,7 +13,7 @@ Three outside projects are bundled and must stay on their own upstream update pa
 | What                    | Where                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------- |
 | Repository              | https://github.com/tamer-sabry8/amun                                            |
-| Branch to start from    | `main` (at `1a382f4` when this was written; CI green)                           |
+| Branch to start from    | `main` (at `7cad71d` when this was written; CI green)                           |
 | Open pull requests      | None                                                                            |
 | Local checkout          | `/Users/tamersabry/Projects/amun`                                               |
 | Worktree used so far    | `/Users/tamersabry/Projects/amun/.claude/worktrees/amun-workflow-wiring-e0ccc3` |
@@ -23,6 +23,33 @@ Three outside projects are bundled and must stay on their own upstream update pa
 | Development app profile | `~/Library/Application Support/Amun-Workflow-Dev` (the owner is signed in here) |
 
 Create a new branch from `main` and a new pull request for your work. Other agents may be working in other worktrees of this repository; do not touch their worktrees or branches.
+
+## What landed on `main` on 13 November 2026
+
+Every commit on `main` that day, grouped by the pull request that carried it. Use it to find where a behaviour came from; `git show <commit>` gives the detail.
+
+| Pull request                         | What it delivered                                                                                                                                                                                                                                          | Commits                                                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 16 · UX rebuild                      | The rebuilt shell ("shell v3"), the product model (groups, work areas, plans, sprints, library), the Council integration, and in-process graphics with a crash fallback. See `docs/UX-REBUILD.md`.                                                         | `cff59e0`, `efec90c`, `e9874c0`                                             |
+| 17 · Packaged memory margin          | Brought the packaged app under its 500 MiB budget and fixed an ambiguous button match in the app journey.                                                                                                                                                  | `1297fd1`, `b86e042`                                                        |
+| 19 · Memory handoff and measurements | Documentation and evidence only: `docs/2026-11-13-PACKAGED-MEMORY-HANDOFF.md` and the combined-branch readings.                                                                                                                                            | `c46cf36`, `a2c6e35`                                                        |
+| 18 · Workflow wiring                 | Approved plans publish to Azure DevOps and Notion; plan review with per-item destinations and partial approval; a message waits for a provider; attachments are read and filed.                                                                            | `99ce89d`, `5dc8518`, `9e3e34d`, `fab1dc7`, `d4fa9ea`, `f0dc5a4`, `549353a` |
+| 20 · Setup sign-in fixes             | Fixed sign-in stuck on "Checking…", a lost check and the hidden device code; "Signed in" instead of "Connected"; "Employer" renamed "Work"; the simpler How you work step; the twenty agents with avatars.                                                 | `6b72b74`, `81e5d9f`, `8537aad`                                             |
+| 21 · Tools, chat and sidebar         | Firstmate-only chat with the labelled layout; the model shown and selectable in the prompt box; Home fixes; tool detection and its screen; more Pi sign-ins; the downloads fly-out; the sidebar and Island redesign; the tool switch enforced at dispatch. | `101004b`, `231d35e`, `407d2e3`, `80e2b50`                                  |
+| 22 · This handoff                    | Documentation only; also records that pull request 10 is closed.                                                                                                                                                                                           | `e179366`                                                                   |
+
+Two migrations were added that day: 30 (`plan_writes`, in `99ce89d`) and 31 (`split_from`, in `fab1dc7`).
+
+### Packaged memory: where it stands
+
+The packaged app has a fixed budget of 500 MiB, summed across every process, at the first screen and on Home. Read `docs/2026-11-13-PACKAGED-MEMORY-HANDOFF.md` before touching `apps/desktop/src/main.ts` or `graphics-mode.ts`; it lists what must be preserved.
+
+- **Last measurement:** Home 479 to 483 MiB, taken at `c46cf36`. That build had pull request 17 but **not** pull requests 18, 20 or 21.
+- **Not measured since.** Pull requests 18, 20 and 21 added screens, twenty avatar images, a tool probe and a conversation that now opens shortly after launch to learn the model. Any of these could move the number. Nobody has packaged or measured current `main`.
+- **Startup:** the first launch after signing took about 7.5 seconds against a 3-second gate. That gate is still open and is the owner's call.
+- **How to measure:** `AMUN_BETA=1 pnpm package`, then `node scripts/rebuild-performance-proof.ts` and `node scripts/graphics-fallback-proof.ts`. Use disposable profiles only.
+
+If your work adds to startup or memory, measure before and after and report the real numbers. Do not raise the budget or leave a process out of the sum.
 
 ## Your assignment
 
@@ -183,7 +210,7 @@ Messages are stored per work area in `work_messages` (`packages/data/src/work-st
 - A real conversation turn with Firstmate inside the rebuilt app ("Our pilot is in Dubai" then "Where is our pilot?").
 - Sign-ins for xAI, Kimi Code and Meta.
 - Screenshot capture, and an image actually reaching a model.
-- The packaged app's 500 MiB memory check on current `main`. Today's work added screens and images, and the budget was already at its limit.
+- The packaged app's 500 MiB memory check on current `main`. The last reading (479 to 483 MiB on Home) predates pull requests 18, 20 and 21.
 - Development performance and memory measurements the owner's scope asks for.
 
 ## Not built (do not start without asking)
@@ -199,6 +226,8 @@ Council room and one Quick Council; product memory in Notion; composer sources f
 - **The automated Codex reviewer** comments on every pull request marked ready. Its findings have been right more often than not. Fix them or reply with the reason, then resolve the thread.
 - **Browser sign-in pages are allow-listed** per provider in `packages/auth/src/pi-auth.ts`. A new provider needs its host added there or sign-in fails closed.
 - **Tool detection cannot tell whether a tool is signed in.** It runs only each tool's version command, on purpose.
+- **A waiting message is never dropped.** It stays saved until Firstmate has answered, and one attempt runs at a time per work area (`inFlight` in `apps/renderer/src/rebuild/firstmate.ts`). CI caught an earlier version losing it.
+- **The app opens a Firstmate conversation about a second after launch** to learn the model for the prompt box (`prime` in `firstmate.ts`). Keep that in mind for startup and memory.
 - **Hooks must sit above early returns** in `apps/renderer/src/rebuild/app.tsx`. A hook placed after the setup check blanks the app when setup finishes.
 - **CI takes about 16 to 20 minutes** and runs the full app-test suite on macOS.
 
