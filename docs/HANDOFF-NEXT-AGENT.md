@@ -48,13 +48,13 @@ The packaged app has a fixed budget of 500 MiB, summed across every process, at 
 
 Measured on 13 November 2026 on one Apple-chip Mac, disposable profiles, three launches per run:
 
-| Build                                                | Launches | First screen (MiB) | Home (MiB) |
-| ---------------------------------------------------- | -------- | ------------------ | ---------- |
-| `c46cf36` (pull request 17 only; the earlier record) | 36       | not recorded here  | 479 to 483 |
-| `7cad71d` (after pull requests 18, 20, 21)           | 9        | 454 to 470         | 496 to 508 |
-| `1124133` (pull request 24)                          | 9        | 463 to 469         | 509 to 517 |
-| `1124133` with every animation off                   | 3        | 462 to 468         | 500 to 501 |
-| `1124133` with entrance animations off               | 6        | 453 to 462         | 484 to 497 |
+| Build                                                                  | Launches                 | First screen (MiB) | Home (MiB) |
+| ---------------------------------------------------------------------- | ------------------------ | ------------------ | ---------- |
+| `c46cf36` (pull request 17 only; as recorded earlier, not re-measured) | see `docs/evidence/T056` | not recorded here  | 479 to 483 |
+| `7cad71d` (after pull requests 18, 20, 21)                             | 9                        | 454 to 470         | 496 to 508 |
+| `1124133` (pull request 24)                                            | 9                        | 463 to 469         | 509 to 517 |
+| `1124133` with every animation off                                     | 3                        | 462 to 468         | 500 to 501 |
+| `1124133` with entrance animations off                                 | 6                        | 453 to 462         | 484 to 497 |
 
 - **Pull requests 18, 20 and 21 added about 20 MiB on Home.** Nobody has found which parts.
 - **Pull request 24 adds about 10 MiB on Home.** The cost is the entrance animations together (the screen easing in, staggered lists, Firstmate's card settling, ticks drawing, the reply reveal). No single one accounts for more than about 2 MiB. Loops, the pulse and the static styles cost nothing measurable.
