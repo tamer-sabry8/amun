@@ -445,6 +445,25 @@ export const themeIds = [
   "navy-gold",
   "navy-cyan",
   "amun-light",
+  // Colours taken from three open theme sets (13 November 2026). Colour only:
+  // each maps its source palette onto the same roles the first four use.
+  "nimbus",
+  "nimbus-maritime",
+  "nimbus-warm",
+  "df-aurora",
+  "df-copper",
+  "df-ember",
+  "df-garnet",
+  "df-midnight",
+  "df-neumorph",
+  "df-sage",
+  "df-slate",
+  "lg-slate",
+  "lg-nous",
+  "lg-midnight",
+  "lg-ember",
+  "lg-mono",
+  "lg-cyberpunk",
 ] as const;
 export type ThemeId = (typeof themeIds)[number];
 /** Default follows macOS appearance; a manual choice in Settings overrides it (Q69). */

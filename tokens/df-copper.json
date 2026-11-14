@@ -1,0 +1,142 @@
+{
+  "color": {
+    "canvas": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.102, 0.063, 0.031],
+        "alpha": 1
+      }
+    },
+    "navigation": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.1705, 0.118, 0.0705],
+        "alpha": 1
+      }
+    },
+    "card": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.239, 0.173, 0.11],
+        "alpha": 1
+      }
+    },
+    "text": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1.0, 0.953, 0.91],
+        "alpha": 1
+      }
+    },
+    "supporting": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.749, 0.627, 0.565],
+        "alpha": 1
+      }
+    },
+    "accent": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.957, 0.635, 0.38],
+        "alpha": 1
+      }
+    },
+    "accent-soft": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1.0, 0.718, 0.302],
+        "alpha": 1
+      }
+    },
+    "structure": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.29, 0.188, 0.125],
+        "alpha": 1
+      }
+    },
+    "control-border": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.5772, 0.4786, 0.4236],
+        "alpha": 1
+      }
+    },
+    "button-start": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.3981, 0.2642, 0.1581],
+        "alpha": 1
+      }
+    },
+    "button-end": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.6125, 0.4064, 0.2432],
+        "alpha": 1
+      }
+    },
+    "button-text": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1, 1, 1],
+        "alpha": 1
+      }
+    }
+  },
+  "status": {
+    "connected": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.4, 0.733, 0.416],
+        "alpha": 1
+      }
+    },
+    "signed-out": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1.0, 0.655, 0.149],
+        "alpha": 1
+      }
+    },
+    "error": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.9496, 0.46, 0.4512],
+        "alpha": 1
+      }
+    },
+    "checking": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.8243, 0.7248, 0.6685],
+        "alpha": 1
+      }
+    },
+    "info": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.392, 0.71, 0.965],
+        "alpha": 1
+      }
+    }
+  }
+}
