@@ -56,6 +56,92 @@ describe("Azure DevOps plan items", () => {
       },
     });
   });
+  it("reads the labelled fields a model writes, not only the short names", () => {
+    const step = adoStep(
+      item({
+        "Work item type": "Product Backlog Item",
+        Project: "TahalufCollection/POCs",
+        Title: "Invite <10> testers",
+        Description: "Synthetic record.",
+        "Acceptance criteria": "1. Created once. 2. Shows its ID.",
+        "Assigned to": "",
+        Iteration: "POCs\\Sprint 1",
+        Estimate: "",
+      }),
+      schema,
+      "POCs",
+      "https://devops.example/TahalufCollection/",
+    );
+    expect(step.fields).toEqual({
+      "System.Title": "Invite <10> testers",
+      "System.Description": "<p>Synthetic record.</p>",
+      "Microsoft.VSTS.Common.AcceptanceCriteria":
+        "<ul><li>1. Created once.</li><li>2. Shows its ID.</li></ul>",
+      "System.IterationPath": "POCs\\Sprint 1",
+    });
+  });
+  it("accepts only this connection's own project name", async () => {
+    const own = "https://devops.example/Collection/";
+    for (const Project of [
+      "POCs",
+      "Collection/POCs",
+      "https://devops.example/Collection/POCs",
+    ])
+      expect(() =>
+        adoStep(item({ Project }), schema, "POCs", own),
+      ).not.toThrow();
+    for (const Project of [
+      "Other/POCs",
+      "https://other.example/Collection/POCs",
+      "Elsewhere/Collection/POCs",
+    ])
+      expect(() => adoStep(item({ Project }), schema, "POCs", own)).toThrow(
+        PlanNotSent,
+      );
+    expect(() =>
+      adoStep(item({ Project: "Collection/POCs" }), schema, "POCs"),
+    ).toThrow(PlanNotSent);
+    let writes = 0;
+    const target = adoPlanTarget(
+      own,
+      "POCs",
+      { processSchema: async () => schema },
+      {
+        write: async () => {
+          writes += 1;
+          return { id: 1 };
+        },
+        find: async () => undefined,
+      },
+    );
+    await expect(
+      target.write(item({ Project: "Foreign/POCs" })),
+    ).rejects.toBeInstanceOf(PlanNotSent);
+    expect(writes).toBe(0);
+  });
+  it("refuses a value that would be dropped instead of dropping it", () => {
+    for (const fields of [
+      { "Assigned to": "Tamer" },
+      { Estimate: "5" },
+      { "Story points": 3 },
+      { Project: "Other" },
+      { Project: "Foreign/POCs" },
+      { Title: "A different title" },
+      { Description: "One", body: "Two" },
+    ])
+      expect(() => adoStep(item(fields), schema, "POCs")).toThrow(PlanNotSent);
+    const noDescription = {
+      ...schema,
+      types: [{ name: "Bug", fields: [field("System.Title")] }],
+    } as unknown as AzureProcessSchema;
+    expect(() =>
+      adoStep(
+        item({ type: "Bug", Description: "Lost?" }),
+        noDescription,
+        "POCs",
+      ),
+    ).toThrow(/no Description field/);
+  });
   it("refuses a type, area or iteration the project does not have", () => {
     expect(() => adoStep(item({ type: "Epic" }), schema, "POCs")).toThrow(
       PlanNotSent,
@@ -137,6 +223,48 @@ describe("Notion plan items", () => {
       title: "Invite <10> testers",
       text: "Hello\n\nAmun publication ID: 3b0f6a52-58a5-4c0e-9d3e-6f7a1f1f0c11",
     });
+  });
+  it("publishes the reviewed title and body from labelled fields", async () => {
+    const sent: { title: string; text: string }[] = [];
+    const target = notionPlanTarget(destination, "ws", {
+      publish: async (input, _workspace, beforeSend) => {
+        beforeSend();
+        sent.push(input);
+        return { state: "created", pageId: page };
+      },
+      locate: async () => undefined,
+    });
+    await target.write({
+      ...item({
+        ParentPageId: destination.parentId.replaceAll("-", "").toUpperCase(),
+        Title: "QA Smoke",
+        Body: "Synthetic page.",
+      }),
+      summary: "Create page QA Smoke",
+      destination: "notion",
+    });
+    expect(sent[0]).toMatchObject({ title: "QA Smoke" });
+    expect(sent[0]!.text).toMatch(/^Synthetic page\.\n\nAmun publication ID/);
+  });
+  it("refuses a different parent or an unsupported field without sending", async () => {
+    let calls = 0;
+    const target = notionPlanTarget(destination, "ws", {
+      publish: async () => {
+        calls += 1;
+        return { state: "created", pageId: page };
+      },
+      locate: async () => undefined,
+    });
+    for (const fields of [
+      { ParentPageId: "22222222222243338444555555555555" },
+      { parent: "not an id" },
+      { Icon: "rocket" },
+      { Body: "One", description: "Two" },
+    ])
+      await expect(
+        target.write({ ...item(fields), destination: "notion" }),
+      ).rejects.toBeInstanceOf(PlanNotSent);
+    expect(calls).toBe(0);
   });
   it("separates a request that never left from an unconfirmed one", async () => {
     const offline = notionPlanTarget(destination, "ws", {

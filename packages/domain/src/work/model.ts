@@ -334,3 +334,32 @@ export function rfpFromRequest(
   }
   return { name, client, due, groupId };
 }
+
+/**
+ * The labelled facts an RFP request states outright: client "QA Sandbox",
+ * deadline 2026-12-01, owner Tamer. Anything missing, or said to be unknown,
+ * stays empty. The owner here is the response owner.
+ */
+export function rfpDetails(text: string) {
+  const known = (value: string | undefined) => {
+    const clean = value?.trim();
+    return clean && !unknownValue.test(clean) ? clean : null;
+  };
+  const client = known(
+    /\bclient\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
+      /\bclient\s*(?:is|:)\s*([^.;,\n]+)/i.exec(text)?.[1],
+  );
+  const day = /\b(?:deadline|due)\s*(?:is|:|on)?\s*(\d{4}-\d{2}-\d{2})\b/i.exec(
+    text,
+  )?.[1];
+  const deadline =
+    day && !Number.isNaN(Date.parse(day))
+      ? new Date(day + "T00:00:00.000Z").toISOString()
+      : null;
+  const owner = known(
+    /(?<!account\s)\b(?:response\s+)?owner\s*(?:is|:)?\s*["“]?([^",.;\n]+?)["”]?(?=\s*[,.;\n]|$)/i.exec(
+      text,
+    )?.[1],
+  );
+  return { client, deadline, owner };
+}

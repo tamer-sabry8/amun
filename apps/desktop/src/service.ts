@@ -143,7 +143,10 @@ import type Database from "better-sqlite3";
 import { openWorkspace } from "../../../packages/data/src/workspace.ts";
 import { observeCandidate } from "../../../packages/crew/src/herdr-candidate.ts";
 import { CrewObserver } from "../../service/src/crew-observer.ts";
-import { observeOwnedTmux } from "../../../packages/crew/src/observe-owned-tmux.ts";
+import {
+  endpointPresence,
+  observeOwnedTmux,
+} from "../../../packages/crew/src/observe-owned-tmux.ts";
 import { openBackendTerminal } from "../../service/src/backend-terminal.ts";
 import { backendTerminalOpen } from "../../../packages/contracts/src/terminal.ts";
 import { piOpen } from "../../../packages/contracts/src/index.ts";
@@ -885,12 +888,23 @@ process.parentPort?.on("message", (event) => {
       await supervisor.ensureRunning();
       // Start the worker (this does nothing when it is already running) and
       // let it reach its own prompt before any job is sent.
-      await dispatchFirstmate(
+      const dispatched = await dispatchFirstmate(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
         process.env.AMUN_TMUX_BINARY!,
         { harness, charter: deliveryCharter },
       );
+      // A worker that is not verifiably running is never waited for.
+      if (
+        (
+          await observeOwnedTmux(
+            process.env.AMUN_CREW_RECEIPTS!,
+            "amun-" + harness,
+            process.env.AMUN_TMUX_BINARY!,
+          )
+        ).endpoint !== "verified"
+      )
+        throw new Error("The worker is not running. " + dispatched);
       const receipt = await loadEndpointReceipt(
         process.env.AMUN_CREW_RECEIPTS!,
         "amun-" + harness,
@@ -919,6 +933,15 @@ process.parentPort?.on("message", (event) => {
           ),
       });
       return blocked ? "asks-trust" : "ready";
+    },
+    async workerGone(harness) {
+      return (
+        (await endpointPresence(
+          process.env.AMUN_CREW_RECEIPTS!,
+          "amun-" + harness,
+          process.env.AMUN_TMUX_BINARY!,
+        )) === "gone"
+      );
     },
     // The owner's answer is kept per worker folder: a new folder asks again.
     trust: {

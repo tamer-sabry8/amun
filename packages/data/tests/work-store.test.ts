@@ -1400,4 +1400,49 @@ describe("a failed publication says what failed and why", () => {
         "“Change product name” was not created. Publishing to Amun is not available yet. Nothing was duplicated.",
     });
   });
+  it("an RFP made from Home is on the board with its stated fields, once", () => {
+    const { employer } = setup();
+    const made = send("save-rfp", {
+      groupId: employer,
+      name: "QA-20261114-RFP-Retest",
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: "Tamer",
+    }).ref!;
+    send("save-rfp", {
+      groupId: employer,
+      name: "QA-20261114-RFP-Retest",
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: "Tamer",
+    });
+    const rfps = snap().rfps.filter((item) => item.id === made);
+    expect(rfps).toMatchObject([
+      {
+        client: "QA Sandbox",
+        stage: "received",
+        deadline: "2026-12-01T00:00:00.000Z",
+        responseOwner: "Tamer",
+        accountOwner: null,
+      },
+    ]);
+    expect(snap().rfps).toHaveLength(1);
+    expect(snap().areas.find((a) => a.id === made)).toMatchObject({
+      type: "rfp",
+      groupId: employer,
+    });
+  });
+  it("an RFP work area made another way is still on the board, unknowns empty", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Bare",
+    }).ref!;
+    expect(snap().rfps).toMatchObject([
+      { id: made, stage: "received", client: "", deadline: null },
+    ]);
+    send("create-area", { groupId: employer, type: "rfp", name: "Bare" });
+    expect(snap().rfps).toHaveLength(1);
+  });
 });

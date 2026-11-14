@@ -1116,11 +1116,29 @@ describe("what Firstmate is told about where it runs and what an RFP is", () => 
       "never call work done until an agent's result",
     );
   });
+  it("describes the RFP record only where one is provided", () => {
+    expect(workTypeGuard("rfp")).not.toContain("The record Amun holds");
+    expect(workTypeGuard("rfp")).toContain("board record is unverified");
+    expect(workTypeGuard("rfp")).not.toContain("already exists in Amun's RFPs");
+    const guard = workTypeGuard("rfp", {
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: null,
+      stage: "received",
+    });
+    expect(guard).toContain("client QA Sandbox, deadline 2026-12-01");
+    expect(guard).toContain("response owner not set");
+  });
+  it("tells Firstmate the work already exists when asked to create it", () => {
+    expect(amunProtocol).toContain("already exists in Amun");
+    expect(amunProtocol).toContain("Do not say you cannot create it");
+  });
   it("keeps an RFP to tracking and leaves other work alone", () => {
     const guard = workTypeGuard("rfp");
     expect(guard).toContain("only tracks");
     expect(guard).toContain("do not invent values");
     expect(guard).toContain("do not write it, start it or offer a proposal");
+    expect(guard).toContain("already exists");
     expect(workTypeGuard("product")).toBe("");
     expect(workTypeGuard("task")).toBe("");
   });

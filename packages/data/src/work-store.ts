@@ -735,6 +735,15 @@ export class WorkStore {
         return this.intake(command);
       case "create-area": {
         const created = this.createArea(command);
+        // An RFP area is a board record from the start, so it is never a
+        // work with no place on the RFPs board.
+        if (command.type === "rfp" && !created.existing)
+          this.run(
+            "INSERT OR IGNORE INTO rfps(work_area_id,client,stage,deadline) VALUES (?,?,'received',?)",
+            created.id,
+            command.client ? this.clean(command.client) : "",
+            command.dueAt ?? null,
+          );
         return {
           ref: created.id,
           message: created.existing

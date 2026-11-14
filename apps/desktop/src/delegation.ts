@@ -21,6 +21,11 @@ export interface DelegationDeps {
    * text (same group only). Empty when there are none.
    */
   sources?(areaId: string, task: string): string;
+  /**
+   * True only when the worker is proven not to be running any more. Unknown
+   * is false: a worker that may still be alive is never given up on.
+   */
+  workerGone?(harness: Harness): Promise<boolean>;
   /** The work the job belongs to, or null when it no longer exists. */
   area(id: string): {
     name: string;
@@ -392,6 +397,17 @@ export class Delegations {
       // result: the worker may still be reviewing or extending it.
       if ((await exists("done")) >= 0 && size > 0) {
         await this.finish(job, "done", { text: await read() });
+        return;
+      }
+      if (
+        size <= 0 &&
+        (await exists("done")) < 0 &&
+        (await this.deps.workerGone?.(job.harness).catch(() => false))
+      ) {
+        // Nothing is resent: the owner asks again, so no job is run twice.
+        await this.finish(job, "failed", {
+          note: `${job.agent} is no longer running, so “${job.title}” was not finished and no result came back. Nothing was lost; ask me to try again.`,
+        });
         return;
       }
       if (Date.now() > until) {

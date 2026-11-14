@@ -111,8 +111,14 @@ it("files a grouped area's result as a draft linked to that work", async () => {
   expect(draft.groupId).toBe(r.groups[0]!.id);
   expect(draft.workAreaIds).toEqual([r.areaId]);
   expect(draft.body).toContain("Double booking");
-  const saved = JSON.parse(await readFile(join(root, id, "job.json"), "utf8"));
-  expect(saved.saved).toBe(true);
+  const savedFlag = async () =>
+    JSON.parse(
+      (await readFile(join(root, id, "job.json"), "utf8").catch(() => "{}")) ||
+        "{}",
+    ).saved;
+  for (let i = 0; i < 100 && (await savedFlag()) !== true; i++)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(await savedFlag()).toBe(true);
 });
 
 it("keeps a result whose draft could not be saved and files it after a restart, once", async () => {

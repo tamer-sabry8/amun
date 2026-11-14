@@ -317,3 +317,27 @@ it("a waiting job is not sent by a restart, only by the owner's answer", async (
   await new Promise((resolve) => setTimeout(resolve, 60));
   expect(delivered).toEqual([]);
 });
+
+it("fails a sent job whose worker is proven gone, once, without resending", async () => {
+  let gone = false;
+  const delegations = make({ workerGone: async () => gone });
+  await delegations.start(job);
+  expect(delivered).toHaveLength(1);
+  gone = true;
+  await until(() => of("message").length > 0);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(of("message")).toHaveLength(1);
+  expect(String(of("message")[0]!.text)).toContain("no longer running");
+  expect(of("activity").filter((c) => c.state === "failed")).toHaveLength(1);
+  expect(delivered).toHaveLength(1);
+});
+
+it("keeps waiting for a worker that is not proven gone", async () => {
+  const delegations = make({ workerGone: async () => false });
+  const id = (await delegations.start(job))!;
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(of("message")).toHaveLength(0);
+  await work(id, "Result");
+  await until(() => of("message").length > 0);
+  expect(String(of("message")[0]!.text)).toContain("finished");
+});

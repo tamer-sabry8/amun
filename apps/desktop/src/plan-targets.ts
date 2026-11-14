@@ -12,7 +12,10 @@ import type {
   NotionPublication,
   NotionResult,
 } from "../../../packages/connectors-notion/src/client.ts";
-import type { NotionDestination } from "../../../packages/auth/src/notion-result.ts";
+import {
+  uuidFromReference,
+  type NotionDestination,
+} from "../../../packages/auth/src/notion-result.ts";
 
 const storyTypes = [
   "User Story",
@@ -28,13 +31,75 @@ const escape = (value: string) =>
 const text = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
+// The plan's field names as written by people or models ("Acceptance
+// criteria", "Work item type") mapped to the names this adapter uses. Any
+// other field with a value, such as "Assigned to" or "Estimate", is refused
+// instead of being dropped; blank ones are ignored.
+const fieldNames: Record<string, string> = {
+  title: "title",
+  description: "description",
+  body: "description",
+  acceptance: "acceptance",
+  acceptancecriteria: "acceptance",
+  type: "type",
+  workitemtype: "type",
+  area: "area",
+  areapath: "area",
+  iteration: "iteration",
+  iterationpath: "iteration",
+  project: "project",
+  destination: "destination",
+};
+/** The project itself, or it under this connection's own collection. */
+function ownProject(named: string, project: string, collection?: string) {
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const clean = named.trim().replace(/\/+$/, "");
+  if (same(clean, project)) return true;
+  if (!collection) return false;
+  const base = collection.replace(/\/+$/, "");
+  const name = decodeURIComponent(base.split("/").at(-1) ?? "");
+  return [`${name}/${project}`, `${base}/${project}`].some((own) =>
+    same(clean, own),
+  );
+}
+
+function planFields(item: PlanWriteItem, project: string, collection?: string) {
+  const fields: Record<string, string> = {};
+  const refused: string[] = [];
+  for (const [label, raw] of Object.entries(item.fields)) {
+    const value = text(raw === null ? null : String(raw));
+    if (!value) continue;
+    const key = label.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = fieldNames[key];
+    if (!name) {
+      refused.push(label);
+      continue;
+    }
+    if (fields[name] !== undefined && fields[name] !== value)
+      throw new PlanNotSent(`“${label}” conflicts with another ${name} value.`);
+    fields[name] = value;
+  }
+  if (refused.length)
+    throw new PlanNotSent(
+      `Amun cannot send ${refused.map((name) => `“${name}”`).join(", ")} to Azure DevOps yet. Remove ${refused.length === 1 ? "it" : "them"} or leave ${refused.length === 1 ? "it" : "them"} blank.`,
+    );
+  if (fields.title && fields.title !== item.summary.trim())
+    throw new PlanNotSent("The title in the fields differs from the title.");
+  const named = fields.project;
+  if (named && !ownProject(named, project, collection))
+    throw new PlanNotSent(`“${named}” is not the project ${project}.`);
+  return fields;
+}
+
 /** The exact Azure work item a plan item becomes. Same input, same step. */
 export function adoStep(
   item: PlanWriteItem,
   schema: AzureProcessSchema,
   project: string,
+  collection?: string,
 ): AdoStep {
-  const wanted = text(item.fields.type);
+  const supplied = planFields(item, project, collection);
+  const wanted = supplied.type ?? null;
   const type = wanted
     ? schema.types.find(
         (entry) => entry.name.toLowerCase() === wanted.toLowerCase(),
@@ -50,26 +115,41 @@ export function adoStep(
     );
   const has = (name: string) =>
     type.fields.some((field) => field.referenceName === name);
+  const require = (name: string, label: string) => {
+    if (!has(name))
+      throw new PlanNotSent(
+        `${type.name} in ${project} has no ${label} field, so it would be lost.`,
+      );
+  };
   const fields: AdoStep["fields"] = { "System.Title": item.summary };
-  const description = text(item.fields.description);
-  if (description && has("System.Description"))
+  const description = supplied.description ?? null;
+  if (description) {
+    require("System.Description", "Description");
     fields["System.Description"] = "<p>" + escape(description) + "</p>";
-  const acceptance = text(item.fields.acceptance);
-  if (acceptance && has("Microsoft.VSTS.Common.AcceptanceCriteria"))
+  }
+  const acceptance = supplied.acceptance ?? null;
+  if (acceptance) {
+    require("Microsoft.VSTS.Common.AcceptanceCriteria", "Acceptance criteria");
     fields["Microsoft.VSTS.Common.AcceptanceCriteria"] =
       "<ul>" +
       acceptance
         .split(/\n+/)
-        .map((line) => "<li>" + escape(line.trim()) + "</li>")
+        .flatMap((line) =>
+          /^1[.)]\s/.test(line) ? line.split(/\s+(?=\d+[.)]\s)/) : [line],
+        )
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => "<li>" + escape(line) + "</li>")
         .join("") +
       "</ul>";
-  const area = text(item.fields.area);
+  }
+  const area = supplied.area ?? null;
   if (area) {
     if (!schema.areas.includes(area))
       throw new PlanNotSent(`“${area}” is not an area path in ${project}.`);
     fields["System.AreaPath"] = area;
   }
-  const iteration = text(item.fields.iteration);
+  const iteration = supplied.iteration ?? null;
   if (iteration) {
     if (!schema.iterations.includes(iteration))
       throw new PlanNotSent(
@@ -104,7 +184,12 @@ export function adoPlanTarget(
   });
   let schema: Promise<AzureProcessSchema> | undefined;
   const step = async (item: PlanWriteItem) =>
-    adoStep(item, await (schema ??= reader.processSchema()), project);
+    adoStep(
+      item,
+      await (schema ??= reader.processSchema()),
+      project,
+      collection,
+    );
   return {
     async write(item) {
       let prepared: AdoStep;
@@ -123,6 +208,57 @@ export function adoPlanTarget(
       return found ? receipt(found.id) : undefined;
     },
   };
+}
+
+const notionNames: Record<string, string> = {
+  title: "title",
+  body: "body",
+  description: "body",
+  parentpageid: "parent",
+  parentid: "parent",
+  parent: "parent",
+  destination: "destination",
+};
+
+/**
+ * The page a plan item becomes. The reviewed Title is the page title (the
+ * item summary describes the action); the parent may only repeat the
+ * connector-verified destination, never change it. Anything else with a
+ * value is refused instead of being dropped.
+ */
+function notionPage(item: PlanWriteItem, destination: NotionDestination) {
+  const fields: Record<string, string> = {};
+  const refused: string[] = [];
+  for (const [label, raw] of Object.entries(item.fields)) {
+    const value = text(raw === null ? null : String(raw));
+    if (!value) continue;
+    const name = notionNames[label.toLowerCase().replace(/[^a-z0-9]/g, "")];
+    if (!name) {
+      refused.push(label);
+      continue;
+    }
+    if (fields[name] !== undefined && fields[name] !== value)
+      throw new PlanNotSent(`“${label}” conflicts with another ${name} value.`);
+    fields[name] = value;
+  }
+  if (refused.length)
+    throw new PlanNotSent(
+      `Amun cannot send ${refused.map((name) => `“${name}”`).join(", ")} to Notion yet. Remove them or leave them blank.`,
+    );
+  if (fields.parent) {
+    let parent: string | null = null;
+    try {
+      parent = uuidFromReference(fields.parent);
+    } catch {
+      // Reported below with the other mismatches.
+    }
+    if (parent !== uuidFromReference(destination.parentId))
+      throw new PlanNotSent(
+        "The parent page differs from the connected Notion destination.",
+      );
+  }
+  const title = fields.title ?? item.summary;
+  return { title, body: fields.body ?? title };
 }
 
 export function notionPlanTarget(
@@ -154,8 +290,8 @@ export function notionPlanTarget(
   });
   return {
     async write(item) {
-      const body =
-        text(item.fields.body) ?? text(item.fields.description) ?? item.summary;
+      const page = notionPage(item, destination);
+      const body = page.body;
       let sent = false;
       let result: NotionResult;
       try {
@@ -164,7 +300,7 @@ export function notionPlanTarget(
             parentId: destination.parentId,
             parentType: destination.parentType,
             titleProperty: destination.titleProperty,
-            title: item.summary,
+            title: page.title,
             text: property
               ? body
               : body + "\n\nAmun publication ID: " + item.marker,

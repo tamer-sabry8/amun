@@ -5,6 +5,7 @@ import {
   intake,
   linkRecord,
   nameFromRequest,
+  rfpDetails,
   rfpFromRequest,
   needsLinking,
   type SupportingRecord,
@@ -547,5 +548,26 @@ describe("rfpFromRequest", () => {
       due: "5 March",
       groupId: null,
     });
+  });
+});
+
+describe("rfpDetails", () => {
+  it("reads the labelled facts of the Home request and nothing else", () => {
+    expect(
+      rfpDetails(
+        'Create an RFP named "QA-20261114-RFP-Retest" in Work. Track only: client "QA Sandbox", deadline 2026-12-01, owner Tamer, status Received.',
+      ),
+    ).toEqual({
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      owner: "Tamer",
+    });
+  });
+  it("keeps unknown values empty", () => {
+    expect(
+      rfpDetails(
+        "Track an RFP. The client is not yet known, the owner is not assigned, and the deadline is unknown.",
+      ),
+    ).toEqual({ client: null, deadline: null, owner: null });
   });
 });

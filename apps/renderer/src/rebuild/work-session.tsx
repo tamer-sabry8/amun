@@ -1021,8 +1021,14 @@ export function WorkSession({
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
     const scoped = briefing
-      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${workTypeGuard(context.area.type)}${text}`
-      : `${workTypeGuard(context.area.type)}${text}`;
+      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${workTypeGuard(
+          context.area.type,
+          snapshot.rfps.find((item) => item.id === areaId),
+        )}${text}`
+      : `${workTypeGuard(
+          context.area.type,
+          snapshot.rfps.find((item) => item.id === areaId),
+        )}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;

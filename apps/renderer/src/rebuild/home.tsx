@@ -1,5 +1,6 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
+import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
 import { acceptOffer } from "./accept-offer.ts";
 import { useState } from "react";
 import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
@@ -67,6 +68,18 @@ export function IntakeCard({
   );
   const [error, setError] = useState("");
   const create = async (type: string, name: string) => {
+    if (type === "rfp") {
+      // The same record as Track an RFP, with the facts the request states.
+      const facts = rfpDetails(pending.text);
+      const result = await workAsync("save-rfp", {
+        groupId,
+        name,
+        client: facts.client ?? "",
+        deadline: facts.deadline,
+        responseOwner: facts.owner,
+      });
+      return result.ok ? result.ref : null;
+    }
     const result = await workAsync("create-area", {
       groupId,
       type: type as "product" | "project" | "task" | "rfp",
