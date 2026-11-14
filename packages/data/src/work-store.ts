@@ -25,6 +25,7 @@ import {
   gateLabels,
   planFingerprint,
   ruleCandidate,
+  failureDetail,
   writeSummary,
   type Plan,
 } from "../../domain/src/work/permissions.ts";
@@ -2123,17 +2124,45 @@ export class WorkStore {
       });
     }
     this.closeAttention("failure:" + planId);
+    const named = (state: "failed" | "unknown") =>
+      all
+        .filter((result) => result.state === state)
+        .map(
+          (result) =>
+            approved.items.find((entry) => entry.id === result.id)?.summary ??
+            "An item",
+        );
     if (!complete)
       this.attend({
         kind: "failure",
         groupId,
         workAreaId,
         title: "Some approved changes were not published",
-        detail: summary.text,
+        detail: failureDetail(
+          named("failed"),
+          named("unknown"),
+          this.writeNote(planId, all.find((r) => r.state === "failed")?.id),
+        ),
         ref: "failure:" + planId,
         options: summary.button ? [summary.button] : [],
       });
     return { ref: planId, step: { ...summary, state } };
+  }
+
+  /** Why the destination refused an item, as the publisher recorded it. */
+  private writeNote(planId: string, itemId: string | undefined) {
+    if (!itemId) return null;
+    try {
+      const row = this.get(
+        "SELECT note FROM plan_writes WHERE plan_id=? AND item_id=?",
+        planId,
+        itemId,
+      );
+      return typeof row?.note === "string" && row.note ? row.note : null;
+    } catch {
+      // Results can be recorded without the publisher's table in play.
+      return null;
+    }
   }
 
   private handoff(areaId: string) {

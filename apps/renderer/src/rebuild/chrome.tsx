@@ -110,6 +110,10 @@ function IslandCard({
       >
         {item.title}
       </button>
+      {item.kind === "failure" && item.detail && (
+        // What failed, in words, not only that something did.
+        <p className="detail">{item.detail}</p>
+      )}
       {steps && (
         <ol className="steps" aria-label="Progress">
           {steps.map((step, position) => (
@@ -213,12 +217,15 @@ const minimisedKey = "amun.island.minimised";
 export function Island({
   top,
   count,
+  held = 0,
   options,
   collapsed,
   actions,
 }: {
   top: Attention | null;
   count: number;
+  /** Things left out because the open chat is already asking about them. */
+  held?: number;
   options: string[];
   collapsed: boolean;
   actions: IslandActions;
@@ -253,7 +260,8 @@ export function Island({
     seen.current = top?.id ?? null;
   }, [top?.id]);
   if (!top)
-    return collapsed ? null : (
+    // Saying "nothing needs you" beside a chat that is asking would be wrong.
+    return collapsed || held > 0 ? null : (
       <div className="rb-island empty">
         <FirstmateMark size={28} />
         <span>Nothing needs you right now.</span>

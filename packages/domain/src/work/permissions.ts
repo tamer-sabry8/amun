@@ -185,6 +185,30 @@ export function writeSummary(results: WriteResult[]) {
   };
 }
 
+/**
+ * One plain sentence naming what was not published, for the place that only
+ * has room to say something failed. `reason` is the destination's own
+ * explanation when there is exactly one to give.
+ */
+export function failureDetail(
+  failed: string[],
+  unknown: string[],
+  reason: string | null,
+) {
+  const name = (items: string[]) =>
+    `“${items[0]}”` + (items.length > 1 ? ` and ${items.length - 1} more` : "");
+  const parts: string[] = [];
+  if (failed.length)
+    parts.push(
+      `${name(failed)} ${failed.length > 1 ? "were" : "was"} not created.`,
+    );
+  if (unknown.length)
+    parts.push(`Checking whether ${name(unknown)} got through.`);
+  if (reason && failed.length === 1) parts.push(reason);
+  parts.push("Nothing was duplicated.");
+  return parts.join(" ");
+}
+
 export interface RuleCase {
   /** Stable key for the situation, e.g. "sheet-vs-project:allocation". */
   situation: string;

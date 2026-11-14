@@ -19,6 +19,7 @@ import {
   minRatio,
 } from "../../../../packages/domain/src/work/shell.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
+import { copyText } from "./clipboard.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
@@ -28,6 +29,8 @@ import {
   heldMessage,
   inFlight,
   holdMessage,
+  markBriefed,
+  needsBriefing,
   releaseMessage,
 } from "./firstmate.ts";
 import { bridge } from "../bridge.ts";
@@ -284,8 +287,7 @@ function InlineCard({
     const text = String(card.message ?? "");
     const check = updateMessage(text);
     const copy = async (what: string, value: string) => {
-      await navigator.clipboard.writeText(value);
-      setCopied(what);
+      if (await copyText(value)) setCopied(what);
     };
     return (
       <div className="rb-inline" role="group" aria-label="Stakeholder update">
@@ -778,6 +780,7 @@ export function WorkSession({
     null,
   );
   const [problem, setProblem] = useState("");
+  const [copiedLog, setCopiedLog] = useState("");
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const sentFirst = useRef<string | null>(null);
@@ -821,6 +824,9 @@ export function WorkSession({
         text: proposed.item,
         card: { kind: "scope", item: proposed.item, brd: proposed.brd },
       });
+    else if (proposed.do === "rename")
+      // Done at once: it stays inside Amun and is undone by renaming again.
+      work("update-area", { areaId, patch: { name: proposed.name } });
     else if (proposed.do === "update")
       work("message", {
         workAreaId: areaId,
@@ -845,6 +851,8 @@ export function WorkSession({
     image?: string,
     /** A message that was already waiting stays waiting unless it is sent. */
     retry = false,
+    /** This turn carries Amun's rules for a conversation that lacked them. */
+    briefing = false,
   ) => {
     if (inFlight.has(areaId)) return;
     inFlight.add(areaId);
@@ -866,12 +874,20 @@ export function WorkSession({
     inFlight.delete(areaId);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
-      if (parsed.text)
+      const renamed = parsed.actions.find((item) => item.do === "rename");
+      // A rename always gets a plain confirmation, even from a silent reply.
+      const said =
+        parsed.text ||
+        (renamed?.do === "rename"
+          ? `Done. This is now called “${renamed.name}”.`
+          : "");
+      if (said)
         work("message", {
           workAreaId: areaId,
           role: "firstmate",
-          text: parsed.text,
+          text: said,
         });
+      if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
       if (retry) {
         releaseMessage(areaId);
@@ -907,15 +923,20 @@ export function WorkSession({
     releaseMessage(areaId);
     setWaiting(null);
     await workAsync("message", { workAreaId: areaId, role: "you", text });
-    // The first message for a work area carries its context and the protocol.
-    const scoped = context.messages.length
-      ? text
-      : `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`;
+    // A conversation that has not been told Amun's rules gets them with this
+    // message: the first one for a work area, and the first after Firstmate's
+    // conversation was started afresh.
+    const briefing = !context.messages.length || needsBriefing();
+    const scoped = briefing
+      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`
+      : text;
     await deliver(
       text,
       files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped,
       null,
       files.find((file) => file.image)?.image ?? undefined,
+      false,
+      briefing,
     );
   };
   /** Tries the waiting message again. It leaves the wait before it is sent. */
@@ -930,6 +951,7 @@ export function WorkSession({
       message.activityId ?? null,
       message.image,
       true,
+      message.scoped.startsWith(amunProtocol),
     );
   };
   useEffect(() => {
@@ -1160,9 +1182,8 @@ export function WorkSession({
                 </button>
                 <button
                   role="menuitem"
-                  onClick={() => {
-                    setMenu(null);
-                    void navigator.clipboard.writeText(
+                  onClick={async () => {
+                    const copied = await copyText(
                       [
                         `Amun failure in "${area.name}"`,
                         context.failure!.title,
@@ -1173,9 +1194,15 @@ export function WorkSession({
                         ),
                       ].join("\n"),
                     );
+                    // Stay open long enough to say whether it worked.
+                    setCopiedLog(copied ? "Copied" : "Could not copy");
+                    setTimeout(() => {
+                      setCopiedLog("");
+                      setMenu(null);
+                    }, 1200);
                   }}
                 >
-                  {failureOverflow[1]}
+                  {copiedLog || failureOverflow[1]}
                 </button>
               </div>
             )}

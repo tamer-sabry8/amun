@@ -286,14 +286,15 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       page.getByRole("button", { name: "Approve and publish 1 change" }),
     ).toBeVisible();
     await shot(page, "12-plan-review");
-    // The Island carries the same approval and its count
+    // Beside the chat that is already asking, the Island stays away
     await page.getByRole("button", { name: "Close the document" }).click();
+    await expect(nav.getByRole("region", { name: "Needs you" })).toHaveCount(0);
+
+    // Home lists it, and there the Island carries the same approval
+    await nav.getByRole("button", { name: "Home" }).click();
     await expect(nav.getByRole("region", { name: "Needs you" })).toContainText(
       "Needs your approval",
     );
-
-    // Home lists it; reviewing is not approving
-    await nav.getByRole("button", { name: "Home" }).click();
     const attention = page.getByRole("region", {
       name: "Needs your attention",
     });

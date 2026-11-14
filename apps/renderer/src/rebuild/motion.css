@@ -123,6 +123,14 @@
   background: #07121c;
 }
 
+/* The Island says what failed, not only that something did. */
+.rb-island .detail {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 /* 03 · Firstmate's face. Two eyes on the tile it already had; the mood is
    set where the mark is used. Sizes are in em so every size of mark works. */
 .rb-fm-mark {

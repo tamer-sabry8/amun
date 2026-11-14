@@ -71,10 +71,15 @@ export function attentionItems(snapshot: Snapshot): Attention[] {
     });
 }
 
-export function homeModel(snapshot: Snapshot, now: number) {
+export function homeModel(
+  snapshot: Snapshot,
+  now: number,
+  /** The work whose chat is on screen, if one is. */
+  openWorkAreaId: string | null = null,
+) {
   const items = attentionItems(snapshot);
   const open = attentionList(items);
-  const island = islandItem(items);
+  const island = islandItem(items, openWorkAreaId);
   const areas = snapshot.areas.filter(
     (area) => inScope(snapshot, area.groupId) && area.status !== "archived",
   );
@@ -225,9 +230,12 @@ export function shortDate(value: string | null, locale = "en-GB") {
 
 // ── Firstmate → Amun actions ────────────────────────────────────────────────
 // Firstmate may end a reply with fenced blocks tagged `amun`, each one JSON
-// object. They only ever *propose*: a plan still needs approval, a question
-// waits for an answer, a document is a draft. Ids from the model are never
-// trusted; everything is filed under the work area the conversation is in.
+// object. Almost all of them only *propose*: a plan still needs approval, a
+// question waits for an answer, a document is a draft. The one exception is
+// renaming the work the conversation is in: it stays inside Amun, changes
+// nothing anyone else sees and is undone by renaming again, so the owner
+// asked for it to happen at once (13 November 2026). Ids from the model are
+// never trusted; everything applies to the work area the conversation is in.
 export type AmunAction =
   | { do: "document"; title: string; type: string; body: string }
   | {
@@ -244,7 +252,8 @@ export type AmunAction =
   | { do: "offer"; title: string; detail: string }
   | { do: "scope"; item: string; brd: string | null }
   | { do: "update"; message: string }
-  | { do: "rule-case"; situation: string; resolution: string };
+  | { do: "rule-case"; situation: string; resolution: string }
+  | { do: "rename"; name: string };
 
 const text = (value: unknown, max = 4000) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
@@ -321,6 +330,16 @@ function action(raw: unknown): AmunAction | null {
       const message = text(input.message, 2000);
       return message ? { do: "update", message } : null;
     }
+    case "rename": {
+      // One line, no control characters: this becomes the work's title.
+      const name = text(
+        typeof input.name === "string"
+          ? input.name.replace(/\s+/g, " ")
+          : input.name,
+        120,
+      );
+      return name ? { do: "rename", name } : null;
+    }
     case "rule-case": {
       const situation = text(input.situation, 120);
       const resolution = text(input.resolution, 400);
@@ -354,7 +373,8 @@ export const amunProtocol = [
   "You are Firstmate inside Amun. Reply briefly in plain language.",
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
-  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion|github|amun","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes. Nothing is published until the owner approves exactly that list.',
+  '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
+  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',
