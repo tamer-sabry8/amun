@@ -195,6 +195,18 @@ export function App() {
     }, downloadsFloatMs);
     return () => clearTimeout(timer);
   }, [layout.rail, downloadCount]);
+  // A work that was deleted while its chat was open: back to Home.
+  const openAreaGone =
+    layout.route === "work" &&
+    !!layout.workAreaId &&
+    !!snapshot &&
+    !snapshot.areas.some((area) => area.id === layout.workAreaId);
+  useEffect(() => {
+    if (!openAreaGone) return;
+    setPane(null);
+    setFirst(null);
+    dispatch({ type: "go", route: "home" });
+  }, [openAreaGone]);
   if (!snapshot)
     return (
       <div className="rb setup">
