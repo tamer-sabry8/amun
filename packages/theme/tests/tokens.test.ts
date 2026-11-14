@@ -1,7 +1,29 @@
 import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { contrast, colorHex } from "../src/contrast.ts";
-const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan", "amun-light"];
+const themes = [
+  "tamer-sabry-default",
+  "navy-gold",
+  "navy-cyan",
+  "amun-light",
+  "nimbus",
+  "nimbus-maritime",
+  "nimbus-warm",
+  "df-aurora",
+  "df-copper",
+  "df-ember",
+  "df-garnet",
+  "df-midnight",
+  "df-neumorph",
+  "df-sage",
+  "df-slate",
+  "lg-slate",
+  "lg-nous",
+  "lg-midnight",
+  "lg-ember",
+  "lg-mono",
+  "lg-cyberpunk",
+];
 it("meets text and interactive contrast in every theme and never overrides locked safety tokens", () => {
   const safety = JSON.parse(readFileSync("tokens/safety.json", "utf8"));
   for (const name of themes) {
@@ -38,7 +60,7 @@ it("validates colour inputs and exact contrast extremes", () => {
     colorHex({ colorSpace: "srgb", components: [2, 0, 0] }),
   ).toThrow();
 });
-it("keeps every connection status colour readable in all four themes (Q69)", () => {
+it("keeps every connection status colour readable in every theme (Q69)", () => {
   for (const name of themes) {
     const tokens = JSON.parse(readFileSync(`tokens/${name}.json`, "utf8"));
     for (const status of [

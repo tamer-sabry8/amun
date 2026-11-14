@@ -13,6 +13,7 @@ import {
   downloadsFloatMs,
   initialShell,
   resolveTheme,
+  type ThemeId,
   shellReducer,
   sidebarCollapsed,
   type Route,
@@ -78,7 +79,7 @@ export function App() {
   const [systemDark, setSystemDark] = useState(
     () => matchMedia("(prefers-color-scheme: dark)").matches,
   );
-  const lastDark = useRef<"tamer-sabry-default" | "navy-gold" | "navy-cyan">(
+  const lastDark = useRef<Exclude<ThemeId, "amun-light">>(
     "tamer-sabry-default",
   );
   const model = useFirstmateModel();
