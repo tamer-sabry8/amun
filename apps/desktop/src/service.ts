@@ -4,9 +4,14 @@ import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
 import { syncCommand } from "../../../packages/contracts/src/memory-sync.ts";
 import { PrototypeSession } from "./prototype-session.ts";
 import { Delegations } from "./delegation.ts";
+import { acceptFirstRunPrompts } from "../../../packages/crew/src/first-run-prompts.ts";
 import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
 import { implementationRun } from "./implementation-run.ts";
-import { sendDelivery } from "../../../packages/crew/src/send-delivery.ts";
+import {
+  deliveryCharter,
+  sendDelivery,
+} from "../../../packages/crew/src/send-delivery.ts";
+import { loadEndpointReceipt } from "../../../packages/crew/src/endpoint-receipt.ts";
 import { deliveryCommand } from "../../../packages/contracts/src/crew.ts";
 import { readPullWorkspace } from "./pr-workspace.ts";
 import { prCommand } from "../../../packages/contracts/src/pr-workspace.ts";
@@ -140,7 +145,7 @@ import { TerminalSession, type Pty } from "../../service/src/terminal.js";
 import { createRequire } from "node:module";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 const requireNative = createRequire(join(process.cwd(), "amun-native.cjs"));
 const databaseModule = process.env.AMUN_DATABASE_MODULE;
 const workspaceRoot = process.env.AMUN_WORKSPACE_ROOT;
@@ -823,6 +828,42 @@ process.parentPort?.on("message", (event) => {
       );
       requireWorkerOn(harness);
       await supervisor.ensureRunning();
+      // Start the worker first (this does nothing when it is already
+      // running) and let it reach its own prompt before the job is sent.
+      // A worker's first run in its worktree asks to trust the folder and
+      // its hooks. The owner's standing rule covers Amun's own worktrees,
+      // once they are checked against the selected Firstmate revision.
+      await dispatchFirstmate(
+        releases,
+        process.env.AMUN_CREW_RECEIPTS!,
+        process.env.AMUN_TMUX_BINARY!,
+        { harness, charter: deliveryCharter },
+      );
+      const receipt = await loadEndpointReceipt(
+        process.env.AMUN_CREW_RECEIPTS!,
+        "amun-" + harness,
+      );
+      const { home, revision } = await releases.crewHome();
+      const worktree = join(dirname(home), harness + "-worker");
+      const socket = join(
+        receipt.scope,
+        "tmux-" + process.getuid!(),
+        "default",
+      );
+      await acceptFirstRunPrompts({
+        target: "firstmate:fm-amun-" + harness,
+        worktree,
+        verify: () => releases.verifyHomes(revision, [home, worktree]),
+        tmux: (args) =>
+          new Promise<string>((resolve, reject) =>
+            execFile(
+              process.env.AMUN_TMUX_BINARY!,
+              ["-S", socket, ...args],
+              { timeout: 8000, maxBuffer: 262144 },
+              (error, stdout) => (error ? reject(error) : resolve(stdout)),
+            ),
+          ),
+      }).catch(() => undefined);
       await sendDelivery(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
