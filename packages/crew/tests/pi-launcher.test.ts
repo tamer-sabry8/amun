@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import { piLauncherScript, writePiLauncher } from "../src/pi-launcher.ts";
 import {
   chooseCopilotModel,
+  CopilotUnavailable,
   selectCopilotModel,
 } from "../src/copilot-routing.ts";
 
@@ -114,5 +115,18 @@ describe("native session start", () => {
         { getDefaultProvider: () => "openai", getDefaultModel: () => "gpt-x" },
       ),
     ).rejects.toThrow("GitHub Copilot is not connected");
+    // The renderer holds the message for sign-in only when this reads as a sign-in problem.
+    await expect(
+      selectCopilotModel(
+        { getAvailable: async () => [] },
+        {
+          getDefaultProvider: () => undefined,
+          getDefaultModel: () => undefined,
+        },
+      ),
+    ).rejects.toSatisfy(
+      (error) =>
+        error instanceof CopilotUnavailable && /sign in/i.test(error.message),
+    );
   });
 });

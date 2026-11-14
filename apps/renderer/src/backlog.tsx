@@ -8,6 +8,7 @@ import {
   type WorkspaceSnapshot,
 } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
+import { BacklogSetup } from "./backlog-setup.tsx";
 type Context = NonNullable<WorkspaceSnapshot["productContext"]>;
 type Option = { id: string; name: string };
 function Choice({
@@ -108,6 +109,16 @@ export function Backlog({ context }: { context: Context }) {
             onChange={setSource}
           />
           {sources.some((s) => s.id === sourceId) && (
+            <details>
+              <summary>Change this project</summary>
+              <BacklogSetup
+                key={sourceId}
+                productId={context.productId}
+                source={sources.find((s) => s.id === sourceId)!}
+              />
+            </details>
+          )}
+          {sources.some((s) => s.id === sourceId) && (
             <TeamBoard
               context={context}
               key={sourceId}
@@ -117,10 +128,10 @@ export function Backlog({ context }: { context: Context }) {
           )}
         </>
       ) : (
-        <p>
-          Map an Azure DevOps project URL in Product context to open its
-          backlog.
-        </p>
+        <>
+          <p>Connect an Azure DevOps project to open its backlog.</p>
+          <BacklogSetup productId={context.productId} />
+        </>
       )}
     </section>
   );

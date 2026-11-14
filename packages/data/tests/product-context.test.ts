@@ -164,3 +164,48 @@ it("binds request reads, decisions and search to the selected product at the ser
     db.close();
   }
 });
+
+it("changes a mapped Azure project in place, only for its own product and kind", () => {
+  const db = new Database(":memory:");
+  try {
+    migrate(db);
+    const service = new WorkspaceService(db);
+    const send = (action: string, fields: Record<string, unknown>) =>
+      service.handle({ version: 1, kind: "workspace", action, ...fields });
+    send("create-product", { name: "A", allowedModels: [] });
+    const a = service.snapshot().preferences.productId!;
+    const fields = {
+      productId: a,
+      sourceKind: "ado",
+      title: "POCs",
+      reference: "https://devops.tahaluf.ae/TahalufCollection/POCs",
+    };
+    send("map-source", fields);
+    const [mapped] = service.snapshot().productContext!.sources;
+    send("map-source", {
+      ...fields,
+      sourceId: mapped!.id,
+      title: "POCs renamed",
+      reference: "https://devops.tahaluf.ae/TahalufCollection/Other",
+    });
+    expect(service.snapshot().productContext!.sources).toEqual([
+      {
+        id: mapped!.id,
+        kind: "ado",
+        title: "POCs renamed",
+        reference: "https://devops.tahaluf.ae/TahalufCollection/Other",
+      },
+    ]);
+    // A different kind or a source id from nowhere is refused, not created.
+    for (const wrong of [
+      { sourceId: mapped!.id, sourceKind: "repo" },
+      { sourceId: crypto.randomUUID() },
+    ])
+      expect(send("map-source", { ...fields, ...wrong })).toMatchObject({
+        kind: "workspace-error",
+      });
+    expect(service.snapshot().productContext!.sources).toHaveLength(1);
+  } finally {
+    db.close();
+  }
+});

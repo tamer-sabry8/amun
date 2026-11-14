@@ -5,6 +5,7 @@ import {
   intake,
   linkRecord,
   nameFromRequest,
+  rfpFromRequest,
   needsLinking,
   type SupportingRecord,
   type WorkArea,
@@ -493,7 +494,58 @@ describe("nameFromRequest", () => {
   ])("%s → %s", (text, expected) => {
     expect(nameFromRequest(text)).toBe(expected);
   });
+  it.each([
+    [
+      'Track an RFP named "QA-20261114-RFP" in Work. The client is not yet known, the owner is not assigned, and the deadline is unknown. Do not invent these values or start delivery.',
+      "QA-20261114-RFP",
+    ],
+    [
+      "Create product named QA-20261114-PRODUCT for testing the intake. Do not start delivery.",
+      "QA-20261114-PRODUCT",
+    ],
+    ["Create a product called Atlas for testing. Nothing else.", "Atlas"],
+  ])("takes only the name: %s", (text, expected) => {
+    expect(nameFromRequest(text)).toBe(expected);
+  });
   it("keeps names short", () => {
     expect(nameFromRequest("x".repeat(200))).toHaveLength(78);
+  });
+});
+
+describe("rfpFromRequest", () => {
+  const groups = [{ id: "employer", name: "Employer" }];
+  it("leaves unknown client, deadline and group empty", () => {
+    expect(
+      rfpFromRequest(
+        'Track an RFP named "QA-20261114-RFP" in Work. The client is not yet known, the owner is not assigned, and the deadline is unknown. Do not invent these values or start delivery.',
+        groups,
+      ),
+    ).toEqual({
+      name: "QA-20261114-RFP",
+      client: null,
+      due: null,
+      groupId: null,
+    });
+  });
+  it("reads only what is stated", () => {
+    expect(
+      rfpFromRequest(
+        'Track an RFP named "Metro" in Employer. The client is DMT. Due 5 March.',
+        groups,
+      ),
+    ).toEqual({
+      name: "Metro",
+      client: "DMT",
+      due: "5 March",
+      groupId: "employer",
+    });
+    expect(
+      rfpFromRequest("Track an RFP from DMT, due 5 March", groups),
+    ).toEqual({
+      name: "DMT",
+      client: "DMT",
+      due: "5 March",
+      groupId: null,
+    });
   });
 });

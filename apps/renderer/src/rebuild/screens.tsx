@@ -2,6 +2,7 @@
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
 import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
+import { rfpFromRequest } from "../../../../packages/domain/src/work/model.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { useState, type DragEvent, type ReactNode } from "react";
 import {
@@ -1689,19 +1690,17 @@ export function Rfps({
             chips={["Track an RFP"]}
             model={model}
             onSend={async (text) => {
-              const title = text.replace(/^track an rfp:?\s*/i, "").trim();
-              if (!title) return setNote("Name the RFP you want to track.");
-              const due = /\bdue\s+(.+)$/i.exec(title);
-              const parsed = due
-                ? Date.parse(due[1]! + " " + new Date(now).getFullYear())
+              const request = rfpFromRequest(text, snapshot.groups);
+              if (!request.name)
+                return setNote("Name the RFP you want to track.");
+              const parsed = request.due
+                ? Date.parse(request.due + " " + new Date(now).getFullYear())
                 : NaN;
-              const named =
-                title.replace(/,?\s*\bdue\s+.+$/i, "").trim() || title;
-              const client = /\b(?:for|from)\s+(.+)$/i.exec(named)?.[1] ?? "";
               const result = await workAsync("save-rfp", {
-                groupId: snapshot.setup.activeGroupId,
-                client,
-                name: named,
+                // Only a group the request names; otherwise the one in use.
+                groupId: request.groupId ?? snapshot.setup.activeGroupId,
+                client: request.client ?? "",
+                name: request.name,
                 deadline: Number.isNaN(parsed)
                   ? null
                   : new Date(parsed).toISOString(),

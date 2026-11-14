@@ -85,6 +85,7 @@ export function Composer({
   const [dismissed, setDismissed] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const addMenu = useRef<HTMLDivElement>(null);
   const recognition = useRef<Recognition | null>(null);
 
   const trigger = dismissed ? null : composerTrigger(draft, caret);
@@ -236,7 +237,28 @@ export function Composer({
           </div>
         )}
         {plus && (
-          <div className="rb-menu" role="menu" aria-label="Add">
+          <div
+            className="rb-menu"
+            role="menu"
+            aria-label="Add"
+            ref={addMenu}
+            // A pointer press must not take focus from the message box before
+            // the click lands, or the menu closes first and the choice is lost.
+            onMouseDown={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              setPlus(false);
+              area.current?.focus();
+            }}
+            onBlur={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (
+                !next ||
+                (!addMenu.current?.contains(next) && next !== area.current)
+              )
+                setPlus(false);
+            }}
+          >
             {plusMenu.map(([id, label]) => (
               <button
                 key={id}
@@ -287,7 +309,11 @@ export function Composer({
           }
           onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           onKeyDown={keys}
-          onBlur={() => setPlus(false)}
+          onBlur={(event) => {
+            // Moving into the menu with the keyboard keeps it open.
+            if (!addMenu.current?.contains(event.relatedTarget as Node | null))
+              setPlus(false);
+          }}
         />
         <input
           ref={picker}

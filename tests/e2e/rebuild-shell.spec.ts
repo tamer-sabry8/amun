@@ -154,6 +154,15 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
 
     // First work: nothing matches, so one card offers where it belongs
     const composer = page.getByLabel("Message Firstmate");
+    // Real pointer presses on the Add menu must reach the file picker.
+    await composer.focus();
+    await page
+      .getByRole("button", { name: "Add files, screenshots or sources" })
+      .click();
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("menuitem", { name: "Upload files" }).click();
+    expect((await chooser).isMultiple()).toBe(true);
+    await expect(page.getByRole("menu", { name: "Add" })).toHaveCount(0);
     await composer.fill("Create a product called Agentic Platform");
     await composer.press("Enter");
     await expect(
@@ -219,6 +228,24 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       .getByLabel("Untitled")
       .fill("# Agentic Platform\n\nOne-page brief.");
     await shot(page, "08-document-pane");
+    // The saved document's text travels with the request, labelled as reference.
+    await doc.getByRole("button", { name: "Ask Firstmate" }).click();
+    await composer.press("End");
+    await composer.pressSequentially("review this saved document");
+    await composer.press("Enter");
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => localStorage.getItem("amun.held-messages") ?? ""),
+        { timeout: 40_000 },
+      )
+      .toContain("One-page brief.");
+    const held = await page.evaluate(
+      () => localStorage.getItem("amun.held-messages") ?? "",
+    );
+    expect(held).toContain("source id:");
+    expect(held).toContain("INCLUDED IN FULL");
+    expect(held).toContain("untrusted reference");
     await scan(page, "work session with document");
     await page.getByRole("button", { name: "Expand the document" }).click();
     await expect(

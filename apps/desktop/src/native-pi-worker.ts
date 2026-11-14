@@ -84,7 +84,10 @@ import {
   NativePiActions,
   type NativePiSession,
 } from "../../../packages/crew/src/native-pi.ts";
-import { selectCopilotModel } from "../../../packages/crew/src/copilot-routing.ts";
+import {
+  CopilotUnavailable,
+  selectCopilotModel,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import { preparePiAuth } from "../../../packages/auth/src/pi-auth.ts";
 import { JsonLineDecoder } from "../../../packages/crew/src/jsonl.ts";
 const root = process.env.AMUN_AUTH_ROOT,
@@ -929,14 +932,17 @@ process.stdin.on("data", (chunk: string) => {
         send(command.id, result);
       })()
         .catch(
-          () =>
+          (error: unknown) =>
             !stopping &&
             send(command.id, {
               kind: "message",
               text:
-                command.command === "conversation-send"
-                  ? "Turn outcome could not be verified. Read the conversation before sending another message."
-                  : "This native action could not be completed. Check session state and the supported argument.",
+                // No turn ran: the owner is told how to connect, not left guessing.
+                error instanceof CopilotUnavailable
+                  ? error.message
+                  : command.command === "conversation-send"
+                    ? "Turn outcome could not be verified. Read the conversation before sending another message."
+                    : "This native action could not be completed. Check session state and the supported argument.",
             }),
         )
         .finally(() => {

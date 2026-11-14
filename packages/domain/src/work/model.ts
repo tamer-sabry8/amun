@@ -277,9 +277,14 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
   // Only the name: what follows it ("it is for work and has a deadline…")
   // describes the work and is not part of what it is called.
   const afterName =
-    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a|testing|tests?|qa|demo)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+  // An identifier-like name ("QA-20261114-RFP for testing") ends at its token.
+  const identifier =
+    /^([^\s"“”]*[-_\d][^\s"“”]*?)[,;:.!?]?\s+(?:for|in|to|as|on|so|because|that|which|with|and|where|when|it|the)\b/i;
   const only = (value: string) =>
-    quoted ? value : (value.split(afterName)[0] ?? value);
+    quoted
+      ? value
+      : (identifier.exec(value)?.[1] ?? value.split(afterName)[0]) || value;
   const stripped = (named ? only(named[1]!) : line)
     .replace(
       /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i,
@@ -290,4 +295,42 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
     .trim();
   const name = stripped || line || fallback;
   return name.length > 80 ? name.slice(0, 77).trimEnd() + "…" : name;
+}
+
+const unknownValue =
+  /^(?:not\s+(?:yet\s+)?(?:known|assigned|set|decided)|unknown|unassigned|tbd|none|n\/a)\b/i;
+
+/**
+ * What an RFP request states, and nothing more. The name is the quoted or
+ * "named/called" name; the client, deadline and group are filled only when the
+ * text gives them outright ("The client is …", "due …", "in <known group>").
+ * "not yet known" and "unknown" stay empty, and nothing is guessed.
+ */
+export function rfpFromRequest(
+  text: string,
+  groups: readonly { id: string; name: string }[] = [],
+) {
+  const body = text.replace(/^\s*(?:please\s+)?track an rfp:?\s*/i, "").trim();
+  const first = body.split("\n")[0] ?? body;
+  const sentenceName = /\b(?:called|named)\b/i.test(first);
+  const stated = first.replace(/,?\s*\bdue\s+.+$/i, "").trim() || first;
+  const name = nameFromRequest("Track an RFP " + stated, "");
+  const fact = (label: RegExp) => {
+    const value = label.exec(body)?.[1]?.trim();
+    return value && !unknownValue.test(value) ? value : null;
+  };
+  const client = sentenceName
+    ? fact(/\bclient\s+(?:is|:)\s+([^.;\n]+)/i)
+    : (/^(?:for|from)\s+(.+)$/i.exec(stated)?.[1]?.trim() ?? null);
+  const due = fact(/\bdue\s+(?:on\s+)?([^.;\n]+)/i);
+  const place =
+    /\bin\s+(?:the\s+)?([^.,;\n]+?)(?:\s+group)?\s*(?:[.,;]|\n|$)/gi;
+  let groupId: string | null = null;
+  for (const match of body.matchAll(place)) {
+    const found = groups.filter(
+      (group) => group.name.toLowerCase() === match[1]!.trim().toLowerCase(),
+    );
+    if (found.length === 1) groupId = found[0]!.id;
+  }
+  return { name, client, due, groupId };
 }

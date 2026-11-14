@@ -24,6 +24,7 @@ import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
+import { documentContext, draftBodies } from "./document-context.ts";
 import {
   askFirstmate,
   heldMessage,
@@ -660,6 +661,11 @@ function OutputDoc({
   const [body, setBody] = useState(item?.body ?? "");
   const area = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setBody(item?.body ?? ""), [outputId]);
+  useEffect(() => {
+    // The saved copy has caught up with what was typed.
+    if (item && draftBodies.get(item.id) === item.body)
+      draftBodies.delete(item.id);
+  }, [item?.body]);
   if (!item)
     return <p className="muted">That item is no longer in the Library.</p>;
   const record = item.section === "record";
@@ -707,7 +713,10 @@ function OutputDoc({
           placeholder={
             record ? "" : "Start writing, or ask Firstmate to draft this."
           }
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => {
+            setBody(event.target.value);
+            draftBodies.set(item.id, event.target.value);
+          }}
           onBlur={() => save(body)}
         />
       </div>
@@ -994,9 +1003,20 @@ export function WorkSession({
     const scoped = briefing
       ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`
       : text;
+    const withFiles = files.length
+      ? `${scoped}\n\n${attachmentBlock(files)}`
+      : scoped;
+    // Saved documents travel after the owner's words, labelled as reference.
+    const documents = documentContext({
+      snapshot,
+      areaId,
+      request: text,
+      openId: pane?.kind === "output" ? pane.id : null,
+      used: news.length + withFiles.length,
+    });
     await deliver(
       text,
-      news + (files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped),
+      news + (documents ? `${withFiles}\n\n${documents}` : withFiles),
       null,
       files.find((file) => file.image)?.image ?? undefined,
       false,

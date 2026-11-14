@@ -486,6 +486,24 @@ export class WorkspaceService {
             if (this.preferences().productId !== command.productId)
               throw Error("Product selection changed");
             const reference = this.redactor.text(command.reference);
+            if (command.sourceId) {
+              const changed = this.db
+                .prepare(
+                  "UPDATE sources SET external_id=?,title=?,hash=?,retrieved_at=? WHERE id=? AND product_id=? AND kind=?",
+                )
+                .run(
+                  reference,
+                  this.redactor.text(command.title),
+                  createHash("sha256").update(reference).digest("hex"),
+                  new Date().toISOString(),
+                  command.sourceId,
+                  command.productId,
+                  command.sourceKind,
+                );
+              if (!changed.changes)
+                throw Error("That source belongs to another product");
+              return;
+            }
             this.db
               .prepare(
                 "INSERT INTO sources(id,product_id,kind,external_id,title,retrieved_at,hash) VALUES (?,?,?,?,?,?,?)",

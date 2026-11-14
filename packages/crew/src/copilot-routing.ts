@@ -3,6 +3,9 @@ export const copilotDefaultModel = "claude-sonnet-5.5";
 /** The one provider-qualified model Amun routes crew and supervision work to by default. */
 export const copilotModelSelector = `${copilotProvider}/${copilotDefaultModel}`;
 
+/** Copilot is not signed in or lacks the model; the owner can fix it by signing in. */
+export class CopilotUnavailable extends Error {}
+
 /**
  * Picks the GitHub Copilot model for a native Pi session: the owner's saved
  * Copilot choice when it is available, otherwise the pinned default. Another
@@ -18,8 +21,8 @@ export function chooseCopilotModel<T extends { provider: string; id: string }>(
       ? copilot.find((m) => m.id === saved.model)
       : undefined) ?? copilot.find((m) => m.id === copilotDefaultModel);
   if (!pick)
-    throw Error(
-      "GitHub Copilot is not connected or its model is unavailable. Connect GitHub Copilot under Settings › Accounts and models.",
+    throw new CopilotUnavailable(
+      "GitHub Copilot is not connected or its model is unavailable. Sign in to GitHub Copilot under Settings › Accounts and models.",
     );
   return pick;
 }
