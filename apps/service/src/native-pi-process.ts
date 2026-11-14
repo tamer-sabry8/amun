@@ -151,7 +151,8 @@ export class NativePiProcess {
   }
   close() {
     clearTimeout(this.timer);
-    this.pending = undefined;
+    // Whoever is waiting on a cancelled operation is told, never left hanging.
+    this.failure();
     const child = this.child;
     this.child = undefined;
     if (!child) return;

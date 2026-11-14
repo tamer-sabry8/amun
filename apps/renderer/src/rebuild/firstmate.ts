@@ -18,6 +18,15 @@ let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
 let listening = false;
 let contextGeneration = 0;
+/** Drops the conversation and settles every call still waiting on the old one. */
+function resetContext(text: string) {
+  contextGeneration++;
+  session = null;
+  priming = null;
+  const pending = [...waiting.values()];
+  waiting.clear();
+  for (const done of pending) done({ kind: "message", text });
+}
 function listen() {
   if (listening) return;
   listening = true;
@@ -26,9 +35,12 @@ function listen() {
     const next = bridge.getSnapshot().workspace?.preferences.productId ?? null;
     if (next === product) return;
     product = next;
-    contextGeneration++;
-    session = null;
-    priming = null;
+    resetContext(
+      "The conversation changed. Read it before sending another message.",
+    );
+    // Learn the new conversation's model right away instead of staying on Auto.
+    void prime();
+    for (const listener of modelListeners) listener();
   });
   bridge.onEvent((raw) => {
     if (
@@ -37,12 +49,7 @@ function listen() {
       "kind" in raw &&
       raw.kind === "service-lost"
     ) {
-      contextGeneration++;
-      session = null;
-      priming = null;
-      for (const done of waiting.values())
-        done({ kind: "message", text: "Connection interrupted. Try again." });
-      waiting.clear();
+      resetContext("Connection interrupted. Try again.");
       return;
     }
     const event = nativePiEvent.safeParse(raw);
@@ -153,17 +160,18 @@ export async function askFirstmate(
       reason:
         "This message and its attachments contain too much text for one turn. Send fewer attachments together; the originals remain in the Library.",
     };
+  const generation = contextGeneration;
+  const changed = (): Turn => ({
+    ok: false,
+    needsProvider: false,
+    reason: "The conversation changed. Please send your message again.",
+  });
   // The model label may already be opening the same conversation.
   if (priming) await priming;
+  if (generation !== contextGeneration) return changed();
   if (!session) {
-    const generation = contextGeneration;
     const opened = await run("conversation", "");
-    if (generation !== contextGeneration)
-      return {
-        ok: false,
-        needsProvider: false,
-        reason: "The conversation changed. Please send your message again.",
-      };
+    if (generation !== contextGeneration) return changed();
     if (opened.kind !== "conversation")
       return {
         ok: false,
@@ -212,6 +220,15 @@ export async function askFirstmate(
         "This message and its attachments are too large for one turn. Send the image and documents separately.",
     };
   const result = await run("conversation-send", argument);
+  // The turn may or may not have run before the switch: never replace the new
+  // conversation with it, and never send it again on the user's behalf.
+  if (generation !== contextGeneration)
+    return {
+      ok: false,
+      needsProvider: false,
+      reason:
+        "The conversation changed while this message was being sent. Read the conversation before sending it again.",
+    };
   if (result.kind !== "conversation") {
     const reason =
       typeof result.text === "string" && result.text
@@ -265,23 +282,33 @@ function prime() {
 const modelListeners = new Set<() => void>();
 /** The models the signed-in providers offer, as Pi lists them. */
 export async function listModels(): Promise<{ id: string; label: string }[]> {
+  const generation = contextGeneration;
   await prime();
+  if (generation !== contextGeneration) return [];
   const result = await run("model", "");
+  if (generation !== contextGeneration) return [];
   return result.kind === "choices" && Array.isArray(result.choices)
     ? (result.choices as { id: string; label: string }[])
     : [];
 }
 /** Switches Firstmate to another model; true when Pi accepted it. */
 export async function chooseModel(id: string): Promise<boolean> {
+  const generation = contextGeneration;
   await prime();
-  if (!session) return false;
+  if (generation !== contextGeneration || !session) return false;
   const result = await run("model", id);
-  if (result.kind !== "message" || !String(result.text).includes(id))
+  if (
+    generation !== contextGeneration ||
+    !session ||
+    result.kind !== "message" ||
+    !String(result.text).includes(id)
+  )
     return false;
   session = { ...session, model: id };
   // What the new model can do (look at images, for one) is the conversation's
   // to say, so it is read again rather than carried over from the old model.
   const refreshed = await run("conversation", "");
+  if (generation !== contextGeneration) return false;
   if (refreshed.kind === "conversation")
     session = {
       sessionId: String(refreshed.sessionId),

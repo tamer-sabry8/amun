@@ -162,3 +162,49 @@ it("forwards stop only for the matching active model request", () => {
   p.close();
   child.emit("exit");
 });
+
+it("answers an operation cancelled by a product switch instead of leaving it pending", () => {
+  const child = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn(),
+    exitCode: null,
+    signalCode: null,
+  });
+  mock.spawn.mockReturnValue(child);
+  const send = vi.fn();
+  const p = new NativePiProcess(
+    {
+      binary: "/a",
+      worker: "/w",
+      entry: "/pi/dist/bundle/rpc-entry.js",
+      root: "/private/pi",
+    },
+    send,
+  );
+  const run = (id: string, command: string) =>
+    p.handle({
+      version: 1,
+      kind: "native-pi",
+      action: "run",
+      id,
+      command,
+      argument: "",
+    });
+  run("prime", "conversation");
+  p.selectProduct("product-b");
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "prime",
+      result: expect.objectContaining({ kind: "message" }),
+    }),
+  );
+  expect(child.kill).toHaveBeenCalledOnce();
+  // The next operation starts a worker for the new product and is not refused.
+  run("again", "conversation");
+  expect(mock.spawn.mock.calls[1]?.[2].env.AMUN_NATIVE_PRODUCT).toBe(
+    "product-b",
+  );
+});
