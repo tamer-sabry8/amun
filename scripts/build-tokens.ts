@@ -1,7 +1,29 @@
 import StyleDictionary from "style-dictionary";
 import { colorHex } from "../packages/theme/src/contrast.ts";
 import { readFile, writeFile } from "node:fs/promises";
-const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan", "amun-light"];
+const themes = [
+  "tamer-sabry-default",
+  "navy-gold",
+  "navy-cyan",
+  "amun-light",
+  "nimbus",
+  "nimbus-maritime",
+  "nimbus-warm",
+  "df-aurora",
+  "df-copper",
+  "df-ember",
+  "df-garnet",
+  "df-midnight",
+  "df-neumorph",
+  "df-sage",
+  "df-slate",
+  "lg-slate",
+  "lg-nous",
+  "lg-midnight",
+  "lg-ember",
+  "lg-mono",
+  "lg-cyberpunk",
+];
 StyleDictionary.registerFormat({
   name: "amun/css",
   format: ({ dictionary, options }) => {
