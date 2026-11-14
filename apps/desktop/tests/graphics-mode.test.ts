@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   afterCleanExit,
   planGraphics,
+  readGraphicsPreference,
   readGraphicsState,
   writeGraphicsState,
   type GraphicsState,
@@ -111,6 +112,51 @@ describe("graphics mode", () => {
       expect(readGraphicsState(file)).toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a separate-process preference without touching crash counts", () => {
+    const crashed: GraphicsState = {
+      version: v,
+      mode: "in-process",
+      running: true,
+      failures: 1,
+    };
+    expect(planGraphics(undefined, v, false, "separate")).toEqual({
+      version: v,
+      mode: "separate",
+      running: true,
+      failures: 0,
+    });
+    expect(planGraphics(crashed, v, false, "separate").failures).toBe(2);
+    // Running separate cleanly never clears an in-process failure history.
+    const clean = afterCleanExit(planGraphics(crashed, v, false, "separate"));
+    expect(clean.failures).toBe(2);
+    expect(planGraphics(undefined, v, false, "in-process").mode).toBe(
+      "in-process",
+    );
+    expect(planGraphics(crashed, v, false, "in-process").mode).toBe("separate");
+  });
+
+  it("reads only a valid graphics preference", () => {
+    const dir = mkdtempSync(join(tmpdir(), "amun-gfx-"));
+    try {
+      const file = join(dir, "graphics-preference.json");
+      expect(readGraphicsPreference(file)).toBeUndefined();
+      for (const [text, expected] of [
+        ['{"mode":"separate"}', "separate"],
+        ['{"mode":"in-process"}', "in-process"],
+        ['{"mode":"gpu"}', undefined],
+        ['{"mode":1}', undefined],
+        ["[]", undefined],
+        ["null", undefined],
+        ["not json", undefined],
+      ] as const) {
+        writeFileSync(file, text);
+        expect(readGraphicsPreference(file)).toBe(expected);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

@@ -26,6 +26,7 @@ import {
   readGraphicsState,
   writeGraphicsState,
   type GraphicsState,
+  readGraphicsPreference,
 } from "./graphics-mode.ts";
 
 const styleNonce = randomBytes(24).toString("base64url");
@@ -261,6 +262,9 @@ function chooseGraphics(): void {
     app.getVersion(),
     app.commandLine.hasSwitch("amun-separate-graphics") ||
       process.env.AMUN_SEPARATE_GRAPHICS === "1",
+    readGraphicsPreference(
+      join(app.getPath("userData"), "graphics-preference.json"),
+    ),
   );
   if (graphics.mode === "in-process")
     app.commandLine.appendSwitch("in-process-gpu");
