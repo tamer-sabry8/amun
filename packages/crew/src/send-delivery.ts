@@ -6,6 +6,9 @@ import { FirstmateReleases } from "./firstmate-release.ts";
 import { dispatchFirstmate } from "./firstmate-dispatch.ts";
 import { loadEndpointReceipt } from "./endpoint-receipt.ts";
 import { observeOwnedTmux } from "./observe-owned-tmux.ts";
+/** What the worker is told it is for. One text, wherever it is started from. */
+export const deliveryCharter =
+  "Read only the active Amun delivery brief. Keep product material inside the selected delivery scope.";
 /** Delivery ids deduplicate the worker inbox entry across service restarts. */
 export async function sendDelivery(
   releases: FirstmateReleases,
@@ -18,8 +21,7 @@ export async function sendDelivery(
   const { home, revision } = await releases.crewHome();
   await dispatchFirstmate(releases, receipts, binary, {
     harness,
-    charter:
-      "Read only the active Amun delivery brief. Keep product material inside the selected delivery scope.",
+    charter: deliveryCharter,
   });
   const task = "amun-" + harness,
     receipt = await loadEndpointReceipt(receipts, task);

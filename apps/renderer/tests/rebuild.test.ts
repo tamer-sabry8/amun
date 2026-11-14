@@ -9,6 +9,7 @@ import { DecisionsPanel, LibraryPanel, Rail } from "../src/rebuild/rail.tsx";
 import { Portfolio, Rfps, Roadmap, Sprints } from "../src/rebuild/screens.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
+  agentNews,
   amunProtocol,
   attentionItems,
   homeModel,
@@ -951,6 +952,87 @@ describe("renaming from the chat", () => {
     expect(amunProtocol).toContain('{"do":"rename","name":"…"}');
     expect(amunProtocol).toContain("needs no approval");
     expect(amunProtocol).toContain('"destination":"ado|notion"');
+  });
+});
+
+describe("handing work to an agent from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("names an agent from the catalogue, a title and the job", () => {
+    const parsed = parseAmunActions(
+      [
+        "QA is on it.",
+        block({
+          do: "delegate",
+          agent: "qa",
+          title: "Check the booking flow",
+          task: "Test the booking flow end to end and list what breaks.",
+        }),
+      ].join("\n\n"),
+    );
+    expect(parsed.text).toBe("QA is on it.");
+    expect(parsed.actions).toEqual([
+      {
+        do: "delegate",
+        agent: "QA",
+        title: "Check the booking flow",
+        task: "Test the booking flow end to end and list what breaks.",
+      },
+    ]);
+  });
+  it("drops an agent that is not in the catalogue, or a job with nothing to do", () => {
+    expect(
+      parseAmunActions(
+        block({ do: "delegate", agent: "Root Shell", task: "rm -rf" }),
+      ).actions,
+    ).toEqual([]);
+    expect(
+      parseAmunActions(block({ do: "delegate", agent: "QA", task: "  " }))
+        .actions,
+    ).toEqual([]);
+  });
+  it("tells Firstmate it coordinates, and who its agents are", () => {
+    expect(amunProtocol).toContain('{"do":"delegate"');
+    expect(amunProtocol).toContain("You are the coordinator");
+    expect(amunProtocol).toContain("never written by you");
+    for (const name of ["QA", "Product Manager", "Research & Insights"])
+      expect(amunProtocol).toContain(name + " (");
+  });
+});
+
+describe("what Firstmate is told about its agents' work", () => {
+  const result = (text: string) => ({
+    role: "firstmate",
+    text,
+    card: { kind: "agent-result", agent: "QA", title: "Check the flow" },
+  });
+  it("gets results finished since the owner last wrote, once", () => {
+    const news = agentNews([
+      { role: "you", text: "Have the flow checked" },
+      { role: "firstmate", text: "QA is on it.", card: null },
+      result("QA has finished “Check the flow”.\n\n1. Double booking."),
+    ]);
+    expect(news).toContain("Finished by your agents since your last reply");
+    expect(news).toContain("1. Double booking.");
+    expect(news).not.toContain("QA is on it.");
+    // After the owner's next message, it is not sent again.
+    expect(
+      agentNews([
+        { role: "you", text: "Have the flow checked" },
+        result("QA has finished “Check the flow”.\n\n1. Double booking."),
+        { role: "you", text: "Shorten that" },
+        { role: "firstmate", text: "Shorter: double booking.", card: null },
+      ]),
+    ).toBe("");
+  });
+  it("says nothing when no agent has finished anything", () => {
+    expect(agentNews([])).toBe("");
+    expect(
+      agentNews([
+        { role: "you", text: "Hello" },
+        { role: "firstmate", text: "Hello.", card: null },
+      ]),
+    ).toBe("");
   });
 });
 

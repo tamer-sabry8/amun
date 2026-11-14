@@ -9,6 +9,10 @@ import {
   type Attention,
 } from "../../../../packages/domain/src/work/home.ts";
 import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import {
+  agentCatalog,
+  agentProfile,
+} from "../../../../packages/domain/src/work/agents.ts";
 import { needsLinking } from "../../../../packages/domain/src/work/model.ts";
 import {
   conversionSuggestion,
@@ -254,7 +258,8 @@ export type AmunAction =
   | { do: "update"; message: string }
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
-  | { do: "delete" };
+  | { do: "delete" }
+  | { do: "delegate"; agent: string; title: string; task: string };
 
 const text = (value: unknown, max = 4000) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
@@ -341,6 +346,19 @@ function action(raw: unknown): AmunAction | null {
       );
       return name ? { do: "rename", name } : null;
     }
+    case "delegate": {
+      // Only an agent from the catalogue: a name the model made up is dropped.
+      const agent = agentProfile(text(input.agent, 80) ?? "")?.name;
+      const task = text(input.task, 8000);
+      return agent && task
+        ? {
+            do: "delegate",
+            agent,
+            title: text(input.title, 120) ?? task.slice(0, 80),
+            task,
+          }
+        : null;
+    }
     case "delete":
       // Only ever a request: the owner confirms it in the chat.
       return { do: "delete" };
@@ -372,12 +390,37 @@ export function parseAmunActions(reply: string) {
     .trim();
   return { text: visible, actions: actions.slice(0, 12) };
 }
+/**
+ * What Firstmate's agents have finished since the owner last wrote. An
+ * agent's result reaches the chat and the library, but not Firstmate's own
+ * conversation, so it travels with the owner's next message. Without it,
+ * "shorten that" would have nothing real to shorten.
+ */
+export function agentNews(
+  messages: { role: string; text: string; card?: unknown }[],
+) {
+  const last = messages.findLastIndex((message) => message.role === "you");
+  const fresh = messages
+    .slice(last + 1)
+    .filter(
+      (message) =>
+        (message.card as { kind?: unknown } | null | undefined)?.kind ===
+        "agent-result",
+    )
+    .map((message) => message.text.slice(0, 12000));
+  return fresh.length
+    ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
+        fresh.join("\n\n---\n\n") +
+        "\n[End of what your agents finished.]\n\n"
+    : "";
+}
 /** Tells Firstmate, once per work area, how to raise things in Amun. */
 export const amunProtocol = [
   "You are Firstmate inside Amun. Reply briefly in plain language.",
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
+  `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
   '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',

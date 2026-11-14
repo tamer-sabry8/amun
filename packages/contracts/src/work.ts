@@ -671,6 +671,13 @@ export const workCommand = z.discriminatedUnion("action", [
     always: z.boolean().default(true),
   }),
   act("toggle-agent", { agentId: id, enabled: z.boolean() }),
+  // What an agent is doing, reported by the service that started its worker.
+  act("agent-status", {
+    role: name,
+    state: z.enum(["working", "waiting", "idle", "done"]),
+    nowDoing: text.nullable().default(null),
+    output: longText.optional(),
+  }),
   act("activity", {
     groupId: id.nullable(),
     workAreaId: id.nullable(),
@@ -777,6 +784,16 @@ export const councilCommand = z.discriminatedUnion("action", [
     action: z.enum(["check-update", "rollback", "room", "close-room"]),
   }),
 ]);
+/** Firstmate hands a piece of work to one of the agents. */
+export const workDelegate = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-delegate"),
+  workAreaId: id,
+  /** The agent's name from the catalogue; never an id from the model. */
+  agent: name,
+  title: name,
+  task: z.string().trim().min(1).max(8000),
+});
 /** A file added from the composer: read on the Mac and filed in the Library. */
 export const workAttachment = z.strictObject({
   version: z.literal(1),
