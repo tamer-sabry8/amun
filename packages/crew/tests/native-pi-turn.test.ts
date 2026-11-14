@@ -47,7 +47,7 @@ it("rejects unknown slash or shell operations, malformed input, stale selection 
     { text: " /unknown" },
     { text: "!! secret" },
     { text: "" },
-    { text: "x".repeat(12001) },
+    { text: "x".repeat(200001) },
     { text: "x\0y" },
     { sessionId: "other" },
     { model: "other/model" },
@@ -84,4 +84,17 @@ it("refuses image content before calling the provider when Pi blocks it or the m
     ).rejects.toThrow("Image unavailable");
   }
   expect(session.prompt).not.toHaveBeenCalled();
+});
+
+it("passes a full document excerpt to inference without truncation", async () => {
+  const { session } = setup("ok");
+  const text =
+    "Summarize the attached BRD, separating facts and assumptions.\n" +
+    "Document content. ".repeat(6000);
+  await expect(nativeTurn(session, { ...request, text })).resolves.toBe(
+    "completed",
+  );
+  expect(session.prompt).toHaveBeenCalledWith(text, {
+    expandPromptTemplates: false,
+  });
 });

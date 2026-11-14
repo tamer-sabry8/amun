@@ -2,7 +2,7 @@
 // (native-pi "conversation" / "conversation-send"). One live conversation is
 // shared by the app; each work area keeps its own visible thread in Amun.
 import { useEffect, useRef, useState } from "react";
-import { nativePiEvent } from "@amun/contracts";
+import { nativePiEvent, nativeTurnTextLimit } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 import { replyFromTranscript } from "./view-model.ts";
 import { modelDisplay } from "../../../../packages/domain/src/work/shell.ts";
@@ -146,6 +146,13 @@ export async function askFirstmate(
   text: string,
   image?: string,
 ): Promise<Turn> {
+  if (text.length > nativeTurnTextLimit)
+    return {
+      ok: false,
+      needsProvider: false,
+      reason:
+        "This message and its attachments contain too much text for one turn. Send fewer attachments together; the originals remain in the Library.",
+    };
   // The model label may already be opening the same conversation.
   if (priming) await priming;
   if (!session) {
@@ -191,15 +198,20 @@ export async function askFirstmate(
         "The model Firstmate is using can’t look at images. Choose one that can under Accounts and models, or remove the image and send again.",
     };
   const before = session.text;
-  const result = await run(
-    "conversation-send",
-    JSON.stringify({
-      sessionId: session.sessionId,
-      model: session.model,
-      text,
-      ...(image ? { image } : {}),
-    }),
-  );
+  const argument = JSON.stringify({
+    sessionId: session.sessionId,
+    model: session.model,
+    text,
+    ...(image ? { image } : {}),
+  });
+  if (argument.length > 524288)
+    return {
+      ok: false,
+      needsProvider: false,
+      reason:
+        "This message and its attachments are too large for one turn. Send the image and documents separately.",
+    };
+  const result = await run("conversation-send", argument);
   if (result.kind !== "conversation") {
     const reason =
       typeof result.text === "string" && result.text
