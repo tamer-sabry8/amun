@@ -865,6 +865,16 @@ export function WorkSession({
     else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
+    else if (proposed.do === "delegate")
+      // The service starts the worker; the result returns to this chat.
+      bridge.send({
+        version: 1,
+        kind: "work-delegate",
+        workAreaId: areaId,
+        agent: proposed.agent,
+        title: proposed.title,
+        task: proposed.task,
+      });
     else if (proposed.do === "delete")
       // Deleting is the owner's call: Firstmate can only ask.
       work("message", {
@@ -922,11 +932,15 @@ export function WorkSession({
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
       // A rename always gets a plain confirmation, even from a silent reply.
+      const handed = parsed.actions.flatMap((item) =>
+        item.do === "delegate" ? [`${item.agent} is on “${item.title}”.`] : [],
+      );
       const said =
         parsed.text ||
         (renamed?.do === "rename"
           ? `Done. This is now called “${renamed.name}”.`
-          : "");
+          : // Handing work over is always said, even from a silent reply.
+            handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,

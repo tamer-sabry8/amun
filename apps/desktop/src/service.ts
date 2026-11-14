@@ -3,6 +3,7 @@ import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
 import { syncCommand } from "../../../packages/contracts/src/memory-sync.ts";
 import { PrototypeSession } from "./prototype-session.ts";
+import { Delegations } from "./delegation.ts";
 import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
 import { implementationRun } from "./implementation-run.ts";
 import { sendDelivery } from "../../../packages/crew/src/send-delivery.ts";
@@ -90,6 +91,7 @@ import {
   planPublish,
   toolsCommand,
   workAttachment,
+  workDelegate,
 } from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -785,6 +787,55 @@ process.parentPort?.on("message", (event) => {
     },
   );
   port.once("close", () => void prototypes.close());
+  // Firstmate hands work to an agent: a real Claude Code or Codex worker,
+  // started and messaged by Firstmate's own scripts, works from the agent's
+  // brief, and its result returns to the chat it was asked in.
+  const delegations = new Delegations({
+    root: join(workspaceRoot!, "delegations"),
+    record(command) {
+      const events = workStore.handle({ version: 1, kind: "work", ...command });
+      if (!closed) for (const event of events) port.postMessage(event);
+      const result = events.find((event) => event.kind === "work-result");
+      return { ok: !!result?.ok, ref: result?.ref ?? null };
+    },
+    area(id) {
+      const area = workStore.snapshot().areas.find((item) => item.id === id);
+      return area
+        ? {
+            name: area.name,
+            type: area.type[0]!.toUpperCase() + area.type.slice(1),
+            purpose: area.purpose,
+          }
+        : null;
+    },
+    harness() {
+      const tools = new ToolRegistry(workspace);
+      return tools.enabled(workerTool.claude)
+        ? "claude"
+        : tools.enabled(workerTool.codex)
+          ? "codex"
+          : null;
+    },
+    async deliver(harness, id, text) {
+      const releases = await FirstmateReleases.open(
+        workspaceRoot!,
+        process.env.AMUN_FIRSTMATE_ARCHIVES!,
+      );
+      requireWorkerOn(harness);
+      await supervisor.ensureRunning();
+      await sendDelivery(
+        releases,
+        process.env.AMUN_CREW_RECEIPTS!,
+        process.env.AMUN_TMUX_BINARY!,
+        harness,
+        id,
+        text,
+      );
+    },
+    redact: (text) => redactor.text(text),
+  });
+  void delegations.resume();
+  port.once("close", () => delegations.close());
   const chatSession = new ChatSession(
     chats,
     supervisor,
@@ -1532,6 +1583,10 @@ process.parentPort?.on("message", (event) => {
           };
         }),
       });
+    } else if (message.data?.kind === "work-delegate") {
+      const parsed = workDelegate.safeParse(message.data);
+      if (!parsed.success) return;
+      void delegations.start(parsed.data).catch(() => undefined);
     } else if (message.data?.kind === "work-attachment") {
       const parsed = workAttachment.safeParse(message.data);
       if (!parsed.success) return;

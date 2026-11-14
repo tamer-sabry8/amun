@@ -954,6 +954,51 @@ describe("renaming from the chat", () => {
   });
 });
 
+describe("handing work to an agent from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("names an agent from the catalogue, a title and the job", () => {
+    const parsed = parseAmunActions(
+      [
+        "QA is on it.",
+        block({
+          do: "delegate",
+          agent: "qa",
+          title: "Check the booking flow",
+          task: "Test the booking flow end to end and list what breaks.",
+        }),
+      ].join("\n\n"),
+    );
+    expect(parsed.text).toBe("QA is on it.");
+    expect(parsed.actions).toEqual([
+      {
+        do: "delegate",
+        agent: "QA",
+        title: "Check the booking flow",
+        task: "Test the booking flow end to end and list what breaks.",
+      },
+    ]);
+  });
+  it("drops an agent that is not in the catalogue, or a job with nothing to do", () => {
+    expect(
+      parseAmunActions(
+        block({ do: "delegate", agent: "Root Shell", task: "rm -rf" }),
+      ).actions,
+    ).toEqual([]);
+    expect(
+      parseAmunActions(block({ do: "delegate", agent: "QA", task: "  " }))
+        .actions,
+    ).toEqual([]);
+  });
+  it("tells Firstmate it coordinates, and who its agents are", () => {
+    expect(amunProtocol).toContain('{"do":"delegate"');
+    expect(amunProtocol).toContain("You are the coordinator");
+    expect(amunProtocol).toContain("never written by you");
+    for (const name of ["QA", "Product Manager", "Research & Insights"])
+      expect(amunProtocol).toContain(name + " (");
+  });
+});
+
 describe("deleting from the chat", () => {
   it("is only ever a request for the owner to confirm", () => {
     const parsed = parseAmunActions(

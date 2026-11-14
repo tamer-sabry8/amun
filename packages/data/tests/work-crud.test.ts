@@ -239,3 +239,35 @@ describe("rules that hold for every kind", () => {
     ).toBe(0);
   });
 });
+
+describe("what an agent is doing", () => {
+  const agent = (role: string) =>
+    snap().agents.find((item) => item.role === role);
+  it("is shown as working, then done with its output, and Firstmate leads", () => {
+    send("agent-status", {
+      role: "QA",
+      state: "working",
+      nowDoing: "Check the booking flow",
+    });
+    expect(agent("QA")).toMatchObject({
+      state: "working",
+      nowDoing: "Check the booking flow",
+      enabled: true,
+    });
+    expect(snap().agents[0]).toMatchObject({ role: "Firstmate", kind: "lead" });
+    send("agent-status", {
+      role: "qa",
+      state: "done",
+      nowDoing: null,
+      output: "Double booking is possible.",
+    });
+    expect(snap().agents.filter((item) => /qa/i.test(item.role))).toHaveLength(
+      1,
+    );
+    expect(agent("QA")).toMatchObject({
+      state: "done",
+      nowDoing: null,
+      output: "Double booking is possible.",
+    });
+  });
+});

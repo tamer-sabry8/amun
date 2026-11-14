@@ -1504,6 +1504,42 @@ export class WorkStore {
         );
         return { ref: id };
       }
+      case "agent-status": {
+        if (!this.get("SELECT 1 FROM work_agents WHERE kind='lead'"))
+          this.run(
+            "INSERT INTO work_agents(id,role,kind,state,created_at) VALUES ('firstmate','Firstmate','lead','idle',?)",
+            now,
+          );
+        const role = this.clean(command.role);
+        let agent = this.get(
+          "SELECT id FROM work_agents WHERE lower(role)=lower(?)",
+          role,
+        );
+        if (!agent) {
+          // An agent Firstmate brought in for this job only.
+          const id = randomUUID();
+          this.run(
+            "INSERT INTO work_agents(id,role,kind,launcher_id,state,created_at) VALUES (?,?,'temporary','firstmate','idle',?)",
+            id,
+            role,
+            now,
+          );
+          agent = { id };
+        }
+        this.run(
+          "UPDATE work_agents SET state=?,now_doing=?,enabled=1 WHERE id=?",
+          command.state,
+          command.nowDoing === null ? null : this.clean(command.nowDoing),
+          agent.id,
+        );
+        if (command.output !== undefined)
+          this.run(
+            "UPDATE work_agents SET output=? WHERE id=?",
+            command.output.slice(0, 20000),
+            agent.id,
+          );
+        return { ref: String(agent.id) };
+      }
       case "toggle-agent":
         this.run(
           "UPDATE work_agents SET enabled=? WHERE id=? AND kind<>'lead'",
