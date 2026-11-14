@@ -2,7 +2,7 @@ import { tmpdir, userInfo } from "node:os";
 import { isAbsolute, join, dirname, resolve } from "node:path";
 /** Explicit environment, never a spread of personal shell variables or credential values. */
 export function workerEnvironment(
-  tool: "claude" | "codex",
+  tool: "claude" | "codex" | "pi",
   normalHome: string,
   profile: string,
   nodeBinary: string,
@@ -18,9 +18,10 @@ export function workerEnvironment(
     HOME: tool === "claude" ? normalHome : join(profile, "home"),
     PATH: dirname(nodeBinary) + ":/usr/bin:/bin",
     ENABLE_CLAUDEAI_MCP_SERVERS: "false",
-    [tool === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"]: join(
-      profile,
-      "state",
-    ),
+    [tool === "claude"
+      ? "CLAUDE_CONFIG_DIR"
+      : tool === "pi"
+        ? "PI_CODING_AGENT_DIR"
+        : "CODEX_HOME"]: join(profile, "state"),
   };
 }

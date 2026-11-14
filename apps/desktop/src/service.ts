@@ -277,6 +277,7 @@ function requireWorkerOn(harness: unknown) {
     throw new WorkerTurnedOff(harness === "claude" ? "Claude Code" : "Codex");
 }
 class WorkerTurnedOff extends Error {}
+class CopilotOnly extends Error {}
 
 // After a restart, a write that was sent and never confirmed is looked up
 // once the connections are ready. Nothing new is sent from here.
@@ -784,13 +785,13 @@ process.parentPort?.on("message", (event) => {
         workspaceRoot!,
         process.env.AMUN_FIRSTMATE_ARCHIVES!,
       );
-      requireWorkerOn("claude");
+      requireWorkerOn("pi");
       await supervisor.ensureRunning();
       return sendDelivery(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
         process.env.AMUN_TMUX_BINARY!,
-        "claude",
+        "pi",
         id,
         text,
       );
@@ -856,12 +857,8 @@ process.parentPort?.on("message", (event) => {
         : null;
     },
     harness() {
-      const tools = new ToolRegistry(workspace);
-      return tools.enabled(workerTool.claude)
-        ? "claude"
-        : tools.enabled(workerTool.codex)
-          ? "codex"
-          : null;
+      // All delegated work runs on Pi with GitHub Copilot; there is no Claude or Codex fallback.
+      return "pi";
     },
     async ready(harness, allow) {
       const releases = await FirstmateReleases.open(
@@ -1206,13 +1203,13 @@ process.parentPort?.on("message", (event) => {
             workspaceRoot!,
             process.env.AMUN_FIRSTMATE_ARCHIVES!,
           );
-          requireWorkerOn("codex");
+          requireWorkerOn("pi");
           await supervisor.ensureRunning();
           return sendDelivery(
             releases,
             process.env.AMUN_CREW_RECEIPTS!,
             process.env.AMUN_TMUX_BINARY!,
-            "codex",
+            "pi",
             id,
             text,
           );
@@ -1504,7 +1501,7 @@ process.parentPort?.on("message", (event) => {
         message.data.action === "resolve-attention" &&
         message.data.resolution === "answer" &&
         message.data.answer === allowWorker
-          ? (["claude", "codex"] as Harness[]).find(
+          ? (["pi", "claude", "codex"] as Harness[]).find(
               (harness) =>
                 workStore
                   .snapshot()
@@ -2066,9 +2063,8 @@ process.parentPort?.on("message", (event) => {
                 process.env.AMUN_FIRSTMATE_ARCHIVES!,
               );
               const dispatch: unknown = JSON.parse(request.argument);
-              requireWorkerOn(
-                (dispatch as { harness?: unknown } | null)?.harness,
-              );
+              if ((dispatch as { harness?: unknown } | null)?.harness !== "pi")
+                throw new CopilotOnly();
               const text = await dispatchFirstmate(
                 releases,
                 process.env.AMUN_CREW_RECEIPTS!,
@@ -2090,9 +2086,11 @@ process.parentPort?.on("message", (event) => {
               sendNative(request.id, {
                 kind: "message",
                 text:
-                  error instanceof WorkerTurnedOff
-                    ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
-                    : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
+                  error instanceof CopilotOnly
+                    ? "Crew workers run on GitHub Copilot through Pi. Choose the Pi worker."
+                    : error instanceof WorkerTurnedOff
+                      ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
+                      : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
               });
             } finally {
               crewDispatchBusy = false;

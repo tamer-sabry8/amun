@@ -142,22 +142,8 @@ export async function ownedWorktreeBranch(primary: string, worker: string) {
     (await realpath(repository)) !== repository
   )
     throw Error("Unsafe crew repository");
-  async function verifyMarker(file: string, expected: string) {
-    const info = await lstat(file);
-    if (
-      !info.isFile() ||
-      info.size > 8192 ||
-      (await realpath(file)) !== file ||
-      (await readFile(file, "utf8")).trimEnd() !== expected
-    )
-      throw Error("Worktree registration mismatch");
-  }
-  for (const home of [primary, worker]) {
-    const admin = join(repository, "worktrees", basename(home));
-    await verifyMarker(join(home, ".git"), "gitdir: " + admin);
-    await verifyMarker(join(admin, "gitdir"), join(home, ".git"));
-    await verifyMarker(join(admin, "commondir"), "../..");
-  }
+  for (const home of [primary, worker])
+    await verifyRegisteredWorktree(repository, home);
   const result = await promisify(execFile)(
     "/usr/bin/git",
     ["-C", worker, "symbolic-ref", "--short", "HEAD"],
@@ -173,4 +159,76 @@ export async function ownedWorktreeBranch(primary: string, worker: string) {
     },
   );
   return result.stdout.trim();
+}
+
+async function verifyMarker(file: string, expected: string) {
+  const info = await lstat(file);
+  if (
+    !info.isFile() ||
+    info.size > 8192 ||
+    (await realpath(file)) !== file ||
+    (await readFile(file, "utf8")).trimEnd() !== expected
+  )
+    throw Error("Worktree registration mismatch");
+}
+async function verifyRegisteredWorktree(repository: string, home: string) {
+  const admin = join(repository, "worktrees", basename(home));
+  await verifyMarker(join(home, ".git"), "gitdir: " + admin);
+  await verifyMarker(join(admin, "gitdir"), join(home, ".git"));
+  await verifyMarker(join(admin, "commondir"), "../..");
+}
+/**
+ * Adds one missing worker checkout to an existing Amun-owned crew repository.
+ * The primary must already be bound to that repository; existing worktrees,
+ * branches and anything else at the destination are never touched, so a
+ * legacy home keeps its live workers and receipts.
+ */
+export async function addOwnedWorker(primary: string, name: string) {
+  const root = dirname(primary);
+  const repository = join(root, "repository.git");
+  const worker = join(root, name + "-worker");
+  if (basename(primary) !== "primary" || !/^[a-z][a-z0-9]{1,15}$/.test(name))
+    throw Error("Worktree is outside this crew");
+  const owner = await lstat(root);
+  if (
+    owner.uid !== process.getuid?.() ||
+    (owner.mode & 0o077) !== 0 ||
+    (await realpath(root)) !== root ||
+    (await realpath(repository)) !== repository
+  )
+    throw Error("Unsafe crew repository");
+  await verifyRegisteredWorktree(repository, primary);
+  try {
+    await lstat(worker);
+    throw Error("Worker checkout already exists");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await promisify(execFile)(
+    "/usr/bin/git",
+    [
+      "-c",
+      "core.hooksPath=/dev/null",
+      "-C",
+      repository,
+      "worktree",
+      "add",
+      "-b",
+      "amun/" + name + "-worker",
+      worker,
+      "main",
+    ],
+    {
+      env: {
+        PATH: "/usr/bin:/bin",
+        HOME: root,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+      },
+      timeout: 60000,
+      maxBuffer: 65536,
+    },
+  );
+  await chmod(worker, 0o700);
+  return worker;
 }

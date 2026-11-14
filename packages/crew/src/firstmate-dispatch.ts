@@ -27,6 +27,8 @@ import {
 } from "./endpoint-receipt.ts";
 import { parseFirstmateRecord, queryTmuxEndpoint } from "./tmux-observer.ts";
 import { observeOwnedTmux } from "./observe-owned-tmux.ts";
+import { copilotModelSelector } from "./copilot-routing.ts";
+import { writePiLauncher, type PiLauncherSource } from "./pi-launcher.ts";
 
 const run = promisify(execFile);
 async function privateDir(path: string) {
@@ -92,7 +94,7 @@ async function crewServer(owner: string, path: string, tmux: TmuxCommand) {
   } catch (e) {
     if (!unavailable(e)) throw e;
     // Loss of an established server never authorizes a replacement dispatch.
-    for (const harness of ["codex", "claude"]) {
+    for (const harness of ["codex", "claude", "pi"]) {
       try {
         await lstat(join(owner, "amun-" + harness + ".launch"));
       } catch (err) {
@@ -144,7 +146,7 @@ async function captureEndpoint(
     token,
   }: {
     id: string;
-    harness: "codex" | "claude";
+    harness: "codex" | "claude" | "pi";
     home: string;
     worker: string;
     receipts: string;
@@ -206,6 +208,7 @@ export async function dispatchFirstmate(
   receipts: string,
   binary: string,
   input: unknown,
+  pi?: PiLauncherSource,
 ) {
   const { harness, charter } = dispatchRequest.parse(input);
   const { home, revision } = await releases.crewHome();
@@ -231,18 +234,33 @@ export async function dispatchFirstmate(
     () => "/opt/homebrew/bin/node",
     () => "/usr/local/bin/node",
   );
-  const launcher = join(homedir(), ".local/bin", harness);
   const binDir = join(owner, "launchers");
   await privateDir(binDir);
-  const link = join(binDir, harness);
-  try {
-    await symlink(launcher, link);
-  } catch (e) {
-    if (
-      (e as NodeJS.ErrnoException).code !== "EEXIST" ||
-      (await readlink(link)) !== launcher
-    )
-      throw Error("Unexpected crew launcher");
+  let launcher: string;
+  if (harness === "pi") {
+    const source = pi ?? {
+      binary: process.env.AMUN_PI_BINARY ?? "",
+      entry: process.env.AMUN_PI_ENTRY ?? "",
+      authRoot: process.env.AMUN_AUTH_ROOT ?? "",
+    };
+    // Pi runs from Amun's bundled runtime and credentials, never a personal install.
+    launcher = await writePiLauncher(binDir, source);
+    await Promise.all([
+      access(source.binary, constants.X_OK),
+      access(source.entry),
+    ]);
+  } else {
+    launcher = join(homedir(), ".local/bin", harness);
+    const link = join(binDir, harness);
+    try {
+      await symlink(launcher, link);
+    } catch (e) {
+      if (
+        (e as NodeJS.ErrnoException).code !== "EEXIST" ||
+        (await readlink(link)) !== launcher
+      )
+        throw Error("Unexpected crew launcher");
+    }
   }
   await Promise.all([
     access(node, constants.X_OK),
@@ -285,6 +303,13 @@ export async function dispatchFirstmate(
       "codex-permission-mode": "restricted",
       "claude-permission-mode": "auto",
       "launch-env-allowlist": "CODEX_HOME\nCLAUDE_CONFIG_DIR\nUSER\nLOGNAME",
+      ...(harness === "pi"
+        ? {
+            "crew-harness": "pi",
+            "secondmate-harness": "pi " + copilotModelSelector,
+            "supervision-branch-model": copilotModelSelector,
+          }
+        : {}),
     }))
       await privateSetting(join(home, "config", key), val + "\n");
     const launchEnv = {
@@ -346,6 +371,7 @@ export async function dispatchFirstmate(
           worker,
           "--harness",
           harness,
+          ...(harness === "pi" ? ["--model", copilotModelSelector] : []),
           "--backend",
           "tmux",
           "--secondmate",

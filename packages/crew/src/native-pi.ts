@@ -1,3 +1,4 @@
+import { copilotProvider } from "./copilot-routing.ts";
 interface Model {
   provider: string;
   id: string;
@@ -12,7 +13,8 @@ export interface NativePiSession {
   cycleThinkingLevel(): string | undefined;
   getAvailableThinkingLevels(): string[];
   setThinkingLevel(level: string): void;
-  setModel(model: Model): Promise<void>;
+  setModel(model: Model, options?: { persist: boolean }): Promise<void>;
+  settingsManager?: { flush(): Promise<void>; drainErrors(): unknown[] };
   setSessionName(name: string): void;
   getLastAssistantText(): string | undefined;
   getSessionStats(): unknown;
@@ -43,8 +45,11 @@ export class NativePiActions {
     if (s.isStreaming && !["session", "copy"].includes(command))
       throw Error("Wait for the current turn or abort it first");
     if (command === "model") {
-      const models = s.modelRuntime.getAvailableSnapshot();
-      if (models.length > 2048) throw Error("Model catalog too large");
+      const catalog = s.modelRuntime.getAvailableSnapshot();
+      if (catalog.length > 2048) throw Error("Model catalog too large");
+      const models = catalog.filter((m) => m.provider === copilotProvider);
+      if (argument && !argument.startsWith(copilotProvider + "/"))
+        throw Error("Amun uses GitHub Copilot models only.");
       const choices = models.map((m) => ({
         id: bounded(m.provider, 128) + "/" + bounded(m.id, 256),
         label: bounded(m.name ?? m.id, 256),
@@ -52,7 +57,12 @@ export class NativePiActions {
       if (!argument) return { kind: "choices", title: "Select model", choices };
       const index = choices.findIndex((m) => m.id === argument);
       if (index < 0) throw Error("Model unavailable");
-      await s.setModel(models[index]!);
+      await s.setModel(models[index]!, { persist: true });
+      await s.settingsManager?.flush();
+      if (s.settingsManager?.drainErrors().length)
+        throw Error(
+          "The model changed, but its default could not be saved. Try again.",
+        );
       return { kind: "message", text: "Model selected: " + argument };
     }
     if (command === "cycle-thinking") {

@@ -84,11 +84,21 @@ import {
   NativePiActions,
   type NativePiSession,
 } from "../../../packages/crew/src/native-pi.ts";
+import { selectCopilotModel } from "../../../packages/crew/src/copilot-routing.ts";
 import { preparePiAuth } from "../../../packages/auth/src/pi-auth.ts";
 import { JsonLineDecoder } from "../../../packages/crew/src/jsonl.ts";
 const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
+interface ModelRuntimeView {
+  getAvailable(
+    provider: string,
+  ): Promise<readonly { provider: string; id: string }[]>;
+}
+interface DefaultModelSettings {
+  getDefaultProvider(): string | undefined;
+  getDefaultModel(): string | undefined;
+}
 type Runtime = NativeSessionRuntime & {
   session: ExtensionSession &
     ResourceSession &
@@ -172,7 +182,7 @@ async function initialize() {
   const sessions = join(cwd, "sessions");
   await privateDirectory(sessions);
   const sdk = (await import(pathToFileURL(entry!).href)) as {
-    ModelRuntime: { create(options: unknown): Promise<unknown> };
+    ModelRuntime: { create(options: unknown): Promise<ModelRuntimeView> };
     getPackageDir(): string;
     readStoredCredential(provider: string, path: string): unknown;
     ProjectTrustStore: new (root: string) => TrustStore;
@@ -183,9 +193,10 @@ async function initialize() {
         dir: string,
       ): Promise<{ id: string; name?: string; path: string; cwd: string }[]>;
     };
-    createAgentSessionServices(
-      options: unknown,
-    ): Promise<{ diagnostics: unknown[] }>;
+    createAgentSessionServices(options: unknown): Promise<{
+      diagnostics: unknown[];
+      settingsManager: DefaultModelSettings;
+    }>;
     createAgentSessionFromServices(options: unknown): Promise<unknown>;
     createAgentSessionRuntime(
       factory: (options: {
@@ -233,8 +244,13 @@ async function initialize() {
           noContextFiles: true,
         },
       });
+      const model = await selectCopilotModel(
+        modelRuntime,
+        services.settingsManager,
+      );
       const created = await sdk.createAgentSessionFromServices({
         services,
+        model,
         sessionManager: options.sessionManager,
         sessionStartEvent: options.sessionStartEvent,
         noTools: "all",

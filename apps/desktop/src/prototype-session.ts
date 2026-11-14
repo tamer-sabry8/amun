@@ -65,7 +65,7 @@ export class PrototypeSession {
           .transaction(() => {
             this.db
               .prepare(
-                "INSERT INTO runs(id,product_id,agent_role,harness,state,started_at,firstmate_task_id) VALUES(?,?,'Designer','claude','queued',?,'amun-claude')",
+                "INSERT INTO runs(id,product_id,agent_role,harness,state,started_at,firstmate_task_id) VALUES(?,?,'Designer','pi','queued',?,'amun-pi')",
               )
               .run(id, cmd.product, new Date().toISOString());
             this.db

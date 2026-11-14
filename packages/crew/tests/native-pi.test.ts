@@ -12,6 +12,10 @@ function fixture() {
     getAvailableThinkingLevels: () => ["off", "medium"],
     setThinkingLevel: vi.fn(),
     setModel: vi.fn(async () => {}),
+    settingsManager: {
+      flush: vi.fn(async () => {}),
+      drainErrors: vi.fn(() => [] as unknown[]),
+    },
     setSessionName: vi.fn(),
     getLastAssistantText: () => "response",
     getSessionStats: () => ({
@@ -48,7 +52,10 @@ it("projects native model/thinking/session views without leaking runtime fields"
 it("executes valid SDK mutations and rejects unsupported models, levels, oversized names and busy mutation", async () => {
   const { session, actions } = fixture();
   await actions.run("model", "github-copilot/gpt-test");
-  expect(session.setModel).toHaveBeenCalledWith(session.model);
+  expect(session.setModel).toHaveBeenCalledWith(session.model, {
+    persist: true,
+  });
+  expect(session.settingsManager.flush).toHaveBeenCalledOnce();
   await actions.run("thinking", "off");
   expect(session.setThinkingLevel).toHaveBeenCalledWith("off");
   await actions.run("name", "Amun test");
@@ -92,4 +99,25 @@ it("cycles the active model's SDK thinking levels and reports an unsupported mod
   session.isStreaming = true;
   await expect(actions.run("cycle-thinking", "")).rejects.toThrow();
   expect(cycle).toHaveBeenCalledTimes(2);
+});
+
+it("does not claim a persisted default when writing settings fails", async () => {
+  const { session, actions } = fixture();
+  session.settingsManager.drainErrors.mockReturnValue([new Error("disk full")]);
+  await expect(actions.run("model", "github-copilot/gpt-test")).rejects.toThrow(
+    "default could not be saved",
+  );
+});
+
+it("offers and accepts only GitHub Copilot models", async () => {
+  const { session, actions } = fixture();
+  const other = { provider: "openai", id: "gpt-other", name: "Other" };
+  session.modelRuntime.getAvailableSnapshot = () => [session.model, other];
+  const result = await actions.run("model", "");
+  expect(result).toMatchObject({
+    choices: [{ id: "github-copilot/gpt-test" }],
+  });
+  await expect(actions.run("model", "openai/gpt-other")).rejects.toThrow(
+    "GitHub Copilot models only",
+  );
 });

@@ -1,3 +1,4 @@
+import { copilotModelSelector } from "./copilot-routing.ts";
 import { lstat, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
@@ -6,6 +7,8 @@ const allowed = new Set([
   "claude-permission-mode",
   "codex-permission-mode",
   "secondmate-harness",
+  "crew-harness",
+  "supervision-branch-model",
   "crew-dispatch.json",
 ]);
 /** Only explicit operational configuration is imported; credentials and executable skills are excluded. */
@@ -22,7 +25,9 @@ export function mergeOverlay(
   }
   const merged = {
     backend: overlay.backend?.trim() ?? "",
-    "secondmate-harness": "codex",
+    "crew-harness": "pi",
+    "secondmate-harness": "pi " + copilotModelSelector,
+    "supervision-branch-model": copilotModelSelector,
     ...overlay,
     "claude-permission-mode": "auto",
     "codex-permission-mode": "restricted",

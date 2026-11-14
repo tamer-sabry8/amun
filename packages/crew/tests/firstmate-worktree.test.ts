@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import {
+  addOwnedWorker,
   createFirstmateWorktrees,
   ownedWorktreeBranch,
 } from "../src/firstmate-worktree.ts";
@@ -87,4 +88,38 @@ it("refuses unsafe or duplicate names before creating state", async () => {
     await expect(
       createFirstmateWorktrees("/unused", "/unused", names),
     ).rejects.toThrow();
+});
+it("adds a worker to a legacy crew repository without touching its existing workers", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "amun-worktree-test-")),
+  );
+  try {
+    const source = join(root, "source");
+    await mkdir(source);
+    await writeFile(join(source, "AGENTS.md"), "Fixture only");
+    const legacy = await createFirstmateWorktrees(source, join(root, "owned"), [
+      "primary",
+      "codex-worker",
+      "claude-worker",
+    ]);
+    const primary = legacy.homes.primary!;
+    await writeFile(join(legacy.homes["codex-worker"]!, "live.txt"), "live");
+    const added = await addOwnedWorker(primary, "pi");
+    expect(added).toBe(join(root, "owned", "pi-worker"));
+    expect(await ownedWorktreeBranch(primary, added)).toBe("amun/pi-worker");
+    expect(
+      await readFile(join(legacy.homes["codex-worker"]!, "live.txt"), "utf8"),
+    ).toBe("live");
+    expect(
+      await ownedWorktreeBranch(primary, legacy.homes["claude-worker"]!),
+    ).toBe("amun/claude-worker");
+    await expect(addOwnedWorker(primary, "pi")).rejects.toThrow("exists");
+    const foreign = join(root, "foreign");
+    await mkdir(foreign, { mode: 0o700 });
+    await expect(
+      addOwnedWorker(join(foreign, "primary"), "pi"),
+    ).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

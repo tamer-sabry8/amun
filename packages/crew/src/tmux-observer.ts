@@ -4,7 +4,7 @@ export type FirstmateRecord = {
   window: string;
   worktree: string;
   spawnGeneration: string;
-  harness: "codex" | "claude";
+  harness: "codex" | "claude" | "pi";
 };
 export type EndpointIdentity = Omit<FirstmateRecord, "backend" | "harness"> & {
   paneId: string;
@@ -43,7 +43,7 @@ export function parseFirstmateRecord(text: string): FirstmateRecord {
     !worktree.startsWith("/") ||
     /[\r\n\t]/.test(worktree) ||
     !/^[-a-zA-Z0-9.]{1,128}$/.test(spawnGeneration) ||
-    (harness !== "codex" && harness !== "claude")
+    (harness !== "codex" && harness !== "claude" && harness !== "pi")
   )
     throw new Error("Unsupported Firstmate record");
   return {

@@ -78,7 +78,7 @@ export const crewInventory = z.strictObject({
 });
 
 export const dispatchRequest = z.strictObject({
-  harness: z.enum(["codex", "claude"]),
+  harness: z.enum(["codex", "claude", "pi"]),
   charter: z
     .string()
     .trim()

@@ -1,3 +1,4 @@
+import { copilotProvider } from "./copilot-routing.ts";
 import type { NativePiResult } from "./native-pi.ts";
 interface Model {
   provider: string;
@@ -25,14 +26,16 @@ export class NativePiPreferences {
     if (direction !== "forward" && direction !== "backward")
       throw Error("Invalid model direction");
     await this.run("scoped-models", "");
-    const models = this.session.modelRuntime.getAvailableSnapshot();
+    const models = this.session.modelRuntime
+      .getAvailableSnapshot()
+      .filter((m) => m.provider === copilotProvider);
     const ids = this.session.settingsManager.getEnabledModels();
+    // An empty scope would let the SDK cycle through every provider.
     this.session.setScopedModels(
-      ids?.length
-        ? models
-            .filter((m) => ids.includes(m.provider + "/" + m.id))
-            .map((model) => ({ model }))
-        : [],
+      (ids?.length
+        ? models.filter((m) => ids.includes(m.provider + "/" + m.id))
+        : models
+      ).map((model) => ({ model })),
     );
     const result = await this.session.cycleModel(direction);
     return {
@@ -51,7 +54,9 @@ export class NativePiPreferences {
       throw Error("Invalid preference action");
     const s = this.session;
     if (s.isStreaming) throw Error("Wait for the current turn");
-    const models = s.modelRuntime.getAvailableSnapshot();
+    const catalog = s.modelRuntime.getAvailableSnapshot();
+    if (catalog.length > 2048) throw Error("Model catalog too large");
+    const models = catalog.filter((m) => m.provider === copilotProvider);
     if (models.length > 2048) throw Error("Model catalog too large");
     const ids = models.map((m) => m.provider + "/" + m.id);
     if (ids.some((id) => id.length > 512) || new Set(ids).size !== ids.length)

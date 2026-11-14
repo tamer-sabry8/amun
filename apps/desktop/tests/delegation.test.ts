@@ -171,7 +171,7 @@ it("uses Codex when that is the tool that is on, and says so when none is", asyn
   expect(await make({ harness: () => null }).start(job)).toBeNull();
   expect(delivered).toEqual([]);
   expect(String(of("message")[0]!.text)).toContain(
-    "Claude Code and Codex are both turned off",
+    "no enabled Copilot worker is available",
   );
   expect(of("agent-status")).toEqual([]);
 });

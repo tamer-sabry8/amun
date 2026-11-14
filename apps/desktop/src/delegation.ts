@@ -10,7 +10,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { agentProfile } from "../../../packages/domain/src/work/agents.ts";
 
-export type Harness = "claude" | "codex";
+export type Harness = "claude" | "codex" | "pi";
 export interface DelegationDeps {
   /** Private folder holding one sub-folder per delegated job. */
   root: string;
@@ -53,6 +53,7 @@ const limit = 200_000;
 const names: Record<Harness, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  pi: "GitHub Copilot through Pi",
 };
 
 /** The written instructions an agent works from, built from its catalogue entry. */
@@ -144,7 +145,7 @@ export class Delegations {
     if (!harness) {
       this.say(
         input.workAreaId,
-        `I could not give this to ${agent}: Claude Code and Codex are both turned off under Settings › Tools on this Mac.`,
+        `I could not give this to ${agent}: no enabled Copilot worker is available. Check the Copilot connection under Settings › Accounts and models.`,
       );
       return null;
     }

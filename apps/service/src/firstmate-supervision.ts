@@ -1,3 +1,7 @@
+import {
+  copilotModelSelector,
+  copilotProvider,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import { spawn } from "node:child_process";
 import {
   cp,
@@ -149,6 +153,10 @@ export class FirstmateSupervision {
           this.entry,
           "--mode",
           "rpc",
+          "--provider",
+          copilotProvider,
+          "--model",
+          copilotModelSelector,
           "--no-session",
           "--no-tools",
           "--no-extensions",

@@ -11,7 +11,12 @@ export function observedRun(
     productId,
     storyId: null,
     agentRole: "unknown",
-    harness: record.harness === "claude" ? "claude_code" : "codex",
+    harness:
+      record.harness === "claude"
+        ? "claude_code"
+        : record.harness === "pi"
+          ? "pi"
+          : "codex",
     model: "unknown",
     firstmateTaskId: record.taskId,
     backend: "tmux",
