@@ -17,9 +17,19 @@ interface Session {
 let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
 let listening = false;
+let contextGeneration = 0;
 function listen() {
   if (listening) return;
   listening = true;
+  let product = bridge.getSnapshot().workspace?.preferences.productId ?? null;
+  bridge.subscribe(() => {
+    const next = bridge.getSnapshot().workspace?.preferences.productId ?? null;
+    if (next === product) return;
+    product = next;
+    contextGeneration++;
+    session = null;
+    priming = null;
+  });
   bridge.onEvent((raw) => {
     if (
       raw &&
@@ -27,7 +37,9 @@ function listen() {
       "kind" in raw &&
       raw.kind === "service-lost"
     ) {
+      contextGeneration++;
       session = null;
+      priming = null;
       for (const done of waiting.values())
         done({ kind: "message", text: "Connection interrupted. Try again." });
       waiting.clear();
@@ -116,7 +128,7 @@ export function releaseMessage(areaId: string) {
   return message;
 }
 const providerProblem =
-  /sign in|signed in|not ready|no model|could not be verified|could not be completed|reconnect|credential|unauthori[sz]ed|expired/i;
+  /sign in|signed in|no model|credential|unauthori[sz]ed|authentication|token.*expired/i;
 
 // Which conversations have been told how to act inside Amun. A new
 // conversation (after a restart, a model change or a sign-in) knows nothing
@@ -134,12 +146,21 @@ export async function askFirstmate(
   text: string,
   image?: string,
 ): Promise<Turn> {
+  // The model label may already be opening the same conversation.
+  if (priming) await priming;
   if (!session) {
+    const generation = contextGeneration;
     const opened = await run("conversation", "");
+    if (generation !== contextGeneration)
+      return {
+        ok: false,
+        needsProvider: false,
+        reason: "The conversation changed. Please send your message again.",
+      };
     if (opened.kind !== "conversation")
       return {
         ok: false,
-        needsProvider: true,
+        needsProvider: providerProblem.test(String(opened.text ?? "")),
         reason:
           typeof opened.text === "string" && opened.text
             ? opened.text
@@ -208,9 +229,14 @@ let priming: Promise<void> | null = null;
 /** Opens the conversation once, so the model in use is known before a message. */
 function prime() {
   if (session || priming) return priming ?? Promise.resolve();
+  const generation = contextGeneration;
   priming = run("conversation", "")
     .then((opened) => {
-      if (opened.kind === "conversation" && !session)
+      if (
+        generation === contextGeneration &&
+        opened.kind === "conversation" &&
+        !session
+      )
         session = {
           sessionId: String(opened.sessionId),
           model: (opened.model as string | null) ?? null,
@@ -219,7 +245,7 @@ function prime() {
         };
     })
     .finally(() => {
-      priming = null;
+      if (generation === contextGeneration) priming = null;
     });
   return priming;
 }
