@@ -123,6 +123,16 @@
   background: #07121c;
 }
 
+/* The work's menu: a long name in the delete question wraps instead of
+   stretching the menu across the window. */
+.rb-crumb .rb-menu {
+  max-width: 360px;
+}
+.rb-crumb .rb-menu-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* The Island says what failed, not only that something did. */
 .rb-island .detail {
   margin: 0;
