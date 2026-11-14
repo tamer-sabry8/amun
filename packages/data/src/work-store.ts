@@ -129,33 +129,44 @@ export class WorkStore {
       "INSERT INTO work_areas(id,type,name,product_id,last_context_at,created_at) SELECT 'area-' || id,'product',name,id,created_at,created_at FROM products WHERE id NOT IN (SELECT product_id FROM work_areas WHERE product_id IS NOT NULL)",
     );
   }
-  private areas(): WorkSnapshot["areas"] {
-    return this.all("SELECT * FROM work_areas ORDER BY created_at,id").map(
-      (row) => ({
-        id: String(row.id),
-        groupId: (row.group_id as string | null) ?? null,
-        type: row.type as WorkArea["type"],
-        name: String(row.name),
-        purpose: String(row.purpose),
-        status: String(row.status),
-        productId: (row.product_id as string | null) ?? null,
-        stakeholder: Number(row.stakeholder),
-        client: (row.client as string | null) ?? null,
-        clientWeight: Number(row.client_weight),
-        dueAt: (row.due_at as string | null) ?? null,
-        effort: (row.effort as "XS" | "S" | "M" | "L" | null) ?? null,
-        milestones: Number(row.milestones),
-        people: Number(row.people),
-        steps: Number(row.steps),
-        declinedShape: row.declined_shape_json
-          ? JSON.parse(String(row.declined_shape_json))
-          : null,
-        convertedFrom: (row.converted_from as WorkArea["type"] | null) ?? null,
-        lastContextAt: (row.last_context_at as string | null) ?? null,
-        interest: Number(row.interest),
-        createdAt: String(row.created_at),
-      }),
+  /** Whether a work exists and has not been deleted. */
+  private live(areaId: string) {
+    return !!this.get(
+      "SELECT 1 FROM work_areas WHERE id=? AND status<>'deleted'",
+      areaId,
     );
+  }
+  /**
+   * Every work. A deleted one is left out unless asked for: only the
+   * snapshot needs them, to know what else to leave out.
+   */
+  private areas(withDeleted = false): WorkSnapshot["areas"] {
+    return this.all(
+      `SELECT * FROM work_areas ${withDeleted ? "" : "WHERE status<>'deleted' "}ORDER BY created_at,id`,
+    ).map((row) => ({
+      id: String(row.id),
+      groupId: (row.group_id as string | null) ?? null,
+      type: row.type as WorkArea["type"],
+      name: String(row.name),
+      purpose: String(row.purpose),
+      status: String(row.status),
+      productId: (row.product_id as string | null) ?? null,
+      stakeholder: Number(row.stakeholder),
+      client: (row.client as string | null) ?? null,
+      clientWeight: Number(row.client_weight),
+      dueAt: (row.due_at as string | null) ?? null,
+      effort: (row.effort as "XS" | "S" | "M" | "L" | null) ?? null,
+      milestones: Number(row.milestones),
+      people: Number(row.people),
+      steps: Number(row.steps),
+      declinedShape: row.declined_shape_json
+        ? JSON.parse(String(row.declined_shape_json))
+        : null,
+      convertedFrom: (row.converted_from as WorkArea["type"] | null) ?? null,
+      lastContextAt: (row.last_context_at as string | null) ?? null,
+      interest: Number(row.interest),
+      createdAt: String(row.created_at),
+    }));
   }
   private plans(): WorkSnapshot["plans"] {
     return this.all("SELECT * FROM work_plans ORDER BY created_at,id").map(
@@ -262,7 +273,7 @@ export class WorkStore {
         routes: this.all(
           "SELECT id,group_id AS groupId,condition,tracker FROM routing_rules ORDER BY created_at,id",
         ),
-        areas: this.areas(),
+        areas: this.areas(true),
         relations: this.all(
           "SELECT from_id AS fromId,to_id AS toId,kind FROM work_area_relations ORDER BY from_id,to_id",
         ),
@@ -550,7 +561,10 @@ export class WorkStore {
   }
   private groupOf(areaId: string | null) {
     if (!areaId) return null;
-    const row = this.get("SELECT group_id FROM work_areas WHERE id=?", areaId);
+    const row = this.get(
+      "SELECT group_id FROM work_areas WHERE id=? AND status<>'deleted'",
+      areaId,
+    );
     if (!row) throw new WorkError("That work area no longer exists.");
     return (row.group_id as string | null) ?? null;
   }
@@ -1264,9 +1278,7 @@ export class WorkStore {
       case "handoff-rfp":
         return this.handoff(command.areaId);
       case "save-roadmap-item": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         const existing = command.itemId
           ? this.get("SELECT * FROM roadmap_items WHERE id=?", command.itemId)
@@ -1350,9 +1362,7 @@ export class WorkStore {
         };
       }
       case "save-sprint": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         if (Date.parse(command.end) < Date.parse(command.start))
           throw new WorkError("A sprint cannot end before it starts.");
@@ -1824,9 +1834,7 @@ export class WorkStore {
         return {};
       }
       case "message": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         const id = randomUUID();
         this.run(

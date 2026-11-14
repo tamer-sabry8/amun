@@ -156,6 +156,60 @@ describe("rules that hold for every kind", () => {
     expect(snap().areas).toEqual([]);
   });
 
+  it("is not offered or opened by a new message that mentions its name", () => {
+    send("finish-setup", {
+      workTypes: ["project"],
+      tools: [],
+      agents: [],
+      groups: [{ name: "Work", routes: [] }],
+    });
+    const groupId = snap().groups[0]!.id;
+    const id = send("create-area", {
+      groupId,
+      type: "project",
+      name: "Arabic Voice",
+    }).ref!;
+    const mention = () =>
+      store
+        .handle({
+          version: 1,
+          kind: "work",
+          action: "intake",
+          text: "For Arabic Voice: draft the launch note",
+          fileNames: [],
+          groupId,
+        })
+        .find(
+          (event) => (event as { kind: string }).kind === "work-result",
+        ) as { step?: unknown };
+    // While it exists, a message naming it is filed under it.
+    expect(JSON.stringify(mention().step)).toContain(id);
+    send("delete-area", { areaId: id });
+    // Afterwards nothing points at it, as a destination or as a choice.
+    expect(JSON.stringify(mention().step)).not.toContain(id);
+  });
+
+  it("takes no new message, plan, sprint or roadmap item once deleted", () => {
+    const id = add("project", "Closed");
+    send("delete-area", { areaId: id });
+    const gone = { ok: false, message: "That work area no longer exists." };
+    expect(
+      send("message", { workAreaId: id, role: "you", text: "Hello" }),
+    ).toMatchObject(gone);
+    expect(
+      send("propose-plan", {
+        groupId: null,
+        workAreaId: id,
+        planKind: "stories",
+        destination: "ado",
+        summary: "One story",
+        items: [{ id: "s1", summary: "A story", fields: {} }],
+      }),
+    ).toMatchObject(gone);
+    expect(snap().messages).toEqual([]);
+    expect(snap().plans).toEqual([]);
+  });
+
   it("drops a link between two works when one is deleted", () => {
     const rfp = add("rfp", "Smart Inspection");
     const project = add("project", "Smart Inspection delivery");
