@@ -16,8 +16,18 @@ export interface DelegationDeps {
   root: string;
   /** Applies a work command and tells the interface. */
   record(command: Record<string, unknown>): { ok: boolean; ref: string | null };
+  /**
+   * The saved documents of the job's work, as bounded, labelled reference
+   * text (same group only). Empty when there are none.
+   */
+  sources?(areaId: string, task: string): string;
   /** The work the job belongs to, or null when it no longer exists. */
-  area(id: string): { name: string; type: string; purpose: string } | null;
+  area(id: string): {
+    name: string;
+    type: string;
+    purpose: string;
+    groupId: string | null;
+  } | null;
   /** The worker tool to use, or null when the owner has turned them all off. */
   harness(): Harness | null;
   /**
@@ -44,6 +54,11 @@ interface Job {
   activityId: string | null;
   startedAt: number;
   state: "waiting-owner" | "sent" | "done" | "failed";
+  /**
+   * Whether the result is filed as a Library draft. Absent on jobs finished
+   * before this was tracked.
+   */
+  saved?: boolean;
 }
 /** The answer that lets a worker use its own folder. */
 export const allowWorker = "Allow it";
@@ -63,6 +78,7 @@ export function agentBrief(input: {
   task: string;
   area: { name: string; type: string; purpose: string };
   result: string;
+  sources?: string;
 }) {
   const profile = agentProfile(input.agent);
   return [
@@ -96,6 +112,7 @@ export function agentBrief(input: {
             : []),
         ]
       : []),
+    ...(input.sources ? ["", "## Source documents", input.sources] : []),
     "",
     "## Rules",
     "- You report to Firstmate. Never address the owner.",
@@ -113,6 +130,14 @@ export class Delegations {
 
   private dir(id: string) {
     return join(this.deps.root, id);
+  }
+  private async readResult(job: Job) {
+    return this.deps.redact(
+      (await readFile(join(this.dir(job.id), "result.md"), "utf8")).slice(
+        0,
+        limit,
+      ),
+    );
   }
   private async save(job: Job) {
     await writeFile(join(this.dir(job.id), "job.json"), JSON.stringify(job), {
@@ -155,7 +180,13 @@ export class Delegations {
     await mkdir(dir, { mode: 0o700, recursive: true });
     await writeFile(
       join(dir, "brief.md"),
-      agentBrief({ ...input, agent, area, result }),
+      agentBrief({
+        ...input,
+        agent,
+        area,
+        result,
+        sources: this.deps.sources?.(input.workAreaId, input.task) ?? "",
+      }),
       { mode: 0o600, flag: "wx" },
     );
     await writeFile(result, "", { mode: 0o600, flag: "wx" });
@@ -290,24 +321,59 @@ export class Delegations {
     return found;
   }
 
-  /** After a restart, keeps waiting for jobs already sent. Sends nothing. */
+  /**
+   * After a restart, keeps waiting for jobs already sent and files any
+   * finished result that never reached the Library. Sends nothing to a worker.
+   */
   async resume() {
-    let entries: string[] = [];
-    try {
-      entries = await readdir(this.deps.root);
-    } catch {
+    for (const job of await this.jobs()) {
+      if (job.state === "sent") this.watch(job);
+      else if (job.state === "done" || job.state === "failed")
+        await this.recover(job).catch(() => undefined);
+    }
+  }
+
+  private async recover(job: Job) {
+    if (job.saved === true) return;
+    const area = this.deps.area(job.workAreaId);
+    if (!area) return;
+    // Before this was tracked, an output with no group was filed correctly;
+    // only grouped work lost its draft, and only a finished job is retried.
+    if (job.saved === undefined && (job.state !== "done" || !area.groupId)) {
+      job.saved = true;
+      await this.save(job);
       return;
     }
-    for (const entry of entries) {
-      try {
-        const job = JSON.parse(
-          await readFile(join(this.deps.root, entry, "job.json"), "utf8"),
-        ) as Job;
-        if (job.state === "sent" && job.id === entry) this.watch(job);
-      } catch {
-        // A folder without a readable record is not a job to wait for.
-      }
+    const text = (await this.readResult(job)).trim();
+    if (!text) return;
+    if (await this.file(job, text))
+      this.say(
+        job.workAreaId,
+        `I have saved ${job.agent}'s result for “${job.title}” as a draft in the Library.`,
+      );
+  }
+
+  /** Files the result as a draft. Safe to repeat: the draft has a fixed id. */
+  private async file(job: Job, text: string) {
+    const area = this.deps.area(job.workAreaId);
+    if (!area) return false;
+    let ok = false;
+    try {
+      ok = this.deps.record({
+        action: "save-output",
+        outputId: "delegation-" + job.id,
+        groupId: area.groupId,
+        type: "doc",
+        title: `${job.title} (${job.agent})`.slice(0, 250),
+        body: text.slice(0, 90_000),
+        workAreaIds: [job.workAreaId],
+      }).ok;
+    } catch {
+      ok = false;
     }
+    job.saved = ok;
+    await this.save(job).catch(() => undefined);
+    return ok;
   }
 
   private watch(job: Job) {
@@ -318,13 +384,7 @@ export class Delegations {
         (file) => file.size,
         () => -1,
       );
-    const read = async () =>
-      this.deps.redact(
-        (await readFile(join(this.dir(job.id), "result.md"), "utf8")).slice(
-          0,
-          limit,
-        ),
-      );
+    const read = () => this.readResult(job);
     const tick = async () => {
       this.timers.delete(job.id);
       const size = await exists("result.md");
@@ -370,8 +430,10 @@ export class Delegations {
     outcome: { text?: string; note?: string },
   ) {
     job.state = state;
-    await this.save(job).catch(() => undefined);
     const text = outcome.text?.trim() ?? "";
+    // Marked unsaved first, so a restart before the draft is filed retries it.
+    if (text) job.saved = false;
+    await this.save(job).catch(() => undefined);
     this.deps.record({
       action: "agent-status",
       role: job.agent,
@@ -394,14 +456,7 @@ export class Delegations {
       // Kept as a draft beside the conversation, and said in the chat. The
       // card marks it as an agent's work, so Firstmate is told about it with
       // the owner's next message and can build on the real text.
-      this.deps.record({
-        action: "save-output",
-        groupId: null,
-        type: "doc",
-        title: `${job.title} (${job.agent})`.slice(0, 250),
-        body: text.slice(0, 90_000),
-        workAreaIds: [job.workAreaId],
-      });
+      const saved = await this.file(job, text);
       this.deps.record({
         action: "message",
         workAreaId: job.workAreaId,
@@ -409,7 +464,11 @@ export class Delegations {
         text:
           (state === "done"
             ? `${job.agent} has finished “${job.title}”.`
-            : (outcome.note ?? "")) + `\n\n${text.slice(0, 12_000)}`,
+            : (outcome.note ?? "")) +
+          (saved
+            ? ""
+            : "\n\nI could not save this as a draft in the Library. The result is kept and I will try again when Amun restarts.") +
+          `\n\n${text.slice(0, 12_000)}`,
         card: { kind: "agent-result", agent: job.agent, title: job.title },
       });
     } else

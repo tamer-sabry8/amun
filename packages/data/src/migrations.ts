@@ -1011,4 +1011,8 @@ CREATE TABLE work_messages (
   // 31 · Items left unticked at approval wait in their own proposal, which
   // remembers the plan it was split from.
   `ALTER TABLE work_plans ADD COLUMN split_from TEXT REFERENCES work_plans(id);`,
+  // 32 · Accepting an offer used to add a "Drafting" row that nothing ever
+  // finished. Those rows are closed as never started rather than left running
+  // or marked done.
+  `UPDATE work_activity SET state='failed',text=text || ' — never started: accepting this did not begin a draft. Ask again in its conversation.' WHERE ref LIKE 'offer:%' AND state='running';`,
 ] as const;

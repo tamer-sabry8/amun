@@ -32,7 +32,12 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const area = { name: "Arabic Voice", type: "Product", purpose: "Voice notes" };
+const area = {
+  name: "Arabic Voice",
+  type: "Product",
+  purpose: "Voice notes",
+  groupId: null as string | null,
+};
 function make(extra: Partial<DelegationDeps> = {}) {
   const delegations = new Delegations({
     root,
@@ -100,6 +105,14 @@ it("gives the agent a brief built from its catalogue entry", () => {
   expect(brief).toContain("Do not write to Azure DevOps, Notion, GitHub");
   expect(brief).toContain('"/tmp/result.md"');
   expect(brief).toContain('create an empty file named "done"');
+});
+
+it("puts the supplied source documents in the brief, and none when there are none", () => {
+  const input = { agent: "QA", title: "T", task: "x", area, result: "/r" };
+  expect(
+    agentBrief({ ...input, sources: "[Document · source id: d1]" }),
+  ).toMatch(/## Source documents\n\[Document · source id: d1\]/);
+  expect(agentBrief(input)).not.toContain("Source documents");
 });
 
 it("starts a worker, shows who is working, and brings the result back to the chat", async () => {

@@ -1,10 +1,8 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
+import { acceptOffer } from "./accept-offer.ts";
 import { useState } from "react";
-import {
-  outcomeNotes,
-  type AttentionRow,
-} from "../../../../packages/domain/src/work/home.ts";
+import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
 import {
   route,
@@ -367,8 +365,12 @@ function Row({
   const primary = () => {
     if (row.primary === "Review changes" && row.tray) return onToggle();
     if (row.primary === "Yes, draft it") {
-      work("resolve-attention", { attentionId: row.id, resolution: "accept" });
-      return onAccepted(outcomeNotes.draft);
+      const item = snapshot.attention.find((entry) => entry.id === row.id);
+      if (!item) return;
+      const accepted = acceptOffer(item);
+      onAccepted(accepted.note);
+      // The draft is asked for in the work's own conversation.
+      return accepted.areaId ? onOpen() : undefined;
     }
     if (row.primary === "View findings")
       work("resolve-attention", { attentionId: row.id, resolution: "done" });

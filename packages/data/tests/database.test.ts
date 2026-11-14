@@ -169,3 +169,20 @@ it("rejects invalid JSON, duplicate operations and orphan approvals", () => {
   ).toThrow();
   db.close();
 });
+
+it("closes Drafting rows that accepting an offer once left running", () => {
+  const db = new Database(":memory:");
+  migrate(db, 31);
+  const insert = db.prepare(
+    "INSERT INTO work_activity(id,group_id,work_area_id,text,state,ref,created_at) VALUES (?,?,?,?,?,?,?)",
+  );
+  insert.run("a1", null, null, "Drafting: BRD", "running", "offer:x", "t");
+  insert.run("a2", null, null, "Reviewing", "running", "job:y", "t");
+  migrate(db);
+  const rows = db
+    .prepare("SELECT id,state,text FROM work_activity ORDER BY id")
+    .all() as { id: string; state: string; text: string }[];
+  expect(rows[0]).toMatchObject({ state: "failed" });
+  expect(rows[0]!.text).toContain("never started");
+  expect(rows[1]).toMatchObject({ state: "running", text: "Reviewing" });
+});

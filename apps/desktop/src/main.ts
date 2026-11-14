@@ -1,3 +1,4 @@
+import { piBinary } from "./pi-runtime.ts";
 import { installFolderPicker } from "./folder-picker.ts";
 import { installScreenshot } from "./screenshot.ts";
 import { installWorkerLogin } from "./worker-login.ts";
@@ -102,7 +103,12 @@ function startService(): void {
           process.platform === "darwin"
             ? "/opt/homebrew/bin/tmux"
             : "/usr/bin/tmux",
-        AMUN_PI_BINARY: process.execPath,
+        // The packaged helper, so a Pi worker is never taken for the app.
+        AMUN_PI_BINARY: piBinary({
+          packaged: app.isPackaged,
+          platform: process.platform,
+          execPath: process.execPath,
+        }),
         AMUN_PI_ENTRY: app.isPackaged
           ? join(
               process.resourcesPath,

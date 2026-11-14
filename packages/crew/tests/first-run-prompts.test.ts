@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import {
   acceptFirstRunPrompts,
   firstRunPrompt,
+  piReady,
+  readyFor,
 } from "../src/first-run-prompts.ts";
 
 const worktree =
@@ -191,4 +193,45 @@ it("answers nothing until the owner has allowed it, and says what is waiting", a
   expect(result).toEqual({ taken: [], blocked: "trusted-folder" });
   expect(sent).toEqual([]);
   expect(checks).toBe(0);
+});
+
+// Pi's idle footer as footer.js draws it, and the project-trust selector.
+const piIdle = `${worktree} (main)
+0.0%/128k (auto)                         claude-sonnet-5.5 • thinking off`;
+const piTrust = `  Project trust
+  ${worktree}
+  Saved decision: none
+  Current session: untrusted
+${piIdle}`;
+
+it("tells Pi's idle screen apart from Codex's, and from its trust question", async () => {
+  expect(readyFor("pi")).toBe(piReady);
+  expect(piReady.test(piIdle)).toBe(true);
+  expect(piReady.test(working)).toBe(false);
+  expect(piReady.test(trust)).toBe(false);
+
+  const run = (screen: string, polls: number) => {
+    let captures = 0;
+    return acceptFirstRunPrompts({
+      target: "firstmate:fm-amun-pi",
+      worktree,
+      allow: true,
+      ready: readyFor("pi"),
+      waitMs: 1,
+      polls,
+      verify: async () => undefined,
+      async tmux() {
+        captures++;
+        return screen;
+      },
+    }).then((result) => ({ result, captures }));
+  };
+  // Ready is noticed straight away, not after the full wait.
+  const idle = await run(piIdle, 60);
+  expect(idle.captures).toBeLessThan(5);
+  expect(idle.result).toEqual({ taken: [], blocked: null });
+  // Pi's own trust question is never taken for ready, and never answered.
+  const asking = await run(piTrust, 6);
+  expect(asking.captures).toBe(6);
+  expect(asking.result.taken).toEqual([]);
 });

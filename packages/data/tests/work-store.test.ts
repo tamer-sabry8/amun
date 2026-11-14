@@ -638,7 +638,7 @@ describe("attention, activity and offers", () => {
     ]);
     expect(snap().activity).toHaveLength(2);
   });
-  it("drafts only after the offer is accepted and never sends", () => {
+  it("accepting an offer closes it once and never shows a draft that is not running", () => {
     const { employer } = setup();
     const work = area(employer, "project", "E-Cabinet");
     const offer = send("attention", {
@@ -648,11 +648,12 @@ describe("attention, activity and offers", () => {
       title: "BRD approval is still unconfirmed",
       detail: "Draft a follow-up?",
     }).ref!;
-    expect(snap().activity).toEqual([]);
     send("resolve-attention", { attentionId: offer, resolution: "accept" });
-    expect(snap().activity).toMatchObject([
-      { state: "running", text: "Drafting: BRD approval is still unconfirmed" },
-    ]);
+    send("resolve-attention", { attentionId: offer, resolution: "accept" });
+    expect(snap().activity).toEqual([]);
+    expect(snap().attention.find((item) => item.id === offer)?.state).toBe(
+      "done",
+    );
   });
   it("stores an answer and requires one", () => {
     const { employer } = setup();

@@ -72,3 +72,50 @@ it("ignores executable accessors on recorded tool output", () => {
     nativeConversationView(id, "Tools", entries, new Redactor()),
   ).not.toHaveProperty("toolOutput");
 });
+const msg = (role: string, text: string) => ({
+  type: "message",
+  message: { role, content: [{ type: "text", text }] },
+});
+it("bounds cumulative history, keeping the newest assistant action whole", () => {
+  const doc = "D".repeat(53000);
+  const action = '```amun-actions\n{"type":"story"}\n```' + "x".repeat(150000);
+  const entries = [
+    ...Array.from({ length: 1100 }, (_, i) => msg("user", "old" + i)),
+    msg("user", doc),
+    msg("assistant", "a"),
+    msg("user", doc),
+    msg("assistant", "b"),
+    msg("user", doc),
+    msg("user", "L".repeat(200000)),
+    msg("assistant", action),
+  ];
+  const view = nativeConversationView(id, "Big", entries, new Redactor());
+  expect(view.text.length).toBeLessThanOrEqual(240000);
+  expect(view.text).toContain(action);
+  expect(view.omittedItems).toBeGreaterThan(100);
+  const kept = view.text.split("## ").length - 1;
+  expect(view.omittedItems).toBe(entries.length - kept);
+});
+it("handles a maximum-size user turn plus a large assistant reply", () => {
+  const entries = [
+    msg("user", "u".repeat(200000)),
+    msg("assistant", "r".repeat(230000)),
+  ];
+  const view = nativeConversationView(id, "Max", entries, new Redactor());
+  expect(view.text.length).toBeLessThanOrEqual(240000);
+  expect(view.text).toContain("r".repeat(230000));
+  expect(view.omittedItems).toBe(1);
+});
+it("says when the newest assistant reply is cut and drops an unfinished action", () => {
+  const reply = 'Plan.\n```amun\n{"do":"convert","note":"' + "y".repeat(250000);
+  const view = nativeConversationView(
+    id,
+    "Big",
+    [msg("assistant", reply)],
+    new Redactor(),
+  );
+  expect(view.text.length).toBeLessThanOrEqual(240000);
+  expect(view.text).toContain("[Partial:");
+  expect(view.text).toContain("Plan.");
+  expect(view.text).not.toContain("```amun");
+});

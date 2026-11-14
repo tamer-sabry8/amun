@@ -54,6 +54,7 @@ import {
   workAsync,
   workStore,
 } from "./store.ts";
+import { acceptOffer } from "./accept-offer.ts";
 import { areaOf, homeModel, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
@@ -370,14 +371,13 @@ export function App() {
               onOpen: openAttention,
               onPrimary: (item) => {
                 if (item.kind === "offer") {
-                  work("resolve-attention", {
-                    attentionId: item.id,
-                    resolution: "accept",
-                  });
-                  setNote(
-                    "Draft only · Nothing sent · Approval status unchanged",
+                  const raw = snapshot.attention.find(
+                    (entry) => entry.id === item.id,
                   );
-                  if (item.workAreaId) openWork(item.workAreaId);
+                  if (!raw) return;
+                  const accepted = acceptOffer(raw);
+                  setNote(accepted.note);
+                  if (accepted.areaId) openWork(accepted.areaId);
                   return;
                 }
                 if (item.kind === "result")

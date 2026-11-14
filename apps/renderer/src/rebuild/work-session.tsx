@@ -43,9 +43,11 @@ import {
 import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
+import { pendingOffers } from "./offer-turns.ts";
 import {
   agentNews,
   amunProtocol,
+  workTypeGuard,
   areaOf,
   parseAmunActions,
   typeLabels,
@@ -875,6 +877,24 @@ export function WorkSession({
     else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
+    else if (proposed.do === "convert")
+      void (async () => {
+        const name = context?.area.name ?? "This";
+        // Same record, same id: the conversation and its links stay put.
+        const result =
+          context?.area.type === "task"
+            ? await workAsync("convert-task", { areaId, convert: true })
+            : null;
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: !result
+            ? `“${name}” is not a task, so there is nothing to convert.`
+            : result.ok
+              ? `Done. “${name}” is now a project. Its conversation, history, links, objective and tracker are kept, and nothing outside Amun was changed.`
+              : `I could not convert “${name}”. ${result.message}`,
+        });
+      })();
     else if (proposed.do === "delegate")
       // The service starts the worker; the result returns to this chat.
       bridge.send({
@@ -1001,8 +1021,8 @@ export function WorkSession({
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
     const scoped = briefing
-      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`
-      : text;
+      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${workTypeGuard(context.area.type)}${text}`
+      : `${workTypeGuard(context.area.type)}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -1038,6 +1058,20 @@ export function WorkSession({
       message.scoped.includes(amunProtocol),
     );
   };
+  useEffect(() => {
+    // Offers the owner accepted: each becomes a real request to Firstmate
+    // here, once. One a restart cut short is said so, and not sent again.
+    if (!context) return;
+    const { send: queued, interrupted } = pendingOffers.claim(areaId);
+    if (interrupted.length)
+      work("message", {
+        workAreaId: areaId,
+        role: "firstmate",
+        text: "Amun closed while I was starting the draft you asked for, so I cannot tell whether it finished. Read the conversation above before asking again.",
+      });
+    for (const turn of queued)
+      void send(turn.text).finally(() => pendingOffers.done(turn.id));
+  }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
     setWaiting(heldMessage(areaId));

@@ -1191,21 +1191,17 @@ export class WorkStore {
                 : "current",
           });
         }
+        // Resolving twice changes nothing: one click, or two, is one answer.
+        if (item.state === "done") return { ref: command.attentionId };
         this.run(
           "UPDATE work_attention SET state='done',answer=?,resolved_at=? WHERE id=?",
           command.answer ? this.clean(command.answer) : null,
           now,
           command.attentionId,
         );
-        if (item.kind === "offer" && command.resolution === "accept")
-          // Accepting the offer only drafts. Nothing is sent.
-          this.activity({
-            groupId: (item.group_id as string | null) ?? null,
-            workAreaId: (item.work_area_id as string | null) ?? null,
-            text: `Drafting: ${String(item.title)}`,
-            state: "running",
-            ref: "offer:" + command.attentionId,
-          });
+        // Accepting an offer closes it and nothing more. Firstmate drafts it
+        // when the owner's conversation sends the request, so there is no
+        // "running" row here that no turn stands behind.
         return { ref: command.attentionId };
       }
       case "save-rfp": {

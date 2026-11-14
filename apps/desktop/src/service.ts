@@ -1,3 +1,4 @@
+import { documentContext } from "../../renderer/src/rebuild/document-context.ts";
 import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
 import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
@@ -9,7 +10,10 @@ import {
   trustRef,
   type Harness,
 } from "./delegation.ts";
-import { acceptFirstRunPrompts } from "../../../packages/crew/src/first-run-prompts.ts";
+import {
+  acceptFirstRunPrompts,
+  readyFor,
+} from "../../../packages/crew/src/first-run-prompts.ts";
 import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
 import { implementationRun } from "./implementation-run.ts";
 import {
@@ -317,7 +321,8 @@ const councilService = new CouncilService({
     };
   },
   askServer: {
-    command: process.execPath,
+    // The validated helper chosen by the main process; dev builds use this one.
+    command: process.env.AMUN_PI_BINARY || process.execPath,
     args: [process.env.AMUN_COUNCIL_ASK ?? ""],
     env: { ELECTRON_RUN_AS_NODE: "1" },
   },
@@ -329,7 +334,7 @@ const councilService = new CouncilService({
       start: (directory: string) => {
         room?.stop();
         room = new Room(directory, {
-          node: process.execPath,
+          node: process.env.AMUN_PI_BINARY || process.execPath,
           env: { ELECTRON_RUN_AS_NODE: "1" },
         });
         return room.start();
@@ -853,8 +858,19 @@ process.parentPort?.on("message", (event) => {
             name: area.name,
             type: area.type[0]!.toUpperCase() + area.type.slice(1),
             purpose: area.purpose,
+            groupId: area.groupId,
           }
         : null;
+    },
+    sources(areaId, task) {
+      return documentContext({
+        snapshot: workStore.snapshot(),
+        areaId,
+        request: task,
+        used: 0,
+        limit: 100_000,
+        forAgent: true,
+      });
     },
     harness() {
       // All delegated work runs on Pi with GitHub Copilot; there is no Claude or Codex fallback.
@@ -890,6 +906,7 @@ process.parentPort?.on("message", (event) => {
         target: "firstmate:fm-amun-" + harness,
         worktree,
         allow,
+        ready: readyFor(harness),
         verify: () => releases.verifyHomes(revision, [home, worktree]),
         tmux: (args) =>
           new Promise<string>((resolve, reject) =>

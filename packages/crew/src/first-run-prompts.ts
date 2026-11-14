@@ -32,6 +32,18 @@ export interface FirstRunInput {
 }
 /** The idle prompt of the two worker tools. */
 export const workerReady = /Ask Codex to do anything|\? for shortcuts/;
+/**
+ * Pi's idle screen, from its own footer (pi-coding-agent footer.js): context
+ * use and window, then the model, e.g. "0.0%/128k (auto)   claude-sonnet-5.5".
+ * Pi has no "?" hint line, and its footer is also drawn while the owner is
+ * being asked about project trust, which is not ready.
+ */
+export const piReady =
+  /\d+(?:\.\d+)?%\/\d+(?:\.\d+)?[kKM]?(?: \(auto\))?\s{2,}\S/;
+const piAsking = /Project trust|Saved decision:|Trust project folder\?/;
+/** The idle-screen pattern for a worker tool. */
+export const readyFor = (harness: string) =>
+  harness === "pi" ? piReady : workerReady;
 export type FirstRunStep = "trusted-folder" | "trusted-hooks";
 
 const squeeze = (text: string) => text.replace(/\s+/g, "");
@@ -90,7 +102,11 @@ export async function acceptFirstRunPrompts(
       }
       taken.push(prompt.step);
       quiet = 0;
-    } else if (!prompt && (input.ready ?? workerReady).test(screen)) {
+    } else if (
+      !prompt &&
+      !piAsking.test(screen) &&
+      (input.ready ?? workerReady).test(screen)
+    ) {
       // The tool is at its own prompt: nothing more to answer. Seen twice,
       // so a screen caught between two prompts is not mistaken for ready.
       if (++quiet >= 2) break;

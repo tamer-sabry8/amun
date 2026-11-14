@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { acceptOffer } from "../src/rebuild/accept-offer.ts";
+import { offerTurns } from "../src/rebuild/offer-turns.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
@@ -14,6 +16,7 @@ import {
   attentionItems,
   homeModel,
   parseAmunActions,
+  workTypeGuard,
   replyFromTranscript,
   trayFor,
   visibleGroups,
@@ -1087,5 +1090,79 @@ describe("Firstmate's card beside an open chat", () => {
     expect(html).toContain("Something failed");
     expect(html).toContain("Change product name");
     expect(html).toContain("was not created");
+  });
+});
+
+describe("converting a task from the chat", () => {
+  it("is only ever about the work the chat is in, never an id from the model", () => {
+    const parsed = parseAmunActions(
+      'Asking now.\n\n```amun\n{"do":"convert","areaId":"someone-elses","to":"product"}\n```',
+    );
+    expect(parsed.actions).toEqual([{ do: "convert" }]);
+    expect(parsed.text).toBe("Asking now.");
+  });
+  it("is in the protocol with its limits, and the model must not claim it happened", () => {
+    expect(amunProtocol).toContain('{"do":"convert"}');
+    expect(amunProtocol).toContain("nothing outside Amun is created or moved");
+    expect(amunProtocol).toContain("never say it is converted yourself");
+  });
+});
+
+describe("what Firstmate is told about where it runs and what an RFP is", () => {
+  it("states the Copilot route without turning it into proof of work done", () => {
+    expect(amunProtocol).toContain("GitHub Copilot");
+    expect(amunProtocol).toContain("do not claim you cannot confirm it");
+    expect(amunProtocol).toContain(
+      "never call work done until an agent's result",
+    );
+  });
+  it("keeps an RFP to tracking and leaves other work alone", () => {
+    const guard = workTypeGuard("rfp");
+    expect(guard).toContain("only tracks");
+    expect(guard).toContain("do not invent values");
+    expect(guard).toContain("do not write it, start it or offer a proposal");
+    expect(workTypeGuard("product")).toBe("");
+    expect(workTypeGuard("task")).toBe("");
+  });
+});
+
+describe("accepting an offer", () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+    };
+  };
+  const turn = { id: "o1", areaId: "w1", text: "Yes, please draft this." };
+  it("sends the request once, however often it is accepted", () => {
+    const queue = offerTurns(memory());
+    expect(queue.queue(turn)).toBe(true);
+    expect(queue.queue(turn)).toBe(false);
+    expect(queue.claim("other").send).toEqual([]);
+    expect(queue.claim("w1").send).toHaveLength(1);
+    expect(queue.claim("w1").send).toEqual([]);
+    queue.done("o1");
+    expect(queue.pending("w1")).toEqual([]);
+  });
+  it("reports a request a restart cut short instead of sending it again", () => {
+    const storage = memory();
+    const before = offerTurns(storage);
+    before.queue(turn);
+    before.claim("w1");
+    const after = offerTurns(storage);
+    const claimed = after.claim("w1");
+    expect(claimed.send).toEqual([]);
+    expect(claimed.interrupted).toHaveLength(1);
+    expect(after.queue(turn)).toBe(true);
+  });
+  it("does nothing for an offer that is already closed", () => {
+    const queue = offerTurns(memory());
+    const result = acceptOffer(
+      { id: "o2", state: "done", workAreaId: "w1", title: "T", detail: "" },
+      queue,
+    );
+    expect(result.areaId).toBeNull();
+    expect(queue.pending("w1")).toEqual([]);
   });
 });

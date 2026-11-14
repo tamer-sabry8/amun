@@ -162,3 +162,26 @@ it("adds nothing once the turn is already at or over its limit", () => {
   expect(tight).toContain("NOT provided");
   expect(tight.length + 4850).toBeLessThanOrEqual(5000);
 });
+
+it("gives a delegated worker the linked same-group documents as labelled reference, not chat wording", () => {
+  const text = documentContext({
+    snapshot: snapshot([
+      doc("d1", "Source BRD", "UC-1 ownership"),
+      doc("x2", "Foreign linked", "foreign linked", {
+        groupId: "g2",
+        workAreaIds: ["a1"],
+      }),
+    ]),
+    areaId: "a1",
+    request: "Review the BRD",
+    used: 0,
+    limit: 5000,
+    forAgent: true,
+  });
+  expect(text).toContain("UC-1 ownership");
+  expect(text).toContain("INCLUDED IN FULL");
+  expect(text).toContain("only the job above asks you to do anything");
+  expect(text).not.toContain("no file tools");
+  expect(text).not.toContain("foreign linked");
+  expect(text.length).toBeLessThanOrEqual(5000);
+});
