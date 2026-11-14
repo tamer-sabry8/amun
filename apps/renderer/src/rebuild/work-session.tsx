@@ -43,6 +43,7 @@ import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
+  agentNews,
   amunProtocol,
   areaOf,
   parseAmunActions,
@@ -987,12 +988,15 @@ export function WorkSession({
     // message: the first one for a work area, and the first after Firstmate's
     // conversation was started afresh.
     const briefing = !context.messages.length || needsBriefing();
+    // Read before this message is added: what agents finished since the
+    // owner last wrote goes to Firstmate with it.
+    const news = agentNews(context.messages);
     const scoped = briefing
       ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`
       : text;
     await deliver(
       text,
-      files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped,
+      news + (files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped),
       null,
       files.find((file) => file.image)?.image ?? undefined,
       false,
@@ -1011,7 +1015,7 @@ export function WorkSession({
       message.activityId ?? null,
       message.image,
       true,
-      message.scoped.startsWith(amunProtocol),
+      message.scoped.includes(amunProtocol),
     );
   };
   useEffect(() => {

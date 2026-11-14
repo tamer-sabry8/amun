@@ -1,12 +1,14 @@
 // A worker's first run in a new worktree stops at two prompts from its own
-// tool: "Trust this folder?" and "Hooks need review". The owner granted
-// standing trust for Amun's own disposable worktrees (AGENTS.md, "Firstmate
-// homes"), scoped to the individual worktree and only after its identity and
-// its hooks have been checked against the selected Firstmate revision.
+// tool: "Trust this folder?" and "Hooks need review". The owner's standing
+// trust (AGENTS.md, "Firstmate homes") covers disposable worktrees only, so
+// for the worker Amun keeps between restarts the owner is asked once, and
+// the answer is recorded for that worktree.
 //
-// This answers those two prompts and nothing else. It never types into a
-// prompt it does not recognise, never answers for a folder other than the
-// worker's own worktree, and never signs a worker in.
+// Once allowed, this answers those two prompts and nothing else, and only
+// after the worktree and its hooks have been checked against the selected
+// Firstmate revision. It never types into a prompt it does not recognise,
+// never answers for a folder other than the worker's own worktree, and never
+// signs a worker in.
 
 /** Runs tmux with these arguments against the crew's private server. */
 export type Tmux = (args: string[]) => Promise<string>;
@@ -18,6 +20,11 @@ export interface FirstRunInput {
   worktree: string;
   /** Checks the worktree and its hooks against the selected revision. */
   verify(): Promise<void>;
+  /**
+   * Whether the owner has allowed this worktree to be trusted. When false, a
+   * prompt is reported and left unanswered for the owner to decide.
+   */
+  allow: boolean;
   /** What the tool's screen looks like once it is ready for work. */
   ready?: RegExp;
   polls?: number;
@@ -60,7 +67,9 @@ export function firstRunPrompt(
  * Watches the worker's pane for a short while and answers the two first-run
  * prompts if they appear. Returns what it answered, in order.
  */
-export async function acceptFirstRunPrompts(input: FirstRunInput) {
+export async function acceptFirstRunPrompts(
+  input: FirstRunInput,
+): Promise<{ taken: FirstRunStep[]; blocked: FirstRunStep | null }> {
   const taken: FirstRunStep[] = [];
   let quiet = 0;
   for (let poll = 0; poll < (input.polls ?? 60); poll++) {
@@ -71,6 +80,7 @@ export async function acceptFirstRunPrompts(input: FirstRunInput) {
       // The pane is not there yet, or has gone: nothing to answer.
     }
     const prompt = firstRunPrompt(screen, input.worktree);
+    if (prompt && !input.allow) return { taken, blocked: prompt.step };
     if (prompt && !taken.includes(prompt.step)) {
       // Each kind is answered once, and only after the check passes.
       await input.verify();
@@ -87,5 +97,5 @@ export async function acceptFirstRunPrompts(input: FirstRunInput) {
     } else quiet = 0;
     await new Promise((resolve) => setTimeout(resolve, input.waitMs ?? 2000));
   }
-  return taken;
+  return { taken, blocked: null };
 }

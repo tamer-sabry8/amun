@@ -3,7 +3,12 @@ import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
 import { syncCommand } from "../../../packages/contracts/src/memory-sync.ts";
 import { PrototypeSession } from "./prototype-session.ts";
-import { Delegations } from "./delegation.ts";
+import {
+  allowWorker,
+  Delegations,
+  trustRef,
+  type Harness,
+} from "./delegation.ts";
 import { acceptFirstRunPrompts } from "../../../packages/crew/src/first-run-prompts.ts";
 import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
 import { implementationRun } from "./implementation-run.ts";
@@ -795,6 +800,43 @@ process.parentPort?.on("message", (event) => {
   // Firstmate hands work to an agent: a real Claude Code or Codex worker,
   // started and messaged by Firstmate's own scripts, works from the agent's
   // brief, and its result returns to the chat it was asked in.
+  const crewTrust = {
+    /** Where this workspace's worker folder is, or "" before one exists. */
+    folder(harness: string) {
+      try {
+        const name = readFileSync(
+          join(workspaceRoot!, "firstmate-crew-home"),
+          "utf8",
+        ).trim();
+        return /^firstmate-home-[A-Za-z0-9]{6}$/.test(name)
+          ? join(workspaceRoot!, name, "git", harness + "-worker")
+          : "";
+      } catch {
+        return "";
+      }
+    },
+    get(harness: string) {
+      const saved = workspace
+        .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+        .pluck()
+        .get("crew.trust." + harness);
+      try {
+        return typeof saved === "string"
+          ? (JSON.parse(saved) as unknown)
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    set(harness: string, folder: string) {
+      if (!folder) return;
+      workspace
+        .prepare(
+          "INSERT INTO workspace_settings(id,value_json) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+        )
+        .run("crew.trust." + harness, JSON.stringify(folder));
+    },
+  };
   const delegations = new Delegations({
     root: join(workspaceRoot!, "delegations"),
     record(command) {
@@ -821,18 +863,15 @@ process.parentPort?.on("message", (event) => {
           ? "codex"
           : null;
     },
-    async deliver(harness, id, text) {
+    async ready(harness, allow) {
       const releases = await FirstmateReleases.open(
         workspaceRoot!,
         process.env.AMUN_FIRSTMATE_ARCHIVES!,
       );
       requireWorkerOn(harness);
       await supervisor.ensureRunning();
-      // Start the worker first (this does nothing when it is already
-      // running) and let it reach its own prompt before the job is sent.
-      // A worker's first run in its worktree asks to trust the folder and
-      // its hooks. The owner's standing rule covers Amun's own worktrees,
-      // once they are checked against the selected Firstmate revision.
+      // Start the worker (this does nothing when it is already running) and
+      // let it reach its own prompt before any job is sent.
       await dispatchFirstmate(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
@@ -850,9 +889,10 @@ process.parentPort?.on("message", (event) => {
         "tmux-" + process.getuid!(),
         "default",
       );
-      await acceptFirstRunPrompts({
+      const { blocked } = await acceptFirstRunPrompts({
         target: "firstmate:fm-amun-" + harness,
         worktree,
+        allow,
         verify: () => releases.verifyHomes(revision, [home, worktree]),
         tmux: (args) =>
           new Promise<string>((resolve, reject) =>
@@ -863,7 +903,20 @@ process.parentPort?.on("message", (event) => {
               (error, stdout) => (error ? reject(error) : resolve(stdout)),
             ),
           ),
-      }).catch(() => undefined);
+      });
+      return blocked ? "asks-trust" : "ready";
+    },
+    // The owner's answer is kept per worker folder: a new folder asks again.
+    trust: {
+      has: (harness) => crewTrust.get(harness) === crewTrust.folder(harness),
+      grant: (harness) => crewTrust.set(harness, crewTrust.folder(harness)),
+    },
+    async deliver(harness, id, text) {
+      const releases = await FirstmateReleases.open(
+        workspaceRoot!,
+        process.env.AMUN_FIRSTMATE_ARCHIVES!,
+      );
+      requireWorkerOn(harness);
       await sendDelivery(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
@@ -1446,8 +1499,23 @@ process.parentPort?.on("message", (event) => {
               )
               ?.ref?.slice(8)
           : undefined;
+      // The owner allowing a worker to use its own folder.
+      const allowed =
+        message.data.action === "resolve-attention" &&
+        message.data.resolution === "answer" &&
+        message.data.answer === allowWorker
+          ? (["claude", "codex"] as Harness[]).find(
+              (harness) =>
+                workStore
+                  .snapshot()
+                  .attention.find(
+                    (item) => item.id === message.data.attentionId,
+                  )?.ref === trustRef(harness),
+            )
+          : undefined;
       const events = workStore.handle(message.data);
       for (const event of events) port.postMessage(event);
+      if (allowed) void delegations.allow(allowed).catch(() => undefined);
       const result = events.find((event) => event.kind === "work-result");
       const planId =
         result?.ok && result.action === "approve-plan"

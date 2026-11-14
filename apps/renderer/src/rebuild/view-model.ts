@@ -390,6 +390,30 @@ export function parseAmunActions(reply: string) {
     .trim();
   return { text: visible, actions: actions.slice(0, 12) };
 }
+/**
+ * What Firstmate's agents have finished since the owner last wrote. An
+ * agent's result reaches the chat and the library, but not Firstmate's own
+ * conversation, so it travels with the owner's next message. Without it,
+ * "shorten that" would have nothing real to shorten.
+ */
+export function agentNews(
+  messages: { role: string; text: string; card?: unknown }[],
+) {
+  const last = messages.findLastIndex((message) => message.role === "you");
+  const fresh = messages
+    .slice(last + 1)
+    .filter(
+      (message) =>
+        (message.card as { kind?: unknown } | null | undefined)?.kind ===
+        "agent-result",
+    )
+    .map((message) => message.text.slice(0, 12000));
+  return fresh.length
+    ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
+        fresh.join("\n\n---\n\n") +
+        "\n[End of what your agents finished.]\n\n"
+    : "";
+}
 /** Tells Firstmate, once per work area, how to raise things in Amun. */
 export const amunProtocol = [
   "You are Firstmate inside Amun. Reply briefly in plain language.",

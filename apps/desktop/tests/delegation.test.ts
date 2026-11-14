@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   agentBrief,
+  allowWorker,
   Delegations,
   type DelegationDeps,
   type Harness,
@@ -16,11 +17,15 @@ let root: string;
 let commands: Record<string, unknown>[];
 let delivered: { harness: Harness; id: string; text: string }[];
 let open: Delegations[];
+let trusted: Set<Harness>;
+let readied: { harness: Harness; allow: boolean }[];
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "amun-delegation-"));
   commands = [];
   delivered = [];
   open = [];
+  trusted = new Set();
+  readied = [];
 });
 afterEach(async () => {
   for (const item of open) item.close();
@@ -37,6 +42,14 @@ function make(extra: Partial<DelegationDeps> = {}) {
     },
     area: (id) => (id === "area-1" ? area : null),
     harness: () => "claude",
+    async ready(harness, allow) {
+      readied.push({ harness, allow });
+      return "ready";
+    },
+    trust: {
+      has: (harness) => trusted.has(harness),
+      grant: (harness) => void trusted.add(harness),
+    },
     async deliver(harness, id, text) {
       delivered.push({ harness, id, text });
     },
@@ -61,9 +74,13 @@ const until = async (done: () => boolean) => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   expect(done()).toBe(true);
 };
-/** What a worker does: read the brief, write the result. */
-const work = (id: string, text: string) =>
+/** What a worker does: read the brief, write the result, then say it is done. */
+const write = (id: string, text: string) =>
   writeFile(join(root, id, "result.md"), text, { mode: 0o600 });
+const work = async (id: string, text: string) => {
+  await write(id, text);
+  await writeFile(join(root, id, "done"), "", { mode: 0o600 });
+};
 
 it("gives the agent a brief built from its catalogue entry", () => {
   const brief = agentBrief({
@@ -82,6 +99,7 @@ it("gives the agent a brief built from its catalogue entry", () => {
   expect(brief).toContain("Never address the owner");
   expect(brief).toContain("Do not write to Azure DevOps, Notion, GitHub");
   expect(brief).toContain('"/tmp/result.md"');
+  expect(brief).toContain('create an empty file named "done"');
 });
 
 it("starts a worker, shows who is working, and brings the result back to the chat", async () => {
@@ -94,6 +112,9 @@ it("starts a worker, shows who is working, and brings the result back to the cha
   expect(delivered[0]).toMatchObject({ harness: "claude", id });
   expect(delivered[0]!.text).toContain(join(root, id, "brief.md"));
   expect(delivered[0]!.text).toContain(join(root, id, "result.md"));
+  expect(delivered[0]!.text).toContain(join(root, id, "done"));
+  // The worker was readied before the job was sent.
+  expect(readied).toEqual([{ harness: "claude", allow: false }]);
   expect(await readFile(join(root, id, "brief.md"), "utf8")).toContain(
     job.task,
   );
@@ -117,6 +138,8 @@ it("starts a worker, shows who is working, and brings the result back to the cha
   expect(of("message")[0]).toMatchObject({
     workAreaId: "area-1",
     role: "firstmate",
+    // Marked as an agent's work, so Firstmate is told about it next turn.
+    card: { kind: "agent-result", agent: "QA", title: job.title },
   });
   const said = String(of("message")[0]!.text);
   expect(said).toContain("QA has finished “Check the booking flow”.");
@@ -203,5 +226,81 @@ it("after a restart keeps waiting for a job already sent, without sending it aga
 it("does nothing for a work that no longer exists", async () => {
   expect(await make().start({ ...job, workAreaId: "deleted" })).toBeNull();
   expect(commands).toEqual([]);
+  expect(delivered).toEqual([]);
+});
+
+it("does not take a pause in writing for a finished result", async () => {
+  // A worker writes an outline, pauses to review, then writes the full text.
+  const delegations = make();
+  const id = (await delegations.start(job))!;
+  await write(id, "Outline only");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  expect(of("message")).toEqual([]);
+  expect(of("save-output")).toEqual([]);
+  await work(id, "The complete findings.");
+  await until(() => of("message").length === 1);
+  expect(String(of("message")[0]!.text)).toContain("The complete findings.");
+  expect(String(of("message")[0]!.text)).not.toContain("Outline only");
+});
+
+it("passes on unconfirmed text at the time limit, labelled as possibly incomplete", async () => {
+  const delegations = make({ timeoutMs: 80 });
+  const id = (await delegations.start(job))!;
+  await write(id, "Half a list");
+  await until(() => of("message").length === 1);
+  const said = String(of("message")[0]!.text);
+  expect(said).toContain("did not confirm");
+  expect(said).toContain("may be incomplete");
+  expect(said).toContain("Half a list");
+  expect(of("agent-status").at(-1)).toMatchObject({ state: "idle" });
+  expect(of("activity").at(-1)).toMatchObject({ state: "failed" });
+});
+
+it("asks the owner once before a worker may use its own folder, then carries on", async () => {
+  const delegations = make({
+    async ready(harness, allow) {
+      readied.push({ harness, allow });
+      return allow ? "ready" : "asks-trust";
+    },
+  });
+  const id = (await delegations.start(job))!;
+  // Nothing was sent, and nothing was answered on the owner's behalf.
+  expect(delivered).toEqual([]);
+  expect(of("attention")).toHaveLength(1);
+  expect(of("attention")[0]).toMatchObject({
+    attentionKind: "question",
+    workAreaId: "area-1",
+    ref: "crew-trust:claude",
+    options: [allowWorker],
+  });
+  expect(String(of("attention")[0]!.title)).toBe(
+    "Let Claude Code start working for QA?",
+  );
+  expect(of("agent-status").at(-1)).toMatchObject({ state: "waiting" });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  expect(of("message")).toEqual([]);
+
+  // The owner allows it: recorded, then the waiting job goes out.
+  await delegations.allow("claude");
+  expect(trusted.has("claude")).toBe(true);
+  expect(readied.at(-1)).toEqual({ harness: "claude", allow: true });
+  expect(delivered.map((item) => item.id)).toEqual([id]);
+  await work(id, "Done after approval.");
+  await until(() => of("message").length === 1);
+  expect(String(of("message")[0]!.text)).toContain("Done after approval.");
+
+  // The next job does not ask again.
+  const next = (await delegations.start({ ...job, title: "Second job" }))!;
+  expect(of("attention")).toHaveLength(1);
+  expect(delivered.map((item) => item.id)).toEqual([id, next]);
+});
+
+it("a waiting job is not sent by a restart, only by the owner's answer", async () => {
+  const first = make({ ready: async () => "asks-trust" });
+  await first.start(job);
+  first.close();
+  const second = make();
+  await second.resume();
+  await new Promise((resolve) => setTimeout(resolve, 60));
   expect(delivered).toEqual([]);
 });

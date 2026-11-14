@@ -72,6 +72,7 @@ it("checks the worktree before each answer and answers each prompt once", async 
   const taken = await acceptFirstRunPrompts({
     target: "firstmate:fm-amun-codex",
     worktree,
+    allow: true,
     waitMs: 1,
     async verify() {
       checks++;
@@ -86,7 +87,10 @@ it("checks the worktree before each answer and answers each prompt once", async 
       return "";
     },
   });
-  expect(taken).toEqual(["trusted-folder", "trusted-hooks"]);
+  expect(taken).toEqual({
+    taken: ["trusted-folder", "trusted-hooks"],
+    blocked: null,
+  });
   expect(sent).toEqual(["Enter", "Down", "Enter"]);
   expect(checks).toBe(2);
 });
@@ -97,6 +101,7 @@ it("answers nothing when the check fails", async () => {
     acceptFirstRunPrompts({
       target: "firstmate:fm-amun-codex",
       worktree,
+      allow: true,
       waitMs: 1,
       verify: async () => {
         throw Error("Worktree does not match the selected revision");
@@ -133,6 +138,7 @@ it("keeps waiting while the tool is still starting, then answers", async () => {
   const taken = await acceptFirstRunPrompts({
     target: "firstmate:fm-amun-codex",
     worktree,
+    allow: true,
     waitMs: 1,
     verify: async () => undefined,
     async tmux(args) {
@@ -142,7 +148,7 @@ it("keeps waiting while the tool is still starting, then answers", async () => {
       return "";
     },
   });
-  expect(taken).toEqual(["trusted-folder"]);
+  expect(taken).toEqual({ taken: ["trusted-folder"], blocked: null });
   expect(sent).toEqual(["Enter"]);
 });
 
@@ -151,6 +157,7 @@ it("gives up quietly when there is nothing to answer", async () => {
   const taken = await acceptFirstRunPrompts({
     target: "firstmate:fm-amun-codex",
     worktree,
+    allow: true,
     waitMs: 1,
     polls: 12,
     verify: async () => undefined,
@@ -160,6 +167,28 @@ it("gives up quietly when there is nothing to answer", async () => {
       return "";
     },
   });
-  expect(taken).toEqual([]);
+  expect(taken).toEqual({ taken: [], blocked: null });
   expect(sent).toEqual([]);
+});
+
+it("answers nothing until the owner has allowed it, and says what is waiting", async () => {
+  const sent: string[] = [];
+  let checks = 0;
+  const result = await acceptFirstRunPrompts({
+    target: "firstmate:fm-amun-codex",
+    worktree,
+    allow: false,
+    waitMs: 1,
+    verify: async () => {
+      checks++;
+    },
+    async tmux(args) {
+      if (args[0] === "capture-pane") return trust;
+      sent.push(args.at(-1)!);
+      return "";
+    },
+  });
+  expect(result).toEqual({ taken: [], blocked: "trusted-folder" });
+  expect(sent).toEqual([]);
+  expect(checks).toBe(0);
 });
