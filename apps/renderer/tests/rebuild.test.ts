@@ -954,6 +954,18 @@ describe("renaming from the chat", () => {
   });
 });
 
+describe("deleting from the chat", () => {
+  it("is only ever a request for the owner to confirm", () => {
+    const parsed = parseAmunActions(
+      'I have asked you to confirm.\n\n```amun\n{"do":"delete","areaId":"someone-elses"}\n```',
+    );
+    // No id is taken from the model: it applies to the open work only.
+    expect(parsed.actions).toEqual([{ do: "delete" }]);
+    expect(amunProtocol).toContain('{"do":"delete"}');
+    expect(amunProtocol).toContain("never say it is deleted");
+  });
+});
+
 describe("Firstmate's card beside an open chat", () => {
   const noop = () => undefined;
   const failed = {

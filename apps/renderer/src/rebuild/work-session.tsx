@@ -44,6 +44,7 @@ import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
   amunProtocol,
+  areaOf,
   parseAmunActions,
   typeLabels,
   workContext,
@@ -230,6 +231,40 @@ function InlineCard({
   card: Card;
 }) {
   const [copied, setCopied] = useState("");
+  const [kept, setKept] = useState(false);
+  if (card.kind === "delete-work") {
+    const area = areaOf(snapshot, areaId);
+    if (kept || !area)
+      return (
+        <div className="rb-inline">
+          <span className="note">Kept. Nothing was deleted.</span>
+        </div>
+      );
+    return (
+      <div
+        className="rb-inline amber"
+        role="group"
+        aria-label="Delete this work"
+      >
+        <span>
+          <strong>Delete “{area.name}”?</strong> Its chat, plans and anything
+          waiting on it go with it. Nothing already in Azure DevOps or Notion is
+          touched.
+        </span>
+        <div className="row wrap">
+          <button
+            className="btn"
+            onClick={() => work("delete-area", { areaId })}
+          >
+            Delete it
+          </button>
+          <button className="btn quiet" onClick={() => setKept(true)}>
+            Keep it
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (card.kind === "scope") {
     const item = String(card.item ?? "This request");
     const prior = snapshot.decisions.some(
@@ -781,6 +816,9 @@ export function WorkSession({
   );
   const [problem, setProblem] = useState("");
   const [copiedLog, setCopiedLog] = useState("");
+  /** The name being typed while this work is renamed; null when it is not. */
+  const [areaName, setAreaName] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const sentFirst = useRef<string | null>(null);
@@ -827,6 +865,14 @@ export function WorkSession({
     else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
+    else if (proposed.do === "delete")
+      // Deleting is the owner's call: Firstmate can only ask.
+      work("message", {
+        workAreaId: areaId,
+        role: "card",
+        text: "Delete this work?",
+        card: { kind: "delete-work" },
+      });
     else if (proposed.do === "update")
       work("message", {
         workAreaId: areaId,
@@ -1055,10 +1101,39 @@ export function WorkSession({
           <span>{context.group ?? "No group yet"}</span>
           <Icon name="chevron" width={12} height={12} />
           <span className="name" style={{ position: "relative" }}>
+            {areaName !== null && (
+              <form
+                style={{ display: "inline" }}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = areaName.trim();
+                  if (next && next !== area.name)
+                    work("update-area", { areaId, patch: { name: next } });
+                  setAreaName(null);
+                }}
+              >
+                <input
+                  type="text"
+                  aria-label="Name of this work"
+                  autoFocus
+                  maxLength={120}
+                  value={areaName}
+                  onChange={(event) => setAreaName(event.target.value)}
+                  onBlur={() => setAreaName(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setAreaName(null);
+                  }}
+                />
+              </form>
+            )}
             <button
               className="here"
+              hidden={areaName !== null}
               aria-expanded={menu === "area"}
-              onClick={() => setMenu(menu === "area" ? null : "area")}
+              onClick={() => {
+                setConfirmDelete(false);
+                setMenu(menu === "area" ? null : "area");
+              }}
             >
               {area.name}
               <Icon
@@ -1074,6 +1149,48 @@ export function WorkSession({
                 role="menu"
                 style={{ top: "calc(100% + 4px)", left: 0 }}
               >
+                {confirmDelete ? (
+                  <>
+                    <div className="rb-menu-title">
+                      Delete “{area.name}”? Its chat, plans and anything waiting
+                      on it go with it.
+                    </div>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(null);
+                        setConfirmDelete(false);
+                        work("delete-area", { areaId });
+                      }}
+                    >
+                      Delete it
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      Keep it
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(null);
+                        setAreaName(area.name);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      Delete…
+                    </button>
+                  </>
+                )}
                 <div className="rb-menu-title">Filed under</div>
                 {snapshot.groups.map((group) => (
                   <button

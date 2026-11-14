@@ -253,7 +253,8 @@ export type AmunAction =
   | { do: "scope"; item: string; brd: string | null }
   | { do: "update"; message: string }
   | { do: "rule-case"; situation: string; resolution: string }
-  | { do: "rename"; name: string };
+  | { do: "rename"; name: string }
+  | { do: "delete" };
 
 const text = (value: unknown, max = 4000) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
@@ -340,6 +341,9 @@ function action(raw: unknown): AmunAction | null {
       );
       return name ? { do: "rename", name } : null;
     }
+    case "delete":
+      // Only ever a request: the owner confirms it in the chat.
+      return { do: "delete" };
     case "rule-case": {
       const situation = text(input.situation, 120);
       const resolution = text(input.resolution, 400);
@@ -374,6 +378,7 @@ export const amunProtocol = [
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
+  '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
   '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',

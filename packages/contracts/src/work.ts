@@ -465,6 +465,7 @@ export const workCommand = z.discriminatedUnion("action", [
       steps: z.int().min(0).max(9999).optional(),
     }),
   }),
+  act("delete-area", { areaId: id }),
   act("touch-area", { areaId: id, asked: z.boolean().default(false) }),
   act("convert-task", { areaId: id, convert: z.boolean() }),
   act("relate-areas", {

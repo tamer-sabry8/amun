@@ -41,6 +41,46 @@ type Step = Parameters<typeof JSON.stringify>[0];
 const bool = (value: unknown) => value === 1;
 const list = (value: unknown) => JSON.parse(String(value ?? "[]"));
 
+/**
+ * A deleted work is gone from everything Amun shows: the work itself, and
+ * whatever was about it (its chat, plans, things waiting, activity, sprint,
+ * roadmap items, RFP). Things that merely point at it (a library draft, a
+ * record, an objective, a council session) stay, without the pointer.
+ */
+export function withoutDeleted(snapshot: WorkSnapshot): WorkSnapshot {
+  const gone = new Set(
+    snapshot.areas
+      .filter((area) => area.status === "deleted")
+      .map((area) => area.id),
+  );
+  if (!gone.size) return snapshot;
+  const dead = (id: unknown) => typeof id === "string" && gone.has(id);
+  const kept = (ids: unknown) =>
+    Array.isArray(ids) ? ids.filter((id) => !dead(id)) : ids;
+  const unlinkOnly = new Set(["council", "decisions"]);
+  const result: Record<string, unknown> = { ...snapshot };
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (!Array.isArray(value)) continue;
+    result[key] = (value as Record<string, unknown>[])
+      .filter((item) => {
+        if (!item || typeof item !== "object") return true;
+        if (key === "areas" || key === "rfps") return !dead(item.id);
+        if (key === "relations") return !dead(item.fromId) && !dead(item.toId);
+        return unlinkOnly.has(key) || !dead(item.workAreaId);
+      })
+      .map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const next = { ...item };
+        if (dead(next.workAreaId)) next.workAreaId = null;
+        if ("workAreaIds" in next) next.workAreaIds = kept(next.workAreaIds);
+        if ("links" in next) next.links = kept(next.links);
+        if (dead(next.deliveryProjectId)) next.deliveryProjectId = null;
+        return next;
+      });
+  }
+  return result as WorkSnapshot;
+}
+
 export class WorkStore {
   private readonly db: Database.Database;
   private readonly redactor: Redactor;
@@ -89,33 +129,44 @@ export class WorkStore {
       "INSERT INTO work_areas(id,type,name,product_id,last_context_at,created_at) SELECT 'area-' || id,'product',name,id,created_at,created_at FROM products WHERE id NOT IN (SELECT product_id FROM work_areas WHERE product_id IS NOT NULL)",
     );
   }
-  private areas(): WorkSnapshot["areas"] {
-    return this.all("SELECT * FROM work_areas ORDER BY created_at,id").map(
-      (row) => ({
-        id: String(row.id),
-        groupId: (row.group_id as string | null) ?? null,
-        type: row.type as WorkArea["type"],
-        name: String(row.name),
-        purpose: String(row.purpose),
-        status: String(row.status),
-        productId: (row.product_id as string | null) ?? null,
-        stakeholder: Number(row.stakeholder),
-        client: (row.client as string | null) ?? null,
-        clientWeight: Number(row.client_weight),
-        dueAt: (row.due_at as string | null) ?? null,
-        effort: (row.effort as "XS" | "S" | "M" | "L" | null) ?? null,
-        milestones: Number(row.milestones),
-        people: Number(row.people),
-        steps: Number(row.steps),
-        declinedShape: row.declined_shape_json
-          ? JSON.parse(String(row.declined_shape_json))
-          : null,
-        convertedFrom: (row.converted_from as WorkArea["type"] | null) ?? null,
-        lastContextAt: (row.last_context_at as string | null) ?? null,
-        interest: Number(row.interest),
-        createdAt: String(row.created_at),
-      }),
+  /** Whether a work exists and has not been deleted. */
+  private live(areaId: string) {
+    return !!this.get(
+      "SELECT 1 FROM work_areas WHERE id=? AND status<>'deleted'",
+      areaId,
     );
+  }
+  /**
+   * Every work. A deleted one is left out unless asked for: only the
+   * snapshot needs them, to know what else to leave out.
+   */
+  private areas(withDeleted = false): WorkSnapshot["areas"] {
+    return this.all(
+      `SELECT * FROM work_areas ${withDeleted ? "" : "WHERE status<>'deleted' "}ORDER BY created_at,id`,
+    ).map((row) => ({
+      id: String(row.id),
+      groupId: (row.group_id as string | null) ?? null,
+      type: row.type as WorkArea["type"],
+      name: String(row.name),
+      purpose: String(row.purpose),
+      status: String(row.status),
+      productId: (row.product_id as string | null) ?? null,
+      stakeholder: Number(row.stakeholder),
+      client: (row.client as string | null) ?? null,
+      clientWeight: Number(row.client_weight),
+      dueAt: (row.due_at as string | null) ?? null,
+      effort: (row.effort as "XS" | "S" | "M" | "L" | null) ?? null,
+      milestones: Number(row.milestones),
+      people: Number(row.people),
+      steps: Number(row.steps),
+      declinedShape: row.declined_shape_json
+        ? JSON.parse(String(row.declined_shape_json))
+        : null,
+      convertedFrom: (row.converted_from as WorkArea["type"] | null) ?? null,
+      lastContextAt: (row.last_context_at as string | null) ?? null,
+      interest: Number(row.interest),
+      createdAt: String(row.created_at),
+    }));
   }
   private plans(): WorkSnapshot["plans"] {
     return this.all("SELECT * FROM work_plans ORDER BY created_at,id").map(
@@ -211,198 +262,204 @@ export class WorkStore {
       ),
       rules,
     );
-    return workSnapshot.parse({
-      version: 1,
-      kind: "work-snapshot",
-      setup: this.setup(),
-      groups: this.all(
-        "SELECT id,name,position FROM work_groups ORDER BY position,id",
-      ),
-      routes: this.all(
-        "SELECT id,group_id AS groupId,condition,tracker FROM routing_rules ORDER BY created_at,id",
-      ),
-      areas: this.areas(),
-      relations: this.all(
-        "SELECT from_id AS fromId,to_id AS toId,kind FROM work_area_relations ORDER BY from_id,to_id",
-      ),
-      records: records.map((record) => ({
-        id: record.id,
-        groupId: record.groupId,
-        type: record.type,
-        title: record.title,
-        body: record.body,
-        linkage: record.linkage,
-        links: record.links,
-        createdAt: record.createdAt,
-      })),
-      objectives: this.all("SELECT * FROM work_objectives ORDER BY id").map(
-        (row) => ({
-          id: String(row.id),
-          groupId: (row.group_id as string | null) ?? null,
-          metric: String(row.metric),
-          baseline: (row.baseline as number | null) ?? null,
-          target: (row.target as number | null) ?? null,
-          current: (row.current as number | null) ?? null,
-          evidenceDate: (row.evidence_date as string | null) ?? null,
-          reviewDate: (row.review_date as string | null) ?? null,
-          conflict: bool(row.conflict),
-          links: objectiveLinks.get(String(row.id)) ?? [],
-        }),
-      ),
-      permissions: this.all(
-        "SELECT id,group_id AS groupId,destination,action,created_at AS createdAt,revoked_at AS revokedAt FROM standing_permissions ORDER BY created_at,id",
-      ),
-      grants: this.all(
-        "SELECT id,source_group_id AS sourceGroupId,target_group_id AS targetGroupId,information,purpose,target_ref AS targetRef,created_at AS createdAt,revoked_at AS revokedAt FROM cross_group_grants ORDER BY created_at,id",
-      ),
-      rules,
-      ruleCandidate: candidate
-        ? {
-            groupId: candidate.groupId,
-            situation: candidate.situation,
-            resolution: candidate.resolution,
-            examples: candidate.examples,
-            ask: candidate.ask,
-          }
-        : null,
-      attention: this.all(
-        "SELECT * FROM work_attention ORDER BY created_at,id",
-      ).map((row) => ({
-        id: String(row.id),
-        kind: row.kind,
-        groupId: (row.group_id as string | null) ?? null,
-        workAreaId: (row.work_area_id as string | null) ?? null,
-        title: String(row.title),
-        detail: String(row.detail),
-        state: row.state,
-        ref: (row.ref as string | null) ?? null,
-        options: list(row.options_json),
-        answer: (row.answer as string | null) ?? null,
-        createdAt: String(row.created_at),
-      })),
-      plans: this.plans(),
-      rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map((row) => ({
-        id: String(row.work_area_id),
-        client: String(row.client),
-        stage: row.stage,
-        deadline: (row.deadline as string | null) ?? null,
-        responseOwner: (row.response_owner as string | null) ?? null,
-        accountOwner: (row.account_owner as string | null) ?? null,
-        presales: (row.presales as string | null) ?? null,
-        proposalSigned: bool(row.proposal_signed),
-        brdApproved: bool(row.brd_approved),
-        deliveryProjectId: (row.delivery_project_id as string | null) ?? null,
-        lossReason: (row.loss_reason as string | null) ?? null,
-      })),
-      roadmap: this.roadmap(),
-      sprints: this.all("SELECT * FROM work_sprints ORDER BY start,id").map(
-        (row) => ({
-          id: String(row.id),
-          workAreaId: String(row.work_area_id),
-          name: String(row.name),
-          team: (row.team as string | null) ?? null,
-          start: String(row.start),
-          end: String(row.end),
-          goal: String(row.goal),
-          draft: bool(row.draft),
-          done: Number(row.done),
-          total: Number(row.total),
-          blocked: Number(row.blocked),
-          changedInAdo: bool(row.changed_in_ado),
-          capacity: (row.capacity as number | null) ?? null,
-          stories: list(row.stories_json),
-          out: list(row.out_json),
-        }),
-      ),
-      calendar: this.all(
-        "SELECT date,label FROM calendar_exceptions ORDER BY date",
-      ),
-      library: [
-        ...this.all(
-          "SELECT * FROM library_outputs ORDER BY updated_at DESC,id",
-        ).map((row) => ({
-          id: String(row.id),
-          section: "output" as const,
-          type: String(row.type),
-          title: String(row.title),
-          groupId: (row.group_id as string | null) ?? null,
-          workAreaIds: outputLinks.get(String(row.id)) ?? [],
-          status: String(row.status),
-          needsLinking: false,
-          body: String(row.body),
-          updatedAt: String(row.updated_at),
-        })),
-        ...records.map((record) => ({
+    return withoutDeleted(
+      workSnapshot.parse({
+        version: 1,
+        kind: "work-snapshot",
+        setup: this.setup(),
+        groups: this.all(
+          "SELECT id,name,position FROM work_groups ORDER BY position,id",
+        ),
+        routes: this.all(
+          "SELECT id,group_id AS groupId,condition,tracker FROM routing_rules ORDER BY created_at,id",
+        ),
+        areas: this.areas(true),
+        relations: this.all(
+          "SELECT from_id AS fromId,to_id AS toId,kind FROM work_area_relations ORDER BY from_id,to_id",
+        ),
+        records: records.map((record) => ({
           id: record.id,
-          section: "record" as const,
+          groupId: record.groupId,
           type: record.type,
           title: record.title,
-          groupId: record.groupId,
-          workAreaIds: record.links,
-          status:
-            record.linkage === "linked"
-              ? "Linked"
-              : record.linkage === "unlinked"
-                ? "Unlinked"
-                : "Needs linking",
-          needsLinking:
-            record.linkage === "link_later" || record.linkage === "unresolved",
           body: record.body,
-          updatedAt: record.updatedAt,
+          linkage: record.linkage,
+          links: record.links,
+          createdAt: record.createdAt,
         })),
-      ],
-      decisions: this.all(
-        "SELECT * FROM decision_log ORDER BY created_at,id",
-      ).map((row) => ({
-        id: String(row.id),
-        groupId: (row.group_id as string | null) ?? null,
-        workAreaId: (row.work_area_id as string | null) ?? null,
-        what: String(row.what),
-        options: list(row.options_json),
-        decidedBy: row.decided_by ?? null,
-        decidedAt: (row.decided_at as string | null) ?? null,
-        outcome: (row.outcome as string | null) ?? null,
-        affected: list(row.affected_json),
-        source: row.source,
-      })),
-      agents: this.all(
-        "SELECT * FROM work_agents ORDER BY kind='lead' DESC,created_at,rowid",
-      ).map((row) => ({
-        id: String(row.id),
-        role: String(row.role),
-        kind: row.kind,
-        launcherId: (row.launcher_id as string | null) ?? null,
-        state: row.state,
-        nowDoing: (row.now_doing as string | null) ?? null,
-        output: String(row.output),
-        enabled: bool(row.enabled),
-      })),
-      activity: this.all(
-        "SELECT id,group_id AS groupId,work_area_id AS workAreaId,text,state,progress,ref,created_at AS createdAt FROM work_activity ORDER BY created_at DESC,id LIMIT 500",
-      ),
-      council: this.all(
-        "SELECT id,decision,group_id AS groupId,work_area_id AS workAreaId,mode,state,recommendation,created_at AS createdAt FROM council_sessions ORDER BY created_at DESC,id",
-      ),
-      findings: this.findings(),
-      memory: {
-        unsynced: Number(
-          this.get(
-            "SELECT count(*) AS n FROM memory_claims WHERE synced=0 AND state='current'",
-          )?.n ?? 0,
+        objectives: this.all("SELECT * FROM work_objectives ORDER BY id").map(
+          (row) => ({
+            id: String(row.id),
+            groupId: (row.group_id as string | null) ?? null,
+            metric: String(row.metric),
+            baseline: (row.baseline as number | null) ?? null,
+            target: (row.target as number | null) ?? null,
+            current: (row.current as number | null) ?? null,
+            evidenceDate: (row.evidence_date as string | null) ?? null,
+            reviewDate: (row.review_date as string | null) ?? null,
+            conflict: bool(row.conflict),
+            links: objectiveLinks.get(String(row.id)) ?? [],
+          }),
         ),
-        disputed: Number(
-          this.get(
-            "SELECT count(*) AS n FROM memory_claims WHERE state='disputed'",
-          )?.n ?? 0,
+        permissions: this.all(
+          "SELECT id,group_id AS groupId,destination,action,created_at AS createdAt,revoked_at AS revokedAt FROM standing_permissions ORDER BY created_at,id",
         ),
-      },
-      messages: this.all(
-        "SELECT id,work_area_id AS workAreaId,role,text,card_json,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
-      ).map(({ card_json, ...row }) => ({
-        ...row,
-        card: card_json ? JSON.parse(String(card_json)) : null,
-      })),
-    });
+        grants: this.all(
+          "SELECT id,source_group_id AS sourceGroupId,target_group_id AS targetGroupId,information,purpose,target_ref AS targetRef,created_at AS createdAt,revoked_at AS revokedAt FROM cross_group_grants ORDER BY created_at,id",
+        ),
+        rules,
+        ruleCandidate: candidate
+          ? {
+              groupId: candidate.groupId,
+              situation: candidate.situation,
+              resolution: candidate.resolution,
+              examples: candidate.examples,
+              ask: candidate.ask,
+            }
+          : null,
+        attention: this.all(
+          "SELECT * FROM work_attention ORDER BY created_at,id",
+        ).map((row) => ({
+          id: String(row.id),
+          kind: row.kind,
+          groupId: (row.group_id as string | null) ?? null,
+          workAreaId: (row.work_area_id as string | null) ?? null,
+          title: String(row.title),
+          detail: String(row.detail),
+          state: row.state,
+          ref: (row.ref as string | null) ?? null,
+          options: list(row.options_json),
+          answer: (row.answer as string | null) ?? null,
+          createdAt: String(row.created_at),
+        })),
+        plans: this.plans(),
+        rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map(
+          (row) => ({
+            id: String(row.work_area_id),
+            client: String(row.client),
+            stage: row.stage,
+            deadline: (row.deadline as string | null) ?? null,
+            responseOwner: (row.response_owner as string | null) ?? null,
+            accountOwner: (row.account_owner as string | null) ?? null,
+            presales: (row.presales as string | null) ?? null,
+            proposalSigned: bool(row.proposal_signed),
+            brdApproved: bool(row.brd_approved),
+            deliveryProjectId:
+              (row.delivery_project_id as string | null) ?? null,
+            lossReason: (row.loss_reason as string | null) ?? null,
+          }),
+        ),
+        roadmap: this.roadmap(),
+        sprints: this.all("SELECT * FROM work_sprints ORDER BY start,id").map(
+          (row) => ({
+            id: String(row.id),
+            workAreaId: String(row.work_area_id),
+            name: String(row.name),
+            team: (row.team as string | null) ?? null,
+            start: String(row.start),
+            end: String(row.end),
+            goal: String(row.goal),
+            draft: bool(row.draft),
+            done: Number(row.done),
+            total: Number(row.total),
+            blocked: Number(row.blocked),
+            changedInAdo: bool(row.changed_in_ado),
+            capacity: (row.capacity as number | null) ?? null,
+            stories: list(row.stories_json),
+            out: list(row.out_json),
+          }),
+        ),
+        calendar: this.all(
+          "SELECT date,label FROM calendar_exceptions ORDER BY date",
+        ),
+        library: [
+          ...this.all(
+            "SELECT * FROM library_outputs ORDER BY updated_at DESC,id",
+          ).map((row) => ({
+            id: String(row.id),
+            section: "output" as const,
+            type: String(row.type),
+            title: String(row.title),
+            groupId: (row.group_id as string | null) ?? null,
+            workAreaIds: outputLinks.get(String(row.id)) ?? [],
+            status: String(row.status),
+            needsLinking: false,
+            body: String(row.body),
+            updatedAt: String(row.updated_at),
+          })),
+          ...records.map((record) => ({
+            id: record.id,
+            section: "record" as const,
+            type: record.type,
+            title: record.title,
+            groupId: record.groupId,
+            workAreaIds: record.links,
+            status:
+              record.linkage === "linked"
+                ? "Linked"
+                : record.linkage === "unlinked"
+                  ? "Unlinked"
+                  : "Needs linking",
+            needsLinking:
+              record.linkage === "link_later" ||
+              record.linkage === "unresolved",
+            body: record.body,
+            updatedAt: record.updatedAt,
+          })),
+        ],
+        decisions: this.all(
+          "SELECT * FROM decision_log ORDER BY created_at,id",
+        ).map((row) => ({
+          id: String(row.id),
+          groupId: (row.group_id as string | null) ?? null,
+          workAreaId: (row.work_area_id as string | null) ?? null,
+          what: String(row.what),
+          options: list(row.options_json),
+          decidedBy: row.decided_by ?? null,
+          decidedAt: (row.decided_at as string | null) ?? null,
+          outcome: (row.outcome as string | null) ?? null,
+          affected: list(row.affected_json),
+          source: row.source,
+        })),
+        agents: this.all(
+          "SELECT * FROM work_agents ORDER BY kind='lead' DESC,created_at,rowid",
+        ).map((row) => ({
+          id: String(row.id),
+          role: String(row.role),
+          kind: row.kind,
+          launcherId: (row.launcher_id as string | null) ?? null,
+          state: row.state,
+          nowDoing: (row.now_doing as string | null) ?? null,
+          output: String(row.output),
+          enabled: bool(row.enabled),
+        })),
+        activity: this.all(
+          "SELECT id,group_id AS groupId,work_area_id AS workAreaId,text,state,progress,ref,created_at AS createdAt FROM work_activity ORDER BY created_at DESC,id LIMIT 500",
+        ),
+        council: this.all(
+          "SELECT id,decision,group_id AS groupId,work_area_id AS workAreaId,mode,state,recommendation,created_at AS createdAt FROM council_sessions ORDER BY created_at DESC,id",
+        ),
+        findings: this.findings(),
+        memory: {
+          unsynced: Number(
+            this.get(
+              "SELECT count(*) AS n FROM memory_claims WHERE synced=0 AND state='current'",
+            )?.n ?? 0,
+          ),
+          disputed: Number(
+            this.get(
+              "SELECT count(*) AS n FROM memory_claims WHERE state='disputed'",
+            )?.n ?? 0,
+          ),
+        },
+        messages: this.all(
+          "SELECT id,work_area_id AS workAreaId,role,text,card_json,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
+        ).map(({ card_json, ...row }) => ({
+          ...row,
+          card: card_json ? JSON.parse(String(card_json)) : null,
+        })),
+      }),
+    );
   }
   /** Each finding keeps a separate decision per work area (UC03, UC05). */
   private findings(): WorkSnapshot["findings"] {
@@ -504,7 +561,10 @@ export class WorkStore {
   }
   private groupOf(areaId: string | null) {
     if (!areaId) return null;
-    const row = this.get("SELECT group_id FROM work_areas WHERE id=?", areaId);
+    const row = this.get(
+      "SELECT group_id FROM work_areas WHERE id=? AND status<>'deleted'",
+      areaId,
+    );
     if (!row) throw new WorkError("That work area no longer exists.");
     return (row.group_id as string | null) ?? null;
   }
@@ -527,7 +587,7 @@ export class WorkStore {
     const name = this.clean(input.name);
     // Never silently create a duplicate of the same kind in the same group.
     const twin = this.get(
-      "SELECT id FROM work_areas WHERE type=? AND lower(name)=lower(?) AND ifnull(group_id,'')=ifnull(?,'')",
+      "SELECT id FROM work_areas WHERE type=? AND lower(name)=lower(?) AND ifnull(group_id,'')=ifnull(?,'') AND status<>'deleted'",
       input.type,
       name,
       input.groupId,
@@ -687,8 +747,11 @@ export class WorkStore {
           "SELECT * FROM work_areas WHERE id=?",
           command.areaId,
         );
-        if (!area) throw new WorkError("That work area no longer exists.");
+        if (!area || area.status === "deleted")
+          throw new WorkError("That work area no longer exists.");
         const patch = command.patch;
+        if (patch.status === "deleted")
+          throw new WorkError("Use Delete to remove a work.");
         // Boundaries never move silently: a group change is only ever the
         // user's own explicit choice, recorded here.
         if (patch.groupId !== undefined) this.requireGroup(patch.groupId);
@@ -718,12 +781,46 @@ export class WorkStore {
               value,
               command.areaId,
             );
+        // A product work and its product record carry one name.
+        if (patch.name !== undefined && area.product_id)
+          this.run(
+            "UPDATE products SET name=? WHERE id=?",
+            this.clean(patch.name),
+            area.product_id,
+          );
         this.run(
           "UPDATE work_areas SET last_context_at=? WHERE id=?",
           now,
           command.areaId,
         );
         return {};
+      }
+      case "delete-area": {
+        const area = this.get(
+          "SELECT status FROM work_areas WHERE id=?",
+          command.areaId,
+        );
+        if (!area || area.status === "deleted")
+          throw new WorkError("That work area no longer exists.");
+        // Removed from everything Amun shows, with its chat, plans and
+        // anything waiting on it. The rows stay in the local file, so a
+        // delete can be undone by hand and nothing that points at the work
+        // is left dangling. Nothing outside Amun is touched: stories already
+        // in Azure DevOps and pages already in Notion stay where they are.
+        this.run(
+          "UPDATE work_areas SET status='deleted',last_context_at=? WHERE id=?",
+          now,
+          command.areaId,
+        );
+        this.run(
+          "UPDATE work_attention SET state='done' WHERE work_area_id=? AND state<>'done'",
+          command.areaId,
+        );
+        this.run(
+          "UPDATE work_activity SET state='finished' WHERE work_area_id=? AND state='running'",
+          command.areaId,
+        );
+        return { ref: command.areaId };
       }
       case "touch-area":
         this.run(
@@ -1181,9 +1278,7 @@ export class WorkStore {
       case "handoff-rfp":
         return this.handoff(command.areaId);
       case "save-roadmap-item": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         const existing = command.itemId
           ? this.get("SELECT * FROM roadmap_items WHERE id=?", command.itemId)
@@ -1267,9 +1362,7 @@ export class WorkStore {
         };
       }
       case "save-sprint": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         if (Date.parse(command.end) < Date.parse(command.start))
           throw new WorkError("A sprint cannot end before it starts.");
@@ -1741,9 +1834,7 @@ export class WorkStore {
         return {};
       }
       case "message": {
-        if (
-          !this.get("SELECT 1 FROM work_areas WHERE id=?", command.workAreaId)
-        )
+        if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         const id = randomUUID();
         this.run(
