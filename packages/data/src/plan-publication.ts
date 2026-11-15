@@ -7,6 +7,7 @@
 // same approval, still uncertain → reported as "unknown" for the owner.
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
 
 export interface PlanWriteItem {
   id: string;
@@ -195,6 +196,8 @@ export class PlanPublisher {
     scope: PlanScope,
     target?: PlanTarget,
   ): Promise<PlanReceipt | undefined> {
+    // An update names an item that already exists; it is never a duplicate.
+    if (adoWorkItemOf(item.fields).named) return undefined;
     const key = planItemKey(item);
     const rows = this.db
       .prepare(
@@ -214,7 +217,7 @@ export class PlanPublisher {
           typeof planItemKey
         >[0] & { id: string })[]
       ).find((entry) => entry.id === row.item_id);
-      if (!before) continue;
+      if (!before || adoWorkItemOf(before.fields).named) continue;
       const other = planItemKey(before);
       if (
         other.title === key.title &&

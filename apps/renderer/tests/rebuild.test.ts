@@ -1045,7 +1045,7 @@ describe("what was already published, for Firstmate", () => {
     expect(text).toContain("created as #1");
     expect(text).toContain("Never say nothing was published");
     expect(text).toContain(
-      "updating an existing Azure DevOps item is not available yet",
+      "Amun can only change its iteration (sprint) and who it is assigned to",
     );
     expect(
       areaTurnContext({ type: "task", name: "T" }, "Task", null),

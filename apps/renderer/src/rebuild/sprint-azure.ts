@@ -12,6 +12,12 @@ import {
 import type { SprintCommand } from "../../../../packages/domain/src/work/planning.ts";
 
 type Reply = Extract<BacklogResult, { view: "sprints" }>;
+export type SprintItems = {
+  sprint: string;
+  state: "loading" | "ready" | "error";
+  items: Extract<BacklogResult, { view: "sprint-items" }>["items"];
+  more: boolean;
+};
 type Intent = "load" | "refresh" | "team";
 
 export const sprintReplies = {
@@ -26,6 +32,10 @@ export const sprintReplies = {
   switched: (team: string) => `Now showing ${team}.`,
   saved: (team: string) => `${team} is now your default team.`,
   lost: "Connection interrupted. Try /sprint refresh.",
+  itemsLoading: "Loading the work items…",
+  itemsLost: "I couldn’t load this sprint’s work items. Try /sprint refresh.",
+  itemsNone: "This sprint has no work items yet.",
+  itemsMore: "Showing the first 200 work items.",
 };
 
 export function useAzureSprints(
@@ -34,6 +44,8 @@ export function useAzureSprints(
   say: (note: string) => void,
 ) {
   const [reply, setReply] = useState<Reply>();
+  const [items, setItems] = useState<SprintItems | null>(null);
+  const itemsPending = useRef<{ id: string; sprint: string } | null>(null);
   const pending = useRef<{ id: string; intent: Intent } | null>(null);
   const binding = resolveSprintBinding(browserStore(), areas, areaId);
   const productId = binding?.productId ?? "";
@@ -58,9 +70,31 @@ export function useAzureSprints(
     [productId, sourceId, say],
   );
 
+  // Read-only: the work items of one Azure sprint, asked when it is opened.
+  const readItems = useCallback(
+    (team: string, sprint: string) => {
+      const id = crypto.randomUUID();
+      itemsPending.current = { id, sprint };
+      setItems({ sprint, state: "loading", items: [], more: false });
+      bridge.send({
+        version: 1,
+        kind: "backlog-read",
+        action: "sprint-items",
+        requestId: id,
+        productId,
+        sourceId,
+        team,
+        sprint,
+      });
+    },
+    [productId, sourceId],
+  );
+
   // Once per Sprints visit, and again if the bound project changes.
   useEffect(() => {
     setReply(undefined);
+    setItems(null);
+    itemsPending.current = null;
     pending.current = null;
     if (savedTeam) read(savedTeam, "load");
   }, [productId, sourceId, savedTeam]);
@@ -68,6 +102,51 @@ export function useAzureSprints(
   useEffect(
     () =>
       bridge.onEvent((event) => {
+        const asked = itemsPending.current;
+        if (asked) {
+          if (
+            event &&
+            typeof event === "object" &&
+            "kind" in event &&
+            event.kind === "service-lost"
+          ) {
+            itemsPending.current = null;
+            setItems({
+              sprint: asked.sprint,
+              state: "error",
+              items: [],
+              more: false,
+            });
+            say(sprintReplies.itemsLost);
+          } else {
+            const result = backlogResult.safeParse(event);
+            if (
+              result.success &&
+              result.data.requestId === asked.id &&
+              result.data.productId === productId
+            ) {
+              itemsPending.current = null;
+              if (result.data.view === "sprint-items") {
+                setItems({
+                  sprint: asked.sprint,
+                  state: "ready",
+                  items: result.data.items,
+                  more: result.data.more,
+                });
+                if (result.data.more) say(sprintReplies.itemsMore);
+              } else {
+                setItems({
+                  sprint: asked.sprint,
+                  state: "error",
+                  items: [],
+                  more: false,
+                });
+                say(sprintReplies.itemsLost);
+              }
+              return;
+            }
+          }
+        }
         const now = pending.current;
         if (
           event &&
@@ -109,6 +188,10 @@ export function useAzureSprints(
   );
 
   const run = (command: SprintCommand) => {
+    if (command.kind === "refresh" && items && reply) {
+      const team = reply.team.id;
+      readItems(team, items.sprint);
+    }
     if (!binding) return say(sprintReplies.noProject);
     if (command.kind === "team") {
       if (!command.name) return say(sprintReplies.needName);
@@ -128,5 +211,12 @@ export function useAzureSprints(
       say(sprintReplies.saved(reply.team.name));
     }
   };
-  return { reply, run, productId };
+  return {
+    reply,
+    run,
+    productId,
+    items,
+    openSprint: (sprint: string) =>
+      reply ? readItems(reply.team.id, sprint) : undefined,
+  };
 }

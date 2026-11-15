@@ -14,6 +14,24 @@ const typeMissing = (status: number, data: unknown) => {
     (key) => key in body && isMissingTypeText(String((body as never)[key])),
   );
 };
+/** Azure reports a person as an object; the plan may name them either way. */
+export function sameAdoField(key: string, actual: unknown, expected: unknown) {
+  if (key === "System.AssignedTo" && actual && typeof actual === "object") {
+    const who = actual as { uniqueName?: unknown; displayName?: unknown };
+    const want = String(expected).trim().toLowerCase();
+    const names = [
+      who.uniqueName,
+      who.displayName,
+      typeof who.displayName === "string" && typeof who.uniqueName === "string"
+        ? `${who.displayName} <${who.uniqueName}>`
+        : undefined,
+    ];
+    return names.some(
+      (name) => typeof name === "string" && name.toLowerCase() === want,
+    );
+  }
+  return actual === expected;
+}
 type Item = AdoReceipt & {
   fields: Record<string, unknown>;
   relations?: { rel: string; url: string }[];
@@ -73,14 +91,8 @@ export class AdoWriteClient {
       throw Error("Azure type changed");
     for (const [k, v] of Object.entries(step.fields)) {
       const actual = item.fields[k];
-      const value =
-        k === "System.AssignedTo" &&
-        actual &&
-        typeof actual === "object" &&
-        "uniqueName" in actual
-          ? actual.uniqueName
-          : actual;
-      if (value === v) continue;
+      if (sameAdoField(k, actual, v)) continue;
+      const value = actual;
       if (
         (k === "System.Description" ||
           k === "Microsoft.VSTS.Common.AcceptanceCriteria") &&

@@ -11,7 +11,7 @@ import {
   openBlockers,
 } from "../../../../packages/domain/src/work/blockers.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import {
   horizonBoard,
   orgChart,
@@ -55,7 +55,8 @@ import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
 import { Composer } from "./composer.tsx";
-import { useAzureSprints } from "./sprint-azure.ts";
+import { sprintReplies, useAzureSprints } from "./sprint-azure.ts";
+import { holdSprintContext, sprintContextText } from "./sprint-context.ts";
 import { BrowserPane } from "./work-session.tsx";
 import { council as councilCommand, work, workAsync } from "./store.ts";
 import {
@@ -929,10 +930,45 @@ export function Sprints({
           azure.reply.team.name,
           azureArea.id,
           azureArea.name,
-        ).map((sprint) => ({ ...sprint, stories: [], out: [], capacity: null }))
+        ).map((sprint) => {
+          const read =
+            azure.items?.state === "ready" &&
+            sprint.id === `ado:${azure.items.sprint}`
+              ? azure.items.items
+              : [];
+          return {
+            ...sprint,
+            done: read.filter((item) =>
+              /^(done|closed|completed)$/i.test(item.state),
+            ).length,
+            total: read.length,
+            stories: read.map((item) => ({
+              id: String(item.id),
+              title: `#${item.id} ${item.title}`,
+              points: null,
+              owner: item.assignee,
+            })),
+            out: [],
+            capacity: null,
+          };
+        })
       : [];
   const overview = [...sprints, ...fromAzure];
   const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
+  const azureDetail = new Map(
+    (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
+      String(item.id),
+      `${item.type} · ${item.state}`,
+    ]),
+  );
+  const openAzure = current?.id.startsWith("ado:")
+    ? current.id.slice("ado:".length)
+    : null;
+  const openSprint = azure.openSprint;
+  // Opening an Azure sprint reads its work items (read-only).
+  useEffect(() => {
+    if (openAzure) openSprint(openAzure);
+  }, [openAzure]);
   const draft =
     sprints.find(
       (sprint) => sprint.draft && (!areaId || sprint.workAreaId === areaId),
@@ -1004,7 +1040,30 @@ export function Sprints({
           if (command?.kind === "plan") return void planSprint();
           if (command) return azure.run(command);
           const target =
-            areaId || current?.workAreaId || sprints[0]?.workAreaId;
+            areaId ||
+            current?.workAreaId ||
+            sprints[0]?.workAreaId ||
+            azureArea?.id;
+          if (target && azure.reply && target === azureArea?.id) {
+            const path = azure.reply.sprints.find(
+              (item) => `ado:${item.id}` === current?.id,
+            );
+            holdSprintContext(
+              target,
+              sprintContextText({
+                team: azure.reply.team.name,
+                sprints: azure.reply.sprints,
+                open:
+                  path && azure.items?.state === "ready"
+                    ? {
+                        name: path.name,
+                        path: path.path,
+                        items: azure.items.items,
+                      }
+                    : null,
+              }),
+            );
+          }
           if (target) onWork(target, text);
           else setNote("Choose a work area first.");
         }}
@@ -1076,7 +1135,17 @@ export function Sprints({
           </div>
         )}
         {tab === "Stories" &&
-          (current.stories.length ? (
+          (openAzure &&
+          azure.items?.sprint === openAzure &&
+          !current.stories.length ? (
+            <p className="muted" role="status">
+              {azure.items.state === "loading"
+                ? sprintReplies.itemsLoading
+                : azure.items.state === "error"
+                  ? sprintReplies.itemsLost
+                  : sprintReplies.itemsNone}
+            </p>
+          ) : current.stories.length ? (
             <div className="rb-board">
               {[
                 ...new Set(
@@ -1091,9 +1160,10 @@ export function Sprints({
                       <div className="rb-tile" key={story.id}>
                         <span className="name">{story.title}</span>
                         <span className="meta">
-                          {story.points === null
-                            ? "Not sized"
-                            : `${story.points} points`}
+                          {azureDetail.get(story.id) ??
+                            (story.points === null
+                              ? "Not sized"
+                              : `${story.points} points`)}
                         </span>
                       </div>
                     ))}

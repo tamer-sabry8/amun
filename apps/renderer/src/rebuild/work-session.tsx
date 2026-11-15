@@ -32,6 +32,7 @@ import { FirstmateMark } from "./firstmate-mark.tsx";
 import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
+import { takeSprintContext } from "./sprint-context.ts";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
 import {
@@ -1571,7 +1572,9 @@ export function WorkSession({
         .slice(0, 30)
         .map(factLine),
       standingPermissionLines(snapshot, context.area.groupId ?? null),
-      trackerLine(tracker),
+      [trackerLine(tracker), takeSprintContext(areaId)]
+        .filter(Boolean)
+        .join(" "),
       publicationLines(snapshot, areaId),
       context.objectives.map((item) => `${item.metric} (${item.line})`),
       snapshot.areas

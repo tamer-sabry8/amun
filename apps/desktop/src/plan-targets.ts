@@ -25,7 +25,15 @@ import {
   type NotionUpdateOutcome,
 } from "../../../packages/auth/src/notion-page-update.ts";
 
-import { AdoTypeMissing } from "../../../packages/connectors-ado/src/governed-writes.ts";
+import {
+  AdoTypeMissing,
+  sameAdoField,
+} from "../../../packages/connectors-ado/src/governed-writes.ts";
+import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
+import {
+  adoWorkItemOf,
+  isAdoItemReference,
+} from "../../../packages/domain/src/ado-update.ts";
 
 const storyTypes = [
   "User Story",
@@ -120,15 +128,30 @@ function ownProject(named: string, project: string, collection?: string) {
   );
 }
 
+// Accepted only on an item that names an existing work item to update.
+const assigneeNames = new Set(["assignedto", "assignee"]);
+const updateAllowed = new Set([
+  "item",
+  "assignee",
+  "iteration",
+  "project",
+  "destination",
+]);
+
 function planFields(item: PlanWriteItem, project: string, collection?: string) {
   const fields: Record<string, string> = {};
   const refused: string[] = [];
+  const update = adoWorkItemOf(item.fields).named;
   for (const [label, raw] of Object.entries(item.fields)) {
     const value = text(raw === null ? null : String(raw));
     if (!value) continue;
     const key = label.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const name = fieldNames[key];
-    if (!name) {
+    const name = isAdoItemReference(label)
+      ? "item"
+      : update && assigneeNames.has(key)
+        ? "assignee"
+        : fieldNames[key];
+    if (!name || (update && !updateAllowed.has(name))) {
       refused.push(label);
       continue;
     }
@@ -138,7 +161,7 @@ function planFields(item: PlanWriteItem, project: string, collection?: string) {
   }
   if (refused.length)
     throw new PlanNotSent(
-      `Amun cannot send ${refused.map((name) => `“${name}”`).join(", ")} to Azure DevOps yet. Remove ${refused.length === 1 ? "it" : "them"} or leave ${refused.length === 1 ? "it" : "them"} blank.`,
+      `${update ? "On an existing work item Amun can only change “Assigned to” and “Iteration path”. It cannot send" : "Amun cannot send"} ${refused.map((name) => `“${name}”`).join(", ")} to Azure DevOps${update ? "" : " yet"}. Remove ${refused.length === 1 ? "it" : "them"} or leave ${refused.length === 1 ? "it" : "them"} blank.`,
     );
   if (fields.title && fields.title !== item.summary.trim())
     throw new PlanNotSent("The title in the fields differs from the title.");
@@ -180,6 +203,8 @@ export function adoStep(
   /** The type to use instead of the planned one, after Azure rejected it. */
   override?: string,
 ): AdoStep {
+  if (adoWorkItemOf(item.fields).named)
+    throw new PlanNotSent("This changes an existing work item, not a new one.");
   const supplied = planFields(item, project, collection);
   const wanted = override ?? supplied.type ?? null;
   const type = pickAdoType(wanted, schema, names);
@@ -245,6 +270,80 @@ export function adoStep(
   };
 }
 
+/**
+ * The exact change an update makes to an existing work item: the item, and
+ * only its Assigned to and Iteration path. Same input, same change.
+ */
+export function adoUpdate(
+  item: PlanWriteItem,
+  schema: AzureProcessSchema,
+  project: string,
+  collection?: string,
+) {
+  const supplied = planFields(item, project, collection);
+  const id = adoWorkItemOf(item.fields).id;
+  if (!id)
+    throw new PlanNotSent("That is not an Azure DevOps work item number.");
+  const fields: Record<string, string> = {};
+  if (supplied.assignee) {
+    if (supplied.assignee.length > 256 || /[\r\n]/.test(supplied.assignee))
+      throw new PlanNotSent("That is not a name Azure DevOps can use.");
+    fields["System.AssignedTo"] = supplied.assignee;
+  }
+  if (supplied.iteration) {
+    if (!schema.iterations.includes(supplied.iteration))
+      throw new PlanNotSent(
+        `“${supplied.iteration}” is not an iteration in ${project}.`,
+      );
+    fields["System.IterationPath"] = supplied.iteration;
+  }
+  if (!Object.keys(fields).length)
+    throw new PlanNotSent(
+      "Name an Assigned to or an Iteration path to change. Nothing was sent.",
+    );
+  return { id, fields };
+}
+const updateLabels: Record<string, string> = {
+  "System.AssignedTo": "Assigned to",
+  "System.IterationPath": "Iteration path",
+};
+/** The exact change on the review card: what is there now, what it becomes. */
+export function adoUpdateChange(
+  now: { id: number; fields: Record<string, unknown> },
+  fields: Record<string, string>,
+) {
+  const shown = (key: string) => {
+    const value = now.fields[key];
+    return typeof value === "string"
+      ? value
+      : value &&
+          typeof value === "object" &&
+          typeof (value as { displayName?: unknown }).displayName === "string"
+        ? (value as { displayName: string }).displayName
+        : "Not set";
+  };
+  const head = `#${now.id} ${String(now.fields["System.Title"] ?? "")}`.trim();
+  const entries = Object.entries(fields);
+  return lineDiff(
+    [
+      head,
+      ...entries.map(([key]) => `${updateLabels[key]}: ${shown(key)}`),
+    ].join("\n"),
+    [
+      head,
+      ...entries.map(([key, value]) => `${updateLabels[key]}: ${value}`),
+    ].join("\n"),
+  );
+}
+/** True when the work item already holds every approved value. */
+const alreadySet = (
+  now: { fields: Record<string, unknown> },
+  fields: Record<string, string>,
+) =>
+  Object.entries(fields).every(([key, value]) =>
+    sameAdoField(key, now.fields[key], value),
+  );
+
 export interface AdoTypeSource {
   /** The team's backlog configuration; a failed read falls back to the rest. */
   backlog?(): Promise<AdoTypeNames>;
@@ -262,6 +361,11 @@ export function adoPlanTarget(
     write(step: AdoStep, parent: null): Promise<{ id: number }>;
     find(step: AdoStep, parent: null): Promise<{ id: number } | undefined>;
     existing?(title: string, type: string): Promise<{ id: number } | undefined>;
+    item?(id: number): Promise<{
+      id: number;
+      rev: number;
+      fields: Record<string, unknown>;
+    }>;
   },
   types: AdoTypeSource = {},
 ): PlanTarget {
@@ -295,8 +399,63 @@ export function adoPlanTarget(
       await resolved(),
       override,
     );
+  // Changes Assigned to and Iteration path on an item that already exists.
+  // The write is conditional on the revision just read, so it can only apply
+  // once; a lookup that finds the approved values already there links it.
+  const change = async (item: PlanWriteItem) => {
+    let planned: ReturnType<typeof adoUpdate>;
+    try {
+      planned = adoUpdate(item, await read(), project, collection);
+    } catch (error) {
+      throw error instanceof PlanNotSent
+        ? error
+        : new PlanNotSent("Azure DevOps could not be read.");
+    }
+    return planned;
+  };
+  const updated = (id: number) => ({ ...receipt(id), updated: true });
   return {
     async write(item) {
+      if (adoWorkItemOf(item.fields).named) {
+        const planned = await change(item);
+        if (!client.item)
+          throw new PlanNotSent("Azure DevOps could not be read.");
+        let now: Awaited<ReturnType<NonNullable<typeof client.item>>>;
+        try {
+          now = await client.item(planned.id);
+        } catch {
+          throw new PlanNotSent(
+            `Amun could not open #${planned.id} in ${project}. Nothing was changed.`,
+          );
+        }
+        if (alreadySet(now, planned.fields)) return updated(planned.id);
+        try {
+          await client.write(
+            {
+              itemId: item.id,
+              parentId: null,
+              remoteId: planned.id,
+              revision: now.rev,
+              marker: "Amun-" + item.marker,
+              type: String(now.fields["System.WorkItemType"] ?? ""),
+              fields: planned.fields,
+            },
+            null,
+          );
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : "";
+          if (reason === "revision_conflict")
+            throw new PlanNotSent(
+              `#${planned.id} changed in Azure DevOps a moment ago. Nothing was changed. Retry to use its latest version.`,
+            );
+          if (/^request_rejected_4\d\d$/.test(reason))
+            throw new PlanNotSent(
+              `Azure DevOps did not accept that change to #${planned.id}, for example a name it does not know. Nothing was changed.`,
+            );
+          throw error;
+        }
+        return updated(planned.id);
+      }
       let prepared: AdoStep;
       try {
         prepared = await step(item);
@@ -333,11 +492,20 @@ export function adoPlanTarget(
       }
     },
     async find(item) {
+      if (adoWorkItemOf(item.fields).named) {
+        const planned = await change(item);
+        if (!client.item) throw Error("Azure DevOps could not be read.");
+        const now = await client.item(planned.id);
+        return alreadySet(now, planned.fields)
+          ? updated(planned.id)
+          : undefined;
+      }
       const found = await client.find(await step(item), null);
       return found ? receipt(found.id) : undefined;
     },
     async existing(item) {
-      if (!client.existing) return undefined;
+      if (!client.existing || adoWorkItemOf(item.fields).named)
+        return undefined;
       const prepared = await step(item);
       const found = await client.existing(
         String(prepared.fields["System.Title"]),

@@ -81,6 +81,7 @@ import {
 import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
 import { createHash } from "node:crypto";
 import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
+import { adoWorkItemOf } from "../../../packages/domain/src/ado-update.ts";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
   nativePiCommand,
@@ -130,10 +131,13 @@ import { homedir } from "node:os";
 import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
 import {
   PlanBlocked,
+  PlanNotSent,
   PlanPublisher,
 } from "../../../packages/data/src/plan-publication.ts";
 import {
   adoPlanTarget,
+  adoUpdate,
+  adoUpdateChange,
   type AdoTypeNames,
   pickAdoType,
   resolveAdoTypes,
@@ -1339,7 +1343,8 @@ process.parentPort?.on("message", (event) => {
       const context = workspaceService.snapshot().productContext;
       // Sprints are read-only and follow the saved binding, not the open product.
       const readOnlySprints =
-        request.kind === "backlog-read" && request.action === "sprints";
+        request.kind === "backlog-read" &&
+        (request.action === "sprints" || request.action === "sprint-items");
       const sources =
         context?.productId === request.productId
           ? context.sources
@@ -1417,6 +1422,20 @@ process.parentPort?.on("message", (event) => {
             view: "sprints",
             team,
             sprints: await d.sprints(team.id),
+          };
+        }
+        if (request.action === "sprint-items") {
+          const wanted = request.team.toLowerCase();
+          const team = (await d.teams()).find(
+            (t) =>
+              t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+          );
+          if (!team) throw Error("unknown_team");
+          return {
+            ...meta,
+            view: "sprint-items",
+            sprint: request.sprint,
+            ...(await d.iterationItems(team.id, request.sprint)),
           };
         }
         if (request.action === "options") {
@@ -2090,6 +2109,54 @@ process.parentPort?.on("message", (event) => {
             return found ? { id: found.externalId } : null;
           }),
         );
+        // An update shows what the work item holds now beside what it becomes.
+        const updates = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const named = adoWorkItemOf(item.fields);
+            if (destination !== "ado" || !named.named) return null;
+            if (!named.id)
+              return {
+                id: 0,
+                problem: "That is not an Azure DevOps work item number.",
+                change: null,
+              };
+            try {
+              const connection = adoConnection(plan.workAreaId);
+              const planned = info?.schema
+                ? adoUpdate(
+                    { ...item, marker: "", destination },
+                    info.schema,
+                    connection.source.project,
+                    connection.source.collection,
+                  )
+                : null;
+              const now = await new AdoWriteClient(
+                connection.source.collection,
+                connection.source.project,
+                connection.transport,
+              ).item(named.id);
+              return {
+                id: named.id,
+                problem: null,
+                change: planned ? adoUpdateChange(now, planned.fields) : null,
+              };
+            } catch (error) {
+              return {
+                id: named.id,
+                problem:
+                  error instanceof PlanNotSent
+                    ? error.message
+                    : `Amun could not open #${named.id} in this Azure DevOps project.`,
+                change: null,
+              };
+            }
+          }),
+        );
         if (closed) return;
         port.postMessage({
           version: 1,
@@ -2124,6 +2191,7 @@ process.parentPort?.on("message", (event) => {
                   null)
                 : null;
             const note = written.find((entry) => entry.id === item.id)?.note;
+            const update = updates[plan.items.indexOf(item)] ?? null;
             const page =
               destination === "notion" ? notionPageOf(item.fields) : undefined;
             const receipt = page ? planPublisher.notionPage(page) : undefined;
@@ -2145,28 +2213,34 @@ process.parentPort?.on("message", (event) => {
               existing: existing[plan.items.indexOf(item)] ?? null,
               note: note?.startsWith("“") ? note : null,
               ...(page ? { kind: "page update", change } : {}),
+              ...(update
+                ? { kind: "work item update", change: update.change }
+                : {}),
               changedInNotion: note === notionChangedNote,
-              place:
-                place && destination === "ado" && typeof area === "string"
+              place: update?.id
+                ? `${place ?? "Azure DevOps"} · Work item #${update.id}`
+                : place && destination === "ado" && typeof area === "string"
                   ? `${place} · ${area}`
                   : place && destination === "notion"
                     ? page
                       ? `Page Amun created under “${place}”`
                       : `New page under “${place}”`
                     : place,
-              problem: page
-                ? !receipt
-                  ? "Amun did not create this page, so it will not change it."
-                  : !receipt.version
-                    ? "Amun did not record how this page looked when it wrote it, so it will not change it."
-                    : null
-                : place
-                  ? null
-                  : destination === "ado"
-                    ? "No Azure DevOps project is chosen for this work yet."
-                    : destination === "notion"
-                      ? "No Notion destination is chosen yet."
-                      : `Publishing to ${trackerName(destination)} is not available yet.`,
+              problem: update?.problem
+                ? update.problem
+                : page
+                  ? !receipt
+                    ? "Amun did not create this page, so it will not change it."
+                    : !receipt.version
+                      ? "Amun did not record how this page looked when it wrote it, so it will not change it."
+                      : null
+                  : place
+                    ? null
+                    : destination === "ado"
+                      ? "No Azure DevOps project is chosen for this work yet."
+                      : destination === "notion"
+                        ? "No Notion destination is chosen yet."
+                        : `Publishing to ${trackerName(destination)} is not available yet.`,
             };
           }),
         });

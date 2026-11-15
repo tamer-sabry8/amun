@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   adoPlanTarget,
   adoStep,
+  adoUpdate,
+  adoUpdateChange,
   resolveAdoTypes,
   claimsNotionPageUpdate,
   localClaimRefusalEvent,
@@ -742,5 +744,116 @@ describe("Notion page updates", () => {
       target(own).write(update({ body: "" })),
     ).rejects.toBeInstanceOf(PlanNotSent);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("Azure DevOps existing work item updates", () => {
+  const update = (fields: Record<string, string | number | null>) =>
+    item({ workitem: 42, ...fields });
+  const now = (fields: Record<string, unknown> = {}) => ({
+    id: 42,
+    rev: 7,
+    fields: {
+      "System.Title": "Login",
+      "System.WorkItemType": "Bug",
+      ...fields,
+    },
+  });
+  const target = (
+    read: () => Promise<ReturnType<typeof now>>,
+    write: (step: unknown) => Promise<{ id: number }>,
+  ) =>
+    adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => schema },
+      { write: write as never, find: async () => undefined, item: read },
+    );
+
+  it("allows only Assigned to and Iteration path on an existing item", () => {
+    expect(
+      adoUpdate(
+        update({ iteration: "POCs\\Sprint 1", "Assigned to": "Sam" }),
+        schema,
+        "POCs",
+      ),
+    ).toEqual({
+      id: 42,
+      fields: {
+        "System.IterationPath": "POCs\\Sprint 1",
+        "System.AssignedTo": "Sam",
+      },
+    });
+    expect(() => adoUpdate(update({ title: "New" }), schema, "POCs")).toThrow(
+      PlanNotSent,
+    );
+    expect(() => adoUpdate(update({}), schema, "POCs")).toThrow(PlanNotSent);
+    expect(() =>
+      adoUpdate(update({ iteration: "POCs\\Nope" }), schema, "POCs"),
+    ).toThrow(PlanNotSent);
+  });
+  it("still refuses Assigned to on a new item", () => {
+    expect(() =>
+      adoStep(item({ "Assigned to": "Tamer" }), schema, "POCs"),
+    ).toThrow(PlanNotSent);
+  });
+  it("shows the exact before and after", () => {
+    const lines = adoUpdateChange(now(), { "System.AssignedTo": "Sam" });
+    expect(lines.map((line) => line.text ?? JSON.stringify(line))).toEqual(
+      expect.arrayContaining([expect.stringContaining("Sam")]),
+    );
+  });
+  it("writes against the revision it read and links the item", async () => {
+    let sent: { remoteId?: number; revision?: number } = {};
+    const result = await target(
+      async () => now(),
+      async (step) => {
+        sent = step as typeof sent;
+        return { id: 42 };
+      },
+    ).write(update({ iteration: "POCs\\Sprint 1" }));
+    expect(sent).toMatchObject({ remoteId: 42, revision: 7 });
+    expect(result).toMatchObject({ externalId: "42", updated: true });
+  });
+  it("does not write what is already set", async () => {
+    const result = await target(
+      async () => now({ "System.IterationPath": "POCs\\Sprint 1" }),
+      async () => {
+        throw Error("must not write");
+      },
+    ).write(update({ iteration: "POCs\\Sprint 1" }));
+    expect(result).toMatchObject({ updated: true });
+  });
+  it("reports a changed item or a refused value as unsent", async () => {
+    for (const reason of ["revision_conflict", "request_rejected_400"])
+      await expect(
+        target(
+          async () => now(),
+          async () => {
+            throw Error(reason);
+          },
+        ).write(update({ iteration: "POCs\\Sprint 1" })),
+      ).rejects.toBeInstanceOf(PlanNotSent);
+    await expect(
+      target(
+        async () => now(),
+        async () => {
+          throw Error("socket hang up");
+        },
+      ).write(update({ iteration: "POCs\\Sprint 1" })),
+    ).rejects.not.toBeInstanceOf(PlanNotSent);
+  });
+  it("finds an update only when the values are already there", async () => {
+    const t = (fields: Record<string, unknown>) =>
+      target(
+        async () => now(fields),
+        async () => ({ id: 1 }),
+      ).find(update({ iteration: "POCs\\Sprint 1" }));
+    expect(await t({})).toBeUndefined();
+    expect(await t({ "System.IterationPath": "POCs\\Sprint 1" })).toMatchObject(
+      {
+        updated: true,
+      },
+    );
   });
 });

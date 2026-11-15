@@ -3,6 +3,13 @@ import { azurePathSegment } from "./path.ts";
 import type { Transport } from "./client.ts";
 
 type BoardSummary = { id: string; name: string };
+type SprintItem = {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+  assignee: string | null;
+};
 
 type BoardColumn = BoardSummary & {
   isSplit: boolean;
@@ -323,6 +330,79 @@ export class BoardDiscovery {
     return {
       columnField: data.fields.columnField.referenceName,
       canEdit: data.canEdit === true,
+    };
+  }
+
+  /**
+   * Read-only: the work items in one of the team's sprints, as Azure lists
+   * them, with title, type, state and who they are assigned to.
+   */
+  async iterationItems(team: string, iteration: string, limit = 200) {
+    const data = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(team) +
+          "/_apis/work/teamsettings/iterations/" +
+          azurePathSegment(iteration) +
+          "/workitems",
+        this.base,
+      ),
+    );
+    if (!record(data) || !Array.isArray(data.workItemRelations))
+      throw new Error("Invalid Azure sprint");
+    const ids: number[] = [];
+    for (const relation of data.workItemRelations) {
+      const id = relation?.target?.id;
+      if (!Number.isSafeInteger(id) || id < 1)
+        throw new Error("Invalid Azure item reference");
+      if (!ids.includes(id)) ids.push(id);
+    }
+    const wanted = ids.slice(0, limit);
+    const byId = new Map<number, SprintItem>();
+    for (let offset = 0; offset < wanted.length; offset += 200) {
+      const url = new URL(this.project + "/_apis/wit/workitems", this.base);
+      url.searchParams.set("ids", wanted.slice(offset, offset + 200).join(","));
+      url.searchParams.set(
+        "fields",
+        [
+          "System.Title",
+          "System.State",
+          "System.WorkItemType",
+          "System.AssignedTo",
+        ].join(","),
+      );
+      const batch = await this.get(url);
+      if (!record(batch) || !Array.isArray(batch.value))
+        throw new Error("Invalid Azure items");
+      for (const item of batch.value) {
+        const f = item?.fields;
+        if (
+          !f ||
+          !wanted.includes(item.id) ||
+          typeof f["System.Title"] !== "string" ||
+          typeof f["System.State"] !== "string" ||
+          typeof f["System.WorkItemType"] !== "string"
+        )
+          throw new Error("Invalid Azure item");
+        const who = f["System.AssignedTo"];
+        byId.set(item.id, {
+          id: item.id,
+          title: f["System.Title"],
+          type: f["System.WorkItemType"],
+          state: f["System.State"],
+          assignee:
+            typeof who === "string"
+              ? who
+              : record(who) && typeof who.displayName === "string"
+                ? who.displayName
+                : null,
+        });
+      }
+    }
+    return {
+      items: wanted.flatMap((id) => byId.get(id) ?? []),
+      more: ids.length > wanted.length,
     };
   }
 

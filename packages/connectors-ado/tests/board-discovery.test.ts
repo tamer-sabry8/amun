@@ -257,3 +257,57 @@ it("reads the story and task types from the default team's backlog configuration
   await d.backlogTypes();
   expect(get).toHaveBeenCalledTimes(2);
 });
+
+it("reads a sprint's work items with title, type, state and assignee", async () => {
+  const get = vi.fn(async (_method: string, url: string) => {
+    const u = new URL(url);
+    return u.pathname.endsWith("/workitems") &&
+      u.pathname.includes("teamsettings")
+      ? {
+          status: 200,
+          data: {
+            workItemRelations: [{ target: { id: 2 } }, { target: { id: 1 } }],
+          },
+        }
+      : {
+          status: 200,
+          data: {
+            value: [
+              {
+                id: 1,
+                fields: {
+                  "System.Title": "Login",
+                  "System.State": "Active",
+                  "System.WorkItemType": "User Story",
+                  "System.AssignedTo": { displayName: "Sam" },
+                },
+              },
+              {
+                id: 2,
+                fields: {
+                  "System.Title": "Logout",
+                  "System.State": "New",
+                  "System.WorkItemType": "Bug",
+                },
+              },
+            ],
+          },
+        };
+  });
+  const result = await new BoardDiscovery(base, "Library", get).iterationItems(
+    "West",
+    "guid-1",
+  );
+  expect(result.more).toBe(false);
+  expect(result.items).toEqual([
+    { id: 2, title: "Logout", type: "Bug", state: "New", assignee: null },
+    {
+      id: 1,
+      title: "Login",
+      type: "User Story",
+      state: "Active",
+      assignee: "Sam",
+    },
+  ]);
+  expect(get.mock.calls.every(([method]) => method === "GET")).toBe(true);
+});
