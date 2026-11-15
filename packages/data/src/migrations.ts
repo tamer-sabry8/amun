@@ -1043,4 +1043,7 @@ INSERT INTO library_output_versions(output_id,version,body,author,created_at)
   SELECT id,1,body,'owner',updated_at FROM library_outputs;
 ALTER TABLE library_outputs ADD COLUMN approved_version INTEGER;
 ALTER TABLE library_outputs ADD COLUMN approved_at TEXT;`,
+  // 36 · An objective can carry a due date. Its title stays the existing
+  // metric column, and an unknown baseline stays NULL (never invented).
+  `ALTER TABLE work_objectives ADD COLUMN due_date TEXT;`,
 ] as const;

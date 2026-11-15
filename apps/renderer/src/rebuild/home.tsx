@@ -69,6 +69,7 @@ export function IntakeCard({
   const [target, setTarget] = useState(
     /(\d{1,3})\s?%/.exec(pending.text)?.[1] ?? "",
   );
+  const [due, setDue] = useState("");
   const [error, setError] = useState("");
   const create = async (type: string, name: string) => {
     if (type === "rfp") {
@@ -235,6 +236,7 @@ export function IntakeCard({
             baseline: number(baseline),
             target: number(target),
             current: number(baseline),
+            dueDate: due || null,
             workAreaIds: [id],
           });
           onOpen(id, pending.text);
@@ -272,6 +274,14 @@ export function IntakeCard({
               placeholder="Not set"
               value={target}
               onChange={(event) => setTarget(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            Due date
+            <input
+              type="date"
+              value={due}
+              onChange={(event) => setDue(event.target.value)}
             />
           </label>
         </div>

@@ -416,7 +416,53 @@ export interface Objective {
   current: number | null;
   evidenceDate: string | null;
   reviewDate: string | null;
+  dueDate?: string | null;
   conflict: boolean;
+}
+
+/** The one thing named by a few words: exact first, then a single near match. */
+export function findNamed<T>(
+  items: T[],
+  name: string,
+  nameOf: (item: T) => string,
+) {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+  const exact = items.filter((item) => nameOf(item).toLowerCase() === wanted);
+  if (exact.length === 1) return exact[0]!;
+  const near = items.filter((item) => {
+    const have = nameOf(item).toLowerCase();
+    return have.includes(wanted) || wanted.includes(have);
+  });
+  return near.length === 1 ? near[0]! : null;
+}
+
+/** A number only when one was given; anything else stays unknown. */
+export function knownNumber(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value.trim().replace(/%$/, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** A date only when it is a real calendar day (YYYY-MM-DD). */
+export function knownDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const day = value.trim().slice(0, 10);
+  const parsed = new Date(`${day}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === day
+    ? day
+    : null;
+}
+
+/** The short line under an objective: where it stands and when it is due. */
+export function objectiveLine(objective: Objective) {
+  const progress = objectiveProgress(objective);
+  return objective.dueDate
+    ? `${progress.label} · due ${objective.dueDate}`
+    : progress.label;
 }
 export function objectiveProgress(objective: Objective) {
   if (objective.conflict)

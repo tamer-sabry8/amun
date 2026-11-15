@@ -5,6 +5,10 @@ import {
   externalChange,
   isCommitted,
   memoryUpdate,
+  findNamed,
+  knownDate,
+  knownNumber,
+  objectiveLine,
   objectiveProgress,
   filterRfps,
   rfpCard,
@@ -823,5 +827,40 @@ describe("stakeholder update and failures", () => {
     expect(nextRetry({ attempts: 1, uncertainWrite: false, budget: 1 })).toBe(
       "surface",
     );
+  });
+});
+
+describe("objective tracker (UC15)", () => {
+  const base = {
+    metric: "Win rate",
+    baseline: null,
+    target: 40,
+    current: null,
+    evidenceDate: null,
+    reviewDate: null,
+    conflict: false,
+  };
+  it("never invents a baseline, a target or a date", () => {
+    expect(knownNumber("")).toBeNull();
+    expect(knownNumber("unknown")).toBeNull();
+    expect(knownNumber(null)).toBeNull();
+    expect(knownNumber("35%")).toBe(35);
+    expect(knownNumber(12)).toBe(12);
+    expect(knownDate("soon")).toBeNull();
+    expect(knownDate("2027-02-30")).toBeNull();
+    expect(knownDate("2027-06-30")).toBe("2027-06-30");
+  });
+  it("says the baseline is unknown, and adds the due date when there is one", () => {
+    expect(objectiveLine(base)).toBe("Baseline unknown");
+    expect(objectiveLine({ ...base, dueDate: "2027-06-30" })).toBe(
+      "Baseline unknown · due 2027-06-30",
+    );
+  });
+  it("finds one thing by a few words, and nothing when it is ambiguous", () => {
+    const areas = [{ name: "Pricing review" }, { name: "Pricing page" }];
+    const name = (item: { name: string }) => item.name;
+    expect(findNamed(areas, "pricing review", name)).toBe(areas[0]);
+    expect(findNamed(areas, "pricing", name)).toBeNull();
+    expect(findNamed(areas, "", name)).toBeNull();
   });
 });

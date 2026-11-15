@@ -41,6 +41,7 @@ import {
   rfpStageLabels,
   rfpStages,
   rfpAuthoringBoundary,
+  objectiveLine,
   trackerName,
   type RfpStage,
 } from "../../../../packages/domain/src/work/flows.ts";
@@ -1493,6 +1494,12 @@ export function Portfolio({
       (!group || area.groupId === group),
   );
   const statuses = [...new Set(all.map((area) => area.status))];
+  const objectives = snapshot.objectives.filter(
+    (item) =>
+      (!group || item.groupId === group) &&
+      (item.groupId === null ||
+        all.some((area) => area.groupId === item.groupId)),
+  );
   return (
     <Page
       title="Portfolio"
@@ -1546,6 +1553,27 @@ export function Portfolio({
         </>
       }
     >
+      {objectives.length > 0 && (
+        <div className="rb-work" aria-label="Objectives">
+          {objectives.map((objective) => (
+            <div className="rb-inline" key={objective.id}>
+              <div className="row">
+                <strong className="grow">{objective.metric}</strong>
+                <span className="tag">Objective</span>
+              </div>
+              <span className="muted small">{objectiveLine(objective)}</span>
+              <span className="muted small">
+                {objective.links.length
+                  ? `Linked to ${objective.links
+                      .map((id) => areaOf(snapshot, id)?.name)
+                      .filter(Boolean)
+                      .join(", ")}`
+                  : "Not linked to any work yet"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {areas.length ? (
         <div className="rb-work">
           {areas.map((area) => {

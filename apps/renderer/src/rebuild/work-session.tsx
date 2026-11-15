@@ -80,6 +80,7 @@ import {
   factLine,
   findFact,
 } from "../../../../packages/domain/src/work/facts.ts";
+import { findNamed } from "../../../../packages/domain/src/work/flows.ts";
 import {
   agentNews,
   delegationTask,
@@ -1048,7 +1049,77 @@ export function WorkSession({
       // Inside Amun and undone by setting it again; only projects have one.
       if (context?.area.type === "project")
         work("update-area", { areaId, patch: { client: proposed.name } });
-    } else if (
+    } else if (proposed.do === "objective" || proposed.do === "objective-link")
+      void (async () => {
+        // Inside Amun: saved at once, and its links stay in this group.
+        const snap = latest.current.snapshot;
+        const groupId = context?.area.groupId ?? null;
+        const reply = (text: string) =>
+          work("message", { workAreaId: areaId, role: "firstmate", text });
+        const named = (names: string[]) => {
+          const found: string[] = [];
+          const missing: string[] = [];
+          for (const name of names) {
+            const area = findNamed(
+              snap.areas.filter((item) => item.groupId === groupId),
+              name,
+              (item) => item.name,
+            );
+            if (area) found.push(area.id);
+            else missing.push(name);
+          }
+          return { found, missing };
+        };
+        const { found, missing } = named(proposed.areas);
+        const note = missing.length
+          ? ` I could not tell which work you meant by ${missing.map((name) => `“${name}”`).join(", ")}, so I did not link it. Say a few words from its name.`
+          : "";
+        if (!groupId) {
+          reply(
+            "Choose a group for this work first, then I can track an objective for it.",
+          );
+          return;
+        }
+        if (proposed.do === "objective") {
+          await workAsync("save-objective", {
+            groupId,
+            metric: proposed.title,
+            baseline: proposed.baseline,
+            target: proposed.target,
+            current: proposed.baseline,
+            dueDate: proposed.due,
+            workAreaIds: [...new Set([areaId, ...found])],
+          });
+          if (note) reply(note.trim());
+          return;
+        }
+        const objective = findNamed(
+          snap.objectives.filter((item) => item.groupId === groupId),
+          proposed.objective,
+          (item) => item.metric,
+        );
+        if (!objective) {
+          reply(
+            `I could not tell which objective you meant by “${proposed.objective}”. Say a few words from its title.`,
+          );
+          return;
+        }
+        await workAsync("save-objective", {
+          objectiveId: objective.id,
+          groupId,
+          metric: objective.metric,
+          baseline: objective.baseline,
+          target: objective.target,
+          current: objective.current,
+          evidenceDate: objective.evidenceDate,
+          reviewDate: objective.reviewDate,
+          dueDate: objective.dueDate,
+          conflict: objective.conflict,
+          workAreaIds: [...new Set([...objective.links, ...found])],
+        });
+        if (note) reply(note.trim());
+      })();
+    else if (
       proposed.do === "blocker" ||
       proposed.do === "blocker-owner" ||
       proposed.do === "unblock"
@@ -1215,6 +1286,9 @@ export function WorkSession({
       const renamed = parsed.actions.find((item) => item.do === "rename");
       const client = parsed.actions.find((item) => item.do === "client");
       const blocked = parsed.actions.find((item) => item.do === "blocker");
+      const tracked = parsed.actions.find(
+        (item) => item.do === "objective" || item.do === "objective-link",
+      );
       const remembered = parsed.actions.find(
         (item) => item.do === "fact-correct" || item.do === "fact-forget",
       );
@@ -1230,14 +1304,18 @@ export function WorkSession({
             ? client.name
               ? `Done. The client is now ${client.name}.`
               : "Done. The client is cleared."
-            : blocked?.do === "blocker"
-              ? `Noted. “${blocked.title}” is blocked${blocked.owner ? `, and ${blocked.owner} owns unblocking it` : ", and nobody owns unblocking it yet"}.`
-              : remembered
-                ? remembered.do === "fact-forget"
-                  ? "Done. I have forgotten that."
-                  : "Done. I have corrected that."
-                : // Handing work over is always said, even from a silent reply.
-                  handed.join(" "));
+            : tracked?.do === "objective"
+              ? `Saved. I am tracking “${tracked.title}”${tracked.baseline === null ? "; its starting point is unknown" : ""}.`
+              : tracked?.do === "objective-link"
+                ? "Done. I have linked that objective."
+                : blocked?.do === "blocker"
+                  ? `Noted. “${blocked.title}” is blocked${blocked.owner ? `, and ${blocked.owner} owns unblocking it` : ", and nobody owns unblocking it yet"}.`
+                  : remembered
+                    ? remembered.do === "fact-forget"
+                      ? "Done. I have forgotten that."
+                      : "Done. I have corrected that."
+                    : // Handing work over is always said, even from a silent reply.
+                      handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,
@@ -1339,6 +1417,12 @@ export function WorkSession({
       standingPermissionLines(snapshot, context.area.groupId ?? null),
       trackerLine(tracker),
       publicationLines(snapshot, areaId),
+      context.objectives.map((item) => `${item.metric} (${item.line})`),
+      snapshot.areas
+        .filter(
+          (item) => item.groupId === context.area.groupId && item.id !== areaId,
+        )
+        .map((item) => item.name),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`
@@ -1840,34 +1924,39 @@ export function WorkSession({
                   </div>
                 </div>
               ))}
-              {context.objective && (
-                <div className="rb-inline" aria-label="Objective">
+              {context.objectives.map((objective) => (
+                <div
+                  className="rb-inline"
+                  aria-label="Objective"
+                  key={objective.id}
+                >
                   <div className="row">
-                    <strong className="grow">{context.objective.metric}</strong>
+                    <strong className="grow">{objective.metric}</strong>
                     <span
                       className={
                         "tag " +
-                        (context.objective.progress.state === "reached"
+                        (objective.progress.state === "reached"
                           ? "good"
-                          : context.objective.progress.state === "conflict"
+                          : objective.progress.state === "conflict"
                             ? "warn"
                             : "")
                       }
                     >
-                      {context.objective.progress.label}
+                      Objective
                     </span>
                   </div>
-                  {"ratio" in context.objective.progress && (
+                  <span className="muted small">{objective.line}</span>
+                  {"ratio" in objective.progress && (
                     <div className="rb-capacity" aria-hidden="true">
                       <i
                         style={{
-                          width: `${(context.objective.progress.ratio ?? 0) * 100}%`,
+                          width: `${(objective.progress.ratio ?? 0) * 100}%`,
                         }}
                       />
                     </div>
                   )}
                 </div>
-              )}
+              ))}
               {context.rfp && (
                 <div className="rb-inline" aria-label="RFP status">
                   <div className="row wrap">

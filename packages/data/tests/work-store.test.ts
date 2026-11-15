@@ -351,6 +351,24 @@ describe("objectives (Q56)", () => {
     expect(snap().objectives).toMatchObject([
       { id, current: 75, links: [task] },
     ]);
+    send("save-objective", {
+      objectiveId: id,
+      groupId: employer,
+      metric: "% billable",
+      baseline: null,
+      target: 90,
+      current: null,
+      dueDate: "2027-06-30",
+      workAreaIds: [task, project],
+    });
+    expect(snap().objectives).toMatchObject([
+      {
+        id,
+        baseline: null,
+        dueDate: "2027-06-30",
+        links: [project, task].sort(),
+      },
+    ]);
     const elsewhere = area(side, "task", "Other");
     expect(
       send("save-objective", {

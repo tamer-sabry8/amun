@@ -340,6 +340,7 @@ export class WorkStore {
             current: (row.current as number | null) ?? null,
             evidenceDate: (row.evidence_date as string | null) ?? null,
             reviewDate: (row.review_date as string | null) ?? null,
+            dueDate: (row.due_date as string | null) ?? null,
             conflict: bool(row.conflict),
             links: objectiveLinks.get(String(row.id)) ?? [],
           }),
@@ -1056,7 +1057,7 @@ export class WorkStore {
               { reason: "cross_group" },
             );
         this.run(
-          "INSERT INTO work_objectives(id,group_id,metric,baseline,target,current,evidence_date,review_date,conflict) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET metric=excluded.metric,baseline=excluded.baseline,target=excluded.target,current=excluded.current,evidence_date=excluded.evidence_date,review_date=excluded.review_date,conflict=excluded.conflict",
+          "INSERT INTO work_objectives(id,group_id,metric,baseline,target,current,evidence_date,review_date,due_date,conflict) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET metric=excluded.metric,baseline=excluded.baseline,target=excluded.target,current=excluded.current,evidence_date=excluded.evidence_date,review_date=excluded.review_date,due_date=excluded.due_date,conflict=excluded.conflict",
           id,
           command.groupId,
           this.clean(command.metric),
@@ -1065,6 +1066,7 @@ export class WorkStore {
           command.current,
           command.evidenceDate,
           command.reviewDate,
+          command.dueDate,
           command.conflict ? 1 : 0,
         );
         this.run("DELETE FROM work_objective_links WHERE objective_id=?", id);

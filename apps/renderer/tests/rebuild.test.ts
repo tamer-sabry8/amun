@@ -216,6 +216,7 @@ describe("view model", () => {
           current: 75,
           evidenceDate: null,
           reviewDate: null,
+          dueDate: "2027-06-30",
           conflict: false,
           links: ["task"],
         },
@@ -244,7 +245,8 @@ describe("view model", () => {
       ],
     });
     const task = workContext(state, "task", now)!;
-    expect(task.objective?.progress).toMatchObject({ state: "tracking" });
+    expect(task.objectives[0]?.progress).toMatchObject({ state: "tracking" });
+    expect(task.objectives[0]?.line).toContain("due 2027-06-30");
     expect(task.conversion?.text).toBe(
       "3 milestones and 4 people. Make it a project?",
     );

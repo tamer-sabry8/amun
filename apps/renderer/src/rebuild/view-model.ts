@@ -18,6 +18,9 @@ import { openBlockers } from "../../../../packages/domain/src/work/blockers.ts";
 import { needsLinking } from "../../../../packages/domain/src/work/model.ts";
 import {
   conversionSuggestion,
+  knownDate,
+  knownNumber,
+  objectiveLine,
   objectiveProgress,
   rfpCard,
 } from "../../../../packages/domain/src/work/flows.ts";
@@ -186,16 +189,18 @@ export function trayFor(snapshot: Snapshot, attentionId: string) {
 export function workContext(snapshot: Snapshot, areaId: string, now: number) {
   const area = areaOf(snapshot, areaId);
   if (!area) return null;
-  const objective = snapshot.objectives.find((item) =>
-    item.links.includes(areaId),
-  );
+  const objectives = snapshot.objectives
+    .filter((item) => item.links.includes(areaId))
+    .map((item) => ({
+      ...item,
+      progress: objectiveProgress(item),
+      line: objectiveLine(item),
+    }));
   const rfp = snapshot.rfps.find((item) => item.id === areaId);
   return {
     area,
     group: groupName(snapshot, area.groupId),
-    objective: objective
-      ? { ...objective, progress: objectiveProgress(objective) }
-      : null,
+    objectives,
     conversion:
       area.type === "task"
         ? conversionSuggestion({
@@ -299,6 +304,15 @@ export type AmunAction =
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
   | { do: "client"; name: string | null }
+  | {
+      do: "objective";
+      title: string;
+      baseline: number | null;
+      target: number | null;
+      due: string | null;
+      areas: string[];
+    }
+  | { do: "objective-link"; objective: string; areas: string[] }
   | { do: "blocker"; title: string; owner: string | null }
   | { do: "blocker-owner"; blocker: string; owner: string | null }
   | { do: "unblock"; blocker: string }
@@ -310,6 +324,13 @@ export type AmunAction =
 
 const text = (value: unknown, max = 4000) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+const areaNames = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((name) => {
+        const clean = text(name, 200);
+        return clean ? [clean] : [];
+      })
+    : [];
 function action(raw: unknown): AmunAction | null {
   if (!raw || typeof raw !== "object") return null;
   const input = raw as Record<string, unknown>;
@@ -400,6 +421,26 @@ function action(raw: unknown): AmunAction | null {
           ? input.name.replace(/\s+/g, " ").trim().slice(0, 200)
           : null;
       return name === null ? null : { do: "client", name: name || null };
+    }
+    case "objective": {
+      // Only what the owner stated: a missing or unreadable value stays unknown.
+      return title
+        ? {
+            do: "objective",
+            title,
+            baseline: knownNumber(input.baseline),
+            target: knownNumber(input.target),
+            due: knownDate(input.due),
+            areas: areaNames(input.areas),
+          }
+        : null;
+    }
+    case "objective-link": {
+      const objective = text(input.objective, 200);
+      const areas = areaNames(input.areas);
+      return objective && areas.length
+        ? { do: "objective-link", objective, areas }
+        : null;
     }
     case "blocker": {
       const owner = text(input.owner, 120);
@@ -590,7 +631,16 @@ export function areaTurnContext(
   tracker = "",
   /** What was already published from this area (`publicationLines`). */
   published: string[] = [],
+  /** Objectives already linked here, and the other areas that could be linked. */
+  objectives: string[] = [],
+  areaNamesInGroup: string[] = [],
 ) {
+  const tracked = objectives.length
+    ? ` Objectives linked to this work area: ${objectives.join("; ")}.`
+    : "";
+  const others = areaNamesInGroup.length
+    ? ` Other work areas in this group, for linking an objective: ${areaNamesInGroup.join("; ")}.`
+    : "";
   const publications = !published.length
     ? ""
     : ` Already published from this work area, by Amun, with the owner's approval (most recent last): ${published.join("; ")}. Never say nothing was published when this list has entries. If the owner asks to publish something that is already listed, say it already exists with its number and do not raise a plan to create it again; offer an update instead, but updating an existing Azure DevOps item is not available yet, so say that plainly.`;
@@ -609,7 +659,7 @@ export function areaTurnContext(
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
   const types = tracker ? ` ${tracker}` : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}${publications}${types}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${types}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {
@@ -632,6 +682,7 @@ export const amunProtocol = [
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
+  '{"do":"objective","title":"what we are measuring or aiming for","baseline":number,"target":number,"due":"YYYY-MM-DD","areas":["names of other work areas in this group to link"]} saves an objective on this Mac straight away when the owner writes "Objective: …", and links it to this work area plus any areas they name. Leave baseline, target and due out unless the owner gave them: never guess a baseline or a date; a missing baseline shows as unknown. {"do":"objective-link","objective":"words from its title","areas":["work area names"]} links an existing objective to more work areas in this group when the owner asks. Neither needs approval or is a plan, and neither changes anything outside Amun. Say in one short line what you saved or linked.',
   '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
   '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
