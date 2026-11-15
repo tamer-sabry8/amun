@@ -1901,7 +1901,7 @@ export function WorkSession({
                           Firstmate
                           {modelDisplay(message.model ?? null) && (
                             <span className="muted small">
-                              {" "}
+                              {"· "}
                               {modelDisplay(message.model ?? null)}
                             </span>
                           )}

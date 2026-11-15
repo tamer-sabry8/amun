@@ -2684,7 +2684,7 @@
   text-decoration: line-through;
   text-decoration-color: var(--control);
 }
-.rb-session {
+.rb-live-session {
   margin: 0;
   max-height: 320px;
   overflow: auto;

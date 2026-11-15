@@ -186,7 +186,7 @@ export function AgentWatch({
               </p>
               <pre
                 ref={screen}
-                className="rb-session"
+                className="rb-live-session"
                 tabIndex={0}
                 aria-label={"Live session of " + name}
                 onScroll={(event) => {

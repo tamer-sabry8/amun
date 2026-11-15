@@ -208,6 +208,16 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       timeout: 30_000,
     });
     await shot(page, "07-work-session");
+    // The session pane keeps the UI font and the message list keeps its room.
+    const [bodyFont, composerFont, listHeight] = await page.evaluate(() => [
+      getComputedStyle(document.body).fontFamily,
+      getComputedStyle(document.querySelector(".rb-convo textarea")!)
+        .fontFamily,
+      document.querySelector(".rb-convo")!.getBoundingClientRect().height,
+    ]);
+    expect(composerFont).toBe(bodyFont);
+    expect(composerFont).not.toMatch(/mono/i);
+    expect(listHeight).toBeGreaterThan(300);
 
     // PRD and Backlog panes use the shell's own look, not the earlier workspace.
     await page.getByRole("button", { name: "PRD", exact: true }).click();
