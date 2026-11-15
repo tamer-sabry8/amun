@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -340,4 +347,30 @@ it("keeps waiting for a worker that is not proven gone", async () => {
   await work(id, "Result");
   await until(() => of("message").length > 0);
   expect(String(of("message")[0]!.text)).toContain("finished");
+});
+
+it("only tracks an RFP: response writing is refused before any job exists", async () => {
+  const rfp = { ...area, type: "rfp" };
+  const delegations = make({ area: (id) => (id === "area-1" ? rfp : null) });
+  expect(
+    await delegations.start({
+      ...job,
+      agent: "Proposal & Bid",
+      title: "Write the response",
+    }),
+  ).toBeNull();
+  expect(of("message").map((command) => command.text)).toEqual([
+    "Amun only tracks this RFP: its client, owners, deadline and status. Writing the response or a proposal happens outside Amun, so I have not handed this to Proposal & Bid. I can still record or update the RFP's details.",
+  ]);
+  expect(commands).toHaveLength(1);
+  expect(delivered).toEqual([]);
+  expect(await readdir(root)).toEqual([]);
+
+  const tracking = await delegations.start({
+    ...job,
+    title: "Deadline",
+    task: "Summarise the RFP deadline and owners.",
+  });
+  expect(tracking).not.toBeNull();
+  expect(delivered).toHaveLength(1);
 });

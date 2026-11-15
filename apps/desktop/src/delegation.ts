@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { agentProfile } from "../../../packages/domain/src/work/agents.ts";
+import { rfpResponseDelegation } from "../../../packages/domain/src/work/rfp-boundary.ts";
 
 export type Harness = "claude" | "codex" | "pi";
 export interface DelegationDeps {
@@ -171,6 +172,20 @@ export class Delegations {
     const profile = agentProfile(input.agent);
     // The name shown is the catalogue's own spelling when there is one.
     const agent = profile?.name ?? input.agent.trim();
+    if (
+      rfpResponseDelegation({
+        areaType: area.type,
+        agent,
+        title: input.title,
+        task: input.task,
+      })
+    ) {
+      this.say(
+        input.workAreaId,
+        `Amun only tracks this RFP: its client, owners, deadline and status. Writing the response or a proposal happens outside Amun, so I have not handed this to ${agent}. I can still record or update the RFP's details.`,
+      );
+      return null;
+    }
     const harness = this.deps.harness();
     if (!harness) {
       this.say(
