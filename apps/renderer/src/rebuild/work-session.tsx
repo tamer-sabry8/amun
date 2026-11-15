@@ -18,6 +18,7 @@ import {
 import {
   maxRatio,
   minRatio,
+  modelDisplay,
 } from "../../../../packages/domain/src/work/shell.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
@@ -1027,6 +1028,7 @@ export function WorkSession({
           workAreaId: areaId,
           role: "firstmate",
           text: said,
+          model: turn.model,
         });
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
@@ -1620,6 +1622,12 @@ export function WorkSession({
                         <span className="who">
                           <FirstmateMark size={18} />
                           Firstmate
+                          {modelDisplay(message.model ?? null) && (
+                            <span className="muted small">
+                              {" "}
+                              {modelDisplay(message.model ?? null)}
+                            </span>
+                          )}
                         </span>
                       )}
                     {message.role === "firstmate" ? (

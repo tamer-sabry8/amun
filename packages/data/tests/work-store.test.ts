@@ -717,6 +717,23 @@ describe("tasks, projects and relations", () => {
       false,
     );
   });
+  it("keeps the model with a Firstmate reply and leaves other messages without one", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Model label");
+    send("message", { workAreaId: id, role: "you", text: "Hi", model: "x/y" });
+    send("message", {
+      workAreaId: id,
+      role: "firstmate",
+      text: "Hello",
+      model: "github-copilot/claude-sonnet-5.5",
+    });
+    send("message", { workAreaId: id, role: "firstmate", text: "Older" });
+    expect(snap().messages.map((message) => message.model)).toEqual([
+      null,
+      "github-copilot/claude-sonnet-5.5",
+      null,
+    ]);
+  });
   it("links a delivery project to a product without merging them, and asks across groups", () => {
     const { employer, side } = setup();
     const product = area(employer, "product", "Platform");

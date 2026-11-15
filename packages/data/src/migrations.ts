@@ -1015,4 +1015,7 @@ CREATE TABLE work_messages (
   // finished. Those rows are closed as never started rather than left running
   // or marked done.
   `UPDATE work_activity SET state='failed',text=text || ' — never started: accepting this did not begin a draft. Ask again in its conversation.' WHERE ref LIKE 'offer:%' AND state='running';`,
+  // 33 · The model that wrote each Firstmate reply, shown beside its name.
+  // Older messages keep it empty.
+  `ALTER TABLE work_messages ADD COLUMN model TEXT;`,
 ] as const;

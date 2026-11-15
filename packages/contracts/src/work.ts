@@ -408,6 +408,8 @@ export const workSnapshot = z.strictObject({
       role: z.enum(["you", "firstmate", "card"]),
       text: z.string(),
       card: z.json().nullable(),
+      /** The model that wrote a Firstmate reply; empty on older messages. */
+      model: z.string().max(200).nullable().optional(),
       createdAt: stamp,
     }),
   ),
@@ -730,6 +732,7 @@ export const workCommand = z.discriminatedUnion("action", [
     role: z.enum(["you", "firstmate", "card"]),
     text: z.string().max(16384),
     card: z.json().nullable().default(null),
+    model: z.string().max(200).nullable().default(null),
   }),
 ]);
 export type WorkCommand = z.infer<typeof workCommand>;

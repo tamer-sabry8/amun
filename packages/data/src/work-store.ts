@@ -461,7 +461,7 @@ export class WorkStore {
           ),
         },
         messages: this.all(
-          "SELECT id,work_area_id AS workAreaId,role,text,card_json,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
+          "SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
         ).map(({ card_json, ...row }) => ({
           ...row,
           card: card_json ? JSON.parse(String(card_json)) : null,
@@ -1887,12 +1887,13 @@ export class WorkStore {
           throw new WorkError("That work area no longer exists.");
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_messages(id,work_area_id,role,text,card_json,created_at) VALUES (?,?,?,?,?,?)",
+          "INSERT INTO work_messages(id,work_area_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?)",
           id,
           command.workAreaId,
           command.role,
           this.clean(command.text),
           command.card === null ? null : JSON.stringify(command.card),
+          command.role === "firstmate" ? command.model : null,
           now,
         );
         this.run(
