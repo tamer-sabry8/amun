@@ -21,3 +21,23 @@ export function scrollTarget(
   if (messages.length > prevCount || busy) return "end";
   return "none";
 }
+
+/**
+ * Index of the first Firstmate message or card of its latest turn: the first
+ * one after the owner's most recent message, or, with no owner message, the
+ * start of the trailing run of Firstmate/card messages. -1 when there is none.
+ */
+export function latestTurnStart(messages: readonly Line[]): number {
+  const isReply = (message: Line) =>
+    message.role === "firstmate" || message.role === "card";
+  const owner = messages.findLastIndex((message) => message.role === "you");
+  if (owner >= 0) {
+    const next = messages.findIndex(
+      (message, index) => index > owner && isReply(message),
+    );
+    return next;
+  }
+  let start = messages.length;
+  while (start > 0 && isReply(messages[start - 1]!)) start--;
+  return start < messages.length ? start : -1;
+}

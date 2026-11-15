@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { scrollTarget } from "../src/rebuild/scroll-target.ts";
+import { latestTurnStart, scrollTarget } from "../src/rebuild/scroll-target.ts";
 
 const you = { role: "you" };
 const fm = { role: "firstmate" };
@@ -24,4 +24,24 @@ it("opens at the bottom unless the newest message is a reply", () => {
   expect(scrollTarget(null, [fm, you], false)).toBe("end");
   expect(scrollTarget(null, [you, fm], false)).toBe("latest-reply");
   expect(scrollTarget(null, [], false)).toBe("end");
+});
+
+it("starts the latest turn at its first message, text before card", () => {
+  expect(latestTurnStart([you, fm, fm, card])).toBe(1);
+  expect(latestTurnStart([fm, you, fm, card])).toBe(2);
+});
+
+it("starts the latest turn at a lone card", () => {
+  expect(latestTurnStart([you, card])).toBe(1);
+  expect(latestTurnStart([fm, card, you, card])).toBe(3);
+});
+
+it("has no latest turn when the owner spoke last", () => {
+  expect(latestTurnStart([fm, you])).toBe(-1);
+  expect(latestTurnStart([])).toBe(-1);
+});
+
+it("without an owner message uses the trailing run of replies", () => {
+  expect(latestTurnStart([fm, card])).toBe(0);
+  expect(latestTurnStart([{ role: "system" }, fm, card])).toBe(1);
 });

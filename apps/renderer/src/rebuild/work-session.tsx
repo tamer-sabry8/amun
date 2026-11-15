@@ -22,7 +22,7 @@ import {
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
 import { useDismiss } from "./use-dismiss.ts";
-import { scrollTarget } from "./scroll-target.ts";
+import { latestTurnStart, scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
@@ -1214,9 +1214,10 @@ export function WorkSession({
       context.messages,
       busy,
     );
-    if (target === "latest-reply")
-      latestReply.current?.scrollIntoView({ block: "start" });
-    else if (target === "end") end.current?.scrollIntoView({ block: "end" });
+    if (target === "latest-reply" && latestReply.current)
+      latestReply.current.scrollIntoView({ block: "start" });
+    else if (target === "latest-reply" || target === "end")
+      end.current?.scrollIntoView({ block: "end" });
   }, [areaId, !!context, context?.messages.length, busy]);
   useEffect(() => {
     work("touch-area", { areaId });
@@ -1228,9 +1229,7 @@ export function WorkSession({
       </div>
     );
   const { area } = context;
-  const lastReplyId = context.messages.findLast(
-    (message) => message.role === "firstmate",
-  )?.id;
+  const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
   const questions = snapshot.attention.filter(
     (item) =>
@@ -1582,17 +1581,32 @@ export function WorkSession({
               )}
               {context.messages.map((message, position) =>
                 message.role === "card" ? (
-                  <InlineCard
-                    key={message.id}
-                    snapshot={snapshot}
-                    areaId={areaId}
-                    card={
-                      (message.card ?? {
-                        kind: "note",
-                        text: message.text,
-                      }) as Card
-                    }
-                  />
+                  message.id === lastReplyId ? (
+                    <div key={message.id} ref={latestReply}>
+                      <InlineCard
+                        snapshot={snapshot}
+                        areaId={areaId}
+                        card={
+                          (message.card ?? {
+                            kind: "note",
+                            text: message.text,
+                          }) as Card
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <InlineCard
+                      key={message.id}
+                      snapshot={snapshot}
+                      areaId={areaId}
+                      card={
+                        (message.card ?? {
+                          kind: "note",
+                          text: message.text,
+                        }) as Card
+                      }
+                    />
+                  )
                 ) : (
                   <div
                     key={message.id}
