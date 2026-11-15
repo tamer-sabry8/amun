@@ -111,6 +111,7 @@ import {
   councilCommand,
   planOpen,
   planPlaces,
+  contentSearch,
   trackerTypes,
   planPublish,
   toolsCommand,
@@ -1928,6 +1929,15 @@ process.parentPort?.on("message", (event) => {
           return;
         await open([url.href]);
       })();
+    } else if (message.data?.kind === "content-search") {
+      const parsed = contentSearch.safeParse(message.data);
+      if (!parsed.success) return;
+      port.postMessage({
+        version: 1,
+        kind: "content-search-result",
+        requestId: parsed.data.requestId,
+        hits: workStore.search(parsed.data.query),
+      });
     } else if (message.data?.kind === "plan-places") {
       const parsed = planPlaces.safeParse(message.data);
       if (!parsed.success) return;

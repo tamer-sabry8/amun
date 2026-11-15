@@ -619,6 +619,22 @@ export function App() {
         onClose={() => dispatch({ type: "palette", open: false })}
         onRoute={go}
         onWork={(id) => openWork(id)}
+        onHit={(item) => {
+          dispatch({ type: "palette", open: false });
+          if (!item.workAreaId) {
+            go("home");
+            if (item.kind !== "message")
+              setNote(
+                "Link this to a piece of work to open it beside its conversation.",
+              );
+            return;
+          }
+          openWork(
+            item.workAreaId,
+            undefined,
+            item.kind === "document" ? { kind: "output", id: item.id } : null,
+          );
+        }}
         onBrowser={
           layout.route === "work"
             ? () => {

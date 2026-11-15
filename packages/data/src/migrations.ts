@@ -1060,4 +1060,44 @@ ALTER TABLE library_outputs ADD COLUMN approved_at TEXT;`,
   resolved_at TEXT
 );
 CREATE INDEX work_reminders_due ON work_reminders(state,due_at);`,
+  // 38 · Search by content: one full-text index over document, record and
+  // conversation text, kept current by triggers. Words are stemmed, so
+  // "pricing" finds "prices". The group of a hit is read from its source at
+  // search time, so moving work between groups never leaves a stale index.
+  `CREATE VIRTUAL TABLE content_index USING fts5(
+  kind UNINDEXED,
+  ref UNINDEXED,
+  title,
+  body,
+  tokenize = 'porter unicode61 remove_diacritics 2'
+);
+INSERT INTO content_index(kind,ref,title,body) SELECT 'document',id,title,body FROM library_outputs;
+INSERT INTO content_index(kind,ref,title,body) SELECT 'record',id,title,body FROM work_records;
+INSERT INTO content_index(kind,ref,title,body) SELECT 'message',id,'',text FROM work_messages WHERE role IN ('you','firstmate');
+CREATE TRIGGER content_index_output_add AFTER INSERT ON library_outputs BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('document',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_output_edit AFTER UPDATE OF title,body ON library_outputs BEGIN
+  DELETE FROM content_index WHERE kind='document' AND ref=old.id;
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('document',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_output_drop AFTER DELETE ON library_outputs BEGIN
+  DELETE FROM content_index WHERE kind='document' AND ref=old.id;
+END;
+CREATE TRIGGER content_index_record_add AFTER INSERT ON work_records BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('record',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_record_edit AFTER UPDATE OF title,body ON work_records BEGIN
+  DELETE FROM content_index WHERE kind='record' AND ref=old.id;
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('record',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_record_drop AFTER DELETE ON work_records BEGIN
+  DELETE FROM content_index WHERE kind='record' AND ref=old.id;
+END;
+CREATE TRIGGER content_index_message_add AFTER INSERT ON work_messages WHEN new.role IN ('you','firstmate') BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('message',new.id,'',new.text);
+END;
+CREATE TRIGGER content_index_message_drop AFTER DELETE ON work_messages BEGIN
+  DELETE FROM content_index WHERE kind='message' AND ref=old.id;
+END;`,
 ] as const;

@@ -904,6 +904,34 @@ export const workAttachmentResult = z.strictObject({
   recordId: z.string().nullable(),
 });
 
+/** Search by content; the service limits it to the owner's current group. */
+export const contentSearch = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("content-search"),
+  requestId: id,
+  query: z.string().max(200),
+});
+export const contentSearchResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("content-search-result"),
+  requestId: id,
+  hits: z.array(
+    z.strictObject({
+      kind: z.enum(["document", "record", "message"]),
+      id,
+      title: z.string(),
+      snippet: z.array(
+        z.strictObject({ text: z.string(), match: z.boolean() }),
+      ),
+      workAreaId: id.nullable(),
+    }),
+  ),
+});
+
+export type ContentSearchHit = z.infer<
+  typeof contentSearchResult
+>["hits"][number];
+
 /** Where each item of a plan would be written, in words the owner can check. */
 export const planPlaces = z.strictObject({
   version: z.literal(1),
@@ -1030,6 +1058,7 @@ export const workEvent = z.discriminatedUnion("kind", [
   toolsReport,
   workAttachmentResult,
   planPlacesResult,
+  contentSearchResult,
   trackerTypesResult,
   workSnapshot,
   councilStatus,

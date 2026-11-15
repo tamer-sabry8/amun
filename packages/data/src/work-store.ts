@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { WorkReminders } from "./work-reminders.ts";
+import { searchContent } from "./content-search.ts";
 import { Redactor } from "../../security/src/redaction.ts";
 import {
   setupState,
@@ -692,6 +693,10 @@ export class WorkStore {
     return { id, existing: false };
   }
 
+  /** Content search, always limited to the group the owner is working in. */
+  search(query: string) {
+    return searchContent(this.db, query, this.setup().activeGroupId);
+  }
   handle(input: unknown): WorkEvent[] {
     const parsed = workCommand.safeParse(input);
     if (!parsed.success) return [];
