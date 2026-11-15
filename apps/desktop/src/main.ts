@@ -327,9 +327,9 @@ if (!app.requestSingleInstanceLock()) {
       if (app.isReady()) openWindow();
       return;
     }
+    if (window.isMinimized()) window.restore();
     if (hideWindowsForTests({ isPackaged: app.isPackaged, env: process.env }))
       return;
-    if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
   });
