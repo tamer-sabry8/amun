@@ -1558,6 +1558,7 @@ export function Portfolio({
                 <span className="meta">
                   {[
                     typeLabels[area.type],
+                    area.type === "project" && area.client,
                     groupName(snapshot, area.groupId) ?? "No group yet",
                     area.status,
                   ].join(" · ")}

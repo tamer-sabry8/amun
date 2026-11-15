@@ -852,6 +852,8 @@ export function WorkSession({
   const [copiedLog, setCopiedLog] = useState("");
   /** The name being typed while this work is renamed; null when it is not. */
   const [areaName, setAreaName] = useState<string | null>(null);
+  /** The client being typed for a project; null when it is not. */
+  const [clientDraft, setClientDraft] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -914,7 +916,11 @@ export function WorkSession({
     else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
-    else if (proposed.do === "convert")
+    else if (proposed.do === "client") {
+      // Inside Amun and undone by setting it again; only projects have one.
+      if (context?.area.type === "project")
+        work("update-area", { areaId, patch: { client: proposed.name } });
+    } else if (proposed.do === "convert")
       void (async () => {
         const name = context?.area.name ?? "This";
         // Same record, same id: the conversation and its links stay put.
@@ -1013,6 +1019,7 @@ export function WorkSession({
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
+      const client = parsed.actions.find((item) => item.do === "client");
       // A rename always gets a plain confirmation, even from a silent reply.
       const handed = parsed.actions.flatMap((item) =>
         item.do === "delegate" ? [`${item.agent} is on “${item.title}”.`] : [],
@@ -1021,8 +1028,12 @@ export function WorkSession({
         parsed.text ||
         (renamed?.do === "rename"
           ? `Done. This is now called “${renamed.name}”.`
-          : // Handing work over is always said, even from a silent reply.
-            handed.join(" "));
+          : client?.do === "client" && context?.area.type === "project"
+            ? client.name
+              ? `Done. The client is now ${client.name}.`
+              : "Done. The client is cleared."
+            : // Handing work over is always said, even from a silent reply.
+              handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,
@@ -1375,6 +1386,17 @@ export function WorkSession({
                     >
                       Rename
                     </button>
+                    {area.type === "project" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          setClientDraft(area.client ?? "");
+                        }}
+                      >
+                        {area.client ? "Change client" : "Set client"}
+                      </button>
+                    )}
                     <button
                       role="menuitem"
                       onClick={() => setConfirmDelete(true)}
@@ -1412,6 +1434,37 @@ export function WorkSession({
             )}
           </span>
           <span className="tag">{typeLabels[area.type]}</span>
+          {area.type === "project" && clientDraft !== null && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const next = clientDraft.trim();
+                if (next !== (area.client ?? ""))
+                  work("update-area", {
+                    areaId,
+                    patch: { client: next || null },
+                  });
+                setClientDraft(null);
+              }}
+            >
+              <input
+                type="text"
+                aria-label="Client for this project"
+                placeholder="Client name"
+                autoFocus
+                maxLength={200}
+                value={clientDraft}
+                onChange={(event) => setClientDraft(event.target.value)}
+                onBlur={() => setClientDraft(null)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setClientDraft(null);
+                }}
+              />
+            </form>
+          )}
+          {area.type === "project" && area.client && clientDraft === null && (
+            <span className="tag">Client: {area.client}</span>
+          )}
           {area.convertedFrom && <span className="tag">Was a task</span>}
           <span className="grow" />
           {area.productId && !open && (

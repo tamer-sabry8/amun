@@ -629,6 +629,13 @@ describe("rfpDetails", () => {
       accountOwner: "Tamer",
     });
   });
+  it("reads the client of a project request", () => {
+    expect(
+      rfpDetails("Create a project for client Acme Corp, due 2026-12-01", now)
+        .client,
+    ).toBe("Acme Corp");
+    expect(rfpDetails("Create a project called Portal", now).client).toBeNull();
+  });
   it("keeps unknown values empty", () => {
     expect(
       rfpDetails(

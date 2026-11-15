@@ -933,6 +933,39 @@ describe("Firstmate proposals", () => {
   });
 });
 
+describe("a project's client from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("is set or cleared straight away, one line", () => {
+    expect(
+      parseAmunActions(block({ do: "client", name: " Acme\n Corp " })).actions,
+    ).toEqual([{ do: "client", name: "Acme Corp" }]);
+    expect(
+      parseAmunActions(block({ do: "client", name: " " })).actions,
+    ).toEqual([{ do: "client", name: null }]);
+    expect(parseAmunActions(block({ do: "client" })).actions).toEqual([]);
+    expect(amunProtocol).toContain('{"do":"client","name":"…"}');
+  });
+  it("is in each project turn, and only there", () => {
+    const project = areaTurnContext(
+      { type: "project", name: "Portal", client: "Acme" },
+      "Project",
+      null,
+    );
+    expect(project).toContain("client of this project is Acme");
+    expect(
+      areaTurnContext({ type: "project", name: "Portal" }, "Project", null),
+    ).toContain("client of this project is not set");
+    expect(
+      areaTurnContext(
+        { type: "product", name: "App", client: "Acme" },
+        "Product",
+        null,
+      ),
+    ).not.toContain("Acme");
+  });
+});
+
 describe("renaming from the chat", () => {
   const block = (value: unknown) =>
     "```amun\n" + JSON.stringify(value) + "\n```";

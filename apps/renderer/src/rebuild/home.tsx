@@ -82,10 +82,13 @@ export function IntakeCard({
       });
       return result.ok ? result.ref : null;
     }
+    // "…for client X", read the same way an RFP's client is.
+    const client = type === "project" ? rfpDetails(pending.text).client : null;
     const result = await workAsync("create-area", {
       groupId,
       type: type as "product" | "project" | "task" | "rfp",
       name,
+      ...(client ? { client } : {}),
     });
     return result.ok ? result.ref : null;
   };
@@ -742,6 +745,7 @@ export function Home({
                 <span className="meta">
                   {[
                     typeLabels[area.type],
+                    area.type === "project" && area.client,
                     groupName(snapshot, area.groupId),
                     area.dueAt && "Due " + shortDate(area.dueAt),
                   ]

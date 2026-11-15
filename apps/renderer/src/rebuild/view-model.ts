@@ -258,6 +258,7 @@ export type AmunAction =
   | { do: "update"; message: string }
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
+  | { do: "client"; name: string | null }
   | { do: "delete" }
   | { do: "convert" }
   | { do: "delegate"; agent: string; title: string; task: string };
@@ -346,6 +347,14 @@ function action(raw: unknown): AmunAction | null {
         120,
       );
       return name ? { do: "rename", name } : null;
+    }
+    case "client": {
+      // The client's name, or empty to clear it: one line, like a rename.
+      const name =
+        typeof input.name === "string"
+          ? input.name.replace(/\s+/g, " ").trim().slice(0, 200)
+          : null;
+      return name === null ? null : { do: "client", name: name || null };
     }
     case "delegate": {
       // Only an agent from the catalogue: a name the model made up is dropped.
@@ -459,12 +468,16 @@ export function workTypeGuard(
  * areas, so each turn names the one it is about, with its own record.
  */
 export function areaTurnContext(
-  area: { type: string; name: string },
+  area: { type: string; name: string; client?: string | null },
   typeLabel: string,
   group: string | null | undefined,
   record?: Parameters<typeof workTypeGuard>[1],
 ) {
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.]\n${workTypeGuard(area.type, record)}`;
+  const client =
+    area.type === "project"
+      ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
+      : "";
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {
@@ -486,6 +499,7 @@ export const amunProtocol = [
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
+  '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',

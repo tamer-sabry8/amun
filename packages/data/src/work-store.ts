@@ -769,6 +769,9 @@ export class WorkStore {
         const patch = command.patch;
         if (patch.status === "deleted")
           throw new WorkError("Use Delete to remove a work.");
+        // An RFP keeps its client on its own record.
+        if (patch.client !== undefined && area.type !== "project")
+          throw new WorkError("Only a project has a client here.");
         // Boundaries never move silently: a group change is only ever the
         // user's own explicit choice, recorded here.
         if (patch.groupId !== undefined) this.requireGroup(patch.groupId);
@@ -781,6 +784,14 @@ export class WorkStore {
           [
             "purpose",
             patch.purpose === undefined ? undefined : this.clean(patch.purpose),
+          ],
+          [
+            "client",
+            patch.client === undefined
+              ? undefined
+              : patch.client === null || !patch.client.trim()
+                ? null
+                : this.clean(patch.client.trim()),
           ],
           ["status", patch.status],
           ["due_at", patch.dueAt],

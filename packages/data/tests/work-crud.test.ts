@@ -136,6 +136,27 @@ describe("rules that hold for every kind", () => {
     expect(find(id)?.name).toBe("Named");
   });
 
+  it("keeps an optional client on a project only, and clears it when emptied", () => {
+    const id = send("create-area", {
+      groupId: null,
+      type: "project",
+      name: "Portal",
+      client: "Acme",
+    }).ref!;
+    expect(find(id)?.client).toBe("Acme");
+    send("update-area", { areaId: id, patch: { client: "  Globex  " } });
+    expect(find(id)?.client).toBe("Globex");
+    send("update-area", { areaId: id, patch: { client: "" } });
+    expect(find(id)?.client).toBeNull();
+    for (const type of ["product", "task"] as const) {
+      const other = add(type, "Not a project");
+      expect(
+        send("update-area", { areaId: other, patch: { client: "Acme" } }).ok,
+      ).toBe(false);
+      expect(find(other)?.client).toBeNull();
+    }
+  });
+
   it("cannot be deleted by setting its status", () => {
     const id = add("task", "Careful");
     expect(

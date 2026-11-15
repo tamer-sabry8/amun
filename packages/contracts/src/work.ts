@@ -474,6 +474,7 @@ export const workCommand = z.discriminatedUnion("action", [
       name: name.optional(),
       groupId: id.optional(),
       purpose: text.optional(),
+      client: text.nullable().optional(),
       status: z.string().max(64).optional(),
       dueAt: stamp.nullable().optional(),
       effort: effort.nullable().optional(),
