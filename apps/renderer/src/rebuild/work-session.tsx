@@ -46,7 +46,11 @@ import {
 import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
-import { answerQuestion, requestPlanChanges } from "./accept-offer.ts";
+import {
+  answerQuestion,
+  answerScope,
+  requestPlanChanges,
+} from "./accept-offer.ts";
 import { pendingOffers } from "./offer-turns.ts";
 import {
   agentNews,
@@ -316,9 +320,7 @@ function InlineCard({
             <button
               key={answer}
               className="btn"
-              onClick={() =>
-                work("scope-answer", { workAreaId: areaId, item, answer })
-              }
+              onClick={() => answerScope({ areaId, item, answer })}
             >
               {label}
             </button>

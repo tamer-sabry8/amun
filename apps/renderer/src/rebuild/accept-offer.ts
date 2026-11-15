@@ -4,6 +4,8 @@ import {
   changesRequest,
   offerRequest,
   pendingOffers,
+  scopeRequest,
+  type ScopeAnswer,
 } from "./offer-turns.ts";
 import { work } from "./store.ts";
 
@@ -72,4 +74,21 @@ export function answerQuestion(
       areaId: question.workAreaId,
       text: answerRequest(question.title, answer),
     });
+}
+
+/** The owner decided on an item outside the approved scope; Firstmate hears it once. */
+export function answerScope(
+  scope: { areaId: string; item: string; answer: ScopeAnswer },
+  queue = pendingOffers,
+) {
+  work("scope-answer", {
+    workAreaId: scope.areaId,
+    item: scope.item,
+    answer: scope.answer,
+  });
+  queue.queue({
+    id: "scope:" + scope.areaId + ":" + scope.item,
+    areaId: scope.areaId,
+    text: scopeRequest(scope.item, scope.answer),
+  });
 }

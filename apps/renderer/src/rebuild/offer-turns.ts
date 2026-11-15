@@ -27,6 +27,18 @@ export const changesRequest = (summary: string, note = "") =>
 export const answerRequest = (title: string, answer: string) =>
   `My answer to your question "${title}": ${answer}. Carry it out: confirm it briefly, record any risk or decision it implies, or hand the work to the right agent, as that answer calls for. Do not publish or approve anything.`;
 
+export type ScopeAnswer = "add_anyway" | "link_cr" | "keep_out";
+
+/** The owner chose what to do with an item outside the approved scope. */
+export const scopeRequest = (item: string, answer: ScopeAnswer) => {
+  const tail = " Do not publish or approve anything.";
+  if (answer === "add_anyway")
+    return `About "${item}", which is outside the approved scope: I choose to add it anyway, accepting the risk, without a change request. It is recorded as my exception, not as approval from the client. Confirm that in one short line, then propose the next concrete step, for example a revised local draft of the affected document. Draft only locally.${tail}`;
+  if (answer === "link_cr")
+    return `About "${item}", which is outside the approved scope: I will link a change request for it. Ask me for the change request reference. Nothing is added until it is linked.${tail}`;
+  return `About "${item}", which is outside the approved scope: I keep it out of scope. Confirm that in one short line and change nothing.${tail}`;
+};
+
 export function offerTurns(storage: Storage | null) {
   const turns = new Map<string, OfferTurn>();
   /** Turns being sent in this run, as opposed to ones a restart cut short. */

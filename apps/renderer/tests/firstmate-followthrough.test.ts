@@ -7,6 +7,7 @@ vi.mock("../src/rebuild/store.ts", () => ({
 
 import {
   answerQuestion,
+  answerScope,
   requestPlanChanges,
 } from "../src/rebuild/accept-offer.ts";
 import { offerTurns } from "../src/rebuild/offer-turns.ts";
@@ -60,6 +61,29 @@ describe("Firstmate hears the owner's choices", () => {
     expect(turns[0]!.text).toContain("accept the risk to the deadline");
     expect(turns[0]!.text).toContain("Add the story?");
   });
+  it.each([
+    ["add_anyway", "not as approval from the client", "revised local draft"],
+    ["link_cr", "change request reference", "Nothing is added"],
+    ["keep_out", "keep it out of scope", "change nothing"],
+  ] as const)(
+    "tells Firstmate once about the scope choice %s",
+    (answer, a, b) => {
+      const q = queue();
+      const scope = { areaId: "w1", item: "Export to PDF", answer };
+      answerScope(scope, q);
+      answerScope(scope, q);
+      expect(sent[0]).toEqual([
+        "scope-answer",
+        { workAreaId: "w1", item: "Export to PDF", answer },
+      ]);
+      const turns = q.claim("w1").send;
+      expect(turns).toHaveLength(1);
+      expect(turns[0]!.text).toContain('"Export to PDF"');
+      expect(turns[0]!.text).toContain(a);
+      expect(turns[0]!.text).toContain(b);
+      expect(turns[0]!.text).not.toMatch(/client (has )?approved/i);
+    },
+  );
   it("answers on a card with no work area close it and send nothing", () => {
     const q = queue();
     answerQuestion({ id: "a2", workAreaId: null, title: "T" }, "Yes", q);
