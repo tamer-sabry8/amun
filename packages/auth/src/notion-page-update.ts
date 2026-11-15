@@ -17,6 +17,57 @@ export interface NotionPageSnapshot {
 const same = (a: string, b: string) =>
   a.replaceAll("-", "").toLowerCase() === b.replaceAll("-", "").toLowerCase();
 
+const idIn = (text: string) => {
+  for (const read of [
+    (value: string) => uuidFromReference(value),
+    (value: string) => uuidFromReference(notionTargetReference(value)),
+  ])
+    try {
+      return read(text.trim());
+    } catch {
+      // Try the next form.
+    }
+  return undefined;
+};
+
+/**
+ * The page's parent as a bare id. `<ancestor-path>` can be empty, so the tags
+ * anywhere in the header and the reply's own parent fields count too; ids are
+ * normalised, with or without dashes. Undefined when none states one.
+ */
+function parentOf(header: string, reply: unknown) {
+  const tag =
+    /<parent-data-source url="(?:\{\{)?collection:\/\/([a-f0-9-]+)/i.exec(
+      header,
+    )?.[1] ??
+    /<parent-(?:page|database) url="(?:\{\{)?([^"}]+)/i.exec(header)?.[1];
+  const fields =
+    reply && typeof reply === "object"
+      ? (reply as Record<string, unknown>)
+      : {};
+  const fromValue = (value: unknown): string | undefined => {
+    if (typeof value === "string")
+      return idIn(value.replace(/^collection:\/\//, ""));
+    if (value && typeof value === "object")
+      for (const key of [
+        "page_id",
+        "data_source_id",
+        "database_id",
+        "id",
+        "url",
+      ])
+        if (typeof (value as Record<string, unknown>)[key] === "string")
+          return fromValue((value as Record<string, unknown>)[key]);
+    return undefined;
+  };
+  return (
+    (tag ? idIn(tag) : undefined) ??
+    [fields.parent, fields.parent_id, fields.parent_url, fields.parent_page_id]
+      .map(fromValue)
+      .find(Boolean)
+  );
+}
+
 /** Reads a `notion-fetch` reply for one page; throws on anything unexpected. */
 export function readNotionPage(
   raw: unknown,
@@ -31,6 +82,7 @@ export function readNotionPage(
       ]),
     })
     .parse(raw);
+  const parsed: unknown = JSON.parse(reply.content[0].text);
   const record = z
     .object({
       url: z.string(),
@@ -41,7 +93,7 @@ export function readNotionPage(
       last_edited_time: z.string().max(64).optional(),
       text: z.string().max(524288),
     })
-    .parse(JSON.parse(reply.content[0].text));
+    .parse(parsed);
   const url = notionTargetReference(record.url);
   if (!same(uuidFromReference(url), pageId)) throw Error("Notion page changed");
   const start = record.text.indexOf("\n<content>\n");
@@ -54,20 +106,7 @@ export function readNotionPage(
   if (content === undefined || /^<\/?(?:page|content)(?:>| )/m.test(content))
     throw Error("Incomplete page");
   const header = record.text.slice(0, start);
-  const ancestor = /^<ancestor-path>\n([^\n]*)/m.exec(header)?.[1] ?? "";
-  const dataSource =
-    /^<parent-data-source url="(?:\{\{)?collection:\/\/([a-f0-9-]+)(?:\}\})?"/i.exec(
-      ancestor,
-    )?.[1];
-  const parentPage = /^<parent-page url="([^"]+)"/.exec(ancestor)?.[1];
-  let parent: string | undefined = dataSource;
-  if (!parent && parentPage) {
-    try {
-      parent = uuidFromReference(notionTargetReference(parentPage));
-    } catch {
-      parent = undefined;
-    }
-  }
+  const parent = parentOf(header, parsed);
   let title: string | undefined;
   const props = /^<properties>\n([^\n]+)\n<\/properties>$/m.exec(header)?.[1];
   if (props) {
@@ -99,6 +138,8 @@ export interface NotionPageUpdate {
   expectedVersion: string;
   /** The page must sit directly under this approved destination. */
   parentId: string;
+  /** Taken as the page's parent only when Notion's reply does not state one. */
+  assumedParentId?: string | undefined;
   titleProperty: string;
   /** Unchanged when absent. */
   title?: string | undefined;
@@ -195,8 +236,8 @@ export async function updateNotionPage(
 ): Promise<NotionUpdateOutcome> {
   const before = await io.read();
   if (before.trashed) return { state: "gone" };
-  if (!before.parent || !same(before.parent, update.parentId))
-    return { state: "elsewhere" };
+  const parent = before.parent ?? update.assumedParentId;
+  if (!parent || !same(parent, update.parentId)) return { state: "elsewhere" };
   if (before.version !== update.expectedVersion)
     return { state: "changed", url: before.url };
   io.beforeSend();

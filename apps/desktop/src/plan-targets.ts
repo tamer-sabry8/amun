@@ -234,15 +234,9 @@ export function adoStep(
   };
   const fields: AdoStep["fields"] = { "System.Title": item.summary };
   const description = supplied.description ?? null;
-  if (description) {
-    require("System.Description", "Description");
-    fields["System.Description"] = "<p>" + escape(description) + "</p>";
-  }
   const acceptance = supplied.acceptance ?? null;
-  if (acceptance) {
-    require("Microsoft.VSTS.Common.AcceptanceCriteria", "Acceptance criteria");
-    fields["Microsoft.VSTS.Common.AcceptanceCriteria"] =
-      "<ul>" +
+  const criteria = acceptance
+    ? "<ul>" +
       acceptance
         .split(/\n+/)
         .flatMap((line) =>
@@ -252,8 +246,25 @@ export function adoStep(
         .filter(Boolean)
         .map((line) => "<li>" + escape(line) + "</li>")
         .join("") +
-      "</ul>";
+      "</ul>"
+    : null;
+  // A type without an Acceptance criteria field (a Task, or a Bug in some
+  // processes) keeps them in its Description, under their own heading, so
+  // nothing is lost. Without a Description either, they cannot be sent.
+  const inDescription =
+    criteria !== null && !has("Microsoft.VSTS.Common.AcceptanceCriteria");
+  if (inDescription && !has("System.Description"))
+    throw new PlanNotSent(
+      `${type.name} in ${project} has no Acceptance criteria field, so it would be lost.`,
+    );
+  if (description || inDescription) {
+    require("System.Description", "Description");
+    fields["System.Description"] =
+      (description ? "<p>" + escape(description) + "</p>" : "") +
+      (inDescription ? "<p>Acceptance criteria</p>" + criteria : "");
   }
+  if (criteria !== null && !inDescription)
+    fields["Microsoft.VSTS.Common.AcceptanceCriteria"] = criteria;
   const area = supplied.area ?? null;
   if (area) {
     if (!schema.areas.includes(area))
@@ -278,6 +289,41 @@ export function adoStep(
     type: type.name,
     fields,
   };
+}
+
+/**
+ * What the review card shows for a new work item: the problem that stops it,
+ * or a plain note when its acceptance criteria travel inside the Description.
+ * The approval binds the plan item's own fields (approved_json), not this
+ * rendering, so changing how they are sent never needs a second approval; the
+ * note only tells the owner what will really be sent.
+ */
+export function adoPayloadNote(
+  item: PlanWriteItem,
+  schema: AzureProcessSchema,
+  project: string,
+  collection: string | undefined,
+  names: AdoTypeNames,
+) {
+  try {
+    const step = adoStep(item, schema, project, collection, names);
+    const moved =
+      "System.Description" in step.fields &&
+      !("Microsoft.VSTS.Common.AcceptanceCriteria" in step.fields) &&
+      /<p>Acceptance criteria<\/p>/.test(
+        String(step.fields["System.Description"]),
+      );
+    return {
+      problem: null,
+      sentAs: moved
+        ? `${step.type} in ${project} has no Acceptance criteria field, so they are sent in its Description under “Acceptance criteria”.`
+        : null,
+    };
+  } catch (error) {
+    if (error instanceof PlanNotSent)
+      return { problem: error.message, sentAs: null };
+    throw error;
+  }
 }
 
 /**
@@ -872,6 +918,8 @@ export interface NotionPageReceipt {
   marker: string;
   version: string | null;
   url: string | null;
+  /** The parent the page was created under, when it was recorded. */
+  parentId?: string | null;
   /** What Amun last wrote, so lines can be appended to it. */
   title?: string;
   body?: string;
@@ -974,6 +1022,11 @@ export function notionPlanTarget(
           pageId: change.pageId,
           expectedVersion: change.receipt.version!,
           parentId: destination.parentId,
+          // Notion may not say where a page sits. Amun's own receipt then
+          // does: the parent recorded at creation, or, for a page written
+          // before that was recorded, the destination Amun only ever creates
+          // pages under. A parent Notion does state is always what counts.
+          assumedParentId: change.receipt.parentId ?? destination.parentId,
           titleProperty: destination.titleProperty,
           title: change.title,
           text: change.body,
@@ -1055,7 +1108,11 @@ export function notionPlanTarget(
         throw Error("Notion did not confirm the page.");
       }
       const version = await versionOf(result.pageId);
-      return { ...receipt(result.pageId), ...(version ? { version } : {}) };
+      return {
+        ...receipt(result.pageId),
+        parentId: destination.parentId,
+        ...(version ? { version } : {}),
+      };
     },
     async find(item) {
       const change = updateOf(item, destination, receipts);

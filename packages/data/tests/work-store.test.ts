@@ -1111,6 +1111,13 @@ describe("sprints, scope, library, decisions, council and agents", () => {
       send("add-agent", { description: "temp helper", always: false }).ok,
     ).toBe(true);
   });
+  it("adds a catalog specialist under its full name", () => {
+    setup();
+    const id = send("add-agent", { description: "Research & Insights" }).ref!;
+    expect(snap().agents.find((item) => item.id === id)?.role).toBe(
+      "Research & Insights",
+    );
+  });
   it("records decisions with who decided and when", () => {
     const { employer } = setup();
     const id = send("record-decision", {

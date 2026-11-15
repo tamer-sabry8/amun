@@ -245,3 +245,59 @@ describe("the exact change", () => {
     ]);
   });
 });
+
+describe("a page whose reply leaves the ancestor path empty", () => {
+  const empty = (extra: object = {}) => {
+    const reply = fetched("Old text", extra);
+    const record = JSON.parse(reply.content[0]!.text);
+    record.text = record.text.replace(
+      /<ancestor-path>[\s\S]*<\/ancestor-path>/,
+      "<ancestor-path></ancestor-path>",
+    );
+    return { content: [{ type: "text", text: JSON.stringify(record) }] };
+  };
+  const bare = parent.replaceAll("-", "").toUpperCase();
+  it("reads the parent from the reply's own fields, with or without dashes", () => {
+    expect(
+      readNotionPage(empty({ parent: { page_id: bare } }), page),
+    ).toMatchObject({ parent });
+    expect(readNotionPage(empty({ parent: parent }), page).parent).toBe(parent);
+    expect(
+      readNotionPage(
+        empty({ parent: "https://www.notion.so/Hub-" + bare }),
+        page,
+      ).parent,
+    ).toBe(parent);
+    expect(readNotionPage(empty(), page).parent).toBeUndefined();
+  });
+  it("uses Amun's receipt only when Notion states no parent", async () => {
+    const snapshot = readNotionPage(empty(), page);
+    const run = (parentId: string, assumed?: string, now = snapshot) =>
+      updateNotionPage(
+        {
+          pageId: page,
+          expectedVersion: now.version,
+          parentId,
+          assumedParentId: assumed,
+          titleProperty: "title",
+          text: "New text",
+          marker: "m-1",
+        },
+        {
+          read: async () => now,
+          call: async () => true,
+          beforeSend: () => undefined,
+        },
+      );
+    expect((await run(parent)).state).toBe("elsewhere");
+    expect((await run(parent, parent)).state).toBe("updated");
+    expect(
+      (await run(parent, "99999999-2222-4333-8444-555555555555")).state,
+    ).toBe("elsewhere");
+    const stated = readNotionPage(
+      empty({ parent: "99999999222243338444555555555555" }),
+      page,
+    );
+    expect((await run(parent, parent, stated)).state).toBe("elsewhere");
+  });
+});

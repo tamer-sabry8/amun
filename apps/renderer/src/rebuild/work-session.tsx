@@ -99,6 +99,10 @@ import {
 import { findNamed } from "../../../../packages/domain/src/work/flows.ts";
 import { reminderIntent } from "../../../../packages/domain/src/work/reminders.ts";
 import {
+  retryIntent,
+  retryTarget,
+} from "../../../../packages/domain/src/work/retry-request.ts";
+import {
   agentNews,
   delegationTask,
   factsFor,
@@ -420,6 +424,7 @@ interface Place {
     { kind: "same" | "add" | "remove"; text: string }[] | null | undefined;
   failure?: string | null | undefined;
   changedInNotion?: boolean | undefined;
+  sentAs?: string | undefined;
   content?: string | null | undefined;
   parent?:
     | { id: string; title: string | null; problem: string | null }
@@ -521,6 +526,7 @@ function PlanItem({
               {parent.title ? ` · ${parent.title}` : ""}
             </span>
           )}
+          {place?.sentAs && <span className="small muted">{place.sentAs}</span>}
           {place?.existing && (
             <span className="small" role="status">
               <span className="tag warn">Already there</span>{" "}
@@ -1599,6 +1605,36 @@ export function WorkSession({
         role: "firstmate",
         text: result.message,
       });
+      return;
+    }
+    // Asking in words to retry a failed item runs the same governed retry as
+    // the Retry button, under the same approval; Firstmate then reports it.
+    const retry =
+      !attachments.files.length && retryIntent(typed)
+        ? retryTarget(snapshot.plans, areaId, typed)
+        : null;
+    if (retry && retry.kind !== "none") {
+      await workAsync("message", {
+        workAreaId: areaId,
+        role: "you",
+        text: typed.trim(),
+      });
+      if (retry.kind === "retry")
+        bridge.send({
+          version: 1,
+          kind: "plan-publish",
+          planId: retry.planId,
+          retry: true,
+        });
+      else
+        await workAsync("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text:
+            retry.kind === "review"
+              ? "That plan changed after you approved it, so I cannot retry it. Please review and approve it again."
+              : "More than one item failed. Use the Retry button on the one you mean.",
+        });
       return;
     }
     // Files in the draft travel with this message.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adoPlanTarget,
+  adoPayloadNote,
   adoStep,
   adoUpdate,
   adoUpdateChange,
@@ -66,6 +67,67 @@ describe("Azure DevOps plan items", () => {
           "<ul><li>One</li><li>Two</li></ul>",
       },
     });
+  });
+  it("keeps acceptance criteria in the Description of a type without that field", () => {
+    const task = {
+      types: [
+        {
+          name: "Task",
+          fields: [field("System.Title"), field("System.Description")],
+        },
+        { name: "Epic", fields: [field("System.Title")] },
+      ],
+      areas: [],
+      iterations: [],
+    } as unknown as AzureProcessSchema;
+    const planned = item({
+      type: "Task",
+      description: "Do <it>",
+      acceptance: "One\nTwo & three",
+    });
+    // The approval binds the plan item's fields, which this leaves as they
+    // were, so a plan approved before this change stays approved.
+    const before = JSON.stringify(planned);
+    const step = adoStep(planned, task, "POCs");
+    expect(JSON.stringify(planned)).toBe(before);
+    expect(step.fields).toEqual({
+      "System.Title": "Invite <10> testers",
+      "System.Description":
+        "<p>Do &lt;it&gt;</p><p>Acceptance criteria</p><ul><li>One</li><li>Two &amp; three</li></ul>",
+    });
+    expect(
+      adoPayloadNote(planned, task, "POCs", undefined, { task: "Task" }),
+    ).toEqual({
+      problem: null,
+      sentAs: expect.stringMatching(
+        /Task in POCs has no Acceptance criteria field/,
+      ),
+    });
+    expect(
+      adoPayloadNote(
+        item({ type: "Task", description: "x" }),
+        task,
+        "POCs",
+        undefined,
+        {
+          task: "Task",
+        },
+      ),
+    ).toEqual({ problem: null, sentAs: null });
+    expect(() =>
+      adoStep(item({ type: "Epic", acceptance: "One" }), task, "POCs"),
+    ).toThrow(
+      /Epic in POCs has no Acceptance criteria field, so it would be lost/,
+    );
+    expect(
+      adoPayloadNote(
+        item({ type: "Epic", acceptance: "One" }),
+        task,
+        "POCs",
+        undefined,
+        {},
+      ),
+    ).toMatchObject({ problem: expect.stringMatching(/would be lost/) });
   });
   it("reads the labelled fields a model writes, not only the short names", () => {
     const step = adoStep(
@@ -455,6 +517,7 @@ describe("Notion plan items", () => {
       await target.write({ ...item({ body: "Hello" }), destination: "notion" }),
     ).toEqual({
       externalId: page,
+      parentId: destination.parentId,
       url: "https://www.notion.so/11111111222243338444555555555555",
     });
     expect(sent[0]).toMatchObject({

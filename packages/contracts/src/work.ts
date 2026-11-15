@@ -1001,6 +1001,8 @@ export const planPlacesResult = z.strictObject({
       failure: z.string().max(400).nullable().optional(),
       /** The page changed in Notion after Amun wrote it; nothing was sent. */
       changedInNotion: z.boolean().optional(),
+      /** How a field travels when the type has no field of its own for it. */
+      sentAs: z.string().max(400).optional(),
       /** The existing work item a new Azure DevOps item is created under. */
       parent: z
         .strictObject({

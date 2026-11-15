@@ -1,7 +1,10 @@
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
-import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
+import {
+  agentCatalog,
+  agentProfile,
+} from "../../../../packages/domain/src/work/agents.ts";
 import {
   rfpDetails,
   rfpFromRequest,
@@ -174,6 +177,8 @@ function Segmented<T extends string>({
 
 // ── Agents ───────────────────────────────────────────────────────────────────
 type AgentRow = Snapshot["agents"][number];
+const catalogId = "catalog:";
+const absent = (agent: AgentRow) => agent.id.startsWith(catalogId);
 const live = (agent: AgentRow) =>
   agent.state === "working" || agent.state === "waiting";
 function SpecialistCard({
@@ -211,11 +216,13 @@ function SpecialistPanel({
   position,
   total,
   onLink,
+  onAdded,
 }: {
   agent: AgentRow;
   position: number;
   total: number;
   onLink?(url: string): void;
+  onAdded?(id: string): void;
 }) {
   const [watch, setWatch] = useState(false);
   const profile = agentProfile(agent.role);
@@ -280,6 +287,7 @@ function SpecialistPanel({
         watch={watch}
         onWatch={setWatch}
         onLink={onLink}
+        onAdded={onAdded}
       />
     </section>
   );
@@ -289,13 +297,16 @@ function AgentControls({
   watch,
   onWatch,
   onLink,
+  onAdded,
 }: {
   agent: AgentRow;
   watch: boolean;
   onWatch(value: boolean): void;
   onLink?: ((url: string) => void) | undefined;
+  onAdded?: ((id: string) => void) | undefined;
 }) {
   const member = agent.kind !== "lead";
+  const notCreated = absent(agent);
   return (
     <div className="controls">
       <div className="row wrap">
@@ -307,22 +318,32 @@ function AgentControls({
         {member && !agent.enabled && (
           <span className="muted small">Not on your team</span>
         )}
-        <button
-          className="btn"
-          aria-pressed={watch}
-          onClick={() => onWatch(!watch)}
-        >
-          Watch
-        </button>
+        {!notCreated && (
+          <button
+            className="btn"
+            aria-pressed={watch}
+            onClick={() => onWatch(!watch)}
+          >
+            Watch
+          </button>
+        )}
         {member && (
           <button
             className={agent.enabled ? "btn quiet" : "btn"}
-            onClick={() =>
+            onClick={() => {
+              if (notCreated) {
+                void workAsync("add-agent", { description: agent.role }).then(
+                  (result) => {
+                    if (result.ok && result.ref) onAdded?.(result.ref);
+                  },
+                );
+                return;
+              }
               work("toggle-agent", {
                 agentId: agent.id,
                 enabled: !agent.enabled,
-              })
-            }
+              });
+            }}
           >
             {agent.enabled ? "Remove from team" : "Add to team"}
           </button>
@@ -371,8 +392,34 @@ export function Agents({
   const [selected, setSelected] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
   const lead = snapshot.agents.find((item) => item.kind === "lead");
-  const specialists = snapshot.agents.filter((item) => item.kind !== "lead");
+  const members = snapshot.agents.filter((item) => item.kind !== "lead");
+  // Every catalog specialist in catalog order (a placeholder when it is not in
+  // the workspace yet), then the agents the owner added themselves.
+  const specialists: AgentRow[] = [
+    ...agentCatalog.map(
+      (profile): AgentRow =>
+        members.find(
+          (item) => item.role.toLowerCase() === profile.name.toLowerCase(),
+        ) ?? {
+          id: catalogId + profile.name,
+          role: profile.name,
+          kind: "always_on",
+          launcherId: null,
+          state: "idle",
+          nowDoing: null,
+          output: "",
+          enabled: false,
+        },
+    ),
+    ...members.filter(
+      (item) =>
+        !agentCatalog.some(
+          (profile) => profile.name.toLowerCase() === item.role.toLowerCase(),
+        ),
+    ),
+  ];
   const chosen =
+    (selected && specialists.find((item) => item.id === selected)) ||
     (selected && snapshot.agents.find((item) => item.id === selected)) ||
     specialists.find((item) => item.role === "Product Manager") ||
     specialists[0] ||
@@ -476,6 +523,7 @@ export function Agents({
                   specialists.findIndex((item) => item.id === chosen.id) + 1
                 }
                 total={specialists.length}
+                onAdded={setSelected}
                 {...(onLink && { onLink })}
               />
             ))}

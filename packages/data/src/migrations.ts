@@ -1114,4 +1114,7 @@ ALTER TABLE library_outputs ADD COLUMN acceptance_at TEXT;`,
   // filled in as the owner's, which nobody recorded. Those rows have no known author.
   `ALTER TABLE library_output_versions ADD COLUMN author_known INTEGER NOT NULL DEFAULT 1;
 UPDATE library_output_versions SET author_known=0 WHERE version=1 AND author='owner';`,
+  // 42 · The Notion parent a page was created under, so a later update can
+  // tell the page is still in the destination when Notion does not say.
+  `ALTER TABLE plan_writes ADD COLUMN page_parent TEXT;`,
 ] as const;

@@ -28,6 +28,8 @@ export interface PlanReceipt {
   updated?: boolean | undefined;
   /** What a written page looked like afterwards, for a later conflict check. */
   version?: string | undefined;
+  /** The Notion parent a created page was written under. */
+  parentId?: string | undefined;
 }
 export interface PlanTarget {
   /** Creates the item. Throws when the outcome is a failure or uncertain. */
@@ -158,6 +160,7 @@ interface WriteRow {
   attempts: number;
   note: string | null;
   page_version: string | null;
+  page_parent: string | null;
 }
 interface Records {
   handle(input: unknown): unknown[];
@@ -378,7 +381,7 @@ export class PlanPublisher {
     const bare = (value: string) => value.replaceAll("-", "").toLowerCase();
     const rows = this.db
       .prepare(
-        `SELECT w.plan_id,w.item_id,w.marker,w.external_id,w.url,w.page_version,p.approved_json
+        `SELECT w.plan_id,w.item_id,w.marker,w.external_id,w.url,w.page_version,w.page_parent,p.approved_json
          FROM plan_writes w JOIN work_plans p ON p.id=w.plan_id
          WHERE w.destination='notion' AND w.state='created' AND w.external_id IS NOT NULL
          ORDER BY w.rowid DESC`,
@@ -390,6 +393,7 @@ export class PlanPublisher {
       external_id: string;
       url: string | null;
       page_version: string | null;
+      page_parent: string | null;
       approved_json: string | null;
     }[];
     const rowsOfPage = rows.filter(
@@ -421,6 +425,8 @@ export class PlanPublisher {
       itemId: latest.item_id,
       marker,
       version: latest.page_version,
+      // The earliest write created the page, so its parent is the creation one.
+      parentId: rowsOfPage.at(-1)!.page_parent,
       url: latest.url,
       title,
       body: field("body", "description") ?? title,
@@ -443,7 +449,7 @@ export class PlanPublisher {
     const next = { ...row, ...patch };
     this.db
       .prepare(
-        "UPDATE plan_writes SET state=?,external_id=?,url=?,attempts=?,note=?,page_version=? WHERE plan_id=? AND item_id=?",
+        "UPDATE plan_writes SET state=?,external_id=?,url=?,attempts=?,note=?,page_version=?,page_parent=? WHERE plan_id=? AND item_id=?",
       )
       .run(
         next.state,
@@ -452,6 +458,7 @@ export class PlanPublisher {
         next.attempts,
         next.note,
         next.page_version,
+        next.page_parent,
         planId,
         itemId,
       );
@@ -552,6 +559,8 @@ export class PlanPublisher {
         url: receipt.url ?? null,
         note: receipt.note ?? null,
         page_version: receipt.version ?? null,
+        // An update keeps the parent recorded when the page was created.
+        page_parent: receipt.parentId ?? row.page_parent,
       });
       results.push({
         id: row.item_id,
@@ -643,6 +652,15 @@ export class PlanPublisher {
               break;
             }
           } catch (error) {
+            // The item itself does not fit the destination: say that, not
+            // that the check could not run. Nothing was sent.
+            if (error instanceof PlanNotSent) {
+              this.set(planId, row.item_id, {
+                note: error.message.slice(0, 300),
+              });
+              results.push({ id: row.item_id, state: "failed" });
+              break;
+            }
             const reason = duplicateCheckReason(error);
             console.error("plan duplicate check failed:", redactedError(error));
             this.set(planId, row.item_id, {

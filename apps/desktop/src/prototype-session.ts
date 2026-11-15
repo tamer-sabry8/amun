@@ -19,7 +19,7 @@ export class PrototypeSession {
   constructor(
     private db: Database.Database,
     private root: string,
-    private selected: () => string | null,
+    private selected: (product: string) => string | null,
     private deliver: (id: string, message: string) => Promise<unknown>,
   ) {}
   async close() {
@@ -41,7 +41,7 @@ export class PrototypeSession {
     const objective = current(),
       prd = objective?.prd;
     const active = () =>
-      this.selected() === cmd.product &&
+      this.selected(cmd.product) === cmd.product &&
       docs.prd(cmd.product, cmd.objective)?.version === cmd.revision;
     if (!active() || !prd?.approved || !objective?.understanding?.approved)
       throw Error("Review the current approved PRD first.");

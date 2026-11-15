@@ -5,6 +5,7 @@ import { WorkStore } from "../src/work-store.ts";
 import {
   PlanBlocked,
   PlanChanged,
+  PlanNotSent,
   PlanPublisher,
   planItemKey,
   sameItem,
@@ -455,6 +456,20 @@ describe("a second plan for something already published", () => {
     expect(plan(id).results).toEqual([
       expect.objectContaining({ state: "failed" }),
     ]);
+  });
+
+  it("shows a check that cannot fit the item as its own reason, not as an unchecked item", async () => {
+    ado.existing = async () => {
+      throw new PlanNotSent(
+        "Task in POCs has no Acceptance criteria or Description field, so it would be lost.",
+      );
+    };
+    const id = approved(story);
+    await publisher.publish(id);
+    expect(ado.writes).toEqual([]);
+    const note = publisher.writes(id)[0]!.note!;
+    expect(note).toMatch(/^Task in POCs has no Acceptance criteria/);
+    expect(note).not.toMatch(/Could not check/);
   });
 
   it("still creates a different title, and says before approval what exists", async () => {

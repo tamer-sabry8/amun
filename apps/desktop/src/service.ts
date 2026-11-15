@@ -144,8 +144,10 @@ import {
   PlanNotSent,
   PlanPublisher,
 } from "../../../packages/data/src/plan-publication.ts";
+import { productScope } from "./product-scope.ts";
 import {
   adoPlanTarget,
+  adoPayloadNote,
   adoUpdate,
   adoUpdateChange,
   type AdoTypeNames,
@@ -384,7 +386,12 @@ async function adoTypeInfo(workAreaId: string | null) {
         task: backlog?.task ?? learned?.task,
       };
   if (backlog?.story) connection.learn(names);
-  return { project: connection.source.project, names, schema };
+  return {
+    project: connection.source.project,
+    collection: connection.source.collection,
+    names,
+    schema,
+  };
 }
 // An approved plan is written to its destinations here. Each destination
 // reuses its existing connection; a missing one blocks that item only.
@@ -1036,6 +1043,9 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
+  // The new shell never sets the legacy "Product context", so renderer
+  // requests are checked against the products that exist instead.
+  const knownProduct = productScope(workspace, () => closed);
   const repositoryCredential = async (kind: "ado" | "github", url: string) => {
     const conn = authMetadata
       .list()
@@ -1138,7 +1148,7 @@ process.parentPort?.on("message", (event) => {
   const prototypes = new PrototypeSession(
     workspace,
     workspaceRoot!,
-    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    knownProduct,
     async (id, text) => {
       const releases = await FirstmateReleases.open(
         workspaceRoot!,
@@ -1426,7 +1436,7 @@ process.parentPort?.on("message", (event) => {
   const chatSession = new ChatSession(
     chats,
     supervisor,
-    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    knownProduct,
     (event) => port.postMessage(event),
   );
   let backendOpening = false;
@@ -1596,7 +1606,7 @@ process.parentPort?.on("message", (event) => {
       const sources =
         context?.productId === request.productId
           ? context.sources
-          : readOnlySprints
+          : knownProduct(request.productId)
             ? workspaceService.productSources(request.productId)
             : null;
       if (!sources) return;
@@ -1654,9 +1664,7 @@ process.parentPort?.on("message", (event) => {
               project,
               azureTransport(collection, secret),
             ),
-            () =>
-              workspaceService.snapshot().preferences.productId ===
-              request.productId,
+            () => knownProduct(request.productId) !== null,
           );
         if (request.action === "schema")
           return { ...meta, view: "schema", schema: await d.processSchema() };
@@ -1744,13 +1752,7 @@ process.parentPort?.on("message", (event) => {
           return { ...meta, view: "error", message };
         })
         .then((reply) => {
-          if (
-            !closed &&
-            (readOnlySprints ||
-              workspaceService.snapshot().productContext?.productId ===
-                request.productId)
-          )
-            port.postMessage(reply);
+          if (knownProduct(request.productId)) port.postMessage(reply);
         });
     } else if (message.data?.kind === "output-preview") {
       const parsed = previewCommand.safeParse(message.data);
@@ -1819,10 +1821,7 @@ process.parentPort?.on("message", (event) => {
               : "Prototype output is unavailable. Check the Designer run and try again.",
         }))
         .then((r) => {
-          if (
-            !closed &&
-            workspaceService.snapshot().preferences.productId === cmd.product
-          ) {
+          if (knownProduct(cmd.product)) {
             port.postMessage(r);
             port.postMessage(workspaceService.snapshot());
           }
@@ -1831,8 +1830,7 @@ process.parentPort?.on("message", (event) => {
       const parsed = deliveryCommand.safeParse(message.data);
       if (!parsed.success) return;
       const cmd = parsed.data,
-        current = () =>
-          closed ? null : workspaceService.snapshot().preferences.productId;
+        current = () => knownProduct(cmd.product);
       void implementationRun(
         cmd,
         workspace,
@@ -1866,7 +1864,7 @@ process.parentPort?.on("message", (event) => {
               number,
             },
             workspace,
-            workspaceService.snapshot().productContext?.sources ?? [],
+            workspaceService.productSources(cmd.product),
             current,
             repositoryCredential,
           );
@@ -1896,12 +1894,11 @@ process.parentPort?.on("message", (event) => {
     } else if (message.data?.kind === "pr-workspace") {
       const parsed = prCommand.safeParse(message.data);
       if (!parsed.success) return;
-      const product = () =>
-        closed ? null : workspaceService.snapshot().preferences.productId;
+      const product = () => knownProduct(parsed.data.product);
       void readPullWorkspace(
         parsed.data,
         workspace,
-        workspaceService.snapshot().productContext?.sources ?? [],
+        workspaceService.productSources(parsed.data.product),
         product,
         repositoryCredential,
       )
@@ -1924,10 +1921,10 @@ process.parentPort?.on("message", (event) => {
       const parsed = codeChangeCommand.safeParse(message.data);
       if (!parsed.success) return;
       const cmd = parsed.data;
-      const product = () =>
-        closed ? null : workspaceService.snapshot().preferences.productId;
+      const product = () => knownProduct(cmd.product);
       void (async () => {
-        if (product() !== cmd.product) throw new CodeChangeError("");
+        if (product() !== cmd.product)
+          throw new CodeChangeError("That project is no longer available.");
         let note = "";
         try {
           if (cmd.action === "approve")
@@ -1952,9 +1949,18 @@ process.parentPort?.on("message", (event) => {
           cards: await codeChanges.cards(cmd.product),
         };
       })()
-        .catch(() => null)
+        .catch((error: unknown) => ({
+          kind: "code-change-result",
+          id: cmd.id,
+          product: cmd.product,
+          message:
+            error instanceof CodeChangeError && error.message
+              ? redactor.text(error.message).slice(0, 512)
+              : "Code changes could not be loaded. Please try again.",
+          cards: [],
+        }))
         .then((r) => {
-          if (r && product() === cmd.product) port.postMessage(r);
+          if (product() === cmd.product) port.postMessage(r);
         });
     } else if (message.data?.kind === "firstmate-chat") {
       void chatSession.handle(message.data);
@@ -1979,8 +1985,10 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       const cmd = parsed.data;
       const active = () =>
-        !closed &&
-        workspaceService.snapshot().preferences.productId === cmd.productId;
+        cmd.productId === null
+          ? !closed &&
+            workspaceService.snapshot().preferences.productId === null
+          : knownProduct(cmd.productId) !== null;
       const reply = (fields: Record<string, unknown>) => {
         if (active())
           port.postMessage({
@@ -2533,6 +2541,19 @@ process.parentPort?.on("message", (event) => {
                   null)
                 : null;
             const note = written.find((entry) => entry.id === item.id)?.note;
+            // What a new work item will really hold, so approval covers it.
+            const payload =
+              destination === "ado" &&
+              info?.schema &&
+              !adoWorkItemOf(item.fields).named
+                ? adoPayloadNote(
+                    { ...item, marker: "", destination },
+                    info.schema,
+                    info.project,
+                    info.collection,
+                    info.names,
+                  )
+                : null;
             const update = updates[plan.items.indexOf(item)] ?? null;
             const parent = parents[plan.items.indexOf(item)] ?? null;
             const page =
@@ -2572,6 +2593,7 @@ process.parentPort?.on("message", (event) => {
                   ? note
                   : null,
               ...(parent ? { parent } : {}),
+              ...(payload?.sentAs ? { sentAs: payload.sentAs } : {}),
               ...(page ? { kind: "page update", change } : {}),
               ...(content !== null ? { content } : {}),
               ...(update
@@ -2597,23 +2619,25 @@ process.parentPort?.on("message", (event) => {
                     : place,
               problem: update?.problem
                 ? update.problem
-                : parent?.problem
-                  ? parent.problem
-                  : page
-                    ? !receipt
-                      ? "Amun did not create this page, so it will not change it."
-                      : !receipt.version
-                        ? "Amun did not record how this page looked when it wrote it, so it will not change it."
-                        : !result
-                          ? "An update needs the new content, or the lines to add, but not both."
-                          : null
-                    : place
-                      ? null
-                      : destination === "ado"
-                        ? "No Azure DevOps project is chosen for this work yet."
-                        : destination === "notion"
-                          ? "No Notion destination is chosen yet."
-                          : `Publishing to ${trackerName(destination)} is not available yet.`,
+                : payload?.problem
+                  ? payload.problem
+                  : parent?.problem
+                    ? parent.problem
+                    : page
+                      ? !receipt
+                        ? "Amun did not create this page, so it will not change it."
+                        : !receipt.version
+                          ? "Amun did not record how this page looked when it wrote it, so it will not change it."
+                          : !result
+                            ? "An update needs the new content, or the lines to add, but not both."
+                            : null
+                      : place
+                        ? null
+                        : destination === "ado"
+                          ? "No Azure DevOps project is chosen for this work yet."
+                          : destination === "notion"
+                            ? "No Notion destination is chosen yet."
+                            : `Publishing to ${trackerName(destination)} is not available yet.`,
             };
           }),
         });

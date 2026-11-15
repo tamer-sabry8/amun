@@ -4,6 +4,7 @@ import { offerTurns } from "../src/rebuild/offer-turns.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
+import { agentCatalog } from "../../../packages/domain/src/work/agents.ts";
 import { leaksRuntimeVocabulary } from "../../../packages/domain/src/work/shell.ts";
 import { CodeChangeCards } from "../src/rebuild/code-change-cards.tsx";
 import { Island, Sidebar } from "../src/rebuild/chrome.tsx";
@@ -751,9 +752,16 @@ describe("destinations", () => {
     );
     const plain = text(html);
     expect(plain).toContain("Lead Agent");
-    expect(plain).toContain("3 day-one specialists");
-    expect(plain).toContain("2 of 3 selected");
-    expect(plain).toContain("Specialist 02 of 03 · Dispatched by Firstmate");
+    const total = agentCatalog.length;
+    const position =
+      agentCatalog.findIndex((item) => item.name === "Product Manager") + 1;
+    expect(plain).toContain(`${total} day-one specialists`);
+    expect(plain).toContain(`2 of ${total} selected`);
+    expect(plain).toContain(
+      `Specialist ${String(position).padStart(2, "0")} of ${total} · Dispatched by Firstmate`,
+    );
+    // Specialists missing from this profile still appear, dimmed.
+    expect(html.match(/class="rb-spec off"/g)).toHaveLength(total - 2);
     expect(plain).toContain("PR/FAQ · OST · RICE · PRD");
     expect(html).toMatch(/aria-label="Product Manager"/);
     expect(plain).toContain("Amazon Working Backwards PR/FAQ");

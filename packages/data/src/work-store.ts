@@ -6,6 +6,7 @@ import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
 import { planItemKey, sameItem } from "./plan-publication.ts";
 import { WorkReminders } from "./work-reminders.ts";
 import { searchContent } from "./content-search.ts";
+import { agentCatalog } from "../../domain/src/work/agents.ts";
 import { Redactor } from "../../security/src/redaction.ts";
 import {
   setupState,
@@ -2740,6 +2741,10 @@ function titleFrom(text: string, files: string[]) {
 }
 /** "A researcher who reads competitor sites" → "Researcher". */
 function roleFrom(description: string) {
+  const named = agentCatalog.find(
+    (agent) => agent.name.toLowerCase() === description.trim().toLowerCase(),
+  );
+  if (named) return named.name;
   const words = description
     .trim()
     .replace(/^(add|create|i need|i want|give me)\s+/i, "")
