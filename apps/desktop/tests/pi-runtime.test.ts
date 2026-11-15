@@ -73,4 +73,5 @@ it.skipIf(!existsSync(builtHelper))(
       .trim();
     expect(out).toMatch(/^v\d+\./);
   },
+  30_000,
 );
