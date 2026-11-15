@@ -21,6 +21,7 @@ it("runs only the supported scoped JSON check under a lock and returns no raw cr
         "--provider",
         "openrouter",
         "--json",
+        "--no-refresh",
       ]);
       expect(options.env.PI_CODING_AGENT_DIR).toBe(root);
       expect(options.env.OPENROUTER_API_KEY).toBeUndefined();
@@ -34,6 +35,16 @@ it("runs only the supported scoped JSON check under a lock and returns no raw cr
       await checkPiReadiness("/safe/node", "/safe/pi", root, "arbitrary", run),
     ).toBe("error");
     expect(calls).toBe(1);
+    expect(
+      await checkPiReadiness(
+        "/safe/node",
+        "/safe/pi",
+        root,
+        "github-copilot",
+        async () =>
+          '{"status":"ready","provider":"github-copilot","authType":"oauth"}',
+      ),
+    ).toBe("configured");
     expect(
       await checkPiReadiness(
         "/safe/node",
