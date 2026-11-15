@@ -142,10 +142,12 @@ function PrdEditor({
   objective,
   productId,
   onSelection,
+  embedded,
 }: {
   objective: Objective;
   productId: string;
   onSelection: (s: string) => void;
+  embedded?: boolean | undefined;
 }) {
   const prd = objective.prd;
   const [draft, setDraft] = useState(prd?.markdown ?? "");
@@ -217,11 +219,40 @@ function PrdEditor({
     setVisual(!visual);
     onSelection("");
   };
+  const fileImport = (
+    <label className={embedded ? "btn" : undefined}>
+      {embedded ? "Choose a file" : "Import PRD Markdown"}
+      <input
+        type="file"
+        aria-label={embedded ? "Add a source document" : undefined}
+        accept=".md,.markdown,.txt"
+        onChange={async (e) => {
+          const f = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          if (!f) return;
+          if (f.size > 100000) {
+            setWarning("Choose a Markdown file up to 100 KB.");
+            return;
+          }
+          const value = await f.text();
+          setVisual(false);
+          setWarning(parsePrd(value).warnings.join(" "));
+          edit(value);
+        }}
+      />
+    </label>
+  );
   return (
     <section onBlur={flush}>
-      <h3>PRD editor</h3>
+      <h3>{embedded ? "PRD" : "PRD editor"}</h3>
       <button onClick={convert}>
-        {visual ? "Markdown mode" : "Visual mode"}
+        {visual
+          ? embedded
+            ? "Edit as text"
+            : "Markdown mode"
+          : embedded
+            ? "Edit as a document"
+            : "Visual mode"}
       </button>
       {warning && <p role="alert">{warning}</p>}
       {visual ? (
@@ -233,9 +264,9 @@ function PrdEditor({
         />
       ) : (
         <label>
-          PRD Markdown
+          {embedded ? "Text of the PRD" : "PRD Markdown"}
           <textarea
-            aria-label="PRD Markdown"
+            aria-label={embedded ? "Text of the PRD" : "PRD Markdown"}
             className="prd-body"
             value={draft}
             onChange={(e) => edit(e.target.value)}
@@ -273,26 +304,14 @@ function PrdEditor({
           Use latest saved version
         </button>
       )}
-      <label>
-        Import PRD Markdown
-        <input
-          type="file"
-          accept=".md,.markdown,.txt"
-          onChange={async (e) => {
-            const f = e.currentTarget.files?.[0];
-            e.currentTarget.value = "";
-            if (!f) return;
-            if (f.size > 100000) {
-              setWarning("Choose a Markdown file up to 100 KB.");
-              return;
-            }
-            const value = await f.text();
-            setVisual(false);
-            setWarning(parsePrd(value).warnings.join(" "));
-            edit(value);
-          }}
-        />
-      </label>
+      {embedded ? (
+        <div className="rb-filepick">
+          <span className="muted small">Add a source document</span>
+          {fileImport}
+        </div>
+      ) : (
+        fileImport
+      )}
       <button
         disabled={!draft}
         onClick={() => {
@@ -306,11 +325,14 @@ function PrdEditor({
           setTimeout(() => URL.revokeObjectURL(url), 2000);
         }}
       >
-        Export Markdown
+        {embedded ? "Download a copy" : "Export Markdown"}
       </button>
       {prd && (
         <details>
-          <summary>Version history ({prd.history.length})</summary>
+          <summary>
+            {embedded ? "Earlier versions" : "Version history"} (
+            {prd.history.length})
+          </summary>
           {prd.history.map((v) => (
             <details key={v.version}>
               <summary>Version {v.version}</summary>
@@ -327,11 +349,13 @@ export function PrdWorkspace({
   openPreview,
   mode,
   setMode,
+  embedded,
 }: {
   context: Context;
   mode: string;
   setMode: (s: string) => void;
   openPreview: (url: string) => void;
+  embedded?: boolean | undefined;
 }) {
   const [difficulty, level] = useState("standard"),
     [chosen, choose] = useState(""),
@@ -392,21 +416,25 @@ export function PrdWorkspace({
           ))}
         </select>
       </label>
-      <label>
-        Authoring difficulty
-        <select value={difficulty} onChange={(e) => level(e.target.value)}>
-          <option>standard</option>
-          <option>complex</option>
-        </select>
-      </label>
-      <label>
-        Firstmate model
-        <select value={model} onChange={(e) => chooseModel(e.target.value)}>
-          {context.allowedModels.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-      </label>
+      {!embedded && (
+        <>
+          <label>
+            Authoring difficulty
+            <select value={difficulty} onChange={(e) => level(e.target.value)}>
+              <option>standard</option>
+              <option>complex</option>
+            </select>
+          </label>
+          <label>
+            Firstmate model
+            <select value={model} onChange={(e) => chooseModel(e.target.value)}>
+              {context.allowedModels.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       {prd && (
         <p aria-label="PRD approval status">
           {prd.approved
@@ -529,6 +557,7 @@ export function PrdWorkspace({
             objective={objective}
             productId={context.productId}
             onSelection={select}
+            embedded={embedded}
           />
           {objective.links.length > 0 && (
             <details>

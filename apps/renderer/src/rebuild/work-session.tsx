@@ -2512,7 +2512,7 @@ export function WorkSession({
               )}
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
-                  <div className="legacy-surface" style={{ maxWidth: "none" }}>
+                  <div className="rb-embedded">
                     {pane.kind === "prd" ? (
                       <Suspense
                         fallback={<p role="status">Opening the PRD…</p>}
@@ -2523,12 +2523,14 @@ export function WorkSession({
                           mode="Write"
                           setMode={() => undefined}
                           openPreview={() => undefined}
+                          embedded
                         />
                       </Suspense>
                     ) : (
                       <Backlog
                         key={workspace.productContext.productId}
                         context={workspace.productContext}
+                        embedded
                       />
                     )}
                   </div>

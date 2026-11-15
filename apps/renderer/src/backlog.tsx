@@ -43,7 +43,13 @@ function Choice({
     </label>
   );
 }
-export function Backlog({ context }: { context: Context }) {
+export function Backlog({
+  context,
+  embedded,
+}: {
+  context: Context;
+  embedded?: boolean | undefined;
+}) {
   const sources = context.sources.filter((s) => s.kind === "ado");
   const mapped = sources.map((s) => s.id);
   const [sourceId, setSource] = useState(() =>
@@ -119,7 +125,7 @@ export function Backlog({ context }: { context: Context }) {
       {sources.length ? (
         <>
           <Choice
-            label="Azure project"
+            label={embedded ? "Project" : "Azure project"}
             options={sources.map((s) => ({ id: s.id, name: s.title }))}
             value={sourceId}
             onChange={(id) => {
@@ -140,6 +146,7 @@ export function Backlog({ context }: { context: Context }) {
           {sources.some((s) => s.id === sourceId) && (
             <TeamBoard
               context={context}
+              embedded={embedded}
               key={sourceId}
               sourceId={sourceId}
               productId={context.productId}
@@ -159,7 +166,9 @@ function TeamBoard({
   context,
   sourceId,
   productId,
+  embedded,
 }: {
+  embedded?: boolean | undefined;
   context: Context;
   sourceId: string;
   productId: string;
@@ -282,9 +291,11 @@ function TeamBoard({
           send("teams");
         }}
       >
-        Load teams
+        {embedded ? "Find teams" : "Load teams"}
       </button>
-      <button onClick={() => send("schema")}>Load process details</button>
+      <button onClick={() => send("schema")}>
+        {embedded ? "Show how this project works" : "Load process details"}
+      </button>
       {schema && (
         <details open>
           <summary>{schema.process ?? "Project process"}</summary>
@@ -312,7 +323,7 @@ function TeamBoard({
       )}
       {teams.length > 0 && (
         <Choice
-          label="Azure team"
+          label={embedded ? "Team" : "Azure team"}
           options={teams}
           value={team}
           onChange={(id) => {
@@ -356,7 +367,7 @@ function TeamBoard({
               send("cards", { team, level });
             }}
           >
-            Load work items
+            {embedded ? "Show work items" : "Load work items"}
           </button>
         </>
       )}

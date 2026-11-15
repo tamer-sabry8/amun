@@ -207,6 +207,21 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     });
     await shot(page, "07-work-session");
 
+    // PRD and Backlog panes use the shell's own look, not the earlier workspace.
+    await page.getByRole("button", { name: "PRD", exact: true }).click();
+    await expect(page.locator(".rb-embedded")).toBeVisible();
+    await expect(page.locator(".legacy-surface")).toHaveCount(0);
+    await expect(page.getByText("Start a Firstmate interview")).toBeVisible();
+    await shot(page, "07a-prd-pane");
+    await page.getByRole("button", { name: "Close the document" }).click();
+    await page.getByRole("button", { name: "Backlog", exact: true }).click();
+    await expect(
+      page.getByRole("form", { name: "Connect an Azure DevOps project" }),
+    ).toBeVisible();
+    await shot(page, "07b-backlog-pane");
+    await scan(page, "backlog pane");
+    await page.getByRole("button", { name: "Close the document" }).click();
+
     // Document pane: sidebar collapses, divider resizes, expand and restore
     await page.getByRole("button", { name: "New document" }).click();
     const doc = page.getByRole("region", { name: "Untitled" });
