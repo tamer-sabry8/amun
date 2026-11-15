@@ -6,8 +6,11 @@ import {
   isCommitted,
   memoryUpdate,
   objectiveProgress,
+  filterRfps,
   rfpCard,
+  rfpDrop,
   rfpHandoff,
+  rfpOwners,
   route,
   scopeCheck,
   syncLabel,
@@ -273,6 +276,39 @@ describe("RFP tracking and handoff (F7)", () => {
     deliveryProjectId: null,
     lossReason: null,
     ...extra,
+  });
+  it("filters a board by text, owner and stage, and lists owners once", () => {
+    const list = [
+      rfp({ id: "a", client: "DMT", responseOwner: "Sara" }),
+      rfp({ id: "b", stage: "won", accountOwner: "Sara", presales: " Omar " }),
+      rfp({ id: "c", client: "Ministry" }),
+    ];
+    const name = (id: string) =>
+      ({ a: "Smart Inspection", b: "Fleet", c: "Roads" })[id] ?? "";
+    expect(filterRfps(list, { name }).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(
+      filterRfps(list, { name, text: " inspect" }).map((r) => r.id),
+    ).toEqual(["a"]);
+    expect(filterRfps(list, { name, text: "dmt" }).map((r) => r.id)).toEqual([
+      "a",
+    ]);
+    expect(filterRfps(list, { name, owner: "Sara" }).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(
+      filterRfps(list, { name, owner: "Sara", stage: "won" }).map((r) => r.id),
+    ).toEqual(["b"]);
+    expect(rfpOwners(list)).toEqual(["Omar", "Sara"]);
+  });
+  it("a drop moves like the Stage control but never hands to delivery", () => {
+    expect(rfpDrop("received", "received")).toBe("none");
+    expect(rfpDrop("received", "won")).toBe("move");
+    expect(rfpDrop("won", "handed_to_delivery")).toBe("use_handoff");
   });
   it("counts down and flags a missing owner", () => {
     expect(rfpCard(rfp(), now)).toMatchObject({

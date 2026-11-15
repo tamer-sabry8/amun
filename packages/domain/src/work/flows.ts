@@ -243,6 +243,55 @@ export interface Rfp {
   deliveryProjectId: string | null;
   lossReason: string | null;
 }
+/** Owners an RFP can be filtered by, each listed once. */
+export function rfpOwners(rfps: readonly Rfp[]): string[] {
+  const names = new Set<string>();
+  for (const rfp of rfps)
+    for (const owner of [rfp.responseOwner, rfp.accountOwner, rfp.presales])
+      if (owner?.trim()) names.add(owner.trim());
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+/** Search text, owner and stage narrow a board; empty values match everything. */
+export function filterRfps<T extends Rfp>(
+  rfps: readonly T[],
+  filter: {
+    text?: string;
+    owner?: string;
+    stage?: RfpStage | "";
+    name(id: string): string;
+  },
+): T[] {
+  const text = (filter.text ?? "").trim().toLowerCase();
+  return rfps.filter((rfp) => {
+    if (filter.stage && rfp.stage !== filter.stage) return false;
+    if (
+      filter.owner &&
+      ![rfp.responseOwner, rfp.accountOwner, rfp.presales].some(
+        (owner) => owner?.trim() === filter.owner,
+      )
+    )
+      return false;
+    if (!text) return true;
+    return [
+      filter.name(rfp.id),
+      rfp.client,
+      rfp.responseOwner,
+      rfp.accountOwner,
+      rfp.presales,
+    ].some((value) => value?.toLowerCase().includes(text));
+  });
+}
+/**
+ * What dropping a card on a column does. It is the same action as the Stage
+ * control; Handed to delivery is only reached through Hand to delivery.
+ */
+export function rfpDrop(
+  from: RfpStage,
+  to: RfpStage,
+): "none" | "move" | "use_handoff" {
+  if (from === to) return "none";
+  return to === "handed_to_delivery" ? "use_handoff" : "move";
+}
 const day = 86_400_000;
 export function rfpCard(rfp: Rfp, now: number) {
   const open = ![

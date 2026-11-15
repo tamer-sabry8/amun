@@ -274,7 +274,11 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
         .getByText("Smart Inspection for DMT"),
     ).toBeVisible();
     await expect(page.getByText("No response owner").first()).toBeVisible();
-    await page.getByLabel("Stage").selectOption("won");
+    await page.getByLabel("Search RFPs").fill("zzz-nothing");
+    await expect(page.getByText("No RFPs match.")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByText("No RFPs match.")).toHaveCount(0);
+    await page.getByLabel(/^Stage/).selectOption("won");
     const handToDelivery = page.getByRole("button", {
       name: "Hand to delivery",
       exact: true,

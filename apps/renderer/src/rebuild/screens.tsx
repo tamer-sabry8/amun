@@ -32,9 +32,12 @@ import {
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
 import {
+  filterRfps,
   rfpCard,
   rfpClosed,
+  rfpDrop,
   rfpHandoff,
+  rfpOwners,
   rfpStageLabels,
   rfpStages,
   rfpAuthoringBoundary,
@@ -1644,9 +1647,19 @@ export function Rfps({
   const [over, setOver] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const allowed = new Set(areasInScope(snapshot).map((area) => area.id));
-  const rfps = snapshot.rfps.filter((rfp) => allowed.has(rfp.id));
-  const current = rfps.find((rfp) => rfp.id === selected) ?? null;
+  const tracked = snapshot.rfps.filter((rfp) => allowed.has(rfp.id));
   const name = (id: string) => areaOf(snapshot, id)?.name ?? "RFP";
+  const [search, setSearch] = useState("");
+  const [owner, setOwner] = useState("");
+  const [stageFilter, setStageFilter] = useState<RfpStage | "">("");
+  const rfps = filterRfps(tracked, {
+    text: search,
+    owner,
+    stage: stageFilter,
+    name,
+  });
+  const filtering = Boolean(search.trim() || owner || stageFilter);
+  const current = tracked.find((rfp) => rfp.id === selected) ?? null;
   const move = async (id: string, stage: RfpStage) => {
     if (stage === "handed_to_delivery") {
       const result = await workAsync("handoff-rfp", { areaId: id });
@@ -1762,6 +1775,54 @@ export function Rfps({
         </>
       }
     >
+      <div className="row wrap" style={{ marginBottom: 12 }}>
+        <input
+          type="text"
+          className="grow"
+          aria-label="Search RFPs"
+          placeholder="Search RFPs by name, client or owner"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <select
+          aria-label="Filter by owner"
+          value={owner}
+          onChange={(event) => setOwner(event.target.value)}
+        >
+          <option value="">Any owner</option>
+          {rfpOwners(tracked).map((person) => (
+            <option key={person} value={person}>
+              {person}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by stage"
+          value={stageFilter}
+          onChange={(event) =>
+            setStageFilter(event.target.value as RfpStage | "")
+          }
+        >
+          <option value="">Any stage</option>
+          {[...rfpStages, ...rfpClosed].map((stage) => (
+            <option key={stage} value={stage}>
+              {rfpStageLabels[stage]}
+            </option>
+          ))}
+        </select>
+        {filtering && (
+          <button
+            className="link small"
+            onClick={() => {
+              setSearch("");
+              setOwner("");
+              setStageFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
       <div className="rb-board">
         {rfpStages.map((stage) => (
           <section
@@ -1776,7 +1837,17 @@ export function Rfps({
             onDrop={(event) => {
               event.preventDefault();
               setOver(null);
-              void move(event.dataTransfer.getData("text/plain"), stage);
+              const id = event.dataTransfer.getData("text/plain");
+              const dropped = tracked.find((rfp) => rfp.id === id);
+              if (!dropped) return;
+              const action = rfpDrop(dropped.stage, stage);
+              if (action === "move") void move(id, stage);
+              if (action === "use_handoff") {
+                setSelected(id);
+                setNote(
+                  "Use Hand to delivery on the RFP card once the proposal is signed and the BRD is approved.",
+                );
+              }
             }}
           >
             <header>
@@ -1789,9 +1860,14 @@ export function Rfps({
           </section>
         ))}
       </div>
-      {!rfps.length && (
+      {!tracked.length && (
         <p className="muted">
           No RFPs are being tracked. Tell Firstmate about one below.
+        </p>
+      )}
+      {tracked.length > 0 && !rfps.length && (
+        <p className="muted" role="status">
+          No RFPs match. Clear the filters to see them all.
         </p>
       )}
       <button
