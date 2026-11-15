@@ -192,6 +192,47 @@ export class BoardDiscovery {
       return x.path;
     });
   }
+  /** Read-only: the team's current and upcoming sprints, soonest first. */
+  async sprints(team: string, limit = 12) {
+    const found: {
+      id: string;
+      name: string;
+      path: string;
+      start: string;
+      finish: string;
+    }[] = [];
+    const values = await this.list(
+      this.project +
+        "/" +
+        azurePathSegment(team) +
+        "/_apis/work/teamsettings/iterations",
+      true,
+    );
+    for (const x of values) {
+      if (
+        !record(x) ||
+        typeof x.id !== "string" ||
+        typeof x.name !== "string" ||
+        typeof x.path !== "string"
+      )
+        throw Error("Invalid team iteration");
+      const a = record(x.attributes) ? x.attributes : {};
+      if (
+        a.timeFrame === "past" ||
+        typeof a.startDate !== "string" ||
+        typeof a.finishDate !== "string"
+      )
+        continue;
+      found.push({
+        id: x.id,
+        name: x.name,
+        path: x.path,
+        start: a.startDate,
+        finish: a.finishDate,
+      });
+    }
+    return found.sort((a, b) => a.start.localeCompare(b.start)).slice(0, limit);
+  }
   async levels(team: string, refresh = false) {
     return (
       await this.list(

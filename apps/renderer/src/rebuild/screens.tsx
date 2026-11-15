@@ -17,6 +17,8 @@ import {
   releaseGroups,
   riceBadge,
   roadmapViews,
+  adoSprints,
+  sprintCommand,
   sprintOverview,
   sprintRow,
   sprintTabs,
@@ -45,6 +47,7 @@ import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentsPanel } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
+import { useAzureSprints } from "./sprint-azure.ts";
 import { BrowserPane } from "./work-session.tsx";
 import { council as councilCommand, work, workAsync } from "./store.ts";
 import {
@@ -878,12 +881,14 @@ export function Sprints({
   snapshot,
   now,
   model,
+  productContext = null,
   onWork,
   onReview,
 }: {
   snapshot: Snapshot;
   now: number;
   model: string | null;
+  productContext?: Parameters<typeof useAzureSprints>[0];
   onWork(areaId: string, message?: string): void;
   onReview(planId: string, workAreaId: string | null): void;
 }) {
@@ -906,7 +911,21 @@ export function Sprints({
       ...sprint,
       workAreaName: areaOf(snapshot, sprint.workAreaId)?.name ?? "",
     }));
-  const current = sprints.find((sprint) => sprint.id === sprintId) ?? null;
+  const azure = useAzureSprints(productContext, setNote);
+  const azureArea = areas.find(
+    (area) => area.productId === azure.productId && azure.productId,
+  );
+  const fromAzure =
+    azure.reply && azureArea && (!areaId || areaId === azureArea.id)
+      ? adoSprints(
+          azure.reply.sprints,
+          azure.reply.team.name,
+          azureArea.id,
+          azureArea.name,
+        ).map((sprint) => ({ ...sprint, stories: [], out: [], capacity: null }))
+      : [];
+  const overview = [...sprints, ...fromAzure];
+  const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
   const draft =
     sprints.find(
       (sprint) => sprint.draft && (!areaId || sprint.workAreaId === areaId),
@@ -974,7 +993,9 @@ export function Sprints({
         chips={["/sprint plan", "Move story 124 to sprint 16"]}
         model={model}
         onSend={(text) => {
-          if (/^\/sprint plan\b/.test(text)) return void planSprint();
+          const command = sprintCommand(text);
+          if (command?.kind === "plan") return void planSprint();
+          if (command) return azure.run(command);
           const target =
             areaId || current?.workAreaId || sprints[0]?.workAreaId;
           if (target) onWork(target, text);
@@ -1155,54 +1176,65 @@ export function Sprints({
             open it.
           </p>
           <div className="rb-rows">
-            {sprintOverview(sprints, now, areaId || undefined).map((sprint) => {
-              const row = sprintRow(sprint, now);
-              return (
-                <button
-                  key={sprint.id}
-                  className="rb-rowitem"
-                  onClick={() => {
-                    setSprintId(sprint.id);
-                    setTab("Summary");
-                  }}
-                >
-                  <span>
-                    <span className="name">{row.title}</span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {[
-                        sprint.team,
-                        `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {sprint.goal}
-                    </span>
-                  </span>
-                  <span className="muted">{row.progress}</span>
-                  <span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {row.timing}
-                    </span>
-                    {row.flags.map((flag) => (
+            {sprintOverview(overview, now, areaId || undefined).map(
+              (sprint) => {
+                const row = sprintRow(sprint, now);
+                return (
+                  <button
+                    key={sprint.id}
+                    className="rb-rowitem"
+                    onClick={() => {
+                      setSprintId(sprint.id);
+                      setTab("Summary");
+                    }}
+                  >
+                    <span>
+                      <span className="name">{row.title}</span>
                       <span
-                        key={flag}
-                        className="small"
-                        style={{
-                          display: "block",
-                          color: "var(--amun-status-signed-out)",
-                        }}
+                        className="muted small"
+                        style={{ display: "block" }}
                       >
-                        {flag}
+                        {[
+                          sprint.team,
+                          `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
-                    ))}
-                  </span>
-                </button>
-              );
-            })}
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                      >
+                        {sprint.goal}
+                      </span>
+                    </span>
+                    <span className="muted">{row.progress}</span>
+                    <span>
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                      >
+                        {row.timing}
+                      </span>
+                      {row.flags.map((flag) => (
+                        <span
+                          key={flag}
+                          className="small"
+                          style={{
+                            display: "block",
+                            color: "var(--amun-status-signed-out)",
+                          }}
+                        >
+                          {flag}
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                );
+              },
+            )}
           </div>
-          {!sprintOverview(sprints, now, areaId || undefined).length && (
+          {!sprintOverview(overview, now, areaId || undefined).length && (
             <p className="muted">
               No current or upcoming sprints. Ask Firstmate to plan one with
               /sprint plan.

@@ -199,3 +199,34 @@ it("pages the project team directory with Azure's top/skip API", async () => {
   expect((await d.teams()).at(-1)).toEqual({ id: "100", name: "Team 100" });
   expect(get).toHaveBeenCalledTimes(2);
 });
+it("reads a team's current and upcoming sprints, read-only and bounded", async () => {
+  const get = vi.fn(async (method: string, url: string) => {
+    expect(method).toBe("GET");
+    expect(new URL(url).pathname).toBe(
+      "/Collection/Library/West%20Team/_apis/work/teamsettings/iterations",
+    );
+    const item = (n: number, timeFrame: string, startDate?: string) => ({
+      id: "i" + n,
+      name: "Sprint " + n,
+      path: "Library\\Sprint " + n,
+      attributes: { timeFrame, startDate, finishDate: startDate },
+    });
+    return {
+      status: 200,
+      data: {
+        value: [
+          item(3, "future", "2026-12-01T00:00:00Z"),
+          item(1, "past", "2026-10-01T00:00:00Z"),
+          item(2, "current", "2026-11-10T00:00:00Z"),
+          item(4, "future"),
+        ],
+      },
+    };
+  });
+  const d = new BoardDiscovery(base, "Library", get);
+  expect((await d.sprints("West Team")).map((s) => s.name)).toEqual([
+    "Sprint 2",
+    "Sprint 3",
+  ]);
+  expect(await d.sprints("West Team", 1)).toHaveLength(1);
+});

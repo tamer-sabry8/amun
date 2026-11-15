@@ -35,6 +35,8 @@ import {
   releaseGroups,
   resequence,
   riceBadge,
+  adoSprints,
+  sprintCommand,
   sprintOverview,
   sprintRow,
   timelineBar,
@@ -495,6 +497,49 @@ describe("sprints (Q35, Q67)", () => {
     expect(sprintRow(sprint({ end: "2026-11-13T00:00:00Z" }), now).timing).toBe(
       "1 day left",
     );
+  });
+  it("parses /sprint commands and leaves other text alone", () => {
+    expect(sprintCommand("/sprint plan")).toEqual({ kind: "plan" });
+    expect(sprintCommand(" /sprint REFRESH ")).toEqual({ kind: "refresh" });
+    expect(sprintCommand("/sprint default")).toEqual({ kind: "default" });
+    expect(sprintCommand("/sprint team POCs Team")).toEqual({
+      kind: "team",
+      name: "POCs Team",
+    });
+    expect(sprintCommand("/sprint team")).toEqual({ kind: "team", name: "" });
+    expect(sprintCommand("/sprintx plan")).toBeNull();
+    expect(sprintCommand("Move story 124")).toBeNull();
+  });
+  it("merges Azure sprints into the overview, keeping the finish day", () => {
+    const azure = adoSprints(
+      [
+        {
+          id: "a",
+          name: "Sprint 5",
+          start: "2026-11-02T00:00:00Z",
+          finish: "2026-11-13T00:00:00Z",
+        },
+        { id: "b", name: "Bad", start: "x", finish: "y" },
+      ],
+      "POCs Team",
+      "w1",
+      "POCs",
+    );
+    expect(azure).toHaveLength(1);
+    expect(azure[0]).toMatchObject({
+      id: "ado:a",
+      team: "POCs Team",
+      draft: false,
+    });
+    const merged = [
+      sprint({ id: "local", start: "2026-11-20T00:00:00Z" }),
+      ...azure,
+    ];
+    expect(
+      sprintOverview(merged, Date.parse("2026-11-13T10:00:00Z")).map(
+        (s) => s.id,
+      ),
+    ).toEqual(["ado:a", "local"]);
   });
   it("lists current and upcoming sprints, filtered by work area", () => {
     const sprints = [

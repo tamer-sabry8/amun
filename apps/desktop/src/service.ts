@@ -1151,6 +1151,20 @@ process.parentPort?.on("message", (event) => {
           return { ...meta, view: "schema", schema: await d.processSchema() };
         if (request.action === "teams")
           return { ...meta, view: "teams", teams: await d.teams() };
+        if (request.action === "sprints") {
+          const wanted = request.team.toLowerCase();
+          const team = (await d.teams()).find(
+            (t) =>
+              t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+          );
+          if (!team) throw Error("unknown_team");
+          return {
+            ...meta,
+            view: "sprints",
+            team,
+            sprints: await d.sprints(team.id),
+          };
+        }
         if (request.action === "options") {
           return {
             ...meta,
@@ -1195,9 +1209,11 @@ process.parentPort?.on("message", (event) => {
               ? "Azure denied read access to this board."
               : raw === "request_rejected_401"
                 ? "Azure sign-in expired. Check the connection in Settings."
-                : raw === "Connect the mapped Azure collection in Settings."
-                  ? raw
-                  : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
+                : raw === "unknown_team"
+                  ? "I couldn’t find that team in this project."
+                  : raw === "Connect the mapped Azure collection in Settings."
+                    ? raw
+                    : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
           return { ...meta, view: "error", message };
         })
         .then((reply) => {

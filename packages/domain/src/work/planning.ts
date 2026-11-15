@@ -174,6 +174,56 @@ export function sprintRow(sprint: Sprint, now: number) {
     ],
   };
 }
+export type SprintCommand =
+  | { kind: "plan" }
+  | { kind: "refresh" }
+  | { kind: "default" }
+  | { kind: "team"; name: string };
+export function sprintCommand(text: string): SprintCommand | null {
+  const m = /^\/sprint\s+(plan|refresh|default|team)\b\s*(.*)$/is.exec(
+    text.trim(),
+  );
+  if (!m) return null;
+  const kind = m[1]!.toLowerCase();
+  if (kind === "team") return { kind, name: m[2]!.trim() };
+  return { kind } as SprintCommand;
+}
+export interface AdoSprint {
+  id: string;
+  name: string;
+  start: string;
+  finish: string;
+}
+/** Read-only rows for the Overview. A finish date runs to the end of that day. */
+export function adoSprints(
+  items: AdoSprint[],
+  team: string,
+  workAreaId: string,
+  workAreaName: string,
+): Sprint[] {
+  return items.flatMap((item) => {
+    const start = Date.parse(item.start);
+    const finish = Date.parse(item.finish);
+    if (!Number.isFinite(start) || !Number.isFinite(finish)) return [];
+    return [
+      {
+        id: `ado:${item.id}`,
+        workAreaId,
+        workAreaName,
+        name: item.name,
+        team,
+        start: new Date(start).toISOString(),
+        end: new Date(finish + dayMs - 1).toISOString(),
+        goal: "",
+        draft: false,
+        done: 0,
+        total: 0,
+        blocked: 0,
+        changedInAdo: false,
+      },
+    ];
+  });
+}
 export function sprintOverview(
   sprints: Sprint[],
   now: number,
