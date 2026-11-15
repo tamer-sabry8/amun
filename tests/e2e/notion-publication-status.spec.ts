@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { migrate } from "../../packages/data/src/database.ts";
 import { NotionConversationReview } from "../../packages/data/src/notion-review.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 const Database = createRequire(resolve("packages/data/package.json"))(
   "better-sqlite3",
 );
@@ -35,6 +36,7 @@ test("workspace-scoped publication remains visible without a misleading workspac
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
@@ -64,6 +66,7 @@ test("conversation sharing is outside model settings", async () => {
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
@@ -161,6 +164,7 @@ test("service restart reconciles interrupted Notion creates only with matching r
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

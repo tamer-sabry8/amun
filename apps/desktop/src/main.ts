@@ -30,13 +30,20 @@ import {
   readGraphicsPreference,
 } from "./graphics-mode.ts";
 import { hideWindowsForTests, shellQuery } from "./shell-selection.ts";
-import { e2eUserData } from "./e2e-user-data.ts";
+import { e2eRouteOpen, e2eUserData } from "./e2e-user-data.ts";
 
 // Keep e2e runs off the real profile; must precede any userData read and the instance lock.
 const e2eProfile = e2eUserData({
   isPackaged: app.isPackaged,
   env: process.env,
   hasUserDataSwitch: app.commandLine.hasSwitch("user-data-dir"),
+  hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+  hasTestProvidersSwitch: app.commandLine.hasSwitch("amun-e2e-test-providers"),
+});
+const e2eRoute = e2eRouteOpen({
+  isPackaged: app.isPackaged,
+  hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+  hasTestProvidersSwitch: app.commandLine.hasSwitch("amun-e2e-test-providers"),
 });
 if (e2eProfile) app.setPath("userData", e2eProfile);
 
@@ -74,14 +81,14 @@ function startService(): void {
       execArgv: ["--js-flags=--max-opt=1"],
       env: {
         ...process.env,
-        // Test fixtures can be declared only by the e2e launcher on unpackaged runs.
-        AMUN_E2E_TEST_PROVIDERS: app.isPackaged
-          ? ""
-          : (process.env.AMUN_E2E_TEST_PROVIDERS ?? ""),
-        // Test-only delay for native turns; never passed on packaged runs.
-        AMUN_E2E_SLOW_NATIVE_MS: app.isPackaged
-          ? ""
-          : (process.env.AMUN_E2E_SLOW_NATIVE_MS ?? ""),
+        // Test fixtures only on unpackaged runs or a packaged run with both explicit proof switches.
+        AMUN_E2E_TEST_PROVIDERS: e2eRoute
+          ? (process.env.AMUN_E2E_TEST_PROVIDERS ?? "")
+          : "",
+        // Test-only delay for native turns; same gate.
+        AMUN_E2E_SLOW_NATIVE_MS: e2eRoute
+          ? (process.env.AMUN_E2E_SLOW_NATIVE_MS ?? "")
+          : "",
         AMUN_APP_VERSION: app.getVersion(),
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
@@ -220,11 +227,15 @@ function openWindow(): void {
     hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
     hasGallerySwitch: app.commandLine.hasSwitch("amun-gallery"),
     hasLegacySwitch: app.commandLine.hasSwitch("amun-legacy-shell"),
+    hasTestProvidersSwitch: app.commandLine.hasSwitch(
+      "amun-e2e-test-providers",
+    ),
     env: process.env,
   });
   // Test-only: Playwright runs must not put windows on the owner's screen.
   const hidden = hideWindowsForTests({
     isPackaged: app.isPackaged,
+    testRouteOpen: e2eRoute,
     env: process.env,
   });
   const rebuiltShell =

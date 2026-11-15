@@ -10,6 +10,7 @@ import {
   access,
   rm,
 } from "node:fs/promises";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("runs only the reviewed Pi extension copy and presents its native dialog", async () => {
   test.setTimeout(75000);
   const root = await realpath(
@@ -28,6 +29,7 @@ test("runs only the reviewed Pi extension copy and presents its native dialog", 
       ...(executablePath ? { executablePath } : {}),
       args: [
         ...(executablePath ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
     });

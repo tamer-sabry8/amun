@@ -2,11 +2,13 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("Priorities ranks completed RICE estimates and keeps unknown values incomplete", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m2-rice-"));
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

@@ -9,6 +9,7 @@ import { azureTransport } from "../../packages/connectors-ado/src/transport.ts";
 import { AdoProofClient } from "../../packages/connectors-ado/src/client.ts";
 import { BoardDiscovery } from "../../packages/connectors-ado/src/board-discovery.ts";
 import { connectionId } from "../../packages/auth/src/broker.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("reads an ADO team backlog in the Mac list and board and compares a card to Azure", async () => {
   test.skip(
@@ -64,6 +65,7 @@ test("reads an ADO team backlog in the Mac list and board and compares a card to
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

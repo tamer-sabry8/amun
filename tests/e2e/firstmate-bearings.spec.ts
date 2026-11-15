@@ -11,6 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native Bearings reads the persistent crew and writes a report only on request", async () => {
   test.setTimeout(150000);
   const root = await realpath(
@@ -21,6 +22,7 @@ test("native Bearings reads the persistent crew and writes a report only on requ
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

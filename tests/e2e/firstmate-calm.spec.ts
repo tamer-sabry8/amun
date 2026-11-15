@@ -2,6 +2,7 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp, realpath, readFile, rm } from "node:fs/promises";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native Calm toggles the pinned Firstmate preference across app restarts", async () => {
   test.setTimeout(100000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-calm-e2e-")));
@@ -12,6 +13,7 @@ test("native Calm toggles the pinned Firstmate preference across app restarts", 
         ...(executablePath ? { executablePath } : {}),
         args: [
           ...(executablePath ? [] : ["apps/desktop"]),
+          ...packagedTestSwitches(),
           "--user-data-dir=" + root,
         ],
       });

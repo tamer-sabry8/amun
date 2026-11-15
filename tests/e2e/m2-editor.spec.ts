@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { migrate } from "../../packages/data/src/database.ts";
 import { WorkspaceService } from "../../packages/data/src/workspace-service.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("PRD editor imports, round-trips, autosaves history and exports Markdown through the Mac shell", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m2-editor-"));
   await mkdir(join(root, "workspace"), { mode: 0o700 });
@@ -57,6 +58,7 @@ test("PRD editor imports, round-trips, autosaves history and exports Markdown th
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

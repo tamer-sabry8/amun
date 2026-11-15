@@ -7,9 +7,13 @@ export function shellQuery(input: {
   hasProofSwitch: boolean;
   hasGallerySwitch: boolean;
   hasLegacySwitch: boolean;
+  hasTestProvidersSwitch?: boolean;
   env: Record<string, string | undefined>;
 }): Record<string, string> {
-  if (input.hasProofSwitch) return { proof: "1" };
+  // Packaged test route (both switches) exercises the rebuilt shell, not the proof page.
+  const packagedTestRoute =
+    input.isPackaged && input.hasTestProvidersSwitch === true;
+  if (input.hasProofSwitch && !packagedTestRoute) return { proof: "1" };
   if (input.isPackaged) return { packaged: "1" };
   if (input.hasGallerySwitch) return { gallery: "1" };
   if (input.hasLegacySwitch || input.env.AMUN_LEGACY_SHELL === "1")
@@ -20,9 +24,10 @@ export function shellQuery(input: {
 /** Windows opened by Playwright stay off the owner's screen. */
 export function hideWindowsForTests(input: {
   isPackaged: boolean;
+  testRouteOpen?: boolean;
   env: Record<string, string | undefined>;
 }): boolean {
-  if (input.isPackaged) return false;
+  if (input.isPackaged && !input.testRouteOpen) return false;
   return (
     input.env.AMUN_E2E_HIDE_WINDOWS === "1" ||
     Boolean(input.env.AMUN_E2E_TEST_PROVIDERS)

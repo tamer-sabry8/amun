@@ -2,6 +2,7 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native picker backup roundtrip uses the service and preserves an existing destination", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-backup-ui-"));
   const archive = join(root, "proof.amunbackup"),
@@ -9,6 +10,7 @@ test("native picker backup roundtrip uses the service and preserves an existing 
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

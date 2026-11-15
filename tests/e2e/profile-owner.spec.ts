@@ -4,12 +4,14 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("opening an active profile returns to its existing window", async () => {
   const profile = mkdtempSync(join(tmpdir(), "amun-profile-owner-"));
   const executablePath = process.env.AMUN_PACKAGED_PATH;
   const args = [
     ...(executablePath ? [] : ["apps/desktop"]),
+    ...packagedTestSwitches(),
     "--user-data-dir=" + profile,
   ];
   const owner = await electron.launch({

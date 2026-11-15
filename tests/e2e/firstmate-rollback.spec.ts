@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { catalog } from "../../packages/contracts/src/firstmate-release.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("one-click rollback survives restart and prepares the retained source without changing existing worktrees", async () => {
   const executablePath = process.env.AMUN_PACKAGED_PATH;
@@ -38,6 +39,7 @@ test("one-click rollback survives restart and prepares the retained source witho
       ...(executablePath ? { executablePath } : {}),
       args: [
         ...(executablePath ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       chromiumSandbox: true,

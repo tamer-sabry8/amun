@@ -1,5 +1,6 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createServer } from "node:http";
+import { packagedProofProfile } from "../support/packaged-launch.ts";
 test("known IdP redirect is blocked, then user restarts auth externally from original page", async () => {
   const server = createServer((req, res) => {
     if (req.url === "/go") {
@@ -17,6 +18,7 @@ test("known IdP redirect is blocked, then user restarts auth externally from ori
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--amun-proof",
+      ...packagedProofProfile(),
     ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }

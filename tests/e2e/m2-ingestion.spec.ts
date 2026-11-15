@@ -4,12 +4,13 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("imports the six supported formats and rejects an unsupported file in the Mac app", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m2-ingest-"));
   const args = process.env.AMUN_PACKAGED_PATH
     ? {
         executablePath: process.env.AMUN_PACKAGED_PATH,
-        args: ["--user-data-dir=" + root],
+        args: [...packagedTestSwitches(), "--user-data-dir=" + root],
       }
     : { args: ["apps/desktop", "--user-data-dir=" + root] };
   const app = await electron.launch(args);

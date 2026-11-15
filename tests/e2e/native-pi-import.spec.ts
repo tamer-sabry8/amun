@@ -2,12 +2,13 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test.use({ actionTimeout: 5000 });
 test("native import reviews scope and imports a real pinned SDK session", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-import-ui-"));
   const app = await electron.launch({
     args: process.env.AMUN_PACKAGED_PATH
-      ? ["--user-data-dir=" + root]
+      ? [...packagedTestSwitches(), "--user-data-dir=" + root]
       : ["apps/desktop", "--user-data-dir=" + root],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }

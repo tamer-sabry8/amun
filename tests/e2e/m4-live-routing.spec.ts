@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { acceptanceDb } from "../support/ado-acceptance-drafts.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("separately approved routing uses both configured live providers and records both verified replies", async () => {
   const source = process.env.AMUN_M4_PROVIDER_AUTH;
   test.skip(
@@ -31,6 +32,7 @@ test("separately approved routing uses both configured live providers and record
       ...(executablePath ? { executablePath } : {}),
       args: [
         ...(executablePath ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
     });

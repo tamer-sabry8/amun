@@ -9,13 +9,18 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("stow measures a new real Firstmate home and records the empty sweep", async () => {
   test.setTimeout(90000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-stow-")));
   const binary = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
     ...(binary ? { executablePath: binary } : {}),
-    args: [...(binary ? [] : ["apps/desktop"]), "--user-data-dir=" + root],
+    args: [
+      ...(binary ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
+      "--user-data-dir=" + root,
+    ],
   });
   try {
     const page = await app.firstWindow();
@@ -107,7 +112,11 @@ test("local Stow learns a selected conversation and remembers each pin decision 
   const launch = () =>
     electron.launch({
       ...(binary ? { executablePath: binary } : {}),
-      args: [...(binary ? [] : ["apps/desktop"]), "--user-data-dir=" + root],
+      args: [
+        ...(binary ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
+        "--user-data-dir=" + root,
+      ],
     });
   let app = await launch(),
     page = await app.firstWindow();

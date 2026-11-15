@@ -8,6 +8,7 @@ import {
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 // UX rebuild journey in a disposable profile: four-step setup → Welcome →
 // first work conversation with a resizable document → the six destinations,
@@ -46,6 +47,7 @@ const launch = (root: string) =>
   electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

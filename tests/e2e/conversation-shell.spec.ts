@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { join, resolve } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("captain explicitly runs a Mac command and chooses Pi model context", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-shell-e2e-")));
   const outside = await realpath(
@@ -77,6 +78,7 @@ test("captain explicitly runs a Mac command and chooses Pi model context", async
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

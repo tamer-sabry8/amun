@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer } from "node:net";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native llama lists, loads and unloads one installed model through a genuine private router", async () => {
   const model = process.env.AMUN_LIVE_LLAMA_GGUF;
   test.skip(!model, "Requires a local GGUF and llama-server");
@@ -55,6 +56,7 @@ test("native llama lists, loads and unloads one installed model through a genuin
       ...(binary ? { executablePath: binary } : {}),
       args: [
         ...(binary ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + join(root, "profile"),
       ],
     });

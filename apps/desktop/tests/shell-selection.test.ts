@@ -30,6 +30,15 @@ describe("shellQuery", () => {
     expect(shellQuery(base)).toEqual({});
   });
 });
+describe("packaged test route shell", () => {
+  it("renders the rebuilt shell only with both switches", () => {
+    const packaged = { ...base, isPackaged: true, hasProofSwitch: true };
+    expect(shellQuery(packaged)).toEqual({ proof: "1" });
+    expect(shellQuery({ ...packaged, hasTestProvidersSwitch: true })).toEqual({
+      packaged: "1",
+    });
+  });
+});
 describe("hideWindowsForTests", () => {
   it("hides under Playwright, never when packaged", () => {
     expect(hideWindowsForTests({ isPackaged: false, env: {} })).toBe(false);

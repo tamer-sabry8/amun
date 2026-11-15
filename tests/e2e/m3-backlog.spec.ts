@@ -6,12 +6,14 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("Backlog opens the selected product's mapped Azure project and explains a missing connection", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m3-board-"));
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
@@ -267,6 +269,7 @@ test("renders server revisions and mapped board columns through the Mac service 
     electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH

@@ -15,6 +15,7 @@ import {
   acceptanceDb,
   acceptanceDrafts,
 } from "../support/ado-acceptance-drafts.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("ADO bounded publication or separate commitment with an exact reviewed binding", async () => {
   const mode = process.env.AMUN_ADO_STAGE;
@@ -124,6 +125,7 @@ test("ADO bounded publication or separate commitment with an exact reviewed bind
     app = await electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH

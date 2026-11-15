@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { migrate } from "../../packages/data/src/database.ts";
 import { WorkStore } from "../../packages/data/src/work-store.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 const Database = createRequire(resolve("packages/data/package.json"))(
   "better-sqlite3",
@@ -17,6 +18,7 @@ const launch = (root: string) =>
   electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

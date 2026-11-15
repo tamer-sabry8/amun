@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("every pinned Pi builtin and required Firstmate command is available in Conversations", async () => {
   const binary = process.env.AMUN_PACKAGED_PATH;
   const runtime = binary
@@ -32,7 +33,11 @@ test("every pinned Pi builtin and required Firstmate command is available in Con
   const root = await mkdtemp(join(tmpdir(), "amun-catalog-"));
   const app = await electron.launch({
     ...(binary ? { executablePath: binary } : {}),
-    args: [...(binary ? [] : ["apps/desktop"]), "--user-data-dir=" + root],
+    args: [
+      ...(binary ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
+      "--user-data-dir=" + root,
+    ],
   });
   try {
     const page = await app.firstWindow();

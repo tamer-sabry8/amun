@@ -2,6 +2,7 @@ import { expect, test, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm, mkdir, writeFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("Filesystem MCP lists only the chosen folder and cancels without granting another", async () => {
   const root = await realpath(
@@ -24,6 +25,7 @@ test("Filesystem MCP lists only the chosen folder and cancels without granting a
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

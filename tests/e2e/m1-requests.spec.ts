@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { migrate } from "../../packages/data/src/database.ts";
 import { AttentionStore } from "../../packages/data/src/attention-store.ts";
 import { attentionItem } from "../../packages/contracts/src/entities.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 const Database = createRequire(resolve("packages/data/package.json"))(
   "better-sqlite3",
 );
@@ -54,6 +55,7 @@ test("shared request queue persists navigation, supports search, Focus restore a
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--force-device-scale-factor=1",
       "--force-color-profile=srgb",
       "--user-data-dir=" + root,

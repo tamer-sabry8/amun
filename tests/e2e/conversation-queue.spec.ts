@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReviewedExtensions } from "../../packages/crew/src/reviewed-extensions.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native Pi queues, recalls and delivers a follow-up during a streaming turn", async () => {
   test.setTimeout(80000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-queue-e2e-")));
@@ -84,6 +85,7 @@ test("native Pi queues, recalls and delivers a follow-up during a streaming turn
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

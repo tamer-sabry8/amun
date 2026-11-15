@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { migrate, schemaVersion } from "../../packages/data/src/database.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 const Database = createRequire(resolve("packages/data/package.json"))(
   "better-sqlite3",
 );
@@ -30,6 +31,7 @@ test("service upgrades prior workspace data and preserves it across app restarts
       const app = await electron.launch({
         args: [
           ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+          ...packagedTestSwitches(),
           "--user-data-dir=" + root,
         ],
         ...(process.env.AMUN_PACKAGED_PATH

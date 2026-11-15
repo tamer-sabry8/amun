@@ -5,6 +5,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("Firstmate turns an approved PRD into linked stories and resolves a story decision on the Mac", async () => {
   const modelFile = process.env.AMUN_M2_GGUF;
   test.skip(!modelFile, "Set AMUN_M2_GGUF to an installed local chat model.");
@@ -71,6 +72,7 @@ test("Firstmate turns an approved PRD into linked stories and resolves a story d
     app = await electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH

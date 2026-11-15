@@ -6,6 +6,7 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("Mac PR review displays a diff and refuses execution after the approved Azure head changes", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m4-pull-"));
@@ -113,6 +114,7 @@ test("Mac PR review displays a diff and refuses execution after the approved Azu
     electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH

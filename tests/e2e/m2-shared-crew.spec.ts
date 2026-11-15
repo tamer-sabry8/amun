@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("one verified crew home keeps the same operational note across two products and excludes their private conversation text", async () => {
   test.skip(
     process.env.AMUN_LIVE_LOCAL_STOW !== "1",
@@ -13,6 +14,7 @@ test("one verified crew home keeps the same operational note across two products
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

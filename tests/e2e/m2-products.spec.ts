@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("two products keep mapped sources, models and persisted source-backed memory isolated", async () => {
   test.setTimeout(90000);
@@ -11,6 +12,7 @@ test("two products keep mapped sources, models and persisted source-backed memor
     electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH
@@ -88,6 +90,7 @@ test("a fresh product cannot inherit the other product's active native conversat
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
