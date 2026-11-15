@@ -19,6 +19,14 @@ const key = "amun.offer-turns";
 export const offerRequest = (title: string, detail: string) =>
   `Yes, please draft this: ${title}.${detail ? " " + detail : ""} Draft only. Do not send anything or change any approval.`;
 
+/** The owner asked for changes to a plan Firstmate proposed. */
+export const changesRequest = (summary: string, note = "") =>
+  `I asked for changes to the plan "${summary}".${note ? ` My note: ${note}` : ""} Nothing was published. Bring back a revised proposal, or ask me what to change if you need to know. Do not publish or approve anything.`;
+
+/** The owner chose an answer on one of Firstmate's question cards. */
+export const answerRequest = (title: string, answer: string) =>
+  `My answer to your question "${title}": ${answer}. Carry it out: confirm it briefly, record any risk or decision it implies, or hand the work to the right agent, as that answer calls for. Do not publish or approve anything.`;
+
 export function offerTurns(storage: Storage | null) {
   const turns = new Map<string, OfferTurn>();
   /** Turns being sent in this run, as opposed to ones a restart cut short. */

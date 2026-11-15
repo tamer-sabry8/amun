@@ -1,7 +1,7 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
 import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
-import { acceptOffer } from "./accept-offer.ts";
+import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
 import { useState } from "react";
 import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
@@ -499,7 +499,7 @@ function Row({
             </button>
             <button
               className="btn"
-              onClick={() => work("request-changes", { planId: tray.plan.id })}
+              onClick={() => requestPlanChanges(tray.plan)}
             >
               Request changes
             </button>

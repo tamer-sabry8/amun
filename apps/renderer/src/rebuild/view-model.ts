@@ -441,11 +441,13 @@ export function workTypeGuard(
     accountOwner?: string | null;
     presales?: string | null;
     stage: string;
+    proposalSigned?: boolean;
+    brdApproved?: boolean;
   } | null,
 ) {
   if (type !== "rfp") return "";
   const known = record
-    ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, Sales or account owner ${record.accountOwner || "not set"}, Pre-sales contact ${record.presales || "not set"}, stage ${record.stage}.`
+    ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, Sales or account owner ${record.accountOwner || "not set"}, Pre-sales contact ${record.presales || "not set"}, stage ${record.stage}, Proposal signed ${record.proposalSigned ? "yes" : "no"}, BRD approved ${record.brdApproved ? "yes" : "no"}.`
     : "";
   const authority = record
     ? " This record is authoritative for this work area only: never use or offer client, deadline, owner or stage values from another work area or an earlier conversation; if they differ from the record, the record wins."
@@ -464,6 +466,20 @@ export function areaTurnContext(
 ) {
   return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.]\n${workTypeGuard(area.type, record)}`;
 }
+/** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
+export function requestedLength(request: string) {
+  const match =
+    /\b(?:(?:under|below|over|at most|at least|maximum of|max|no more than|up to|within|about|around)\s+)?\d+(?:\s*(?:-|–|to)\s*\d+)?[\s-]*(?:pages?|words?|paragraphs?|sentences?|lines?|bullets?|slides?)\b|\bone[- ]pager\b/i.exec(
+      request,
+    );
+  return match ? match[0].trim() : null;
+}
+/** A delegation brief that always states the length the owner asked for. */
+export function delegationTask(task: string, ownerRequest: string) {
+  const length = requestedLength(ownerRequest);
+  if (!length || task.toLowerCase().includes(length.toLowerCase())) return task;
+  return `${task}\n\nLength the owner asked for: ${length}. Keep to it.`;
+}
 /** Tells Firstmate, once per work area, how to raise things in Amun. */
 export const amunProtocol = [
   "You are Firstmate inside Amun. Reply briefly in plain language.",
@@ -471,6 +487,7 @@ export const amunProtocol = [
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
+  "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
   '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps: type, description, acceptance (one criterion per line), area, iteration. Notion: title (the page title), body. Leave out anything else, such as assignee or estimate, because it will be refused, and never name a different project or parent. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
@@ -483,4 +500,8 @@ export const amunProtocol = [
   "The work this conversation is about already exists in Amun when you are first spoken to, even if the owner's first message asks to create it: Amun created it before this conversation started. Do not say you cannot create it or that nothing was created; continue from it, and say only what you actually know about it.",
   "Each message names the work area it is about and may carry that area's record. Use only that area's record. Never use or offer values (client, deadline, owner, stage, names) from other work areas or earlier conversations for it; if they differ from the current record, the current record wins.",
   "Never write to Azure DevOps, a backlog or a committed roadmap yourself, and never use another group's information without asking.",
+  "When the owner asks you to use another group's product or work, always offer to ask for their approval to bring that group's material across, and never use it until they approve.",
+  "When the owner says an article or link is general reading to leave unlinked and not to ask again, save it as an unlinked reading note (a document of type doc) with exactly the title they gave, do not ask what to link it to or remind them later, and confirm in one line that it is saved.",
+  "A stakeholder update names the record each claim comes from, with its title in square brackets, whenever a record exists.",
+  "An RFP that is won is handed on only from the RFP card's Hand to delivery step, once Proposal signed and BRD approved are both ticked. Do not convert it or create a delivery project yourself: name the prerequisites still missing and point the owner to Hand to delivery on the RFP card.",
 ].join("\n");

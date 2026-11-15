@@ -1445,4 +1445,28 @@ describe("a failed publication says what failed and why", () => {
     send("create-area", { groupId: employer, type: "rfp", name: "Bare" });
     expect(snap().rfps).toHaveLength(1);
   });
+  it("repairs an RFP work area that predates board records, once", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Legacy",
+    }).ref!;
+    db.prepare("DELETE FROM rfps WHERE work_area_id=?").run(made);
+    expect(snap().rfps).toMatchObject([
+      { id: made, stage: "received", client: "", deadline: null },
+    ]);
+    expect(snap().rfps).toHaveLength(1);
+  });
+  it("leaves a deleted RFP off the board", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Gone",
+    }).ref!;
+    db.prepare("DELETE FROM rfps WHERE work_area_id=?").run(made);
+    db.prepare("UPDATE work_areas SET status='deleted' WHERE id=?").run(made);
+    expect(snap().rfps).toEqual([]);
+  });
 });

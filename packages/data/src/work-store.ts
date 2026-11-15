@@ -123,6 +123,13 @@ export class WorkStore {
     );
   }
 
+  /** RFP work areas made before they were board records get one, once. */
+  private adoptRfps() {
+    this.run(
+      "INSERT OR IGNORE INTO rfps(work_area_id,client,stage) SELECT id,'','received' FROM work_areas WHERE type='rfp' AND status<>'deleted' AND id NOT IN (SELECT work_area_id FROM rfps)",
+    );
+  }
+
   /** Products created through earlier flows become product work areas. */
   private adoptProducts() {
     this.run(
@@ -195,6 +202,7 @@ export class WorkStore {
 
   snapshot(): WorkSnapshot {
     this.adoptProducts();
+    this.adoptRfps();
     this.run(
       "UPDATE work_attention SET state='open',snoozed_until=NULL WHERE state='snoozed' AND snoozed_until<=?",
       this.stamp(),

@@ -46,9 +46,11 @@ import {
 import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
+import { answerQuestion, requestPlanChanges } from "./accept-offer.ts";
 import { pendingOffers } from "./offer-turns.ts";
 import {
   agentNews,
+  delegationTask,
   amunProtocol,
   areaTurnContext,
   areaOf,
@@ -626,10 +628,7 @@ function PlanReview({
                 ? `Approve and publish ${ticked.length} of ${plan.items.length}`
                 : approveLabel(plan.items.length, noun)}
             </button>
-            <button
-              className="btn"
-              onClick={() => work("request-changes", { planId: plan.id })}
-            >
+            <button className="btn" onClick={() => requestPlanChanges(plan)}>
               Request changes
             </button>
           </div>
@@ -845,6 +844,8 @@ export function WorkSession({
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const sentFirst = useRef<string | null>(null);
+  /** The owner's latest words, so a brief can carry the length they asked for. */
+  const lastRequest = useRef("");
 
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction) => {
@@ -925,7 +926,7 @@ export function WorkSession({
         workAreaId: areaId,
         agent: proposed.agent,
         title: proposed.title,
-        task: proposed.task,
+        task: delegationTask(proposed.task, lastRequest.current),
       });
     else if (proposed.do === "delete")
       // Deleting is the owner's call: Firstmate can only ask.
@@ -1034,6 +1035,7 @@ export function WorkSession({
     // One message waits at a time; a new one replaces the wait, not the text.
     releaseMessage(areaId);
     setWaiting(null);
+    lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
     // A conversation that has not been told Amun's rules gets them with this
     // message: the first one for a work area, and the first after Firstmate's
@@ -1649,13 +1651,7 @@ export function WorkSession({
                       <button
                         key={option}
                         className="btn"
-                        onClick={() =>
-                          work("resolve-attention", {
-                            attentionId: question.id,
-                            resolution: "answer",
-                            answer: option,
-                          })
-                        }
+                        onClick={() => answerQuestion(question, option)}
                       >
                         {option}
                       </button>
