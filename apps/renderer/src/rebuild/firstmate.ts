@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { nativePiEvent, nativeTurnTextLimit } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import type { WaitReason } from "./held-wait.ts";
 import { replyFromTranscript } from "./view-model.ts";
 import { modelDisplay } from "../../../../packages/domain/src/work/shell.ts";
 
@@ -105,6 +106,8 @@ export interface Held {
   activityId?: string | null;
   /** One image sent with the message (base64 PNG), if any. */
   image?: string | undefined;
+  /** Why it waits; missing in messages saved by older builds. */
+  reason?: WaitReason | undefined;
 }
 const heldKey = "amun.held-messages";
 const held = new Map<string, Held>();

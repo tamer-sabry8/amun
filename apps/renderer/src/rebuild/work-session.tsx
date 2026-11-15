@@ -24,6 +24,7 @@ import { copyText } from "./clipboard.ts";
 import { useDismiss } from "./use-dismiss.ts";
 import { scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
+import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
@@ -975,7 +976,22 @@ export function WorkSession({
     /** This turn carries Amun's rules for a conversation that lacked them. */
     briefing = false,
   ) => {
-    if (inFlight.has(areaId)) return;
+    if (inFlight.has(areaId)) {
+      // A turn is still out (for example a waiting message being retried):
+      // a new message waits behind it instead of being dropped.
+      if (!retry) {
+        const queued = {
+          text,
+          scoped,
+          activityId,
+          image,
+          reason: "busy" as const,
+        };
+        holdMessage(areaId, queued);
+        setWaiting(queued);
+      }
+      return;
+    }
     inFlight.add(areaId);
     setProblem("");
     setBusy(true);
@@ -1014,17 +1030,49 @@ export function WorkSession({
         });
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
-      if (retry) {
+      // Only the message this turn carried leaves the wait; a newer one stays.
+      if (retry && heldMessage(areaId)?.scoped === scoped) {
         releaseMessage(areaId);
         setWaiting(null);
       }
+      if (heldMessage(areaId)) retryWaiting();
     } else if (turn.needsProvider || retry) {
+      const newer = heldMessage(areaId);
+      if (newer && newer.scoped !== scoped) {
+        // A message queued behind this turn now waits for the provider too.
+        if (turn.needsProvider && waitReason(newer) === "busy") {
+          const message = { ...newer, reason: "provider" as const };
+          holdMessage(areaId, message);
+          setWaiting(message);
+        }
+        return;
+      }
+      if (
+        !turn.needsProvider &&
+        waitReason(heldMessage(areaId) ?? {}) === "busy"
+      ) {
+        // A message that only queued behind a turn is not a provider wait.
+        releaseMessage(areaId);
+        setWaiting(null);
+        setProblem(turn.reason);
+        return;
+      }
       // Kept, not failed: it goes out once a provider is connected.
-      const message = { text, scoped, activityId: row, image };
+      const message = {
+        text,
+        scoped,
+        activityId: row,
+        image,
+        reason: "provider" as const,
+      };
       holdMessage(areaId, message);
       setWaiting(message);
       return;
-    } else setProblem(turn.reason);
+    } else {
+      setProblem(turn.reason);
+      // A message queued behind this failed turn is still sent.
+      if (heldMessage(areaId)) retryWaiting();
+    }
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
       work("activity", {
@@ -1070,11 +1118,12 @@ export function WorkSession({
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
     // Saved documents travel after the owner's words, labelled as reference.
+    const fresh = latest.current;
     const documents = documentContext({
-      snapshot,
+      snapshot: fresh.snapshot,
       areaId,
       request: text,
-      openId: pane?.kind === "output" ? pane.id : null,
+      openId: fresh.pane?.kind === "output" ? fresh.pane.id : null,
       used: news.length + withFiles.length,
     });
     await deliver(
@@ -1103,6 +1152,10 @@ export function WorkSession({
   };
   const sendRef = useRef(send);
   sendRef.current = send;
+  // send() awaits before reading the Library; a save landing meanwhile must
+  // not be missed, or a document just typed reaches Firstmate as empty.
+  const latest = useRef({ snapshot, pane });
+  latest.current = { snapshot, pane };
   useEffect(() => {
     // Offers the owner accepted: each becomes a real request to Firstmate
     // here, once. One a restart cut short is said so, and not sent again.
@@ -1568,29 +1621,31 @@ export function WorkSession({
                   >
                     Waiting to send
                   </span>
-                  <div className="rb-inline amber" role="alert">
-                    <span>
-                      <strong style={{ fontWeight: 600 }}>
-                        Connect an AI provider to send this.
-                      </strong>{" "}
-                      Your message is saved and goes out once, as soon as a
-                      provider is connected.
-                    </span>
-                    <div className="row">
-                      <button className="btn primary" onClick={onSettings}>
-                        Connect a provider
-                      </button>
-                      <button
-                        className="btn quiet"
-                        onClick={() => {
-                          releaseMessage(areaId);
-                          setWaiting(null);
-                        }}
-                      >
-                        Discard message
-                      </button>
+                  {waitParts(waitReason(waiting)).providerAlert && (
+                    <div className="rb-inline amber" role="alert">
+                      <span>
+                        <strong style={{ fontWeight: 600 }}>
+                          Connect an AI provider to send this.
+                        </strong>{" "}
+                        Your message is saved and goes out once, as soon as a
+                        provider is connected.
+                      </span>
+                      <div className="row">
+                        <button className="btn primary" onClick={onSettings}>
+                          Connect a provider
+                        </button>
+                        <button
+                          className="btn quiet"
+                          onClick={() => {
+                            releaseMessage(areaId);
+                            setWaiting(null);
+                          }}
+                        >
+                          Discard message
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
               {steps.length > 0 && (

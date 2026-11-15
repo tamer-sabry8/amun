@@ -2116,15 +2116,17 @@ process.parentPort?.on("message", (event) => {
                   : result,
               ),
             )
-            .catch((error: unknown) =>
+            .catch((error: unknown) => {
+              if (process.env.AMUN_DEBUG_SWALLOWED)
+                console.error("[amun-debug] bearings failed:", error);
               sendNative(request.id, {
                 kind: "message",
                 text:
                   error instanceof BoardError
                     ? error.message
                     : "Crew snapshot unavailable. Check the crew worktree and runtime dependencies.",
-              }),
-            );
+              });
+            });
           return;
         }
         if (request.command === "crew-dispatch") {
@@ -2224,7 +2226,9 @@ process.parentPort?.on("message", (event) => {
                   throw Error("Invalid action");
               }
               sendNative(request.id, { kind: "message", text });
-            } catch {
+            } catch (error) {
+              if (process.env.AMUN_DEBUG_SWALLOWED)
+                console.error("[amun-debug] release operation failed:", error);
               sendNative(request.id, {
                 kind: "message",
                 text: "Firstmate release operation failed. Check the retained package and workspace.",
