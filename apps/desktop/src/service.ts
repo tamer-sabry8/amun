@@ -143,6 +143,14 @@ import {
   Redactor,
   createSafeLogger,
 } from "../../../packages/security/src/redaction.ts";
+import {
+  LogBuffer,
+  diagnosticsReport,
+} from "../../../packages/security/src/diagnostics.ts";
+import {
+  diagnosticsRequest,
+  diagnosticsResult,
+} from "../../../packages/contracts/src/diagnostics.ts";
 import { ActionStore } from "../../../packages/data/src/outbox.ts";
 import type Database from "better-sqlite3";
 import { openWorkspace } from "../../../packages/data/src/workspace.ts";
@@ -173,7 +181,14 @@ const workspace = openWorkspace(
   requireNative(databaseModule) as typeof Database,
 );
 const redactor = new Redactor();
-const logger = createSafeLogger(redactor, process.stdout);
+const logBuffer = new LogBuffer();
+const logger = createSafeLogger(redactor, {
+  write: (chunk: string) => {
+    logBuffer.write(chunk);
+    return process.stdout.write(chunk);
+  },
+});
+const serviceStartedAt = new Date();
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 let syncingMemory = false;
@@ -1025,8 +1040,29 @@ process.parentPort?.on("message", (event) => {
   let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
+    const diagnostics = diagnosticsRequest.safeParse(message.data);
     if (response) port.postMessage(response);
-    else if (
+    else if (diagnostics.success) {
+      port.postMessage(
+        diagnosticsResult.parse({
+          version: 1,
+          kind: "diagnostics-result",
+          id: diagnostics.data.id,
+          text: diagnosticsReport(
+            {
+              "Amun version": process.env.AMUN_APP_VERSION ?? "unknown",
+              Electron: process.versions.electron ?? "unknown",
+              Chromium: process.versions.chrome ?? "unknown",
+              Node: process.versions.node,
+              System: `${process.platform} ${process.arch}`,
+              "Service started": serviceStartedAt.toISOString(),
+            },
+            logBuffer.recent(),
+            redactor,
+          ),
+        }),
+      );
+    } else if (
       message.data?.kind === "refresh-crew" &&
       message.data.version === 1
     ) {

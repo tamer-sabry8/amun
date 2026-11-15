@@ -2,7 +2,11 @@
 // the conversation tools. They send the same bridge messages as the earlier
 // agents and Pi panels, with the same review and confirmation steps.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
+import {
+  diagnosticsResult,
+  nativePiEvent,
+  type NativePiEvent,
+} from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 
 type Result = NativePiEvent["result"];
@@ -443,6 +447,128 @@ export function ConversationTools() {
             </div>
           )}
           {exportStatus && <p className="small">{exportStatus}</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function DiagnosticsTools() {
+  const { connected } = useConnected();
+  const pending = useRef<string | null>(null);
+  const savePending = useRef<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [review, setReview] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    const off = bridge.onEvent((value) => {
+      const result = diagnosticsResult.safeParse(value);
+      if (result.success && result.data.id === pending.current) {
+        pending.current = null;
+        setBusy(false);
+        setReview(result.data.text);
+        setStatus("");
+      } else if (
+        value &&
+        typeof value === "object" &&
+        "kind" in value &&
+        value.kind === "service-lost" &&
+        pending.current
+      ) {
+        pending.current = null;
+        setBusy(false);
+        setStatus("The connection to Amun was lost. Try again in a moment.");
+      }
+    });
+    const listener = (event: MessageEvent) => {
+      if (
+        event.source !== window ||
+        event.data?.kind !== "amun-pi-export-status" ||
+        !savePending.current ||
+        event.data.result?.id !== savePending.current
+      )
+        return;
+      savePending.current = null;
+      setStatus(
+        event.data.result.status === "saved"
+          ? "Diagnostics saved"
+          : event.data.result.status === "cancelled"
+            ? "Export cancelled"
+            : "Diagnostics not saved. Choose a new file name; existing files are not overwritten.",
+      );
+    };
+    window.addEventListener("message", listener);
+    return () => {
+      off();
+      window.removeEventListener("message", listener);
+    };
+  }, []);
+  return (
+    <section aria-labelledby="rb-adv-diag">
+      <h3 id="rb-adv-diag">Diagnostics</h3>
+      <p className="muted">
+        Save recent Amun logs and version numbers to help find a problem.
+      </p>
+      <div className="rb-inline">
+        <span className="row wrap">
+          <button
+            className="btn quiet"
+            disabled={!connected || busy}
+            onClick={() => {
+              const id = crypto.randomUUID();
+              pending.current = id;
+              setBusy(true);
+              setReview(null);
+              setStatus("");
+              bridge.send({ version: 1, kind: "diagnostics", id });
+            }}
+          >
+            Export diagnostics
+          </button>
+        </span>
+        <div aria-live="polite" style={{ display: "grid", gap: 10 }}>
+          {busy && <p className="small">Working…</p>}
+          {review !== null && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <strong>Review the diagnostics</strong>
+              <p className="note">
+                Sign-ins and secrets are removed, but read this before you save
+                or share it. Nothing leaves this Mac.
+              </p>
+              <label className="field">
+                Diagnostics contents
+                <textarea
+                  readOnly
+                  rows={10}
+                  value={review}
+                  aria-label="Diagnostics contents to review"
+                />
+              </label>
+              <span className="row wrap">
+                <button
+                  className="btn"
+                  onClick={() => {
+                    const id = crypto.randomUUID();
+                    savePending.current = id;
+                    setStatus("Choose where to save it…");
+                    window.postMessage(
+                      {
+                        kind: "amun-pi-export-command",
+                        command: { id, format: "txt", text: review },
+                      },
+                      "*",
+                    );
+                  }}
+                >
+                  Save the reviewed diagnostics…
+                </button>
+                <button className="btn quiet" onClick={() => setReview(null)}>
+                  Close
+                </button>
+              </span>
+            </div>
+          )}
+          {status && <p className="small">{status}</p>}
         </div>
       </div>
     </section>

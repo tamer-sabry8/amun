@@ -12,7 +12,11 @@ import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
-import { ConversationTools, FirstmateRuntime } from "./advanced-panels.tsx";
+import {
+  ConversationTools,
+  DiagnosticsTools,
+  FirstmateRuntime,
+} from "./advanced-panels.tsx";
 import { BackupPanel, SkillsPanel } from "./settings-panels.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
@@ -608,6 +612,7 @@ export function Settings({
               </p>
               <FirstmateRuntime />
               <ConversationTools />
+              <DiagnosticsTools />
               <p className="muted small">
                 The earlier workspace remains available for comparison at Amun’s
                 address with ?legacy=1.

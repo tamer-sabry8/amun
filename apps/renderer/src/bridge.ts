@@ -17,6 +17,7 @@ import {
   prototypeResult,
   crewRoster,
   crewInventory,
+  diagnosticsResult,
   type WorkspaceSnapshot,
   type AuthEvent,
 } from "@amun/contracts";
@@ -159,6 +160,11 @@ export function initializeBridge() {
       const roster = crewRoster.safeParse(message.data);
       if (roster.success) {
         for (const f of eventListeners) f(roster.data);
+        return;
+      }
+      const diagnostics = diagnosticsResult.safeParse(message.data);
+      if (diagnostics.success) {
+        for (const f of eventListeners) f(diagnostics.data);
         return;
       }
       const chat = chatResult.safeParse(message.data);

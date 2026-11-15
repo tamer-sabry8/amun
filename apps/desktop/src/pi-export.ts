@@ -16,8 +16,13 @@ export function installPiExport(window: BrowserWindow) {
     let status: "saved" | "cancelled" | "failed" = "failed";
     try {
       const chosen = await dialog.showSaveDialog(window, {
-        title: "Save reviewed Pi session",
-        defaultPath: "Amun-session." + request.format,
+        title:
+          request.format === "txt"
+            ? "Save reviewed diagnostics"
+            : "Save reviewed Pi session",
+        defaultPath:
+          (request.format === "txt" ? "Amun-diagnostics." : "Amun-session.") +
+          request.format,
         filters: [
           { name: request.format.toUpperCase(), extensions: [request.format] },
         ],

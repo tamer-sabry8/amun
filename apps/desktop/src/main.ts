@@ -77,6 +77,7 @@ function startService(): void {
         AMUN_E2E_TEST_PROVIDERS: app.isPackaged
           ? ""
           : (process.env.AMUN_E2E_TEST_PROVIDERS ?? ""),
+        AMUN_APP_VERSION: app.getVersion(),
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
         AMUN_MCP_MODULES: mcpModules(),

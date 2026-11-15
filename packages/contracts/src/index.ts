@@ -27,5 +27,6 @@ export * from "./native-pi.js";
 export * from "./backlog.js";
 export * from "./firstmate-chat.js";
 export * from "./pr-workspace.js";
+export * from "./diagnostics.js";
 
 export * from "./prototype.js";
