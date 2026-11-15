@@ -68,10 +68,27 @@ export function attentionRow(item: Attention): AttentionRow {
 }
 
 /** What a proposal has not done yet, named for where it would go. */
-export function previewNote(destination: string) {
+export function previewNote(destination: string, named?: string) {
   return destination === "ado"
     ? "Preview only · No Azure DevOps changes"
-    : "Preview only · Nothing changes until you approve";
+    : `Preview only · ${named ? `To ${named} · ` : ""}Nothing changes until you approve`;
+}
+/** One honest header line per plan state; never claims approval for a plan that was not approved. */
+export function planStateNote(state: string, destination: string) {
+  switch (state) {
+    case "proposed":
+      return previewNote(destination);
+    case "changes_requested":
+      return "Changes requested · nothing was published";
+    case "approved":
+    case "published":
+    case "partial":
+      return "Approved";
+    case "failed":
+      return "Approved · publishing did not finish";
+    default:
+      return "Not published";
+  }
 }
 /** Labels that make clear what an accepted offer or a result did not do (Q50). */
 export const outcomeNotes = {

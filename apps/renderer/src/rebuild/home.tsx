@@ -76,7 +76,9 @@ export function IntakeCard({
         name,
         client: facts.client ?? "",
         deadline: facts.deadline,
-        responseOwner: facts.owner,
+        responseOwner: facts.responseOwner,
+        accountOwner: facts.accountOwner,
+        presales: facts.presales,
       });
       return result.ok ? result.ref : null;
     }

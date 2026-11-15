@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import {
   failureOverflow,
+  planStateNote,
   previewNote,
   updateMessage,
 } from "../../../../packages/domain/src/work/home.ts";
@@ -47,7 +48,7 @@ import { pendingOffers } from "./offer-turns.ts";
 import {
   agentNews,
   amunProtocol,
-  workTypeGuard,
+  areaTurnContext,
   areaOf,
   parseAmunActions,
   typeLabels,
@@ -509,7 +510,7 @@ function PlanReview({
       <p className="muted">
         To {planDestinations(plan)} · {plan.items.length}{" "}
         {plan.items.length === 1 ? "item" : "items"} ·{" "}
-        {proposed ? previewNote(plan.destination) : "Approved"}
+        {planStateNote(plan.state, plan.destination)}
       </p>
       <div style={{ display: "grid", gap: 14 }}>
         {plan.items.map((item) => {
@@ -1020,15 +1021,16 @@ export function WorkSession({
     // Read before this message is added: what agents finished since the
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
+    const record = snapshot.rfps.find((item) => item.id === areaId);
+    const header = areaTurnContext(
+      context.area,
+      typeLabels[context.area.type],
+      context.group,
+      record,
+    );
     const scoped = briefing
-      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${workTypeGuard(
-          context.area.type,
-          snapshot.rfps.find((item) => item.id === areaId),
-        )}${text}`
-      : `${workTypeGuard(
-          context.area.type,
-          snapshot.rfps.find((item) => item.id === areaId),
-        )}${text}`;
+      ? `${amunProtocol}\n\n${header}${text}`
+      : `${header}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -1567,7 +1569,9 @@ export function WorkSession({
               {plans.map((plan) => (
                 <div className="rb-inline" key={plan.id}>
                   <strong>{plan.summary}</strong>
-                  <span className="note">{previewNote(plan.destination)}</span>
+                  <span className="note">
+                    {previewNote(plan.destination, planDestinations(plan))}
+                  </span>
                   <button
                     className="btn"
                     style={{ justifySelf: "start" }}

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   adoPlanTarget,
   adoStep,
+  claimsNotionPageUpdate,
+  localClaimRefusalEvent,
+  localPlanRefusal,
+  notionUpdateRefusal,
+  notionUpdateRefusalEvent,
   notionPlanTarget,
 } from "../src/plan-targets.ts";
 import { PlanNotSent } from "../../../packages/data/src/plan-publication.ts";
@@ -296,5 +301,154 @@ describe("Notion plan items", () => {
       locate: async () => page,
     });
     expect((await found.find(item()))?.externalId).toBe(page);
+  });
+});
+
+describe("Notion page update claims", () => {
+  const plan = (summary: string, fields = {}, itemSummary = "QA page") => ({
+    summary,
+    items: [{ summary: itemSummary, fields }],
+  });
+  it("refuses the incident wording", () => {
+    expect(
+      claimsNotionPageUpdate(
+        plan(
+          "Update the existing Notion page QA-20261114. Edits the existing page only; no new page is created",
+        ),
+      ),
+    ).toBe(true);
+  });
+  it("refuses re-sync, edit and page-reference fields", () => {
+    expect(claimsNotionPageUpdate(plan("Re-sync QA notes"))).toBe(true);
+    expect(claimsNotionPageUpdate(plan("Notes", {}, "Edit the page"))).toBe(
+      true,
+    );
+    expect(claimsNotionPageUpdate(plan("Notes", { "Page ID": "abc" }))).toBe(
+      true,
+    );
+  });
+  it("allows ordinary new-page plans", () => {
+    expect(
+      claimsNotionPageUpdate(plan("Publish QA summary", { body: "Hello" })),
+    ).toBe(false);
+    expect(claimsNotionPageUpdate(plan("Add a page", { "Page ID": "" }))).toBe(
+      false,
+    );
+  });
+  it("does not scan body text, only titles and page references", () => {
+    expect(
+      claimsNotionPageUpdate(
+        plan("Publish QA notes", {
+          body: "We will re-sync later and edit the page by hand",
+          description: "Update the existing page",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      claimsNotionPageUpdate(plan("Notes", { Title: "Re-sync QA notes" })),
+    ).toBe(true);
+  });
+  it("refuses an incident-style Notion plan and tolerates missing items", () => {
+    const summary =
+      "Update the existing Notion page QA-20261114. Edits the existing page only; no new page is created";
+    const event = notionUpdateRefusalEvent({
+      action: "propose-plan",
+      destination: "notion",
+      summary,
+      items: [{ summary: "QA page", fields: {} }],
+    });
+    expect(event).toMatchObject({ ok: false, message: notionUpdateRefusal });
+    expect(
+      notionUpdateRefusalEvent(
+        { action: "update-plan" },
+        { destination: "notion", summary },
+      ),
+    ).toMatchObject({ ok: false, message: notionUpdateRefusal });
+    expect(
+      notionUpdateRefusalEvent({
+        action: "propose-plan",
+        destination: "ado",
+        summary,
+        items: [],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("local-only requests", () => {
+  const notion = {
+    action: "propose-plan",
+    destination: "notion",
+    summary: "Two QA stories",
+    items: [{ fields: {} }],
+  };
+  const ado = { ...notion, destination: "ado" };
+  it("refuses an external plan when the owner asked for local only", () => {
+    for (const ask of [
+      "Add two local QA stories. Do not change Azure DevOps.",
+      "Keep it local",
+      "local only please",
+      "Create the stories locally",
+      "Only in Amun",
+      "don't change Notion",
+    ])
+      expect(localClaimRefusalEvent(notion, ask)).toMatchObject({
+        ok: false,
+        message: localPlanRefusal,
+      });
+  });
+  it("refuses only when the forbidden service is the plan's destination", () => {
+    expect(
+      localClaimRefusalEvent(ado, "Do not change Azure DevOps"),
+    ).toMatchObject({ ok: false });
+    expect(
+      localClaimRefusalEvent(notion, "Do not change Azure DevOps"),
+    ).toBeNull();
+  });
+  it("allows approval-gated wording", () => {
+    for (const ask of [
+      "Propose them only; do not publish anywhere yet.",
+      "Prepare a separate review-and-publish plan for the stories. Do not publish until I approve the plan separately.",
+      "Don't send yet, preview only",
+    ])
+      expect(localClaimRefusalEvent(ado, ask)).toBeNull();
+    expect(
+      localClaimRefusalEvent(
+        { ...ado, summary: "Nothing is published until you approve" },
+        "Add stories",
+      ),
+    ).toBeNull();
+  });
+  it("refuses an external plan whose summary claims local", () => {
+    expect(
+      localClaimRefusalEvent(
+        { ...notion, summary: "Local sprint plan" },
+        "Add stories",
+      ),
+    ).not.toBeNull();
+    expect(
+      localClaimRefusalEvent(
+        {
+          ...notion,
+          summary: "Local draft sprint for QA. Not for Azure DevOps.",
+        },
+        "Add stories",
+      ),
+    ).not.toBeNull();
+    expect(
+      localClaimRefusalEvent(
+        { ...notion, summary: "Stays in Amun" },
+        "Add stories",
+      ),
+    ).not.toBeNull();
+  });
+  it("allows ordinary external plans and local destinations", () => {
+    expect(localClaimRefusalEvent(notion, "Publish this to Notion")).toBeNull();
+    expect(
+      localClaimRefusalEvent(
+        { ...notion, destination: "amun" },
+        "keep it local",
+      ),
+    ).toBeNull();
   });
 });

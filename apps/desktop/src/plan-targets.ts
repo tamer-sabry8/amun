@@ -210,6 +210,183 @@ export function adoPlanTarget(
   };
 }
 
+export const notionUpdateRefusal =
+  "Amun can only create new Notion pages; updating an existing page is not supported yet.";
+
+const updateWording = [
+  /\bexisting\s+(notion\s+)?page\b/,
+  /\bno new page\b/,
+  /\bre-?sync/,
+  /\b(updates?|updating|edits?|editing|overwrites?|modif(?:y|ies)|amends?)\s+(the\s+|a\s+|an\s+)?(notion\s+)?page\b/,
+];
+const pageReference = new Set([
+  "page",
+  "pageid",
+  "pageurl",
+  "pagelink",
+  "notionpage",
+  "notionpageid",
+  "notionpageurl",
+  "existingpage",
+  "existingpageid",
+  "existingpageurl",
+  "targetpage",
+  "targetpageid",
+]);
+
+/**
+ * True when a Notion plan says it changes a page that already exists. The
+ * publisher only creates child pages, so such a plan must never be stored.
+ */
+export function claimsNotionPageUpdate(plan: {
+  summary: string;
+  items: { summary: string; fields: Record<string, string | number | null> }[];
+}) {
+  const wording = (value: string) =>
+    updateWording.some((pattern) => pattern.test(value.toLowerCase()));
+  // Body-like fields are page content, so only titles and page references count.
+  const titleLike = new Set(["title", "name", "heading"]);
+  return (
+    wording(plan.summary) ||
+    plan.items.some(
+      (item) =>
+        wording(item.summary) ||
+        Object.entries(item.fields).some(([key, value]) => {
+          const name = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (value === null || String(value).trim() === "") return false;
+          if (pageReference.has(name)) return true;
+          return titleLike.has(name) && wording(String(value));
+        }),
+    )
+  );
+}
+
+/**
+ * The refusal event for a Notion plan message that claims to change an
+ * existing page, or null when the message may go on to the store.
+ */
+export function notionUpdateRefusalEvent(
+  proposal:
+    | {
+        action: "propose-plan";
+        destination?: unknown;
+        summary: string;
+        items?: { summary: string; fields: Record<string, unknown> }[];
+      }
+    | {
+        action: "update-plan";
+        items?: { summary: string; fields: Record<string, unknown> }[];
+      }
+    | { action: string },
+  stored?: { destination: unknown; summary: string },
+) {
+  if (proposal.action !== "propose-plan" && proposal.action !== "update-plan")
+    return null;
+  const p = proposal as {
+    destination?: unknown;
+    summary?: string;
+    items?: { summary: string; fields: Record<string, unknown> }[];
+  };
+  const items = p.items ?? [];
+  if (proposal.action === "update-plan" && !stored) return null;
+  const destinations = [
+    proposal.action === "propose-plan" ? p.destination : stored?.destination,
+    ...items.map((i) => i.fields.destination),
+  ];
+  const toNotion = destinations.some(
+    (value) =>
+      typeof value === "string" && value.trim().toLowerCase() === "notion",
+  );
+  if (
+    !toNotion ||
+    !claimsNotionPageUpdate({
+      summary:
+        proposal.action === "propose-plan"
+          ? (p.summary ?? "")
+          : (stored?.summary ?? ""),
+      items: items as {
+        summary: string;
+        fields: Record<string, string | number | null>;
+      }[],
+    })
+  )
+    return null;
+  return {
+    version: 1 as const,
+    kind: "work-result" as const,
+    action: proposal.action,
+    ok: false as const,
+    message: notionUpdateRefusal,
+    ref: null,
+    step: null,
+  };
+}
+
+export const localPlanRefusal =
+  "That plan would go to an outside service, not stay local. Amun did not store it. Do not call it local; say plainly that this change cannot be made locally yet and nothing was changed.";
+const localAsk =
+  /\blocal(ly)?[\s-]only\b|\bkeep\s+(it|this|them|these)\s+local(ly)?\b|\blocal(ly)?\b(?=[^.]*\b(draft|sprint|plan|stories|story|change)\b)|\blocally\b|\bonly\s+in\s+amun\b/i;
+const localClaim = /\blocal(ly)?\b|\bstays?\s+in\s+amun\b/i;
+const external = new Set(["notion", "ado", "github"]);
+const serviceNames: Record<string, string> = {
+  notion: "notion",
+  ado: "azure devops|azure\\s+boards|ado",
+  github: "github",
+};
+
+// Forbids changing the plan's own destination; "do not publish" is not one.
+function forbidsDestination(message: string, service: string) {
+  return new RegExp(
+    `\\b(do not|don't|dont|never)\\s+(change|touch|update|write to)\\s+(${serviceNames[service]})\\b`,
+    "i",
+  ).test(message);
+}
+
+function deniesDestination(summary: string, service: string) {
+  return new RegExp(`\\bnot for\\s+(${serviceNames[service]})\\b`, "i").test(
+    summary,
+  );
+}
+
+/**
+ * A plan for an outside destination must not be described as local, nor
+ * stored when the owner's latest message asked for local-only work.
+ */
+export function localClaimRefusalEvent(
+  proposal: {
+    action: string;
+    destination?: unknown;
+    summary?: string;
+    items?: { fields: Record<string, unknown> }[];
+  },
+  latestOwnerMessage: string,
+) {
+  if (proposal.action !== "propose-plan") return null;
+  const places = [
+    proposal.destination,
+    ...(proposal.items ?? []).map((i) => i.fields.destination),
+  ].map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""));
+  const targets = places.filter((v) => external.has(v));
+  if (!targets.length) return null;
+  const summary = proposal.summary ?? "";
+  if (
+    !localAsk.test(latestOwnerMessage) &&
+    !targets.some((t) => forbidsDestination(latestOwnerMessage, t)) &&
+    !localClaim.test(summary) &&
+    !targets.some((t) => deniesDestination(summary, t))
+  )
+    return null;
+  return {
+    version: 1 as const,
+    kind: "work-result" as const,
+    action: "propose-plan" as const,
+    ok: false as const,
+    message: localPlanRefusal,
+    ref: null,
+    step: null,
+  };
+}
+
 const notionNames: Record<string, string> = {
   title: "title",
   body: "body",

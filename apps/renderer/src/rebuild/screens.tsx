@@ -2,7 +2,10 @@
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
 import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
-import { rfpFromRequest } from "../../../../packages/domain/src/work/model.ts";
+import {
+  rfpDetails,
+  rfpFromRequest,
+} from "../../../../packages/domain/src/work/model.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { useState, type DragEvent, type ReactNode } from "react";
 import {
@@ -1693,17 +1696,23 @@ export function Rfps({
               const request = rfpFromRequest(text, snapshot.groups);
               if (!request.name)
                 return setNote("Name the RFP you want to track.");
+              const facts = rfpDetails(text, new Date(now));
               const parsed = request.due
                 ? Date.parse(request.due + " " + new Date(now).getFullYear())
                 : NaN;
               const result = await workAsync("save-rfp", {
                 // Only a group the request names; otherwise the one in use.
                 groupId: request.groupId ?? snapshot.setup.activeGroupId,
-                client: request.client ?? "",
+                client: request.client ?? facts.client ?? "",
                 name: request.name,
-                deadline: Number.isNaN(parsed)
-                  ? null
-                  : new Date(parsed).toISOString(),
+                deadline:
+                  facts.deadline ??
+                  (Number.isNaN(parsed)
+                    ? null
+                    : new Date(parsed).toISOString()),
+                responseOwner: facts.responseOwner,
+                accountOwner: facts.accountOwner,
+                presales: facts.presales,
               });
               setNote(result.ok ? "" : result.message);
               if (result.ref) setSelected(result.ref);

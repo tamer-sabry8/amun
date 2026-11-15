@@ -436,7 +436,22 @@ export function workTypeGuard(
   const known = record
     ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, stage ${record.stage}.`
     : "";
-  return `[This is an RFP Amun only tracks: client, owner, deadline, status and notes. ${record ? "This RFP already exists in Amun's RFPs board" : "An RFP work area already exists in Amun; its board record is unverified"}; do not say you cannot create it. Record or update those when asked, and keep the owner's wording; do not invent values that were not given.${known} Writing or implementing the response belongs to a separate product, so do not write it, start it or offer a proposal or bid draft here.]\n`;
+  const authority = record
+    ? " This record is authoritative for this work area only: never use or offer client, deadline, owner or stage values from another work area or an earlier conversation; if they differ from the record, the record wins."
+    : "";
+  return `[This is an RFP Amun only tracks: client, owner, deadline, status and notes. ${record ? "This RFP already exists in Amun's RFPs board" : "An RFP work area already exists in Amun; its board record is unverified"}; do not say you cannot create it. Record or update those when asked, and keep the owner's wording; do not invent values that were not given.${known}${authority} Writing or implementing the response belongs to a separate product, so do not write it, start it or offer a proposal or bid draft here.]\n`;
+}
+/**
+ * The header for every turn: Firstmate's conversation is shared by all work
+ * areas, so each turn names the one it is about, with its own record.
+ */
+export function areaTurnContext(
+  area: { type: string; name: string },
+  typeLabel: string,
+  group: string | null | undefined,
+  record?: Parameters<typeof workTypeGuard>[1],
+) {
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.]\n${workTypeGuard(area.type, record)}`;
 }
 /** Tells Firstmate, once per work area, how to raise things in Amun. */
 export const amunProtocol = [
@@ -447,7 +462,7 @@ export const amunProtocol = [
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
-  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps: type, description, acceptance (one criterion per line), area, iteration. Notion: title (the page title), body. Leave out anything else, such as assignee or estimate, because it will be refused, and never name a different project or parent.',
+  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps: type, description, acceptance (one criterion per line), area, iteration. Notion: title (the page title), body. Leave out anything else, such as assignee or estimate, because it will be refused, and never name a different project or parent. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',
@@ -455,5 +470,6 @@ export const amunProtocol = [
   '{"do":"rule-case","situation":"short-key","resolution":"what the owner decided"} records a repeated decision.',
   "Where you run: Amun routes you and all of your agents through GitHub Copilot (the Pi worker, provider github-copilot) and nothing else. If asked which provider or engine you use, say so. This is how Amun is set up, so do not claim you cannot confirm it. It does not prove any particular piece of work ran: never call work done until an agent's result has actually arrived.",
   "The work this conversation is about already exists in Amun when you are first spoken to, even if the owner's first message asks to create it: Amun created it before this conversation started. Do not say you cannot create it or that nothing was created; continue from it, and say only what you actually know about it.",
+  "Each message names the work area it is about and may carry that area's record. Use only that area's record. Never use or offer values (client, deadline, owner, stage, names) from other work areas or earlier conversations for it; if they differ from the current record, the current record wins.",
   "Never write to Azure DevOps, a backlog or a committed roadmap yourself, and never use another group's information without asking.",
 ].join("\n");

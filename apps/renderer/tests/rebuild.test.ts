@@ -17,6 +17,7 @@ import {
   homeModel,
   parseAmunActions,
   workTypeGuard,
+  areaTurnContext,
   replyFromTranscript,
   trayFor,
   visibleGroups,
@@ -1128,6 +1129,33 @@ describe("what Firstmate is told about where it runs and what an RFP is", () => 
     });
     expect(guard).toContain("client QA Sandbox, deadline 2026-12-01");
     expect(guard).toContain("response owner not set");
+  });
+  it("gives each turn only its own area's record", () => {
+    const rec = (client: string, deadline: string, stage: string) => ({
+      client,
+      deadline,
+      responseOwner: null,
+      stage,
+    });
+    const a = areaTurnContext(
+      { type: "rfp", name: "RFP-A" },
+      "RFP",
+      null,
+      rec("", "", "lost"),
+    );
+    const b = areaTurnContext(
+      { type: "rfp", name: "RFP-B" },
+      "RFP",
+      "Work",
+      rec("QA Test Client", "2026-11-25T00:00:00.000Z", "received"),
+    );
+    expect(a).toContain("RFP-A");
+    expect(a).toContain("stage lost");
+    for (const leaked of ["QA Test Client", "2026-11-25", "RFP-B", "Work"])
+      expect(a).not.toContain(leaked);
+    expect(b).toContain("client QA Test Client");
+    expect(a).toContain("the record wins");
+    expect(amunProtocol).toContain("current record wins");
   });
   it("tells Firstmate the work already exists when asked to create it", () => {
     expect(amunProtocol).toContain("already exists in Amun");

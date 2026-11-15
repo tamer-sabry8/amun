@@ -584,22 +584,75 @@ describe("rfpFromRequest", () => {
 });
 
 describe("rfpDetails", () => {
+  const now = new Date("2026-11-14T10:00:00Z");
+  const none = {
+    client: null,
+    deadline: null,
+    responseOwner: null,
+    accountOwner: null,
+    presales: null,
+  };
   it("reads the labelled facts of the Home request and nothing else", () => {
     expect(
       rfpDetails(
         'Create an RFP named "QA-20261114-RFP-Retest" in Work. Track only: client "QA Sandbox", deadline 2026-12-01, owner Tamer, status Received.',
+        now,
       ),
     ).toEqual({
+      ...none,
       client: "QA Sandbox",
       deadline: "2026-12-01T00:00:00.000Z",
-      owner: "Tamer",
+      accountOwner: "Tamer",
     });
   });
   it("keeps unknown values empty", () => {
     expect(
       rfpDetails(
         "Track an RFP. The client is not yet known, the owner is not assigned, and the deadline is unknown.",
+        now,
       ),
-    ).toEqual({ client: null, deadline: null, owner: null });
+    ).toEqual(none);
+  });
+  it("reads the incident sentence without moving the owner", () => {
+    expect(
+      rfpDetails(
+        "Track a new RFP called QA-20261114-RFP-Smart-Inspection for client QA Test Client, due 25 November 2026. RFP owner is Sara; the response owner is not known yet. This is synthetic QA data.",
+        now,
+      ),
+    ).toEqual({
+      ...none,
+      client: "QA Test Client",
+      deadline: "2026-11-25T00:00:00.000Z",
+      accountOwner: "Sara",
+    });
+  });
+  it.each([
+    ["for client Acme Ltd due 5 Dec 2026", "Acme Ltd", "2026-12-05"],
+    ["client Acme, deadline: November 25, 2026", "Acme", "2026-11-25"],
+    ["client: Acme; due 25/11/2026", "Acme", "2026-11-25"],
+    ['client is "Acme, Inc" due 25th Nov 2026', "Acme, Inc", "2026-11-25"],
+    ["client Acme due 17 November", "Acme", "2026-11-17"],
+    ["client Acme due 10 November", "Acme", "2027-11-10"],
+    ["client Acme due in 10 days", "Acme", "2026-11-24"],
+    ["client Acme due 31 February 2026", "Acme", null],
+  ])("reads client and deadline from %s", (text, client, day) => {
+    expect(rfpDetails(text, now)).toMatchObject({
+      client,
+      deadline: day ? day + "T00:00:00.000Z" : null,
+    });
+  });
+  it.each([
+    [
+      "Response owner is Dana. Sales owner: Omar, pre-sales Lena",
+      { responseOwner: "Dana", accountOwner: "Omar", presales: "Lena" },
+    ],
+    [
+      "sales or account owner Omar and pre-sales contact is Lena.",
+      { accountOwner: "Omar", presales: "Lena" },
+    ],
+    ["response owner not known yet, presales TBD", {}],
+    ["owner is Sara", { accountOwner: "Sara" }],
+  ])("reads owners from %s", (text, expected) => {
+    expect(rfpDetails(text, now)).toEqual({ ...none, ...expected });
   });
 });

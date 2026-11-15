@@ -352,31 +352,104 @@ export function rfpFromRequest(
   return { name, client, due, groupId };
 }
 
+const monthNames = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
+
+// A real calendar day at 00:00Z, or null for something like 31 February.
+function utcDay(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month &&
+    date.getUTCDate() === day
+    ? date
+    : null;
+}
+
+function deadlineFrom(text: string, now: Date) {
+  const lead = String.raw`\b(?:deadline|due)(?:\s+date)?\s*(?:is|:|on|by)?\s*`;
+  const after = (pattern: string) => new RegExp(lead + pattern, "i").exec(text);
+  const today = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const month = (name: string) =>
+    monthNames.indexOf(name.slice(0, 3).toLowerCase());
+  const monthWord = String.raw`(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
+  const named = (
+    dayText: string,
+    monthText: string,
+    yearText: string | undefined,
+  ) => {
+    const m = month(monthText);
+    const d = Number(dayText);
+    if (yearText) return utcDay(Number(yearText), m, d);
+    const thisYear = utcDay(now.getUTCFullYear(), m, d);
+    if (thisYear && thisYear.getTime() >= today) return thisYear;
+    return utcDay(now.getUTCFullYear() + 1, m, d);
+  };
+  const iso = after(String.raw`(\d{4})-(\d{2})-(\d{2})\b`);
+  if (iso) return utcDay(+iso[1]!, +iso[2]! - 1, +iso[3]!);
+  const dayFirst = after(
+    String.raw`(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?` +
+      monthWord +
+      String.raw`\b(?:,?\s+(\d{4})\b)?`,
+  );
+  if (dayFirst) return named(dayFirst[1]!, dayFirst[2]!, dayFirst[3]);
+  const monthFirst = after(
+    monthWord +
+      String.raw`\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4})\b)?`,
+  );
+  if (monthFirst) return named(monthFirst[2]!, monthFirst[1]!, monthFirst[3]);
+  const slash = after(String.raw`(\d{1,2})/(\d{1,2})/(\d{4})\b`);
+  if (slash) return utcDay(+slash[3]!, +slash[2]! - 1, +slash[1]!);
+  const within = after(String.raw`in\s+(\d{1,3})\s+days?\b`);
+  if (within) return new Date(today + Number(within[1]) * 86_400_000);
+  return null;
+}
+
 /**
- * The labelled facts an RFP request states outright: client "QA Sandbox",
- * deadline 2026-12-01, owner Tamer. Anything missing, or said to be unknown,
- * stays empty. The owner here is the response owner.
+ * The facts an RFP request states outright, read without guessing: the client
+ * ("for client X", "client: X", a quoted name), the deadline (ISO, "25 November
+ * 2026", "November 25, 2026", "25/11/2026" day-first, "due 17 November" as its
+ * next occurrence, "due in 10 days"), and who owns what. The response owner is
+ * set only by "response owner"; "RFP / account / sales owner" and a bare
+ * "owner" are the account owner; "pre-sales X" is the pre-sales contact.
+ * Anything missing, or said to be unknown, stays null.
  */
-export function rfpDetails(text: string) {
+export function rfpDetails(text: string, now: Date = new Date()) {
   const known = (value: string | undefined) => {
     const clean = value?.trim();
     return clean && !unknownValue.test(clean) ? clean : null;
   };
+  const end = String.raw`(?=\s*(?:[,.;\n]|$)|\s+(?:and|due|deadline)\b)`;
+  const value = String.raw`\s*(?:is|:)?\s*["“]?([^",.;\n]+?)["”]?` + end;
   const client = known(
     /\bclient\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
-      /\bclient\s*(?:is|:)\s*([^.;,\n]+)/i.exec(text)?.[1],
+      new RegExp(
+        String.raw`\bclient\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline)\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
+        "i",
+      ).exec(text)?.[1],
   );
-  const day = /\b(?:deadline|due)\s*(?:is|:|on)?\s*(\d{4}-\d{2}-\d{2})\b/i.exec(
-    text,
-  )?.[1];
-  const deadline =
-    day && !Number.isNaN(Date.parse(day))
-      ? new Date(day + "T00:00:00.000Z").toISOString()
-      : null;
-  const owner = known(
-    /(?<!account\s)\b(?:response\s+)?owner\s*(?:is|:)?\s*["“]?([^",.;\n]+?)["”]?(?=\s*[,.;\n]|$)/i.exec(
-      text,
-    )?.[1],
-  );
-  return { client, deadline, owner };
+  const find = (pattern: string) =>
+    known(new RegExp(pattern + value, "i").exec(text)?.[1]);
+  const deadline = deadlineFrom(text, now)?.toISOString() ?? null;
+  const responseOwner = find(String.raw`\bresponse\s+owner`);
+  const accountOwner =
+    find(String.raw`\b(?:rfp|account|sales)\s+owner`) ??
+    find(String.raw`(?<!\b(?:response|rfp|account|sales)\s)\bowner`);
+  const presales = find(String.raw`\bpre-?sales(?:\s+contact)?`);
+  return { client, deadline, responseOwner, accountOwner, presales };
 }

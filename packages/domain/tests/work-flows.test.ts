@@ -25,6 +25,7 @@ import {
   fromLegacyStatus,
   islandItem,
   nextRetry,
+  planStateNote,
   previewNote,
   rankWork,
   shouldAutoTest,
@@ -738,7 +739,18 @@ describe("stakeholder update and failures", () => {
     expect(updateMessage("").note).toContain("never sends");
   });
   it("says what a proposal has not changed, for its destination", () => {
+    expect(planStateNote("changes_requested", "notion")).toBe(
+      "Changes requested · nothing was published",
+    );
+    expect(planStateNote("proposed", "ado")).toBe(previewNote("ado"));
+    expect(planStateNote("published", "notion")).toBe("Approved");
+    expect(planStateNote("changes_requested", "notion")).not.toContain(
+      "Approved",
+    );
     expect(previewNote("ado")).toBe("Preview only · No Azure DevOps changes");
+    expect(previewNote("notion", "Notion")).toBe(
+      "Preview only · To Notion · Nothing changes until you approve",
+    );
     expect(previewNote("amun")).toBe(
       "Preview only · Nothing changes until you approve",
     );

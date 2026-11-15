@@ -115,7 +115,12 @@ import {
   PlanBlocked,
   PlanPublisher,
 } from "../../../packages/data/src/plan-publication.ts";
-import { adoPlanTarget, notionPlanTarget } from "./plan-targets.ts";
+import {
+  adoPlanTarget,
+  localClaimRefusalEvent,
+  notionUpdateRefusalEvent,
+  notionPlanTarget,
+} from "./plan-targets.ts";
 import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
 import { ToolRegistry } from "../../../packages/data/src/tool-registry.ts";
 import { probeTools } from "./tool-probe.ts";
@@ -1550,7 +1555,24 @@ process.parentPort?.on("message", (event) => {
                   )?.ref === trustRef(harness),
             )
           : undefined;
-      const events = workStore.handle(message.data);
+      const proposal = message.data;
+      const stored =
+        proposal.action === "update-plan"
+          ? workStore.snapshot().plans.find((p) => p.id === proposal.planId)
+          : undefined;
+      const latestOwner =
+        proposal.action === "propose-plan" && proposal.workAreaId
+          ? (workStore
+              .snapshot()
+              .messages.filter(
+                (m) => m.workAreaId === proposal.workAreaId && m.role === "you",
+              )
+              .at(-1)?.text ?? "")
+          : "";
+      const refusal =
+        localClaimRefusalEvent(proposal, latestOwner) ??
+        notionUpdateRefusalEvent(proposal, stored);
+      const events = refusal ? [refusal] : workStore.handle(message.data);
       for (const event of events) port.postMessage(event);
       if (allowed) void delegations.allow(allowed).catch(() => undefined);
       const result = events.find((event) => event.kind === "work-result");
