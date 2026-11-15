@@ -2281,6 +2281,7 @@
 }
 .rb-doc-view .task label {
   display: flex;
+  flex-direction: row;
   gap: 9px;
   align-items: flex-start;
   cursor: pointer;
