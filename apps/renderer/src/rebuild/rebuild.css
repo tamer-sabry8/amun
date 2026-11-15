@@ -1425,7 +1425,7 @@
 /* Agents: pick a specialist on the left, read its brief on the right. */
 .rb-agents {
   display: grid;
-  grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 0;
   flex: 1;
   min-height: 0;
@@ -1580,6 +1580,7 @@
   min-height: 0;
   align-content: start;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 0 4px 20px 16px;
   min-width: 0;
@@ -1594,6 +1595,16 @@
 }
 .rb-spec-panel > header > div {
   min-width: 0;
+}
+.rb-spec-panel > *,
+.rb-spec-panel > header > *,
+.rb-spec-panel .block,
+.rb-spec-panel .block > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rb-spec-panel > header {
+  flex-wrap: wrap;
 }
 .rb-spec-panel .kicker {
   margin: 0 0 4px;
@@ -1618,6 +1629,7 @@
   margin: 6px 0 0;
   font-size: 18px;
   color: var(--muted);
+  text-wrap: balance;
 }
 .rb-spec-panel .block {
   padding: 20px;

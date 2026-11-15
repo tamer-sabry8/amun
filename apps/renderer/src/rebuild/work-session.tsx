@@ -2974,6 +2974,7 @@ export function WorkSession({
                   <PullRequests
                     key={workspace.productContext.productId}
                     context={workspace.productContext}
+                    workAreaId={areaId}
                     onAsk={(text) => setSeed({ text, nonce: Date.now() })}
                   />
                 ) : (

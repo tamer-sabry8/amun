@@ -10,12 +10,15 @@ const sign = (n: number, mark: string) => (n ? `${mark}${n}` : "");
  */
 export function CodeChangeCards({
   product,
+  workAreaId,
   onOpened,
   connected,
   onConnect,
   initial = [],
 }: {
   product: string;
+  /** The work area this pane is open in: its changes show here too. */
+  workAreaId?: string | undefined;
   onOpened: () => void;
   /** owner/name of the repositories this project reads from, lower case. */
   connected?: string[];
@@ -34,7 +37,14 @@ export function CodeChangeCards({
     const id = crypto.randomUUID();
     pending.current = id;
     wait(true);
-    bridge.send({ version: 1, kind: "code-change", id, product, ...args });
+    bridge.send({
+      version: 1,
+      kind: "code-change",
+      id,
+      product,
+      workAreaId,
+      ...args,
+    });
   };
 
   useEffect(
@@ -62,7 +72,7 @@ export function CodeChangeCards({
   useEffect(() => {
     send({ action: "list" });
     // Once per project.
-  }, [product]);
+  }, [product, workAreaId]);
   const shown = [
     ...cards.filter((c) => !["declined", "open"].includes(c.state)),
     ...cards.filter((c) => c.state === "open").slice(0, 3),

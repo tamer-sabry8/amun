@@ -438,6 +438,29 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       .locator(".rb-agents .list > .grid")
       .evaluate((node) => node.scrollTo(0, 0));
     await shot(page, "16-agents");
+    for (const [width, height] of [
+      [1200, 800],
+      [900, 700],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      const fit = await page.evaluate(() => {
+        const root = document.documentElement;
+        const panel = document.querySelector(".rb-spec-panel");
+        const edges = [
+          ...document.querySelectorAll(
+            ".rb-spec-panel, .rb-spec-panel h2, .rb-spec-panel > header, .rb-spec-panel .block",
+          ),
+        ].map((node) => node.getBoundingClientRect().right);
+        return {
+          page: root.scrollWidth - root.clientWidth,
+          panelScroll: panel ? panel.scrollWidth - panel.clientWidth : 0,
+          edge: Math.max(...edges) - root.clientWidth,
+        };
+      });
+      expect(fit.page).toBeLessThanOrEqual(0);
+      expect(fit.panelScroll).toBeLessThanOrEqual(0);
+      expect(fit.edge).toBeLessThanOrEqual(0);
+    }
     await page.getByRole("button", { name: /^Research & Insights/ }).click();
     await expect(
       page.getByRole("region", { name: "Research & Insights" }),

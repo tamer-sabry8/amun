@@ -42,9 +42,11 @@ const voteLabels = {
  */
 export function PullRequests({
   context,
+  workAreaId,
   onAsk,
 }: {
   context: NonNullable<WorkspaceSnapshot["productContext"]>;
+  workAreaId?: string | undefined;
   onAsk: (text: string) => void;
 }) {
   const [rows, setRows] = useState<NonNullable<Result["rows"]>>([]),
@@ -165,6 +167,7 @@ export function PullRequests({
   const changes = (
     <CodeChangeCards
       product={product}
+      workAreaId={workAreaId}
       onOpened={() => send("list")}
       connected={names}
       onConnect={connect}

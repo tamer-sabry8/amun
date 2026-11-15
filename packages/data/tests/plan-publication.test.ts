@@ -681,3 +681,13 @@ describe("duplicate check failure reason", () => {
     ).not.toMatch(/pw@|abc123|https/);
   });
 });
+
+it("shows the destination's own refusal text on the card", async () => {
+  const { refusalReason } = await import("../src/plan-publication.ts");
+  const error = Object.assign(Error("request_rejected_400"), {
+    detail: "TF401320: Rule Error",
+  });
+  expect(refusalReason("ado", error)).toBe(
+    "Azure DevOps refused it: TF401320: Rule Error",
+  );
+});

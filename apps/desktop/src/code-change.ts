@@ -46,6 +46,8 @@ export interface CodeChangeDeps {
   say(workAreaId: string, text: string): void;
   /** Asks the crewmate to revise its change in the same working copy. */
   revise(meta: Meta, note: string): Promise<void>;
+  /** Records an unexpected failure with secrets removed. */
+  report?(event: string, error: unknown): void;
 }
 export const connectGithubFirst =
   "Connect GitHub in Settings › Tools first, then ask again.";
@@ -196,29 +198,39 @@ export class CodeChanges {
     );
   }
 
-  /** The product's work areas: their changes show whichever repository list. */
-  private areas(product: string) {
-    return (
+  /**
+   * The work areas whose changes show in this pane: the product's own areas
+   * and the area the pane is open in, whichever product was recorded when the
+   * job was handed over.
+   */
+  private areas(product: string, workAreaId?: string) {
+    const found = (
       this.deps.db
         .prepare("SELECT id FROM work_areas WHERE product_id=?")
         .pluck()
         .all(product) as string[]
     ).map(String);
+    return workAreaId ? [...found, workAreaId] : found;
   }
   private owns(
     item: { revisions: { product: string }; payload: { workAreaId: string } },
     product: string,
+    workAreaId?: string,
   ) {
     return (
       item.revisions.product === product ||
-      this.areas(product).includes(item.payload.workAreaId)
+      this.areas(product, workAreaId).includes(item.payload.workAreaId)
     );
   }
 
   /** What the owner sees for each change. */
-  async cards(product: string): Promise<CodeChangeCard[]> {
+  async cards(product: string, workAreaId?: string): Promise<CodeChangeCard[]> {
     const cards: CodeChangeCard[] = [];
-    for (const item of this.review.list(product, 20, this.areas(product))) {
+    for (const item of this.review.list(
+      product,
+      20,
+      this.areas(product, workAreaId),
+    )) {
       const { payload, action } = item;
       const state = states[action.state] ?? "failed";
       let blocker: string | undefined;
@@ -230,11 +242,14 @@ export class CodeChanges {
           origin: new URL(payload.repo.url).origin,
           owner: payload.repo.owner,
           name: payload.repo.name,
-        }).catch((error: unknown) =>
-          error instanceof CodeChangeError ? error : undefined,
-        );
+        }).catch((error: unknown) => {
+          if (error instanceof CodeChangeError) return error;
+          this.deps.report?.("code-change.access.failed", error);
+          return new CodeChangeError(
+            "Amun could not check your GitHub access just now. Try again in a moment.",
+          );
+        });
         if (chosen instanceof CodeChangeError) blocker = chosen.message;
-        else if (!chosen) blocker = connectGithubFirst;
         else if (!chosen.writable)
           blocker = cannotWrite(`${payload.repo.owner}/${payload.repo.name}`);
       }
@@ -266,10 +281,15 @@ export class CodeChanges {
   }
 
   /** The owner approved this exact change. */
-  async approve(product: string, reviewId: string, binding: string) {
+  async approve(
+    product: string,
+    reviewId: string,
+    binding: string,
+    workAreaId?: string,
+  ) {
     const item = this.review.read(reviewId);
     const meta = await this.meta(item.payload.job);
-    if (!this.owns(item, product)) throw Error("Product changed.");
+    if (!this.owns(item, product, workAreaId)) throw Error("Product changed.");
     const m = {
       origin: meta.origin,
       owner: meta.owner,
@@ -441,9 +461,14 @@ export class CodeChanges {
   }
 
   /** The owner wants something different: nothing is sent, the crewmate is asked. */
-  async changes(product: string, reviewId: string, note: string) {
+  async changes(
+    product: string,
+    reviewId: string,
+    note: string,
+    workAreaId?: string,
+  ) {
     const item = this.review.read(reviewId);
-    if (!this.owns(item, product)) throw Error("Product changed.");
+    if (!this.owns(item, product, workAreaId)) throw Error("Product changed.");
     if (item.action.state !== "pending_approval")
       throw new CodeChangeError("This change can't be edited any more.");
     const meta = await this.meta(item.payload.job);

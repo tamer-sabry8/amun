@@ -95,12 +95,20 @@ const trackerWords: Record<string, string> = {
   ado: "Azure DevOps",
   github: "GitHub",
 };
+/** The destination's own redacted refusal text, when the error carries one. */
+function refusalDetail(error: unknown) {
+  const detail = (error as { detail?: unknown } | null)?.detail;
+  return typeof detail === "string" ? detail.trim().slice(0, 300) : "";
+}
 /**
  * Plain words for why a destination turned a write down, from its raw error.
  * The raw text is never shown: only the matched category is.
  */
 export function refusalReason(destination: string, error: unknown) {
   const text = error instanceof Error ? error.message : String(error ?? "");
+  const detail = refusalDetail(error);
+  if (detail)
+    return `${trackerWords[destination] ?? "The destination"} refused it: ${detail}`;
   const name = trackerWords[destination] ?? "The destination";
   const status = Number(
     /request_rejected_(\d{3})|\b(?:status|http|error)\D{0,3}(\d{3})\b|\b(4\d\d|5\d\d)\b/i
@@ -143,10 +151,11 @@ export function refusalReason(destination: string, error: unknown) {
 /** An error line for the service log with links and secrets removed. */
 export function redactedError(error: unknown) {
   const text = error instanceof Error ? error.message : String(error ?? "");
-  return text
+  const detail = refusalDetail(error);
+  return (detail ? `${text}: ${detail}` : text)
     .replace(/https?:\/\/\S+/gi, "[link]")
     .replace(/(bearer|basic|token|pat|password)[\s:=]+\S+/gi, "$1 [removed]")
-    .slice(0, 200);
+    .slice(0, 400);
 }
 
 type WriteState = "pending" | "sent" | "created" | "missing" | "unknown";

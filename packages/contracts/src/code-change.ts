@@ -50,6 +50,8 @@ const base = {
   kind: z.literal("code-change"),
   id: z.uuid(),
   product: short,
+  /** The work area the pane is open in. */
+  workAreaId: short.optional(),
 };
 export const codeChangeCommand = z.discriminatedUnion("action", [
   z.strictObject({ ...base, action: z.literal("list") }),

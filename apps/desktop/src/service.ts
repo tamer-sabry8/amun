@@ -1135,6 +1135,12 @@ process.parentPort?.on("message", (event) => {
     host: githubCode,
     tokens: repositoryTokens,
     say: sayInArea,
+    report: (event, error) =>
+      logger.error(event, {
+        reason: redactor.text(
+          error instanceof Error ? error.message : String(error),
+        ),
+      }),
     revise: async (meta, note) => {
       await delegations.start({
         workAreaId: meta.workAreaId,
@@ -1932,10 +1938,22 @@ process.parentPort?.on("message", (event) => {
               cmd.product,
               cmd.reviewId,
               cmd.binding,
+              cmd.workAreaId,
             );
           else if (cmd.action === "changes")
-            await codeChanges.changes(cmd.product, cmd.reviewId, cmd.note);
+            await codeChanges.changes(
+              cmd.product,
+              cmd.reviewId,
+              cmd.note,
+              cmd.workAreaId,
+            );
         } catch (error) {
+          if (!(error instanceof CodeChangeError))
+            logger.error("code-change.action.failed", {
+              reason: redactor.text(
+                error instanceof Error ? error.message : String(error),
+              ),
+            });
           note =
             error instanceof CodeChangeError
               ? redactor.text(error.message).slice(0, 512)
@@ -1946,19 +1964,27 @@ process.parentPort?.on("message", (event) => {
           id: cmd.id,
           product: cmd.product,
           message: note,
-          cards: await codeChanges.cards(cmd.product),
+          cards: await codeChanges.cards(cmd.product, cmd.workAreaId),
         };
       })()
-        .catch((error: unknown) => ({
-          kind: "code-change-result",
-          id: cmd.id,
-          product: cmd.product,
-          message:
-            error instanceof CodeChangeError && error.message
-              ? redactor.text(error.message).slice(0, 512)
-              : "Code changes could not be loaded. Please try again.",
-          cards: [],
-        }))
+        .catch((error: unknown) => {
+          if (!(error instanceof CodeChangeError))
+            logger.error("code-change.list.failed", {
+              reason: redactor.text(
+                error instanceof Error ? error.message : String(error),
+              ),
+            });
+          return {
+            kind: "code-change-result",
+            id: cmd.id,
+            product: cmd.product,
+            message:
+              error instanceof CodeChangeError && error.message
+                ? redactor.text(error.message).slice(0, 512)
+                : "Code changes could not be loaded. Please try again.",
+            cards: [],
+          };
+        })
         .then((r) => {
           if (product() === cmd.product) port.postMessage(r);
         });

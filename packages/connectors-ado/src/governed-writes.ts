@@ -7,6 +7,41 @@ const missingTypeText =
   /TF26199|VS402\d+|work item type\b[^.]*\b(does not exist|not found)\b|is not a work item type|WorkItemType(NotFound|DoesNotExist)/i;
 /** True for Azure's wording when a work item type is not in the project. */
 export const isMissingTypeText = (text: string) => missingTypeText.test(text);
+/** Azure's own refusal text, with links and secrets removed and trimmed. */
+export function redactAdoMessage(text: unknown) {
+  return String(text ?? "")
+    .replace(/https?:\/\/\S+/gi, "[link]")
+    .replace(/(bearer|basic|token|pat|password)[\s:=]+\S+/gi, "$1 [removed]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+}
+/** A non-2xx Azure answer. The message stays the short status code. */
+export class AdoRejected extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super("request_rejected_" + status);
+  }
+}
+const rejectionDetail = (data: unknown) => {
+  const body = data && typeof data === "object" ? (data as object) : {};
+  const pick = (key: string) => {
+    const value = (body as Record<string, unknown>)[key];
+    return typeof value === "string" ? value : "";
+  };
+  const message = redactAdoMessage(pick("message"));
+  const code = redactAdoMessage(pick("typeKey") || pick("errorCode"));
+  return code && !message.includes(code)
+    ? message
+      ? `${message} (${code})`
+      : code
+    : message;
+};
+/** Both a trailing slash and none give exactly one slash before _apis. */
+export const workItemUrl = (collection: string, id: number) =>
+  collection.replace(/\/*$/, "/") + "_apis/wit/workItems/" + id;
 const typeMissing = (status: number, data: unknown) => {
   if (status !== 400 && status !== 404) return false;
   const body = data && typeof data === "object" ? (data as object) : {};
@@ -43,6 +78,7 @@ const sameProject = (actual: string, expected: string) =>
   decoded(actual).trim().toLowerCase() ===
   decoded(expected).trim().toLowerCase();
 type Item = AdoReceipt & {
+  url?: string;
   fields: Record<string, unknown>;
   relations?: { rel: string; url: string }[];
 };
@@ -71,10 +107,14 @@ export class AdoWriteClient {
         route.startsWith("workitems/$") &&
         typeMissing(r.status, r.data)
       )
-        throw new AdoTypeMissing("request_rejected_" + r.status);
-      throw Error(
-        r.status === 412 ? "revision_conflict" : "request_rejected_" + r.status,
-      );
+        throw Object.assign(
+          new AdoTypeMissing("request_rejected_" + r.status),
+          {
+            detail: rejectionDetail(r.data),
+          },
+        );
+      if (r.status === 412) throw Error("revision_conflict");
+      throw new AdoRejected(r.status, rejectionDetail(r.data));
     }
     return r.data;
   }
@@ -134,6 +174,22 @@ export class AdoWriteClient {
       throw Error("Azure revision did not advance");
     return { id: item.id, rev: item.rev };
   }
+  /** The server's own URL for the parent, else one built from the collection. */
+  private async parentUrl(parent: number) {
+    try {
+      const own = ((await this.call("GET", "workitems/" + parent)) as Item)
+        ?.url;
+      if (
+        typeof own === "string" &&
+        new URL(own).origin === new URL(this.collection).origin &&
+        new RegExp("/workitems/" + parent + "$", "i").test(own)
+      )
+        return own;
+    } catch {
+      // Fall back to the collection address below.
+    }
+    return workItemUrl(this.collection, parent);
+  }
   async write(step: AdoStep, parent: number | null) {
     const patch: { op: string; path: string; value: unknown }[] = [];
     if (step.remoteId)
@@ -155,7 +211,7 @@ export class AdoWriteClient {
           path: "/relations/-",
           value: {
             rel: "System.LinkTypes.Hierarchy-Reverse",
-            url: this.collection + "_apis/wit/workItems/" + parent,
+            url: await this.parentUrl(parent),
           },
         });
     }
