@@ -1,6 +1,6 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   failureOverflow,
@@ -31,7 +31,7 @@ import { latestTurnStart, scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
-import { Backlog } from "./lazy.tsx";
+import { Backlog, PrdView } from "./lazy.tsx";
 import { PullRequests } from "./pull-requests.tsx";
 import { takeSprintContext } from "./sprint-context.ts";
 import { Composer } from "./composer.tsx";
@@ -110,12 +110,6 @@ import {
   type AmunAction,
   type Snapshot,
 } from "./view-model.ts";
-
-const PrdWorkspace = lazy(() =>
-  import("../prd-workspace.tsx").then(({ PrdWorkspace }) => ({
-    default: PrdWorkspace,
-  })),
-);
 
 export type PaneTarget =
   | { kind: "output"; id: string }
@@ -2923,28 +2917,18 @@ export function WorkSession({
                 ))}
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
-                  <div className="rb-embedded">
-                    {pane.kind === "prd" ? (
-                      <Suspense
-                        fallback={<p role="status">Opening the PRD…</p>}
-                      >
-                        <PrdWorkspace
-                          key={workspace.productContext.productId}
-                          context={workspace.productContext}
-                          mode="Write"
-                          setMode={() => undefined}
-                          openPreview={() => undefined}
-                          embedded
-                        />
-                      </Suspense>
-                    ) : (
-                      <Backlog
-                        key={workspace.productContext.productId}
-                        context={workspace.productContext}
-                        embedded
-                      />
-                    )}
-                  </div>
+                  pane.kind === "prd" ? (
+                    <PrdView
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                      openPreview={(url) => onPane({ kind: "browser", url })}
+                    />
+                  ) : (
+                    <Backlog
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                    />
+                  )
                 ) : (
                   <p className="muted" role="status">
                     Opening…
