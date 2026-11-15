@@ -4,6 +4,7 @@
 import type { AzureProcessSchema } from "../../../packages/contracts/src/backlog.ts";
 import type { AdoStep } from "../../../packages/data/src/ado-batch.ts";
 import {
+  PlanChanged,
   PlanNotSent,
   type PlanTarget,
   type PlanWriteItem,
@@ -13,9 +14,16 @@ import type {
   NotionResult,
 } from "../../../packages/connectors-notion/src/client.ts";
 import {
+  notionTargetReference,
   uuidFromReference,
   type NotionDestination,
 } from "../../../packages/auth/src/notion-result.ts";
+import {
+  updatedContent,
+  type NotionPageSnapshot,
+  type NotionPageUpdate,
+  type NotionUpdateOutcome,
+} from "../../../packages/auth/src/notion-page-update.ts";
 
 import { AdoTypeMissing } from "../../../packages/connectors-ado/src/governed-writes.ts";
 
@@ -341,7 +349,27 @@ export function adoPlanTarget(
 }
 
 export const notionUpdateRefusal =
-  "Amun can only create new Notion pages; updating an existing page is not supported yet.";
+  "Amun can only update a Notion page it created itself, and the plan has to name that page. Nothing was changed.";
+export const notionChangedNote =
+  "Changed in Notion since Amun last wrote it. Nothing was overwritten.";
+
+/** The page a plan item names, as a bare id, or undefined. */
+export function notionPageOf(fields: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(fields)) {
+    if (!pageReference.has(key.toLowerCase().replace(/[^a-z0-9]/g, "")))
+      continue;
+    if (typeof value !== "string" || !value.trim()) continue;
+    try {
+      const text = value.trim();
+      return uuidFromReference(
+        /^https?:/i.test(text) ? notionTargetReference(text) : text,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
 
 const updateWording = [
   /\bexisting\s+(notion\s+)?page\b/,
@@ -409,6 +437,8 @@ export function notionUpdateRefusalEvent(
       }
     | { action: string },
   stored?: { destination: unknown; summary: string },
+  /** True for a page Amun created itself and holds a receipt for. */
+  ownPage: (pageId: string) => boolean = () => false,
 ) {
   if (proposal.action !== "propose-plan" && proposal.action !== "update-plan")
     return null;
@@ -438,6 +468,15 @@ export function notionUpdateRefusalEvent(
         summary: string;
         fields: Record<string, string | number | null>;
       }[],
+    })
+  )
+    return null;
+  // An update of pages Amun created is reviewed and approved like any plan.
+  if (
+    items.length &&
+    items.every((item) => {
+      const page = notionPageOf(item.fields);
+      return page !== undefined && ownPage(page);
     })
   )
     return null;
@@ -525,6 +564,13 @@ const notionNames: Record<string, string> = {
   parentid: "parent",
   parent: "parent",
   destination: "destination",
+  page: "page",
+  pageid: "page",
+  pageurl: "page",
+  pagelink: "page",
+  notionpage: "page",
+  notionpageid: "page",
+  notionpageurl: "page",
 };
 
 /**
@@ -565,7 +611,43 @@ function notionPage(item: PlanWriteItem, destination: NotionDestination) {
       );
   }
   const title = fields.title ?? item.summary;
-  return { title, body: fields.body ?? title };
+  return { title, body: fields.body ?? title, page: fields.page };
+}
+
+/** What the owner approved for one update, checked against Amun's receipts. */
+export interface NotionPageReceipt {
+  marker: string;
+  version: string | null;
+  url: string | null;
+}
+function updateOf(
+  item: PlanWriteItem,
+  destination: NotionDestination,
+  receipts: ((pageId: string) => NotionPageReceipt | undefined) | undefined,
+) {
+  const named = notionPageOf(item.fields);
+  const page = notionPage(item, destination);
+  if (!page.page) return undefined;
+  if (!named)
+    throw new PlanNotSent("That is not a Notion page link. Nothing was sent.");
+  const receipt = receipts?.(named);
+  if (!receipt)
+    throw new PlanNotSent(
+      "Amun can only update a Notion page it created itself. Nothing was sent.",
+    );
+  if (!receipt.version)
+    throw new PlanNotSent(
+      "Amun did not record how this page looked when it wrote it, so it will not change it. Nothing was sent.",
+    );
+  if (
+    typeof item.fields.title !== "string" ||
+    !item.fields.title.trim() ||
+    !(item.fields.body ?? item.fields.description)
+  )
+    throw new PlanNotSent(
+      "An update needs both the new title and the new content. Nothing was sent.",
+    );
+  return { pageId: named, receipt, title: page.title, body: page.body };
 }
 
 export function notionPlanTarget(
@@ -586,7 +668,19 @@ export function notionPlanTarget(
       },
       workspaceId: string,
     ): Promise<string | undefined>;
+    readPage?(
+      pageId: string,
+      workspaceId: string,
+      titleProperty?: string,
+    ): Promise<NotionPageSnapshot>;
+    updatePage?(
+      input: NotionPageUpdate,
+      workspaceId: string,
+      beforeSend: () => void,
+    ): Promise<NotionUpdateOutcome>;
   },
+  /** Amun's own receipt for a page it created; none for any other page. */
+  receipts?: (pageId: string) => NotionPageReceipt | undefined,
 ): PlanTarget {
   const property =
     destination.parentType === "data_source_id" &&
@@ -595,8 +689,78 @@ export function notionPlanTarget(
     externalId: pageId,
     url: "https://www.notion.so/" + pageId.replaceAll("-", ""),
   });
+  const bare = (pageId: string) => pageId.replaceAll("-", "");
+  // After a created page: what it looks like now, kept for the conflict check.
+  const versionOf = async (pageId: string) => {
+    try {
+      return (
+        await connection.readPage?.(
+          pageId,
+          workspaceId,
+          destination.titleProperty,
+        )
+      )?.version;
+    } catch {
+      return undefined;
+    }
+  };
+  const update = async (
+    item: PlanWriteItem,
+    change: NonNullable<ReturnType<typeof updateOf>>,
+  ) => {
+    if (!connection.updatePage)
+      throw new PlanNotSent("Notion could not be reached. Nothing was sent.");
+    let sent = false;
+    let outcome: NotionUpdateOutcome;
+    try {
+      outcome = await connection.updatePage(
+        {
+          pageId: change.pageId,
+          expectedVersion: change.receipt.version!,
+          parentId: destination.parentId,
+          titleProperty: destination.titleProperty,
+          title: change.title,
+          text: change.body,
+          marker: change.receipt.marker,
+        },
+        workspaceId,
+        () => {
+          sent = true;
+        },
+      );
+    } catch (error) {
+      if (sent) throw error;
+      throw new PlanNotSent(
+        error instanceof Error && /reconnect/i.test(error.message)
+          ? "Reconnect Notion in Settings, then retry."
+          : "Notion could not be reached. Nothing was sent.",
+      );
+    }
+    if (outcome.state === "changed")
+      throw new PlanChanged(notionChangedNote, outcome.url);
+    if (outcome.state === "elsewhere")
+      throw new PlanNotSent(
+        "That page is not under the connected Notion destination. Nothing was sent.",
+      );
+    if (outcome.state === "gone")
+      throw new PlanNotSent(
+        "That page was deleted in Notion. Nothing was sent.",
+      );
+    if (outcome.state !== "updated") {
+      if (!sent) throw new PlanNotSent("Notion did not accept the update.");
+      throw Error("Notion did not confirm the update.");
+    }
+    return {
+      externalId: change.pageId,
+      url: change.receipt.url ?? "https://www.notion.so/" + bare(change.pageId),
+      updated: true,
+      version: outcome.version,
+    };
+  };
   return {
     async write(item) {
+      const change = updateOf(item, destination, receipts);
+      if (change) return update(item, change);
       const page = notionPage(item, destination);
       const body = page.body;
       let sent = false;
@@ -630,9 +794,33 @@ export function notionPlanTarget(
         if (!sent) throw new PlanNotSent("Notion did not accept the page.");
         throw Error("Notion did not confirm the page.");
       }
-      return receipt(result.pageId);
+      const version = await versionOf(result.pageId);
+      return { ...receipt(result.pageId), ...(version ? { version } : {}) };
     },
     async find(item) {
+      const change = updateOf(item, destination, receipts);
+      if (change) {
+        if (!connection.readPage)
+          throw Error("Notion has not confirmed whether the page changed.");
+        const now = await connection.readPage(
+          change.pageId,
+          workspaceId,
+          destination.titleProperty,
+        );
+        // The page already holds the approved content, so it was updated.
+        return now.content ===
+          updatedContent(
+            { text: change.body, marker: change.receipt.marker },
+            now.content,
+          ) && now.title === change.title
+          ? {
+              externalId: change.pageId,
+              url: now.url,
+              updated: true,
+              version: now.version,
+            }
+          : undefined;
+      }
       const pageId = await connection.locate(
         {
           marker: item.marker,

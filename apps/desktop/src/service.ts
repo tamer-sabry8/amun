@@ -80,6 +80,7 @@ import {
 } from "../../../packages/auth/src/github-mcp.ts";
 import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
 import { createHash } from "node:crypto";
+import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
   nativePiCommand,
@@ -139,6 +140,8 @@ import {
   localClaimRefusalEvent,
   notionUpdateRefusalEvent,
   notionPlanTarget,
+  notionPageOf,
+  notionChangedNote,
 } from "./plan-targets.ts";
 import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
 import { ToolRegistry } from "../../../packages/data/src/tool-registry.ts";
@@ -336,7 +339,7 @@ async function adoTypeInfo(workAreaId: string | null) {
 }
 // An approved plan is written to its destinations here. Each destination
 // reuses its existing connection; a missing one blocks that item only.
-const planPublisher = new PlanPublisher(
+const planPublisher: PlanPublisher = new PlanPublisher(
   workspace,
   workStore,
   async (destination, scope) => {
@@ -378,7 +381,9 @@ const planPublisher = new PlanPublisher(
       const workspaceId = notionConnection.identity?.workspaceId;
       if (!workspaceId)
         throw new PlanBlocked("Reconnect Notion in Settings, then retry.");
-      return notionPlanTarget(target, workspaceId, notionConnection);
+      return notionPlanTarget(target, workspaceId, notionConnection, (pageId) =>
+        planPublisher.notionPage(pageId),
+      );
     }
     throw new PlanBlocked(
       `Publishing to ${trackerName(destination)} is not available yet.`,
@@ -1897,7 +1902,11 @@ process.parentPort?.on("message", (event) => {
           : "";
       const refusal =
         localClaimRefusalEvent(proposal, latestOwner) ??
-        notionUpdateRefusalEvent(proposal, stored);
+        notionUpdateRefusalEvent(
+          proposal,
+          stored,
+          (pageId) => !!planPublisher.notionPage(pageId),
+        );
       const events = refusal ? [refusal] : workStore.handle(message.data);
       for (const event of events) port.postMessage(event);
       if (allowed) void delegations.allow(allowed).catch(() => undefined);
@@ -1983,7 +1992,11 @@ process.parentPort?.on("message", (event) => {
         .writes(parsed.data.planId)
         .find((item) => item.id === parsed.data.itemId);
       // Only a link Amun itself recorded for a created item is opened.
-      if (written?.state !== "created" || !written.url) return;
+      if (
+        (written?.state !== "created" && written?.note !== notionChangedNote) ||
+        !written.url
+      )
+        return;
       let url: URL;
       try {
         url = new URL(written.url);
@@ -2111,25 +2124,49 @@ process.parentPort?.on("message", (event) => {
                   null)
                 : null;
             const note = written.find((entry) => entry.id === item.id)?.note;
+            const page =
+              destination === "notion" ? notionPageOf(item.fields) : undefined;
+            const receipt = page ? planPublisher.notionPage(page) : undefined;
+            const content = item.fields.body ?? item.fields.description;
+            const title = item.fields.title;
+            const change =
+              receipt &&
+              typeof content === "string" &&
+              typeof title === "string"
+                ? lineDiff(
+                    `Title: ${receipt.title}\n${receipt.body}`,
+                    `Title: ${title}\n${content}`,
+                  )
+                : null;
             return {
               id: item.id,
               destination,
               kind,
               existing: existing[plan.items.indexOf(item)] ?? null,
               note: note?.startsWith("“") ? note : null,
+              ...(page ? { kind: "page update", change } : {}),
+              changedInNotion: note === notionChangedNote,
               place:
                 place && destination === "ado" && typeof area === "string"
                   ? `${place} · ${area}`
                   : place && destination === "notion"
-                    ? `New page under “${place}”`
+                    ? page
+                      ? `Page Amun created under “${place}”`
+                      : `New page under “${place}”`
                     : place,
-              problem: place
-                ? null
-                : destination === "ado"
-                  ? "No Azure DevOps project is chosen for this work yet."
-                  : destination === "notion"
-                    ? "No Notion destination is chosen yet."
-                    : `Publishing to ${trackerName(destination)} is not available yet.`,
+              problem: page
+                ? !receipt
+                  ? "Amun did not create this page, so it will not change it."
+                  : !receipt.version
+                    ? "Amun did not record how this page looked when it wrote it, so it will not change it."
+                    : null
+                : place
+                  ? null
+                  : destination === "ado"
+                    ? "No Azure DevOps project is chosen for this work yet."
+                    : destination === "notion"
+                      ? "No Notion destination is chosen yet."
+                      : `Publishing to ${trackerName(destination)} is not available yet.`,
             };
           }),
         });

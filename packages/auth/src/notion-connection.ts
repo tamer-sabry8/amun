@@ -21,6 +21,13 @@ import type {
 } from "../../connectors-notion/src/client.ts";
 import { boundedMcpResponse } from "./notion-response.ts";
 import {
+  readNotionPage,
+  updateNotionPage,
+  type NotionPageSnapshot,
+  type NotionPageUpdate,
+  type NotionUpdateOutcome,
+} from "./notion-page-update.ts";
+import {
   notionDestination,
   type NotionDestination,
   notionIdentity,
@@ -56,6 +63,17 @@ export function notionBrowserArgs(
     throw Error("Unsafe Notion authorization destination");
   return ["-a", browser === "edge" ? "Microsoft Edge" : "Dia", url.href];
 }
+interface NotionPageIo {
+  fetchPage(
+    pageId: string,
+    titleProperty?: string,
+  ): Promise<NotionPageSnapshot>;
+  change(
+    pageId: string,
+    command: "replace_content" | "update_properties",
+    body: object,
+  ): Promise<boolean>;
+}
 /** No authProvider on transport: a rejected write can never cause an auth replay. */
 async function verifyMcp(
   token: string,
@@ -75,6 +93,11 @@ async function verifyMcp(
     done(id: string | undefined): void;
   },
   memory?: MemoryExchange,
+  pageWork?: {
+    workspaceId: string;
+    update: boolean;
+    run(io: NotionPageIo): Promise<void>;
+  },
 ): Promise<void> {
   const { Client, StreamableHTTPClientTransport } =
     await import("./mcp-client.ts");
@@ -201,6 +224,42 @@ async function verifyMcp(
         remote = await fetchField();
       }
       memory.done(remote, identity.workspaceId);
+    }
+    if (pageWork) {
+      if (
+        identity.workspaceId.replaceAll("-", "").toLowerCase() !==
+        pageWork.workspaceId.replaceAll("-", "").toLowerCase()
+      )
+        throw Error("Notion workspace changed; review again");
+      const tool = tools.tools.find((t) => t.name === "notion-update-page");
+      if (pageWork.update && !tool) throw Error("Notion update unavailable");
+      await pageWork.run({
+        fetchPage: async (pageId, titleProperty) =>
+          readNotionPage(
+            await notionRead("notion-fetch", () =>
+              read("notion-fetch", { id: pageId }),
+            ),
+            pageId,
+            titleProperty,
+          ),
+        change: async (pageId, command, body) => {
+          if (!pageWork.update || !tool)
+            throw Error("Notion update unavailable");
+          const patch = {
+            page_id: pageId,
+            command,
+            ...body,
+            allow_async: false,
+          };
+          const reply = await client.callTool({
+            name: tool.name,
+            arguments: tool.inputSchema.properties?.data
+              ? { data: patch }
+              : patch,
+          });
+          return !reply.isError;
+        },
+      });
     }
     if (recovery) {
       if (identity.workspaceId !== recovery.workspaceId)
@@ -413,6 +472,69 @@ export class NotionConnection {
       );
     });
     return outcome;
+  }
+  /** Reads one page Amun may have written; nothing is changed. */
+  async readPage(
+    pageId: string,
+    workspaceId: string,
+    titleProperty?: string,
+  ): Promise<NotionPageSnapshot> {
+    let page: NotionPageSnapshot | undefined;
+    await this.withPage(workspaceId, false, async (io) => {
+      page = await io.fetchPage(pageId, titleProperty);
+    });
+    if (!page) throw Error("Notion page unavailable");
+    return page;
+  }
+  /**
+   * Replaces a page's content after the owner approved the exact change, and
+   * only when the page is still as Amun last wrote it.
+   */
+  async updatePage(
+    input: NotionPageUpdate,
+    workspaceId: string,
+    beforeSend: () => void,
+  ): Promise<NotionUpdateOutcome> {
+    let outcome: NotionUpdateOutcome = { state: "unknown" };
+    await this.withPage(workspaceId, true, async (io) => {
+      outcome = await updateNotionPage(input, {
+        read: () => io.fetchPage(input.pageId, input.titleProperty),
+        call: (command, body) => io.change(input.pageId, command, body),
+        beforeSend,
+      });
+    });
+    return outcome;
+  }
+  private async withPage(
+    workspaceId: string,
+    update: boolean,
+    run: (io: NotionPageIo) => Promise<void>,
+  ) {
+    if (!/^[a-f0-9-]{32,36}$/i.test(workspaceId))
+      throw Error("Reviewed Notion workspace missing");
+    await this.connect("edge", false);
+    await withRefreshLock(this.options.root, async () => {
+      const record = readNotionOAuthRecord(
+        this.options.keyring.get(this.account),
+      );
+      if (
+        !record?.tokens ||
+        !record.expiresAt ||
+        record.expiresAt <= Date.now()
+      )
+        throw Error("Reconnect Notion");
+      this.options.registerSecret(record.tokens.access_token);
+      await verifyMcp(
+        record.tokens.access_token,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { workspaceId, update, run },
+      );
+    });
   }
   async locate(intent: PublicationLookup, workspaceId: string, url?: string) {
     await this.connect("edge", false);

@@ -4,6 +4,7 @@ import { migrate } from "../src/database.ts";
 import { WorkStore } from "../src/work-store.ts";
 import {
   PlanBlocked,
+  PlanChanged,
   PlanPublisher,
   type PlanTarget,
   type PlanWriteItem,
@@ -472,5 +473,87 @@ describe("a second plan for something already published", () => {
         "ado",
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("updating a Notion page Amun created", () => {
+  const pageId = "11111111-2222-4333-8444-555555555555";
+  const propose = (fields: Record<string, string>) => {
+    const id = send("propose-plan", {
+      groupId: null,
+      workAreaId: null,
+      planKind: "edit",
+      destination: "notion",
+      summary: "Update Notion page: QA notes",
+      items: [
+        {
+          id: "00000000-0000-4000-8000-0000000000a1",
+          summary: "Update Notion page: QA notes",
+          fields,
+        },
+      ],
+    }).ref!;
+    send("approve-plan", { planId: id, fingerprint: plan(id).fingerprint });
+    return id;
+  };
+  const publisherFor = (target: PlanTarget) =>
+    new PlanPublisher(db, store, async () => target);
+
+  it("keeps the version and the text written, and knows only its own pages", async () => {
+    const first = propose({ title: "QA notes", body: "Hello" });
+    await publisherFor({
+      write: async () => ({ externalId: pageId, version: "v1" }),
+      find: async () => undefined,
+    }).publish(first);
+    const receipt = publisher.notionPage(pageId.toUpperCase());
+    expect(receipt).toMatchObject({
+      version: "v1",
+      title: "QA notes",
+      body: "Hello",
+    });
+    expect(publisher.notionPage("99999999-2222-4333-8444-555555555555")).toBe(
+      undefined,
+    );
+  });
+
+  it("records an update with its new version", async () => {
+    await publisherFor({
+      write: async () => ({ externalId: pageId, version: "v1" }),
+      find: async () => undefined,
+    }).publish(propose({ title: "QA notes", body: "Hello" }));
+    const second = propose({ page: pageId, title: "QA notes", body: "Hi" });
+    await publisherFor({
+      write: async () => ({
+        externalId: pageId,
+        updated: true,
+        version: "v2",
+      }),
+      find: async () => undefined,
+    }).publish(second);
+    expect(plan(second).state).toBe("published");
+    expect(plan(second).results[0]).toMatchObject({ updated: true });
+    expect(publisher.notionPage(pageId)).toMatchObject({
+      version: "v2",
+      body: "Hi",
+    });
+  });
+
+  it("stops on a page changed in Notion: nothing written, the newer page is linked", async () => {
+    const changed = propose({ page: pageId, title: "QA notes", body: "Hi" });
+    let writes = 0;
+    await publisherFor({
+      write: async () => {
+        writes++;
+        throw new PlanChanged("Changed in Notion", "https://notion.example/p");
+      },
+      find: async () => undefined,
+    }).publish(changed);
+    expect(plan(changed).state).toBe("failed");
+    expect(publisher.writes(changed)[0]).toMatchObject({
+      state: "missing",
+      note: "Changed in Notion",
+      url: "https://notion.example/p",
+    });
+    expect(writes).toBeLessThanOrEqual(2);
   });
 });

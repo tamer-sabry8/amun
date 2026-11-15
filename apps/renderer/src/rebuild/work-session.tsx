@@ -415,6 +415,9 @@ interface Place {
   kind?: string | null | undefined;
   note?: string | null | undefined;
   existing?: { id: string } | null | undefined;
+  change?:
+    { kind: "same" | "add" | "remove"; text: string }[] | null | undefined;
+  changedInNotion?: boolean | undefined;
 }
 /** Where each item of a plan would go, asked from the service. */
 function usePlaces(planId: string, fingerprint: string) {
@@ -510,13 +513,38 @@ function PlanItem({
               {`Already in ${trackerName(destination)} as ${/^\d+$/.test(place.existing.id) ? "#" : ""}${place.existing.id} — approving will link, not create.`}
             </span>
           )}
-          <span className="muted small">{fields || "No field changes"}</span>
+          {place?.change ? (
+            <span
+              className="small prd-diff"
+              role="group"
+              aria-label="What will change"
+              style={{ display: "grid", gap: 2, whiteSpace: "pre-wrap" }}
+            >
+              {place.change.map((line, index) =>
+                line.kind === "add" ? (
+                  <ins key={index}>{"+ " + line.text}</ins>
+                ) : line.kind === "remove" ? (
+                  <del key={index}>{"− " + line.text}</del>
+                ) : (
+                  <span key={index} className="muted">
+                    {"  " + line.text}
+                  </span>
+                ),
+              )}
+            </span>
+          ) : (
+            <span className="muted small">{fields || "No field changes"}</span>
+          )}
         </>
       )}
       {result?.state === "created" && (
         <span className="row wrap small">
           <span className="tag good">
-            {result.linked ? "Already exists" : "Created"}
+            {result.linked
+              ? "Already exists"
+              : result.updated
+                ? "Updated"
+                : "Created"}
             {result.externalId && /^\d+$/.test(result.externalId)
               ? " #" + result.externalId
               : ""}
@@ -546,18 +574,46 @@ function PlanItem({
         <>
           <span className="row wrap small">
             <span
-              className={"tag " + (result.state === "failed" ? "bad" : "warn")}
+              className={
+                "tag " +
+                (result.state === "failed" && !place?.changedInNotion
+                  ? "bad"
+                  : "warn")
+              }
             >
-              {result.state === "failed" ? "Not created" : "Being checked"}
+              {place?.changedInNotion
+                ? "Changed in Notion"
+                : result.state === "failed"
+                  ? "Not created"
+                  : "Being checked"}
             </span>
-            <span className="muted">
-              {result.state === "failed"
-                ? (place?.problem ??
-                  `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
-                : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
+            <span className="muted" role="status">
+              {place?.changedInNotion
+                ? "Changed in Notion since Amun last wrote it. Nothing was overwritten."
+                : result.state === "failed"
+                  ? (place?.problem ??
+                    `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
+                  : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
             </span>
           </span>
-          {settled && (
+          {settled && place?.changedInNotion && (
+            <span>
+              <button
+                className="btn"
+                onClick={() =>
+                  bridge.send({
+                    version: 1,
+                    kind: "plan-open",
+                    planId: plan.id,
+                    itemId: item.id,
+                  })
+                }
+              >
+                Review the newer version
+              </button>
+            </span>
+          )}
+          {settled && !place?.changedInNotion && (
             <span>
               <button
                 className="btn"

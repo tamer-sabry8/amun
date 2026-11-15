@@ -7,6 +7,7 @@ import {
   localClaimRefusalEvent,
   localPlanRefusal,
   notionUpdateRefusal,
+  notionChangedNote,
   notionUpdateRefusalEvent,
   notionPlanTarget,
 } from "../src/plan-targets.ts";
@@ -629,5 +630,117 @@ describe("looking for an Azure item Amun already created", () => {
       url: "https://devops.example/Collection/POCs/_workitems/edit/1091018",
     });
     expect(asked).toEqual([["Invite <10> testers", "Product Backlog Item"]]);
+  });
+});
+
+describe("Notion page updates", () => {
+  const pageId = "11111111-2222-4333-8444-555555555555";
+  const destination = {
+    title: "test for Amun to use",
+    parentId: "41735810-e3a9-80ea-ae45-d78ca230f0a3",
+    parentType: "page_id" as const,
+    titleProperty: "title",
+  };
+  const update = (fields: Record<string, string> = {}) => ({
+    id: "i1",
+    summary: "Update Notion page: QA notes",
+    marker: "m-2",
+    destination: "notion",
+    fields: { page: pageId, title: "QA notes", body: "New", ...fields },
+  });
+  const receipt = { marker: "m-1", version: "v1", url: null };
+  const connection = (outcome: object, sent: string[] = []) => ({
+    publish: async () => ({ state: "unknown" as const }),
+    locate: async () => undefined,
+    updatePage: async (
+      input: { expectedVersion: string; text: string },
+      _workspace: string,
+      beforeSend: () => void,
+    ) => {
+      sent.push(input.expectedVersion + ":" + input.text);
+      if ((outcome as { state: string }).state === "updated") beforeSend();
+      return outcome as never;
+    },
+  });
+  const own = (id: string) => (id === pageId ? receipt : undefined);
+
+  it("allows a plan that updates a page Amun created, and only that", () => {
+    const proposal = (page: string) => ({
+      action: "propose-plan",
+      destination: "notion",
+      summary: "Update the existing Notion page",
+      items: [{ summary: "QA notes", fields: { page } }],
+    });
+    expect(
+      notionUpdateRefusalEvent(
+        proposal(pageId),
+        undefined,
+        (id) => id === pageId,
+      ),
+    ).toBeNull();
+    expect(
+      notionUpdateRefusalEvent(
+        proposal("99999999-2222-4333-8444-555555555555"),
+        undefined,
+        (id) => id === pageId,
+      ),
+    ).toMatchObject({ ok: false, message: notionUpdateRefusal });
+    expect(notionUpdateRefusalEvent(proposal(pageId))).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("updates with the version Amun recorded and reports the new one", async () => {
+    const sent: string[] = [];
+    const target = notionPlanTarget(
+      destination,
+      "ws",
+      connection({ state: "updated", version: "v2" }, sent),
+      own,
+    );
+    expect(await target.write(update())).toMatchObject({
+      externalId: pageId,
+      updated: true,
+      version: "v2",
+    });
+    expect(sent).toEqual(["v1:New"]);
+  });
+
+  it("stops with the newer page's link when it changed in Notion", async () => {
+    const target = notionPlanTarget(
+      destination,
+      "ws",
+      connection({ state: "changed", url: "https://www.notion.so/abc" }),
+      own,
+    );
+    const failure = await target
+      .write(update())
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      message: notionChangedNote,
+      url: "https://www.notion.so/abc",
+    });
+    expect(failure).toBeInstanceOf(PlanNotSent);
+  });
+
+  it("refuses pages Amun did not create, or never recorded, before reaching Notion", async () => {
+    const sent: string[] = [];
+    const target = (receipts: Parameters<typeof notionPlanTarget>[3]) =>
+      notionPlanTarget(
+        destination,
+        "ws",
+        connection({ state: "updated", version: "v2" }, sent),
+        receipts,
+      );
+    await expect(
+      target(() => undefined).write(update()),
+    ).rejects.toBeInstanceOf(PlanNotSent);
+    await expect(
+      target(() => ({ ...receipt, version: null })).write(update()),
+    ).rejects.toBeInstanceOf(PlanNotSent);
+    await expect(
+      target(own).write(update({ body: "" })),
+    ).rejects.toBeInstanceOf(PlanNotSent);
+    expect(sent).toEqual([]);
   });
 });

@@ -1106,4 +1106,8 @@ END;`,
 ALTER TABLE library_outputs ADD COLUMN acceptance_version INTEGER;
 ALTER TABLE library_outputs ADD COLUMN acceptance_reason TEXT;
 ALTER TABLE library_outputs ADD COLUMN acceptance_at TEXT;`,
+  // 40 · What a Notion page looked like when Amun last wrote it (its edit time
+  // and a fingerprint of its content), so a later update can stop when someone
+  // changed the page in Notion in between.
+  `ALTER TABLE plan_writes ADD COLUMN page_version TEXT;`,
 ] as const;

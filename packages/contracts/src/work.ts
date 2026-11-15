@@ -67,6 +67,8 @@ const writeResult = z.strictObject({
   url: z.string().max(2048).optional(),
   /** The item already existed in the destination, so it was linked, not created. */
   linked: z.boolean().optional(),
+  /** An existing page was changed; nothing new was created. */
+  updated: z.boolean().optional(),
 });
 const planStory = z.strictObject({
   id,
@@ -977,6 +979,19 @@ export const planPlacesResult = z.strictObject({
         .strictObject({ id: z.string().max(256) })
         .nullable()
         .optional(),
+      /** The exact change to an existing Notion page, line by line. */
+      change: z
+        .array(
+          z.strictObject({
+            kind: z.enum(["same", "add", "remove"]),
+            text: z.string().max(4096),
+          }),
+        )
+        .max(2000)
+        .nullable()
+        .optional(),
+      /** The page changed in Notion after Amun wrote it; nothing was sent. */
+      changedInNotion: z.boolean().optional(),
     }),
   ),
 });

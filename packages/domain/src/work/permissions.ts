@@ -220,6 +220,8 @@ export interface WriteResult {
   url?: string | undefined;
   /** Already existed in the destination: linked, not created. */
   linked?: boolean | undefined;
+  /** An existing page was changed, not created. */
+  updated?: boolean | undefined;
 }
 /** Partial writes are reported per item; an uncertain write is never replayed blind (UC21). */
 export function writeSummary(results: WriteResult[]) {
@@ -228,6 +230,9 @@ export function writeSummary(results: WriteResult[]) {
   const unknown = results.filter((result) => result.state === "unknown");
   const retry = failed.map((result) => result.id);
   const linked = created.filter((result) => result.linked).length;
+  const updated = created.filter(
+    (result) => result.updated && !result.linked,
+  ).length;
   return {
     created: created.length,
     failed: failed.length,
@@ -235,7 +240,8 @@ export function writeSummary(results: WriteResult[]) {
     retry,
     reconcileFirst: unknown.map((result) => result.id),
     text:
-      `${created.length - linked} created, ${failed.length} not created` +
+      `${created.length - linked - updated} created, ${failed.length} not created` +
+      (updated ? `, ${updated} updated` : "") +
       (linked ? `, ${linked} already existed (linked, not created)` : "") +
       (unknown.length ? `, ${unknown.length} being checked` : "") +
       ", nothing duplicated",

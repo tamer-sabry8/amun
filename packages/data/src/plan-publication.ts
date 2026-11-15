@@ -23,6 +23,10 @@ export interface PlanReceipt {
   note?: string | undefined;
   /** The item already existed, so it was linked and nothing was created. */
   linked?: boolean | undefined;
+  /** An existing page was changed; nothing new was created. */
+  updated?: boolean | undefined;
+  /** What a written page looked like afterwards, for a later conflict check. */
+  version?: string | undefined;
 }
 export interface PlanTarget {
   /** Creates the item. Throws when the outcome is a failure or uncertain. */
@@ -53,6 +57,15 @@ export type ResolveTarget = (
 export class PlanBlocked extends Error {}
 /** Thrown by `write` when the request provably never left the Mac. */
 export class PlanNotSent extends Error {}
+/** An update stopped because the page changed since Amun wrote it. */
+export class PlanChanged extends PlanNotSent {
+  constructor(
+    message: string,
+    readonly url: string,
+  ) {
+    super(message);
+  }
+}
 
 type WriteState = "pending" | "sent" | "created" | "missing" | "unknown";
 interface WriteRow {
@@ -64,6 +77,7 @@ interface WriteRow {
   url: string | null;
   attempts: number;
   note: string | null;
+  page_version: string | null;
 }
 interface Records {
   handle(input: unknown): unknown[];
@@ -74,6 +88,7 @@ type Result = {
   externalId?: string;
   url?: string;
   linked?: boolean;
+  updated?: boolean;
 };
 const same = (value: unknown) =>
   typeof value === "string"
@@ -253,6 +268,64 @@ export class PlanPublisher {
     }
   }
 
+  /**
+   * The latest thing Amun wrote to a Notion page it created, from its own
+   * receipts: the plan item that wrote it, its marker, the version recorded
+   * then and the title and body it was given. Undefined for any other page.
+   */
+  notionPage(pageId: string) {
+    const bare = (value: string) => value.replaceAll("-", "").toLowerCase();
+    const rows = this.db
+      .prepare(
+        `SELECT w.plan_id,w.item_id,w.marker,w.external_id,w.url,w.page_version,p.approved_json
+         FROM plan_writes w JOIN work_plans p ON p.id=w.plan_id
+         WHERE w.destination='notion' AND w.state='created' AND w.external_id IS NOT NULL
+         ORDER BY w.rowid DESC`,
+      )
+      .all() as {
+      plan_id: string;
+      item_id: string;
+      marker: string;
+      external_id: string;
+      url: string | null;
+      page_version: string | null;
+      approved_json: string | null;
+    }[];
+    const rowsOfPage = rows.filter(
+      (row) => bare(row.external_id) === bare(pageId),
+    );
+    const latest = rowsOfPage[0];
+    if (!latest) return undefined;
+    // The marker belongs to the page, so it is the one its creation used.
+    const marker = rowsOfPage.at(-1)!.marker;
+    const item = (
+      JSON.parse(latest.approved_json ?? "[]") as {
+        id: string;
+        summary: string;
+        fields: Record<string, string | number | null>;
+      }[]
+    ).find((entry) => entry.id === latest.item_id);
+    const field = (...names: string[]) => {
+      for (const [key, value] of Object.entries(item?.fields ?? {}))
+        if (
+          names.includes(key.toLowerCase().replace(/[^a-z0-9]/g, "")) &&
+          typeof value === "string" &&
+          value.trim()
+        )
+          return value.trim();
+    };
+    const title = field("title") ?? item?.summary ?? "";
+    return {
+      planId: latest.plan_id,
+      itemId: latest.item_id,
+      marker,
+      version: latest.page_version,
+      url: latest.url,
+      title,
+      body: field("body", "description") ?? title,
+    };
+  }
+
   private rows(planId: string) {
     return this.db
       .prepare("SELECT * FROM plan_writes WHERE plan_id=? ORDER BY rowid")
@@ -269,7 +342,7 @@ export class PlanPublisher {
     const next = { ...row, ...patch };
     this.db
       .prepare(
-        "UPDATE plan_writes SET state=?,external_id=?,url=?,attempts=?,note=? WHERE plan_id=? AND item_id=?",
+        "UPDATE plan_writes SET state=?,external_id=?,url=?,attempts=?,note=?,page_version=? WHERE plan_id=? AND item_id=?",
       )
       .run(
         next.state,
@@ -277,6 +350,7 @@ export class PlanPublisher {
         next.url,
         next.attempts,
         next.note,
+        next.page_version,
         planId,
         itemId,
       );
@@ -376,6 +450,7 @@ export class PlanPublisher {
         external_id: receipt.externalId,
         url: receipt.url ?? null,
         note: receipt.note ?? null,
+        page_version: receipt.version ?? null,
       });
       results.push({
         id: row.item_id,
@@ -383,6 +458,7 @@ export class PlanPublisher {
         externalId: receipt.externalId,
         ...(receipt.url ? { url: receipt.url } : {}),
         ...(receipt.linked ? { linked: true } : {}),
+        ...(receipt.updated ? { updated: true } : {}),
       });
     };
     for (const row of this.rows(planId)) {
@@ -485,6 +561,7 @@ export class PlanPublisher {
         } catch (error) {
           this.set(planId, row.item_id, {
             note: error instanceof Error ? error.message.slice(0, 300) : null,
+            ...(error instanceof PlanChanged ? { url: error.url } : {}),
           });
           if (error instanceof PlanNotSent) {
             // Nothing left the Mac, so there is nothing to look up.
