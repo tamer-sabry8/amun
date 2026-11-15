@@ -20,7 +20,6 @@ import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { ToolCards } from "./tool-cards.tsx";
 import { Icon } from "../icons.tsx";
-import { NativePiPanel } from "./lazy.tsx";
 import { work } from "./store.ts";
 
 export const tools = [
@@ -237,7 +236,6 @@ export function Wizard({ connected }: { connected: string[] }) {
   const [custom, setCustom] = useState("");
   const [agent, setAgent] = useState("");
   const [extraAgents, setExtraAgents] = useState<string[]>([]);
-  const [review, setReview] = useState(false);
   const bridgeState = useSyncExternalStore(
     bridge.subscribe,
     bridge.getSnapshot,
@@ -309,15 +307,7 @@ export function Wizard({ connected }: { connected: string[] }) {
                   ? "Firstmate picks a model for each kind of task."
                   : "Sign in to pick models. You can do this later."}
               </span>
-              <button className="link" onClick={() => setReview(!review)}>
-                {review ? "Hide details" : "Review"}
-              </button>
             </p>
-            {review && (
-              <div className="legacy-surface">
-                <NativePiPanel subscriptionsOnly />
-              </div>
-            )}
           </>
         )}
         {state.step === "tools" && (

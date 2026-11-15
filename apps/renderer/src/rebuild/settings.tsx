@@ -111,7 +111,7 @@ export function Settings({
             {settingsSections.map(([id, label]) => (
               <button
                 key={id}
-                className="rb-nav"
+                className="rb-snav"
                 aria-current={section === id ? "page" : undefined}
                 onClick={() => onSection(id)}
               >
@@ -133,14 +133,6 @@ export function Settings({
                 Firstmate picks a model per task type from the accounts above,
                 and every run shows the model it used.
               </p>
-              <details>
-                <summary className="link">
-                  Review coding assistants on this Mac
-                </summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <NativePiPanel subscriptionsOnly />
-                </div>
-              </details>
             </section>
           )}
           {section === "tools" && (
