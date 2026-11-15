@@ -2197,3 +2197,124 @@
 .rb-island .steps .dot {
   flex: none;
 }
+.rb-artifact .doc .rb-doc-view {
+  max-width: 66ch;
+  padding-bottom: 24px;
+}
+.rb-doc-view h1 {
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  margin: 0 0 12px;
+  font-weight: 650;
+  text-wrap: balance;
+}
+.rb-doc-view h2 {
+  font-size: 14.5px;
+  font-weight: 650;
+  margin: 26px 0 8px;
+  letter-spacing: -0.005em;
+}
+.rb-doc-view h3 {
+  font-size: 13.5px;
+  font-weight: 650;
+  margin: 18px 0 6px;
+}
+.rb-doc-view p {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+.rb-doc-view :where(ul, ol) {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+.rb-doc-view li {
+  margin: 3px 0;
+}
+.rb-doc-view li::marker {
+  color: var(--muted);
+}
+.rb-doc-view strong {
+  font-weight: 620;
+  color: var(--ink);
+}
+.rb-doc-view code {
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+  color: var(--amun-color-accent-soft);
+}
+.rb-doc-view hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 22px 0;
+}
+.rb-doc-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 6px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.rb-doc-view th {
+  background: var(--card);
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+.rb-doc-view :where(th, td) {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  vertical-align: top;
+}
+.rb-doc-view td:first-child {
+  white-space: nowrap;
+  color: var(--amun-color-accent-soft);
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+}
+.rb-doc-view .task {
+  list-style: none;
+  margin-left: -20px;
+}
+.rb-doc-view .task label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.rb-doc-view .task input {
+  appearance: none;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 3px 0 0;
+  padding: 0;
+  border: 1.5px solid var(--control);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.rb-doc-view .task input:disabled {
+  cursor: default;
+}
+.rb-doc-view .task input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rb-doc-view .task input:checked::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid var(--canvas);
+  border-bottom: 2px solid var(--canvas);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.rb-doc-view .task input:checked + span {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--control);
+}

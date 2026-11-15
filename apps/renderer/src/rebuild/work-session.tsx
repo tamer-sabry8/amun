@@ -26,6 +26,8 @@ import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
+import { MarkdownDoc } from "./markdown-doc.tsx";
+import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   heldMessage,
@@ -647,7 +649,7 @@ function PlanReview({
   );
 }
 
-function OutputDoc({
+export function OutputDoc({
   snapshot,
   areaId,
   outputId,
@@ -684,10 +686,11 @@ function OutputDoc({
       workAreaIds: item.workAreaIds,
     });
   };
-  const insert = (snippet: string) => {
+  const insert = (make: string | ((before: string) => string)) => {
     const element = area.current;
     if (!element) return;
     const at = element.selectionStart;
+    const snippet = typeof make === "function" ? make(body.slice(0, at)) : make;
     const next = body.slice(0, at) + snippet + body.slice(element.selectionEnd);
     setBody(next);
     save(next);
@@ -708,20 +711,33 @@ function OutputDoc({
             <span className="tag">From the Library</span>
           )}
         </div>
-        <textarea
-          ref={area}
-          aria-label={item.title}
-          readOnly={!editing || record}
-          value={body}
-          placeholder={
-            record ? "" : "Start writing, or ask Firstmate to draft this."
-          }
-          onChange={(event) => {
-            setBody(event.target.value);
-            draftBodies.set(item.id, event.target.value);
-          }}
-          onBlur={() => save(body)}
-        />
+        {!editing ? (
+          <MarkdownDoc
+            body={body}
+            disabled={record}
+            onToggle={(line) => {
+              const next = toggleTask(body, line);
+              setBody(next);
+              draftBodies.set(item.id, next);
+              save(next);
+            }}
+          />
+        ) : (
+          <textarea
+            ref={area}
+            aria-label={item.title}
+            readOnly={record}
+            value={body}
+            placeholder={
+              record ? "" : "Start writing, or ask Firstmate to draft this."
+            }
+            onChange={(event) => {
+              setBody(event.target.value);
+              draftBodies.set(item.id, event.target.value);
+            }}
+            onBlur={() => save(body)}
+          />
+        )}
       </div>
       {record && (
         <form
@@ -761,13 +777,7 @@ function OutputDoc({
       {editing && !record && (
         <div className="rb-toolbar" role="toolbar" aria-label="Document tools">
           <button onClick={() => insert("\n## Heading\n")}>Text</button>
-          <button
-            onClick={() =>
-              insert("\n| Column | Column |\n| --- | --- |\n|  |  |\n")
-            }
-          >
-            Table
-          </button>
+          <button onClick={() => insert(tableSnippet)}>Table</button>
           <button onClick={() => insert("\n- [ ] ")}>Checklist</button>
           <button
             className="ask"

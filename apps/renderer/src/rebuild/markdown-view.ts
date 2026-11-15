@@ -1,0 +1,161 @@
+export type Inline =
+  | { kind: "text"; text: string }
+  | { kind: "code"; text: string }
+  | { kind: "bold"; children: Inline[] };
+
+export type ListItem = {
+  content: Inline[];
+  /** Present for "- [ ] text" items; `line` is the index in the body's lines. */
+  task?: { checked: boolean; line: number; label: string };
+};
+
+export type Block =
+  | { kind: "heading"; level: 1 | 2 | 3; content: Inline[] }
+  | { kind: "rule" }
+  | { kind: "table"; header: Inline[][]; rows: Inline[][][] }
+  | { kind: "list"; ordered: boolean; items: ListItem[] }
+  | { kind: "paragraph"; lines: Inline[][] };
+
+const TOKEN = /\*\*(.+?)\*\*|`([^`]+)`/g;
+
+export function parseInline(source: string): Inline[] {
+  const out: Inline[] = [];
+  let last = 0;
+  for (const match of source.matchAll(TOKEN)) {
+    const at = match.index ?? 0;
+    if (at > last) out.push({ kind: "text", text: source.slice(last, at) });
+    if (match[1] !== undefined)
+      out.push({ kind: "bold", children: parseInline(match[1]) });
+    else out.push({ kind: "code", text: match[2] ?? "" });
+    last = at + match[0].length;
+  }
+  if (last < source.length)
+    out.push({ kind: "text", text: source.slice(last) });
+  return out;
+}
+
+const HEADING = /^(#{1,3})\s+(.*)$/;
+const BULLET = /^\s*-\s/;
+const NUMBERED = /^\s*\d+\.\s/;
+const TASK = /^\[( |x)\]\s(.*)$/i;
+const SEPARATOR = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const isRule = (line: string) => /^---+$/.test(line.trim());
+const isTableLine = (line: string) => line.trim().startsWith("|");
+const cells = (row: string) =>
+  row
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map((cell) => parseInline(cell.trim()));
+const startsBlock = (line: string) =>
+  /^#{1,3}\s/.test(line) ||
+  isTableLine(line) ||
+  BULLET.test(line) ||
+  NUMBERED.test(line) ||
+  isRule(line);
+
+export function parseMarkdown(body: string): Block[] {
+  const lines = body.split("\n");
+  const blocks: Block[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+    const heading = HEADING.exec(line);
+    if (heading) {
+      blocks.push({
+        kind: "heading",
+        level: (heading[1] ?? "#").length as 1 | 2 | 3,
+        content: parseInline(heading[2] ?? ""),
+      });
+      i++;
+      continue;
+    }
+    if (isRule(line)) {
+      blocks.push({ kind: "rule" });
+      i++;
+      continue;
+    }
+    if (isTableLine(line) && SEPARATOR.test(lines[i + 1] ?? "x")) {
+      const header = cells(line);
+      i += 2;
+      const rows: Inline[][][] = [];
+      while (i < lines.length && isTableLine(lines[i] ?? "")) {
+        rows.push(cells(lines[i] ?? ""));
+        i++;
+      }
+      blocks.push({ kind: "table", header, rows });
+      continue;
+    }
+    if (BULLET.test(line)) {
+      const items: ListItem[] = [];
+      while (i < lines.length && BULLET.test(lines[i] ?? "")) {
+        const text = (lines[i] ?? "").replace(BULLET, "");
+        const task = TASK.exec(text);
+        items.push(
+          task
+            ? {
+                content: parseInline(task[2] ?? ""),
+                task: {
+                  checked: (task[1] ?? "").toLowerCase() === "x",
+                  line: i,
+                  label: task[2] ?? "",
+                },
+              }
+            : { content: parseInline(text) },
+        );
+        i++;
+      }
+      blocks.push({ kind: "list", ordered: false, items });
+      continue;
+    }
+    if (NUMBERED.test(line)) {
+      const items: ListItem[] = [];
+      while (i < lines.length && NUMBERED.test(lines[i] ?? "")) {
+        items.push({
+          content: parseInline((lines[i] ?? "").replace(NUMBERED, "")),
+        });
+        i++;
+      }
+      blocks.push({ kind: "list", ordered: true, items });
+      continue;
+    }
+    const paragraph: Inline[][] = [parseInline(line)];
+    i++;
+    while (i < lines.length) {
+      const next = lines[i] ?? "";
+      if (!next.trim() || startsBlock(next)) break;
+      paragraph.push(parseInline(next));
+      i++;
+    }
+    blocks.push({ kind: "paragraph", lines: paragraph });
+  }
+  return blocks;
+}
+
+/** Flips one task line's box and leaves every other line untouched. */
+export function toggleTask(body: string, line: number): string {
+  const lines = body.split("\n");
+  const current = lines[line];
+  if (current === undefined) return body;
+  lines[line] = current.replace(
+    /^(\s*-\s\[)( |x|X)(\]\s)/,
+    (_all, open: string, mark: string, close: string) =>
+      open + (mark === " " ? "x" : " ") + close,
+  );
+  return lines.join("\n");
+}
+
+/** The Table snippet, led by a blank line so the table renders after text. */
+export function tableSnippet(before: string): string {
+  const lead =
+    before === "" || before.endsWith("\n\n")
+      ? ""
+      : before.endsWith("\n")
+        ? "\n"
+        : "\n\n";
+  return lead + "| Column | Column |\n| --- | --- |\n|  |  |\n";
+}
