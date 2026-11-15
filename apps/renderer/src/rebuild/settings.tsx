@@ -1,7 +1,7 @@
 // Settings (handoff §9): accounts and models, tools, groups and routing,
 // permissions, Council, skills, themes, data, advanced. Runtime vocabulary
 // lives only under Advanced.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import {
   gateLabels,
@@ -23,6 +23,15 @@ import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
 import { ConnectionCards } from "./connection-cards.tsx";
 import { council, work } from "./store.ts";
+import { copyText } from "./clipboard.ts";
+import {
+  buildDate,
+  buildInfo,
+  readSystem,
+  versionDetails,
+  versionLine,
+  type SystemInfo,
+} from "./version-info.ts";
 import {
   groupName,
   permissionText,
@@ -40,6 +49,7 @@ export const settingsSections = [
   ["themes", "Themes"],
   ["data", "Data and backup"],
   ["advanced", "Advanced"],
+  ["about", "About"],
 ] as const;
 export type SettingsSection = (typeof settingsSections)[number][0];
 
@@ -99,6 +109,14 @@ export function Settings({
     permit: "create",
   });
   const [problem, setProblem] = useState("");
+  const [system, setSystem] = useState<SystemInfo>({
+    macos: "unknown",
+    arch: "unknown",
+  });
+  const [copied, setCopied] = useState("");
+  useEffect(() => {
+    if (section === "about") void readSystem().then(setSystem);
+  }, [section]);
   const trackers = [
     ...tools.map(([id]) => id).filter((id) => id !== "obsidian"),
     "amun",
@@ -647,6 +665,51 @@ export function Settings({
               <FirstmateRuntime />
               <ConversationTools />
               <DiagnosticsTools />
+            </section>
+          )}
+          {section === "about" && (
+            <section aria-labelledby="rb-s-about">
+              <h2 id="rb-s-about">About</h2>
+              <div className="rb-rows">
+                <div className="rb-rowitem">
+                  <span>
+                    <span className="name">Amun</span>
+                    <br />
+                    <span className="muted small">
+                      {versionLine(buildInfo)}
+                    </span>
+                  </span>
+                </div>
+                <div className="rb-rowitem">
+                  <span>
+                    <span className="name">Build</span>
+                    <br />
+                    <span className="muted small">
+                      {buildInfo.commit} · {buildDate(buildInfo)}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <p className="muted">
+                Ad-hoc signed beta for trusted testers. Not notarized.
+              </p>
+              <div className="row">
+                <button
+                  className="btn quiet"
+                  onClick={async () =>
+                    setCopied(
+                      (await copyText(versionDetails(buildInfo, system)))
+                        ? "Copied."
+                        : "Couldn’t copy. Try again.",
+                    )
+                  }
+                >
+                  Copy version details
+                </button>
+                <span className="muted small" role="status" aria-live="polite">
+                  {copied}
+                </span>
+              </div>
             </section>
           )}
         </div>

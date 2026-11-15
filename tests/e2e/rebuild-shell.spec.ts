@@ -445,6 +445,14 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     );
     await shot(page, "19-light-theme");
     await scan(page, "themes, light");
+    await page
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("button", { name: "About" })
+      .click();
+    await expect(page.getByText(/Version Beta 0\.9 \(0\.9\.0\)/)).toBeVisible();
+    await expect(
+      page.getByText("Ad-hoc signed beta for trusted testers. Not notarized."),
+    ).toBeVisible();
 
     // ⌘K search finds the work and opens its conversation
     await page.keyboard.press("Meta+k");
