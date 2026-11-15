@@ -32,6 +32,16 @@ export function sameAdoField(key: string, actual: unknown, expected: unknown) {
   }
   return actual === expected;
 }
+const decoded = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+const sameProject = (actual: string, expected: string) =>
+  decoded(actual).trim().toLowerCase() ===
+  decoded(expected).trim().toLowerCase();
 type Item = AdoReceipt & {
   fields: Record<string, unknown>;
   relations?: { rel: string; url: string }[];
@@ -80,7 +90,7 @@ export class AdoWriteClient {
       !Number.isSafeInteger(r.rev) ||
       !r.fields ||
       (r.fields["System.TeamProject"] &&
-        r.fields["System.TeamProject"] !== this.project)
+        !sameProject(String(r.fields["System.TeamProject"]), this.project))
     )
       throw Error("Azure item identity mismatch");
     return r;
@@ -184,14 +194,41 @@ export class AdoWriteClient {
   ) {
     const types = Array.isArray(type) ? type : [type];
     const quote = (value: string) => value.replaceAll("'", "''");
-    const result = (await this.call("POST", "wiql", {
-      query:
-        "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Title] = '" +
-        quote(title) +
-        "' AND [System.WorkItemType] IN (" +
-        types.map((name) => "'" + quote(name) + "'").join(",") +
-        ") ORDER BY [System.Id]",
-    })) as { workItems?: { id: number }[] };
+    const search = (names: string[]) =>
+      this.call("POST", "wiql", {
+        query:
+          "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Title] = '" +
+          quote(title) +
+          "' AND [System.WorkItemType] IN (" +
+          names.map((name) => "'" + quote(name) + "'").join(",") +
+          ") ORDER BY [System.Id]",
+      }) as Promise<{ workItems?: { id: number }[] }>;
+    let result: { workItems?: { id: number }[] };
+    try {
+      result = await search(types);
+    } catch (error) {
+      // Azure DevOps Server rejects the whole query when one listed type is not
+      // in the project, so each type is asked alone and an unknown one has none.
+      if (
+        types.length < 2 ||
+        !(error instanceof Error) ||
+        error.message !== "request_rejected_400"
+      )
+        throw error;
+      const workItems: { id: number }[] = [];
+      for (const name of types) {
+        try {
+          workItems.push(...((await search([name]))?.workItems ?? []));
+        } catch (single) {
+          if (
+            !(single instanceof Error) ||
+            single.message !== "request_rejected_400"
+          )
+            throw single;
+        }
+      }
+      result = { workItems: workItems.sort((a, b) => a.id - b.id) };
+    }
     // A tag query cannot match by prefix, so the marker is checked on each.
     for (const { id } of (result?.workItems ?? []).slice(0, 20)) {
       const item = await this.item(id);

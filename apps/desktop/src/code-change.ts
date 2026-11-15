@@ -196,10 +196,29 @@ export class CodeChanges {
     );
   }
 
+  /** The product's work areas: their changes show whichever repository list. */
+  private areas(product: string) {
+    return (
+      this.deps.db
+        .prepare("SELECT id FROM work_areas WHERE product_id=?")
+        .pluck()
+        .all(product) as string[]
+    ).map(String);
+  }
+  private owns(
+    item: { revisions: { product: string }; payload: { workAreaId: string } },
+    product: string,
+  ) {
+    return (
+      item.revisions.product === product ||
+      this.areas(product).includes(item.payload.workAreaId)
+    );
+  }
+
   /** What the owner sees for each change. */
   async cards(product: string): Promise<CodeChangeCard[]> {
     const cards: CodeChangeCard[] = [];
-    for (const item of this.review.list(product)) {
+    for (const item of this.review.list(product, 20, this.areas(product))) {
       const { payload, action } = item;
       const state = states[action.state] ?? "failed";
       let blocker: string | undefined;
@@ -250,7 +269,7 @@ export class CodeChanges {
   async approve(product: string, reviewId: string, binding: string) {
     const item = this.review.read(reviewId);
     const meta = await this.meta(item.payload.job);
-    if (item.revisions.product !== product) throw Error("Product changed.");
+    if (!this.owns(item, product)) throw Error("Product changed.");
     const m = {
       origin: meta.origin,
       owner: meta.owner,
@@ -424,7 +443,7 @@ export class CodeChanges {
   /** The owner wants something different: nothing is sent, the crewmate is asked. */
   async changes(product: string, reviewId: string, note: string) {
     const item = this.review.read(reviewId);
-    if (item.revisions.product !== product) throw Error("Product changed.");
+    if (!this.owns(item, product)) throw Error("Product changed.");
     if (item.action.state !== "pending_approval")
       throw new CodeChangeError("This change can't be edited any more.");
     const meta = await this.meta(item.payload.job);

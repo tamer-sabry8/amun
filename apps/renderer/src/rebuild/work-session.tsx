@@ -418,6 +418,7 @@ interface Place {
   existing?: { id: string } | null | undefined;
   change?:
     { kind: "same" | "add" | "remove"; text: string }[] | null | undefined;
+  failure?: string | null | undefined;
   changedInNotion?: boolean | undefined;
   content?: string | null | undefined;
   parent?:
@@ -612,14 +613,17 @@ function PlanItem({
               {place?.changedInNotion
                 ? "Changed in Notion"
                 : result.state === "failed"
-                  ? "Not created"
+                  ? place?.kind?.endsWith("update")
+                    ? "Not updated"
+                    : "Not created"
                   : "Being checked"}
             </span>
             <span className="muted" role="status">
               {place?.changedInNotion
                 ? "Changed in Notion since Amun last wrote it. Nothing was overwritten."
                 : result.state === "failed"
-                  ? (place?.problem ??
+                  ? (place?.failure ??
+                    place?.problem ??
                     `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
                   : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
             </span>

@@ -114,14 +114,25 @@ export class CodeChangeReview {
       receipt: this.get<CodeChangeReceipt>("receipt." + id),
     };
   }
-  /** Reviews for one product, newest first. */
-  list(product: string, limit = 20) {
+  /**
+   * Reviews for one product, newest first. `areas` are the product's work
+   * areas: a change made for one of them belongs here even when it was filed
+   * while another product was selected.
+   */
+  list(product: string, limit = 20, areas: readonly string[] = []) {
     const rows = this.db
       .prepare(
-        "SELECT id FROM actions WHERE kind='code_change' AND product_id=? ORDER BY rowid DESC LIMIT ?",
+        "SELECT id FROM actions WHERE kind='code_change' ORDER BY rowid DESC LIMIT 200",
       )
-      .all(product, limit) as { id: string }[];
-    return rows.map((row) => this.read(row.id));
+      .all() as { id: string }[];
+    return rows
+      .map((row) => this.read(row.id))
+      .filter(
+        (item) =>
+          item.revisions.product === product ||
+          areas.includes(item.payload.workAreaId),
+      )
+      .slice(0, limit);
   }
   /**
    * Approves one exact version. `current` is the hash of what is in the

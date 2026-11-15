@@ -417,7 +417,34 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await scan(page, "sprints");
     await nav.getByRole("button", { name: "Agents" }).click();
     await expect(page.getByRole("button", { name: /Firstmate/ })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Product Manager" }),
+    ).toBeVisible();
+    await expect(page.getByText(/\d+ of \d+ selected/)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /PR\/FAQ/ }).first(),
+    ).toBeVisible();
+    const selectedCard = page.getByRole("button", {
+      name: /^Product Manager/,
+      pressed: true,
+    });
+    await expect(selectedCard).toHaveCSS("border-top-width", "2px");
+    await expect(selectedCard).not.toHaveCSS(
+      "border-top-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await selectedCard.scrollIntoViewIfNeeded();
+    await page
+      .locator(".rb-agents .list > .grid")
+      .evaluate((node) => node.scrollTo(0, 0));
     await shot(page, "16-agents");
+    await page.getByRole("button", { name: /^Research & Insights/ }).click();
+    await expect(
+      page.getByRole("region", { name: "Research & Insights" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Remove from team" }),
+    ).toBeVisible();
     await scan(page, "agents");
     await nav.getByRole("button", { name: "Council" }).click();
     await expect(page.getByText(/Advisors are simulations/)).toBeVisible();

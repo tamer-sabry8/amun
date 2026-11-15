@@ -84,7 +84,7 @@ import {
   createGithubIssue,
 } from "../../../packages/auth/src/github-mcp.ts";
 import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
 import {
   adoParentOf,
@@ -1241,42 +1241,68 @@ process.parentPort?.on("message", (event) => {
     },
     code: {
       async prepare(input) {
-        const snapshot = workspaceService.snapshot();
-        const product = snapshot.preferences.productId;
-        const wanted = (() => {
+        // The change belongs to the project its work area is in.
+        const product =
+          (workspace
+            .prepare("SELECT product_id FROM work_areas WHERE id=?")
+            .pluck()
+            .get(input.workAreaId) as string | undefined) ??
+          workspaceService.snapshot().preferences.productId;
+        let wanted: ReturnType<typeof repositoryTarget> | undefined;
+        try {
+          wanted = repositoryTarget(input.repo);
+        } catch {
+          wanted = undefined;
+        }
+        const key = (target: ReturnType<typeof repositoryTarget>) =>
+          target.provider === "GitHub"
+            ? `${target.origin}/${target.owner}/${target.repo}`.toLowerCase()
+            : "";
+        const sameRepo = (reference: string) => {
           try {
-            const t = repositoryTarget(input.repo);
-            return t.provider === "GitHub"
-              ? `${t.origin}/${t.owner}/${t.repo}`.toLowerCase()
-              : "";
-          } catch {
-            return "";
-          }
-        })();
-        const source = (snapshot.productContext?.sources ?? []).find((item) => {
-          if (item.kind !== "repo" || !item.reference) return false;
-          try {
-            const t = repositoryTarget(item.reference);
-            return (
-              t.provider === "GitHub" &&
-              `${t.origin}/${t.owner}/${t.repo}`.toLowerCase() === wanted
-            );
+            return !!wanted && key(wanted) === key(repositoryTarget(reference));
           } catch {
             return false;
           }
-        });
-        if (!product || !source)
+        };
+        if (!product || wanted?.provider !== "GitHub")
           return {
             refusal:
-              "I can only change code in a repository connected to this project. Tell me which repository to use first.",
+              "I can only change code in a GitHub repository. Tell me which repository to use first.",
           };
+        let reference = (
+          workspace
+            .prepare(
+              "SELECT external_id FROM sources WHERE product_id=? AND kind='repo' AND external_id IS NOT NULL",
+            )
+            .pluck()
+            .all(product) as string[]
+        ).find(sameRepo);
+        // A repository the owner named is connected to the project for reading.
+        if (!reference) {
+          reference = wanted.url;
+          workspace
+            .prepare(
+              "INSERT INTO sources(id,product_id,kind,external_id,title,retrieved_at,hash) VALUES (?,?,?,?,?,?,?)",
+            )
+            .run(
+              randomUUID(),
+              product,
+              "repo",
+              reference,
+              `${wanted.owner}/${wanted.repo}`,
+              new Date().toISOString(),
+              createHash("sha256").update(reference).digest("hex"),
+            );
+        }
+        const source = { reference };
         try {
           const { meta, worktree } = await codeChanges.prepare({
             product,
             workAreaId: input.workAreaId,
             agent: input.agent,
             title: input.title,
-            repo: source.reference!,
+            repo: source.reference,
           });
           return {
             id: meta.id,
@@ -2552,6 +2578,14 @@ process.parentPort?.on("message", (event) => {
                 ? { kind: "work item update", change: update.change }
                 : {}),
               changedInNotion: note === notionChangedNote,
+              failure:
+                note &&
+                note !== notionChangedNote &&
+                !note.startsWith("“") &&
+                !note.startsWith("Linked under") &&
+                !note.startsWith("Already exists")
+                  ? note.slice(0, 400)
+                  : null,
               place: update?.id
                 ? `${place ?? "Azure DevOps"} · Work item #${update.id}`
                 : place && destination === "ado" && typeof area === "string"

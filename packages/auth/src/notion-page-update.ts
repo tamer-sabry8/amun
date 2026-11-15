@@ -111,7 +111,12 @@ export type NotionUpdateOutcome =
   | { state: "changed"; url: string }
   | { state: "elsewhere" }
   | { state: "gone" }
-  | { state: "unknown" };
+  | { state: "unknown" }
+  /** Notion answered with an error and the page was left as it was. */
+  | { state: "refused"; detail: string };
+
+/** What a tool call can report: done, unconfirmed, or refused with a reason. */
+export type NotionCallResult = boolean | { refused: string };
 
 const footer = (marker: string) => "\n\nAmun publication ID: " + marker;
 /** The content the page will hold: the new text, and the marker if it had one. */
@@ -125,18 +130,66 @@ export function updatedContent(
 }
 
 /**
+ * The smallest search-and-replace that turns `before` into `after`, anchored
+ * on one unchanged neighbouring line so it can match exactly once. Undefined
+ * when no unambiguous edit exists.
+ */
+export function contentEdit(before: string, after: string) {
+  const a = before.split("\n");
+  const b = after.split("\n");
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (
+    s < a.length - p &&
+    s < b.length - p &&
+    a[a.length - 1 - s] === b[b.length - 1 - s]
+  )
+    s++;
+  const oldMid = a.slice(p, a.length - s);
+  const newMid = b.slice(p, b.length - s);
+  if (!oldMid.length && !newMid.length) return undefined;
+  const attempts: [string[], string[]][] = oldMid.length
+    ? [[oldMid, newMid]]
+    : [];
+  if (p > 0)
+    attempts.push([
+      [a[p - 1]!, ...oldMid],
+      [a[p - 1]!, ...newMid],
+    ]);
+  if (s > 0) {
+    const next = a[a.length - s]!;
+    attempts.push([
+      [...oldMid, next],
+      [...newMid, next],
+    ]);
+  }
+  for (const [o, n] of attempts) {
+    const old_str = o.join("\n");
+    if (
+      old_str.trim() &&
+      before.indexOf(old_str) !== -1 &&
+      before.indexOf(old_str) === before.lastIndexOf(old_str)
+    )
+      return { old_str, new_str: n.join("\n") };
+  }
+  return undefined;
+}
+
+/**
  * Reads the page, stops when it differs from what Amun last wrote, and
- * otherwise replaces its content. `read` and `call` talk to Notion; `beforeSend`
- * runs once, just before anything is changed.
+ * otherwise changes only what the approved text changes, keeping the marker.
+ * `read` and `call` talk to Notion; `beforeSend` runs once, just before
+ * anything is changed.
  */
 export async function updateNotionPage(
   update: NotionPageUpdate,
   io: {
     read(): Promise<NotionPageSnapshot>;
     call(
-      command: "replace_content" | "update_properties",
+      command: "update_content" | "replace_content" | "update_properties",
       body: object,
-    ): Promise<boolean>;
+    ): Promise<NotionCallResult>;
     beforeSend(): void;
   },
 ): Promise<NotionUpdateOutcome> {
@@ -148,20 +201,35 @@ export async function updateNotionPage(
     return { state: "changed", url: before.url };
   io.beforeSend();
   try {
-    if (
-      !(await io.call("replace_content", {
-        new_str: updatedContent(update, before.content),
-      }))
-    )
-      return { state: "unknown" };
+    const content = updatedContent(update, before.content);
+    const hadMarker = before.content
+      .trimEnd()
+      .endsWith("Amun publication ID: " + update.marker);
+    if (content !== before.content) {
+      const edit = contentEdit(before.content, content);
+      let result: NotionCallResult = false;
+      if (edit)
+        result = await io.call("update_content", {
+          content_updates: [edit],
+        });
+      // A refused edit left the page as it was, so the whole-page form is safe.
+      if (result !== true)
+        result = await io.call("replace_content", { new_str: content });
+      if (result !== true)
+        return typeof result === "object"
+          ? { state: "refused", detail: result.refused }
+          : { state: "unknown" };
+    }
     if (update.title !== undefined && update.title !== before.title)
       if (
-        !(await io.call("update_properties", {
+        (await io.call("update_properties", {
           properties: { [update.titleProperty]: update.title },
-        }))
+        })) !== true
       )
         return { state: "unknown" };
     const after = await io.read();
+    if (hadMarker && !after.content.includes(update.marker))
+      return { state: "unknown" };
     return { state: "updated", version: after.version };
   } catch {
     // A change may have landed; the caller looks before anything is repeated.

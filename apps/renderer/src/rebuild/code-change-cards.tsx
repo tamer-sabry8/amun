@@ -11,11 +11,18 @@ const sign = (n: number, mark: string) => (n ? `${mark}${n}` : "");
 export function CodeChangeCards({
   product,
   onOpened,
+  connected,
+  onConnect,
+  initial = [],
 }: {
   product: string;
   onOpened: () => void;
+  /** owner/name of the repositories this project reads from, lower case. */
+  connected?: string[];
+  onConnect?: (repo: CodeChangeCard["repo"]) => void;
+  initial?: CodeChangeCard[];
 }) {
-  const [cards, setCards] = useState<CodeChangeCard[]>([]),
+  const [cards, setCards] = useState<CodeChangeCard[]>(initial),
     [status, notify] = useState(""),
     [busy, wait] = useState(false),
     [asking, ask] = useState<string | null>(null);
@@ -83,6 +90,21 @@ export function CodeChangeCards({
             aria-label={`Code change for ${name}`}
           >
             <strong>Code change for {name}</strong>
+            {connected &&
+              onConnect &&
+              !connected.includes(name.toLowerCase()) && (
+                <span className="row wrap">
+                  <span className="muted small">
+                    This project does not read from {name} yet.
+                  </span>
+                  <button
+                    className="btn quiet"
+                    onClick={() => onConnect(card.repo)}
+                  >
+                    Connect {name} to this project
+                  </button>
+                </span>
+              )}
             <span className="muted small">
               New branch {card.branch} from {card.base}
             </span>

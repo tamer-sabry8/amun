@@ -23,6 +23,7 @@ import { boundedMcpResponse } from "./notion-response.ts";
 import {
   readNotionPage,
   updateNotionPage,
+  type NotionCallResult,
   type NotionPageSnapshot,
   type NotionPageUpdate,
   type NotionUpdateOutcome,
@@ -70,9 +71,27 @@ interface NotionPageIo {
   ): Promise<NotionPageSnapshot>;
   change(
     pageId: string,
-    command: "replace_content" | "update_properties",
+    command: "update_content" | "replace_content" | "update_properties",
     body: object,
-  ): Promise<boolean>;
+  ): Promise<NotionCallResult>;
+}
+const dashedId = (id: string) =>
+  /^[a-f0-9]{32}$/i.test(id)
+    ? `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`
+    : id;
+/** The error text a tool reply carries, bounded; the caller redacts it. */
+function toolErrorText(reply: unknown) {
+  const content = (reply as { content?: unknown })?.content;
+  const text = Array.isArray(content)
+    ? content
+        .map((part) =>
+          part && typeof part === "object" && "text" in part
+            ? String((part as { text: unknown }).text)
+            : "",
+        )
+        .join(" ")
+    : "";
+  return text.slice(0, 500) || "no detail";
 }
 /** No authProvider on transport: a rejected write can never cause an auth replay. */
 async function verifyMcp(
@@ -246,18 +265,31 @@ async function verifyMcp(
           if (!pageWork.update || !tool)
             throw Error("Notion update unavailable");
           const patch = {
-            page_id: pageId,
+            page_id: dashedId(pageId),
             command,
             ...body,
             allow_async: false,
           };
-          const reply = await client.callTool({
-            name: tool.name,
-            arguments: tool.inputSchema.properties?.data
-              ? { data: patch }
-              : patch,
-          });
-          return !reply.isError;
+          try {
+            const reply = await client.callTool({
+              name: tool.name,
+              arguments: tool.inputSchema.properties?.data
+                ? { data: patch }
+                : patch,
+            });
+            return reply.isError ? { refused: toolErrorText(reply) } : true;
+          } catch (error) {
+            // An answer from Notion is a refusal; anything else is uncertain.
+            const code = (error as { code?: unknown } | null)?.code;
+            if (
+              error instanceof Error &&
+              error.name === "McpError" &&
+              typeof code === "number" &&
+              ![-32000, -32001].includes(code)
+            )
+              return { refused: error.message.slice(0, 500) };
+            throw error;
+          }
         },
       });
     }

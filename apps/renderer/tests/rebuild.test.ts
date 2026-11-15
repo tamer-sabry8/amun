@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
 import { leaksRuntimeVocabulary } from "../../../packages/domain/src/work/shell.ts";
+import { CodeChangeCards } from "../src/rebuild/code-change-cards.tsx";
 import { Island, Sidebar } from "../src/rebuild/chrome.tsx";
 import { BlockerRow } from "../src/rebuild/blocker-row.tsx";
 import { VersionHistory } from "../src/rebuild/document-versions.tsx";
@@ -12,6 +13,7 @@ import { Home, IntakeCard } from "../src/rebuild/home.tsx";
 import { DecisionsPanel, LibraryPanel, Rail } from "../src/rebuild/rail.tsx";
 import {
   AgentOutput,
+  Agents,
   Portfolio,
   Rfps,
   Roadmap,
@@ -719,6 +721,45 @@ describe("destinations", () => {
     expect(
       text(renderToStaticMarkup(createElement(AgentOutput, { output: "" }))),
     ).toContain("No output yet");
+  });
+  it("Agents opens on the Product Manager with its brief, chips and counts", () => {
+    const agent = (
+      id: string,
+      role: string,
+      kind: "lead" | "always_on",
+      enabled = true,
+    ): WorkSnapshot["agents"][number] => ({
+      id,
+      role,
+      kind,
+      launcherId: null,
+      state: "idle",
+      nowDoing: null,
+      output: "",
+      enabled,
+    });
+    const state = snapshot({
+      agents: [
+        agent("fm", "Firstmate", "lead"),
+        agent("r", "Research & Insights", "always_on", false),
+        agent("pm", "Product Manager", "always_on"),
+        agent("q", "QA", "always_on"),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      createElement(Agents, { snapshot: state, model: null, onLink: noop }),
+    );
+    const plain = text(html);
+    expect(plain).toContain("Lead Agent");
+    expect(plain).toContain("3 day-one specialists");
+    expect(plain).toContain("2 of 3 selected");
+    expect(plain).toContain("Specialist 02 of 03 · Dispatched by Firstmate");
+    expect(plain).toContain("PR/FAQ · OST · RICE · PRD");
+    expect(html).toMatch(/aria-label="Product Manager"/);
+    expect(plain).toContain("Amazon Working Backwards PR/FAQ");
+    expect(plain).toContain("Remove from team");
+    expect(html).toMatch(/aria-pressed="true"[^>]*><span class="rb-avatar"/);
+    expect(plain).not.toMatch(/terminal/i);
   });
   it("RFPs is a tracking pipeline with the proposed stages", () => {
     const state = snapshot({
@@ -1579,5 +1620,44 @@ describe("shared blocker row and version authors", () => {
     expect(html.match(/ · You/g)).toHaveLength(1);
     expect(html.match(/ · Firstmate/g)).toHaveLength(1);
     expect(html).not.toMatch(/Version 1[^<]*<\/span><span[^>]*>[^<]*· /);
+  });
+});
+
+describe("code changes with no connected repository", () => {
+  it("shows a pending change and offers one plain connect button", () => {
+    const card = {
+      id: "c1",
+      product: "p1",
+      repo: {
+        owner: "tamer-sabry8",
+        name: "amun-qa-sandbox",
+        url: "https://github.com/tamer-sabry8/amun-qa-sandbox",
+      },
+      base: "main",
+      branch: "amun/readme",
+      message: "Update README",
+      files: [
+        { path: "README.md", status: "modified", additions: 1, deletions: 0 },
+      ],
+      diff: "+ hello",
+      diffHash: "h",
+      binding: "b",
+      state: "waiting",
+    } as never;
+    const html = renderToStaticMarkup(
+      createElement(CodeChangeCards, {
+        product: "p1",
+        onOpened: () => undefined,
+        connected: [],
+        onConnect: () => undefined,
+        initial: [card],
+      }),
+    );
+    expect(html).toContain("Code changes");
+    expect(html).toContain("Code change for tamer-sabry8/amun-qa-sandbox");
+    expect(html).toContain(
+      "Connect tamer-sabry8/amun-qa-sandbox to this project",
+    );
+    expect(html).toContain("Approve and open pull request");
   });
 });

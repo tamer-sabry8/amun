@@ -829,6 +829,26 @@ describe("Notion page updates", () => {
     expect(failure).toBeInstanceOf(PlanNotSent);
   });
 
+  it("tells the owner why Notion refused the change", async () => {
+    const target = notionPlanTarget(
+      destination,
+      "ws",
+      connection({
+        state: "refused",
+        detail: "403 restricted_resource secret",
+      }),
+      own,
+    );
+    const failure = await target
+      .write(update())
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(PlanNotSent);
+    expect((failure as Error).message).toBe(
+      "Notion refused the change: the page can't be edited by this connection.",
+    );
+    expect((failure as Error).message).not.toContain("secret");
+  });
+
   it("refuses pages Amun did not create, or never recorded, before reaching Notion", async () => {
     const sent: string[] = [];
     const target = (receipts: Parameters<typeof notionPlanTarget>[3]) =>

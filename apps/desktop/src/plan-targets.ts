@@ -6,6 +6,8 @@ import type { AdoStep } from "../../../packages/data/src/ado-batch.ts";
 import {
   PlanChanged,
   PlanNotSent,
+  redactedError,
+  refusalReason,
   type PlanTarget,
   type PlanWriteItem,
 } from "../../../packages/data/src/plan-publication.ts";
@@ -989,6 +991,10 @@ export function notionPlanTarget(
           ? "Reconnect Notion in Settings, then retry."
           : "Notion could not be reached. Nothing was sent.",
       );
+    }
+    if (outcome.state === "refused") {
+      console.error("notion update refused:", redactedError(outcome.detail));
+      throw new PlanNotSent(refusalReason("notion", outcome.detail));
     }
     if (outcome.state === "changed")
       throw new PlanChanged(notionChangedNote, outcome.url);

@@ -1422,47 +1422,267 @@
   height: 22px;
   background: var(--control);
 }
-.rb-agent {
+/* Agents: pick a specialist on the left, read its brief on the right. */
+.rb-agents {
+  display: grid;
+  grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 0 12px;
+}
+.rb-scroll.fixed {
+  overflow: hidden;
+}
+.rb-scroll.fixed .rb-page {
+  height: 100%;
+  min-height: 0;
+}
+.rb-agents .list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding-right: 16px;
+}
+.rb-agents .list > * {
+  flex: none;
+}
+.rb-agents .list > .grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 0 4px 4px 0;
+}
+.rb-agents .rb-avatar {
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.rb-lead-card {
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   justify-content: stretch !important;
-  gap: 2px 10px !important;
-  width: 200px;
+  gap: 14px !important;
+  width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 16px !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   background: var(--card);
 }
-.rb-agent:hover,
-.rb-agent[aria-pressed="true"] {
+.rb-lead-card:hover,
+.rb-lead-card[aria-pressed="true"] {
   border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
 }
-.rb-agent.fading {
-  opacity: 0.5;
-}
-.rb-agent .glyph {
-  grid-row: span 2;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--press);
+.rb-lead-card .text {
   display: grid;
-  place-items: center;
-  color: var(--accent);
+  gap: 2px;
+  min-width: 0;
 }
-.rb-agent .role {
+.rb-lead-card strong {
+  font-size: 17px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-.rb-agent .doing {
-  font-size: 12.5px;
-  color: var(--muted);
+.rb-lead-card .text > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-lead-card .pill {
+  font-family: var(--amun-font-code);
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--amun-status-connected);
+  background: color-mix(in srgb, var(--amun-status-connected) 14%, transparent);
+  white-space: nowrap;
+}
+.rb-agents .count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rb-agents .grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  gap: 12px;
+}
+.rb-spec {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch !important;
+  gap: 12px !important;
+  text-align: left;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: 14px !important;
+  min-width: 0;
+  min-height: 70px;
+  overflow: hidden;
+  background: var(--card);
+}
+.rb-spec:hover {
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+}
+.rb-spec.off {
+  opacity: 0.7;
+}
+.rb .rb-spec[aria-pressed="true"],
+.rb .rb-spec[aria-pressed="true"]:hover {
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+  opacity: 1;
+}
+.rb-spec .text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+}
+.rb-spec strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.rb-spec strong > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-spec .text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.rb-spec-panel {
+  overflow-y: auto;
+  min-height: 0;
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  padding: 0 4px 20px 16px;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+}
+.rb-spec-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.rb-spec-panel > header > div {
+  min-width: 0;
+}
+.rb-spec-panel .kicker {
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.rb-spec-panel h2 {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.rb-spec-panel .summary {
+  margin: 6px 0 0;
+  font-size: 18px;
+  color: var(--muted);
+}
+.rb-spec-panel .block {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.rb-spec-panel h3 {
+  margin: 0 0 8px;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.rb-spec-panel .block p {
+  margin: 0;
+}
+.rb-spec-panel .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rb-spec-panel .chips :is(a, span) {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 10px;
+  font-family: var(--amun-font-code);
+  font-size: 12.5px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.rb-spec-panel .chips a:hover {
+  border-color: var(--accent);
+}
+.rb-spec-panel .controls {
+  display: grid;
+  gap: 12px;
+}
+.rb-spec-panel .controls p {
+  margin: 0;
+}
+@media (max-width: 899px) {
+  .rb-agents {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rb-scroll.fixed {
+    overflow: auto;
+  }
+  .rb-agents .list {
+    padding-right: 0;
+  }
+  .rb-agents .list > .grid {
+    overflow: visible;
+  }
+  .rb-spec-panel {
+    overflow: visible;
+    padding: 20px 0 0;
+    border-left: 0;
+  }
 }
 .rb-live {
   width: 7px;

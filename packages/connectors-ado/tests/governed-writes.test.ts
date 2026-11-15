@@ -171,3 +171,53 @@ it("marks only Azure's missing-type rejection of a create", async () => {
   expect(other).not.toBeInstanceOf(AdoTypeMissing);
   expect((other as Error).message).toBe("request_rejected_400");
 });
+const found = (project: string, id = 5) => ({
+  id,
+  rev: 1,
+  fields: {
+    "System.TeamProject": project,
+    "System.Title": "T",
+    "System.Tags": "Amun-x",
+  },
+  relations: [],
+});
+it("accepts a project name that differs only by case or encoding", async () => {
+  const client = new AdoWriteClient(base, "My POCs", async () => ({
+    status: 200,
+    data: found("my%20pocs"),
+  }));
+  await expect(client.item(5)).resolves.toMatchObject({ id: 5 });
+});
+it("still refuses an item from another project", async () => {
+  const client = new AdoWriteClient(base, "POCs", async () => ({
+    status: 200,
+    data: found("Other"),
+  }));
+  await expect(client.item(5)).rejects.toThrow("identity mismatch");
+});
+it("asks each type alone when the server rejects an unknown type in the search", async () => {
+  const queries: string[] = [];
+  const client = new AdoWriteClient(base, "POCs", async (method, url, body) => {
+    if (url.includes("wiql")) {
+      const query = (body as { query: string }).query;
+      queries.push(query);
+      if (query.includes(",")) return { status: 400, data: {} };
+      if (query.includes("'Nope'")) return { status: 400, data: {} };
+      return { status: 200, data: { workItems: [{ id: 5 }] } };
+    }
+    return { status: 200, data: found("POCs") };
+  });
+  await expect(
+    client.existing("T", ["Product Backlog Item", "Nope"]),
+  ).resolves.toEqual({ id: 5 });
+  expect(queries).toHaveLength(3);
+});
+it("still fails a search a single type cannot answer", async () => {
+  const client = new AdoWriteClient(base, "POCs", async () => ({
+    status: 400,
+    data: {},
+  }));
+  await expect(client.existing("T", "Task", 1)).rejects.toThrow(
+    "request_rejected_400",
+  );
+});

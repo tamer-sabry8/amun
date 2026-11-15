@@ -68,6 +68,85 @@ export class PlanChanged extends PlanNotSent {
   }
 }
 
+/** Safe, plain words for why the already-exists check could not finish. */
+export function duplicateCheckReason(error: unknown) {
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  const rejected = /request_rejected_(\d{3})/.exec(text);
+  if (error instanceof Error && error.name === "AdoTypeMissing")
+    return "Azure DevOps does not have that work item type in this project";
+  if (rejected) {
+    const status = Number(rejected[1]);
+    if (status === 401 || status === 403)
+      return `Azure DevOps answered ${status}; check the connection and permissions`;
+    if (status === 404)
+      return "Azure DevOps answered 404; check the project name";
+    return `Azure DevOps answered ${status} to the search`;
+  }
+  if (/identity mismatch/i.test(text))
+    return "an item found there belongs to a different project";
+  if (/ECONN|ENOTFOUND|ETIMEDOUT|fetch failed|network|timed? ?out/i.test(text))
+    return "Azure DevOps could not be reached";
+  return "";
+}
+const trackerWords: Record<string, string> = {
+  notion: "Notion",
+  ado: "Azure DevOps",
+  github: "GitHub",
+};
+/**
+ * Plain words for why a destination turned a write down, from its raw error.
+ * The raw text is never shown: only the matched category is.
+ */
+export function refusalReason(destination: string, error: unknown) {
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  const name = trackerWords[destination] ?? "The destination";
+  const status = Number(
+    /request_rejected_(\d{3})|\b(?:status|http|error)\D{0,3}(\d{3})\b|\b(4\d\d|5\d\d)\b/i
+      .exec(text)
+      ?.slice(1)
+      .find(Boolean) ?? 0,
+  );
+  const thing = destination === "notion" ? "the page" : "the item";
+  if (/did not confirm|has not confirmed|not confirmed/i.test(text))
+    return `${name} did not confirm whether this went through. Amun checks before sending anything again.`;
+  if (
+    status === 401 ||
+    /unauthori[sz]ed|invalid[_ ]token|expired|reconnect/i.test(text)
+  )
+    return `Reconnect ${name} in Settings, then retry.`;
+  if (
+    status === 403 ||
+    /forbidden|permission|restricted|not allowed|locked|read[- ]only|access denied/i.test(
+      text,
+    )
+  )
+    return `${name} refused the change: ${thing} can't be edited by this connection.`;
+  if (status === 404 || /not[_ ]found|does not exist|no such/i.test(text))
+    return `${name} refused the change: it could not find ${thing}.`;
+  if (status === 409 || status === 412 || /conflict/i.test(text))
+    return `${name} refused the change: ${thing} was changed by someone else.`;
+  if (status === 429 || /rate.?limit|too many/i.test(text))
+    return `${name} is busy right now. Try again in a minute.`;
+  if (
+    status >= 500 ||
+    /ECONN|ENOTFOUND|ETIMEDOUT|fetch failed|network|timed? ?out|unavailable/i.test(
+      text,
+    )
+  )
+    return `${name} could not be reached or had a problem. Try again shortly.`;
+  if (status === 400 || /validation|invalid|malformed|unsupported/i.test(text))
+    return `${name} refused the change: it did not accept the content.`;
+  return `${name} refused the change.`;
+}
+/** An error line for the service log with links and secrets removed. */
+export function redactedError(error: unknown) {
+  const text = error instanceof Error ? error.message : String(error ?? "");
+  return text
+    .replace(/https?:\/\/\S+/gi, "[link]")
+    .replace(/(bearer|basic|token|pat|password)[\s:=]+\S+/gi, "$1 [removed]")
+    .slice(0, 200);
+}
+
 type WriteState = "pending" | "sent" | "created" | "missing" | "unknown";
 interface WriteRow {
   item_id: string;
@@ -563,9 +642,11 @@ export class PlanPublisher {
               });
               break;
             }
-          } catch {
+          } catch (error) {
+            const reason = duplicateCheckReason(error);
+            console.error("plan duplicate check failed:", redactedError(error));
             this.set(planId, row.item_id, {
-              note: "Could not check whether this already exists, so nothing was created.",
+              note: `Could not check whether this already exists${reason ? ` (${reason})` : ""}, so nothing was created. Try again or ask Firstmate.`,
             });
             results.push({ id: row.item_id, state: "failed" });
             break;
@@ -579,8 +660,16 @@ export class PlanPublisher {
           done(row, await api.write(item));
           settled = true;
         } catch (error) {
+          console.error(
+            "plan write failed:",
+            row.destination,
+            redactedError(error),
+          );
           this.set(planId, row.item_id, {
-            note: error instanceof Error ? error.message.slice(0, 300) : null,
+            note:
+              error instanceof PlanNotSent
+                ? error.message.slice(0, 300)
+                : refusalReason(row.destination, error),
             ...(error instanceof PlanChanged ? { url: error.url } : {}),
           });
           if (error instanceof PlanNotSent) {

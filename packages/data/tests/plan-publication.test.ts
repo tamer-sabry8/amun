@@ -645,3 +645,24 @@ describe("parent links in the duplicate guard", () => {
     expect(sameItem(key("1091018"), key("1091019"))).toBe(false);
   });
 });
+
+describe("duplicate check failure reason", () => {
+  it("names the known causes in plain words and hides links and secrets", async () => {
+    const { duplicateCheckReason, redactedError } =
+      await import("../src/plan-publication.ts");
+    expect(duplicateCheckReason(new Error("request_rejected_400"))).toBe(
+      "Azure DevOps answered 400 to the search",
+    );
+    expect(duplicateCheckReason(new Error("request_rejected_401"))).toMatch(
+      /connection/,
+    );
+    expect(
+      duplicateCheckReason(new Error("Azure item identity mismatch")),
+    ).toMatch(/different project/);
+    expect(duplicateCheckReason(new Error("fetch failed"))).toMatch(/reached/);
+    expect(duplicateCheckReason(new Error("boom"))).toBe("");
+    expect(
+      redactedError(new Error("GET https://u:pw@host/x failed token abc123")),
+    ).not.toMatch(/pw@|abc123|https/);
+  });
+});

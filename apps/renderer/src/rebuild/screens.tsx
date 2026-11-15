@@ -20,8 +20,6 @@ import {
 } from "react";
 import {
   horizonBoard,
-  orgChart,
-  teamUnder,
   planSummary,
   calendarNote,
   releaseGroups,
@@ -36,7 +34,6 @@ import {
   sprintViews,
   timelineBar,
   type Sprint,
-  type AgentNode,
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
 import {
@@ -86,6 +83,7 @@ function Page({
   actions,
   children,
   footer,
+  fixed,
 }: {
   title: string;
   context?: string;
@@ -93,9 +91,11 @@ function Page({
   actions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Keeps the page still so panes inside it scroll on their own. */
+  fixed?: boolean;
 }) {
   return (
-    <div className="rb-scroll">
+    <div className={fixed ? "rb-scroll fixed" : "rb-scroll"}>
       <div className="rb-page">
         <header className="rb-head">
           {context && <span className="context">{context}</span>}
@@ -173,121 +173,168 @@ function Segmented<T extends string>({
 }
 
 // ── Agents ───────────────────────────────────────────────────────────────────
-/** One agent: a full card for the lead and for anyone working, a compact
-    row for the rest. Choosing either opens the same panel underneath. */
-function AgentButton({
-  node,
-  row = false,
+type AgentRow = Snapshot["agents"][number];
+const live = (agent: AgentRow) =>
+  agent.state === "working" || agent.state === "waiting";
+function SpecialistCard({
+  agent,
   selected,
   onSelect,
-  busy = false,
 }: {
-  node: AgentNode;
-  row?: boolean;
-  selected: string | null;
+  agent: AgentRow;
+  selected: boolean;
   onSelect(id: string): void;
-  /** For the lead: whether anyone on the team is working. */
-  busy?: boolean;
 }) {
-  const quiet =
-    node.kind === "lead"
-      ? "Your lead agent"
-      : node.kind === "temporary"
-        ? "Temporary"
-        : row
-          ? "Ready"
-          : "Always on";
+  const profile = agentProfile(agent.role);
+  const line = profile?.tags?.length
+    ? profile.tags.join(" · ")
+    : (profile?.summary ?? agent.nowDoing ?? "");
   return (
     <button
-      className={
-        "rb-agent" + (row ? " row" : "") + (node.fading ? " fading" : "")
-      }
-      aria-pressed={selected === node.id}
-      onClick={() => onSelect(node.id)}
+      className={"rb-spec" + (agent.enabled ? "" : " off")}
+      aria-pressed={selected}
+      onClick={() => onSelect(agent.id)}
     >
-      {node.kind === "lead" ? (
-        <span style={{ gridRow: "span 2" }}>
-          <FirstmateMark size={30} mood={busy ? "working" : "resting"} />
-        </span>
-      ) : agentProfile(node.role) ? (
-        <span style={{ gridRow: row ? undefined : "span 2" }}>
-          <AgentAvatar role={node.role} size={row ? 26 : 30} />
-        </span>
-      ) : (
-        <span className="glyph" aria-hidden="true">
-          <Icon name={node.icon} width={16} height={16} />
-        </span>
-      )}
-      <span className="role">
-        {node.role}
-        {!row && (
-          <span className={"rb-live " + node.state} title={node.status} />
-        )}
+      <AgentAvatar role={agent.role} size={44} />
+      <span className="text">
+        <strong title={agent.role}>
+          <span>{agent.role}</span>
+          {live(agent) && <span className="rb-live working" title="Working" />}
+        </strong>
+        {line && <span title={line}>{line}</span>}
       </span>
-      <span className="doing">{node.nowDoing ?? quiet}</span>
-      {row && <span className={"rb-live " + node.state} title={node.status} />}
     </button>
   );
 }
-function Team({
-  chart,
-  selected,
-  onSelect,
+function SpecialistPanel({
+  agent,
+  position,
+  total,
+  onLink,
 }: {
-  chart: AgentNode;
-  selected: string | null;
-  onSelect(id: string): void;
+  agent: AgentRow;
+  position: number;
+  total: number;
+  onLink?(url: string): void;
 }) {
-  const team = teamUnder(chart);
-  const working = team.filter(
-    (agent) => agent.state === "working" || agent.state === "waiting",
-  );
-  const ready = team.filter((agent) => !working.includes(agent));
+  const [watch, setWatch] = useState(false);
+  const profile = agentProfile(agent.role);
+  const pad = (value: number) => String(value).padStart(2, "0");
   return (
-    <div className="rb-team">
-      <div className="lead">
-        <AgentButton
-          node={chart}
-          selected={selected}
-          onSelect={onSelect}
-          busy={working.length > 0}
-        />
-      </div>
-      {working.length > 0 && (
-        <section aria-labelledby="rb-team-working">
-          <h2 id="rb-team-working">
-            Working now <span className="count">{working.length}</span>
-          </h2>
-          <div className="working">
-            {working.map((agent) => (
-              <AgentButton
-                key={agent.id}
-                node={agent}
-                selected={selected}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </section>
+    <section className="rb-spec-panel" aria-label={agent.role}>
+      <header>
+        <AgentAvatar role={agent.role} size={80} />
+        <div>
+          <p
+            className="kicker"
+            title={`Specialist ${pad(position)} of ${pad(total)} · Dispatched by Firstmate`}
+          >
+            Specialist {pad(position)} of {pad(total)} · Dispatched by Firstmate
+          </p>
+          <h2>{agent.role}</h2>
+          <p className="summary">
+            {profile
+              ? profile.summary
+              : agent.kind === "temporary"
+                ? "Temporary helper"
+                : "Added by you"}
+          </p>
+        </div>
+      </header>
+      {profile && (
+        <>
+          <section className="block">
+            <h3>What this specialist owns for you</h3>
+            <p>{profile.scope}</p>
+          </section>
+          <section className="block">
+            <h3>Deliverables it brings back to your chat</h3>
+            <p>{profile.outputs}</p>
+          </section>
+          <section className="block">
+            <h3>Built-in industry frameworks &amp; templates</h3>
+            <ul className="chips">
+              {profile.frameworks.map(([name, link]) => (
+                <li key={name}>
+                  {onLink ? (
+                    <a
+                      href={link}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        onLink(link);
+                      }}
+                    >
+                      {name}
+                    </a>
+                  ) : (
+                    <span>{name}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       )}
-      {ready.length > 0 && (
-        <section aria-labelledby="rb-team-ready">
-          <h2 id="rb-team-ready">
-            Ready when Firstmate needs them{" "}
-            <span className="count">{ready.length}</span>
-          </h2>
-          <div className="roster">
-            {ready.map((agent) => (
-              <AgentButton
-                key={agent.id}
-                node={agent}
-                row
-                selected={selected}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </section>
+      <AgentControls
+        agent={agent}
+        watch={watch}
+        onWatch={setWatch}
+        onLink={onLink}
+      />
+    </section>
+  );
+}
+function AgentControls({
+  agent,
+  watch,
+  onWatch,
+  onLink,
+}: {
+  agent: AgentRow;
+  watch: boolean;
+  onWatch(value: boolean): void;
+  onLink?: ((url: string) => void) | undefined;
+}) {
+  const member = agent.kind !== "lead";
+  return (
+    <div className="controls">
+      <div className="row wrap">
+        <p>
+          <span className="muted">Now doing · </span>
+          {agent.nowDoing ?? "Nothing right now"}
+        </p>
+        <span className="grow" />
+        {member && !agent.enabled && (
+          <span className="muted small">Not on your team</span>
+        )}
+        <button
+          className="btn"
+          aria-pressed={watch}
+          onClick={() => onWatch(!watch)}
+        >
+          Watch
+        </button>
+        {member && (
+          <button
+            className={agent.enabled ? "btn quiet" : "btn"}
+            onClick={() =>
+              work("toggle-agent", {
+                agentId: agent.id,
+                enabled: !agent.enabled,
+              })
+            }
+          >
+            {agent.enabled ? "Remove from team" : "Add to team"}
+          </button>
+        )}
+      </div>
+      <AgentOutput output={agent.output} {...(onLink && { onLink })} />
+      {watch && (
+        <AgentWatch
+          agentId={agent.id}
+          launcherId={agent.launcherId}
+          name={agent.role}
+        />
       )}
     </div>
   );
@@ -322,14 +369,19 @@ export function Agents({
   onLink?(url: string): void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [watch, setWatch] = useState(false);
   const [problem, setProblem] = useState("");
-  const chart = orgChart(snapshot.agents.filter((agent) => agent.enabled));
-  const agent = snapshot.agents.find((item) => item.id === selected);
+  const lead = snapshot.agents.find((item) => item.kind === "lead");
+  const specialists = snapshot.agents.filter((item) => item.kind !== "lead");
+  const chosen =
+    (selected && snapshot.agents.find((item) => item.id === selected)) ||
+    specialists.find((item) => item.role === "Product Manager") ||
+    specialists[0] ||
+    lead;
+  const onTeam = specialists.filter((item) => item.enabled).length;
   return (
     <Page
       title="Agents"
-      line="Firstmate leads. Agents do the work you delegate."
+      fixed
       footer={
         <>
           {problem && (
@@ -352,76 +404,103 @@ export function Agents({
         </>
       }
     >
-      {chart ? (
-        <Team
-          chart={chart}
-          selected={selected}
-          onSelect={(id) => {
-            setSelected(id);
-            setWatch(false);
-          }}
-        />
+      {lead ? (
+        <div className="rb-agents">
+          <div className="list">
+            <button
+              className="rb-lead-card"
+              aria-pressed={chosen?.id === lead.id}
+              onClick={() => setSelected(lead.id)}
+            >
+              <FirstmateMark
+                size={44}
+                mood={specialists.some(live) ? "working" : "resting"}
+              />
+              <span className="text">
+                <strong>Firstmate</strong>
+                <span>
+                  Your AI product team leader · You talk only to Firstmate
+                </span>
+              </span>
+              <span className="pill">Lead Agent</span>
+            </button>
+            <div className="count-row">
+              <span>
+                {specialists.length} day-one specialists (click any agent to
+                inspect)
+              </span>
+              <span>
+                {onTeam} of {specialists.length} selected
+              </span>
+            </div>
+            <div className="grid">
+              {specialists.map((item) => (
+                <SpecialistCard
+                  key={item.id}
+                  agent={item}
+                  selected={chosen?.id === item.id}
+                  onSelect={setSelected}
+                />
+              ))}
+            </div>
+          </div>
+          {chosen &&
+            (chosen.kind === "lead" ? (
+              <section
+                key={chosen.id}
+                className="rb-spec-panel"
+                aria-label="Firstmate"
+              >
+                <header>
+                  <FirstmateMark
+                    size={88}
+                    mood={specialists.some(live) ? "working" : "resting"}
+                  />
+                  <div>
+                    <p className="kicker">Lead agent</p>
+                    <h2>Firstmate</h2>
+                    <p className="summary">
+                      Your AI product team leader. You talk only to Firstmate;
+                      it hands the work to your specialists and brings back the
+                      results.
+                    </p>
+                  </div>
+                </header>
+                <LeadControls agent={chosen} {...(onLink && { onLink })} />
+              </section>
+            ) : (
+              <SpecialistPanel
+                key={chosen.id}
+                agent={chosen}
+                position={
+                  specialists.findIndex((item) => item.id === chosen.id) + 1
+                }
+                total={specialists.length}
+                {...(onLink && { onLink })}
+              />
+            ))}
+        </div>
       ) : (
         <p className="muted">Finish setup to meet Firstmate and your agents.</p>
       )}
-      {agent && (
-        <section
-          className="rb-panel"
-          aria-label={agent.role}
-          style={{ marginTop: 8 }}
-        >
-          <header>
-            <h2>{agent.role}</h2>
-            <span className="tag">
-              {agent.kind === "lead"
-                ? "Lead agent"
-                : agent.kind === "always_on"
-                  ? "Always on"
-                  : "Temporary"}
-            </span>
-            <span className="grow" />
-            <button
-              className="btn"
-              aria-pressed={watch}
-              onClick={() => setWatch(!watch)}
-            >
-              Watch
-            </button>
-            {agent.kind !== "lead" && (
-              <button
-                className="btn quiet"
-                onClick={() => {
-                  work("toggle-agent", { agentId: agent.id, enabled: false });
-                  setSelected(null);
-                }}
-              >
-                Remove
-              </button>
-            )}
-          </header>
-          <div style={{ padding: "0 18px 18px", display: "grid", gap: 10 }}>
-            {agentProfile(agent.role) && (
-              <p>
-                <span className="muted">What it does · </span>
-                {agentProfile(agent.role)?.summary}
-              </p>
-            )}
-            <p>
-              <span className="muted">Now doing · </span>
-              {agent.nowDoing ?? "Nothing right now"}
-            </p>
-            <AgentOutput output={agent.output} {...(onLink && { onLink })} />
-            {watch && (
-              <AgentWatch
-                agentId={agent.id}
-                launcherId={agent.launcherId}
-                name={agent.role}
-              />
-            )}
-          </div>
-        </section>
-      )}
     </Page>
+  );
+}
+function LeadControls({
+  agent,
+  onLink,
+}: {
+  agent: AgentRow;
+  onLink?: (url: string) => void;
+}) {
+  const [watch, setWatch] = useState(false);
+  return (
+    <AgentControls
+      agent={agent}
+      watch={watch}
+      onWatch={setWatch}
+      onLink={onLink}
+    />
   );
 }
 

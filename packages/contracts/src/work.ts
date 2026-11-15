@@ -997,6 +997,8 @@ export const planPlacesResult = z.strictObject({
         .optional(),
       /** The exact text a new Notion page will hold, secrets already removed. */
       content: z.string().max(20000).nullable().optional(),
+      /** Plain words for why the destination did not take this item. */
+      failure: z.string().max(400).nullable().optional(),
       /** The page changed in Notion after Amun wrote it; nothing was sent. */
       changedInNotion: z.boolean().optional(),
       /** The existing work item a new Azure DevOps item is created under. */

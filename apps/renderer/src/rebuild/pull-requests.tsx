@@ -146,20 +146,48 @@ export function PullRequests({
     send("list");
   };
 
+  const names = sources.map((source) => {
+    const found = /([^/:]+)\/([^/#?]+?)(?:\.git)?\/?$/.exec(
+      source.reference ?? "",
+    );
+    return found ? `${found[1]}/${found[2]}`.toLowerCase() : "";
+  });
+  const connect = (repo: { owner: string; name: string; url: string }) =>
+    bridge.send({
+      version: 1,
+      kind: "workspace",
+      action: "map-source",
+      productId: product,
+      sourceKind: "repo",
+      title: `${repo.owner}/${repo.name}`,
+      reference: repo.url,
+    });
+  const changes = (
+    <CodeChangeCards
+      product={product}
+      onOpened={() => send("list")}
+      connected={names}
+      onConnect={connect}
+    />
+  );
+
   if (!sources.length)
     return (
-      <div className="rb-inline amber">
-        <strong>No repository is connected to this project yet.</strong>
-        <span className="note">
-          Tell Firstmate which GitHub repository it uses, for example “Use
-          https://github.com/owner/repo for this project”.
-        </span>
-        <button
-          className="btn"
-          onClick={() => onAsk("Connect this project to the repository ")}
-        >
-          Ask Firstmate to connect one
-        </button>
+      <div style={{ display: "grid", gap: 12 }}>
+        {changes}
+        <div className="rb-inline amber">
+          <strong>No repository is connected to this project yet.</strong>
+          <span className="note">
+            Tell Firstmate which GitHub repository it uses, for example “Use
+            https://github.com/owner/repo for this project”.
+          </span>
+          <button
+            className="btn"
+            onClick={() => onAsk("Connect this project to the repository ")}
+          >
+            Ask Firstmate to connect one
+          </button>
+        </div>
       </div>
     );
 
@@ -197,8 +225,11 @@ export function PullRequests({
             Refresh
           </button>
         </div>
+        <p className="muted small">
+          Reads from {sources.map((s) => s.title).join(", ")}.
+        </p>
         {statusLine}
-        <CodeChangeCards product={product} onOpened={() => send("list")} />
+        {changes}
         <div className="rb-rows">
           {rows.map((row) => {
             const checks = checksLabel(row.checks);

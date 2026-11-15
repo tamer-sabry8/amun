@@ -98,6 +98,12 @@ interface Job {
   /** The job changes code in Amun's own copy of a repository. */
   code?: CodeWorktree;
 }
+/** Crewmates whose profile fits changing code; the first is the default. */
+export const codeAgents = [
+  "Solution & AI Architecture",
+  "Presales & Solutioning",
+  "QA",
+];
 /** The answer that lets a worker use its own folder. */
 export const allowWorker = "Allow it";
 export const trustRef = (harness: Harness) => "crew-trust:" + harness;
@@ -235,7 +241,10 @@ export class Delegations {
     if (!area) return null;
     const profile = agentProfile(input.agent);
     // The name shown is the catalogue's own spelling when there is one.
-    const agent = profile?.name ?? input.agent.trim();
+    const named = profile?.name ?? input.agent.trim();
+    // Code and README edits go to a crewmate whose profile fits them.
+    const agent =
+      input.repo && !codeAgents.includes(named) ? codeAgents[0]! : named;
     if (
       rfpResponseDelegation({
         areaType: area.type,

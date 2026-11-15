@@ -78,7 +78,10 @@ describe("updating a page Amun wrote", () => {
       state: "updated",
       version: after.version,
     });
-    expect(calls).toEqual(["send", 'replace_content:{"new_str":"New text"}']);
+    expect(calls).toEqual([
+      "send",
+      'update_content:{"content_updates":[{"old_str":"Old text","new_str":"New text"}]}',
+    ]);
   });
   it("stops without writing when someone edited the page in Notion", async () => {
     const calls: string[] = [];
@@ -121,11 +124,114 @@ describe("updating a page Amun wrote", () => {
       { ...update, expectedVersion: marked.version, title: "Renamed" },
       io([marked], calls),
     );
-    expect(calls[1]).toContain("New text\\n\\nAmun publication ID: m-1");
+    expect(calls[1]).toContain("New text");
+    expect(calls[1]).not.toContain("m-1");
     expect(calls[2]).toBe(
       'update_properties:{"properties":{"title":"Renamed"}}',
     );
     expect(updatedContent(update, "Old text")).toBe("New text");
+  });
+});
+
+describe("updating through a mocked Notion MCP", () => {
+  const marker = "Amun publication ID: m-1";
+  const start = `Created by Amun.\n\n${marker}`;
+  const mock = (refuse?: (command: string) => string | undefined) => {
+    let content = start;
+    const calls: string[] = [];
+    const snapshot = () =>
+      readNotionPage(
+        fetched(content, { last_edited_time: "t" + calls.length }),
+        page,
+      );
+    return {
+      calls,
+      get content() {
+        return content;
+      },
+      snapshot,
+      io: (version: () => string = () => snapshot().version) => ({
+        read: async () => snapshot(),
+        beforeSend: () => calls.push("send"),
+        call: async (command: string, body: object) => {
+          calls.push(command);
+          const refused = refuse?.(command);
+          if (refused) return { refused };
+          const b = body as {
+            content_updates?: { old_str: string; new_str: string }[];
+            new_str?: string;
+          };
+          if (command === "update_content") {
+            const [edit] = b.content_updates!;
+            if (content.split(edit!.old_str).length !== 2)
+              return { refused: "no_match" };
+            content = content.replace(edit!.old_str, edit!.new_str);
+          } else if (command === "replace_content") content = b.new_str!;
+          void version;
+          return true;
+        },
+      }),
+    };
+  };
+  const request = (base: NotionPageSnapshot, text: string) => ({
+    pageId: page,
+    expectedVersion: base.version,
+    parentId: parent,
+    titleProperty: "title",
+    title: "QA notes",
+    text,
+    marker: "m-1",
+  });
+
+  it("appends one line, leaves the exact approved text and keeps the marker", async () => {
+    const notion = mock();
+    const base = notion.snapshot();
+    const outcome = await updateNotionPage(
+      request(base, "Created by Amun.\nUpdated by Amun (check)."),
+      notion.io(),
+    );
+    expect(outcome.state).toBe("updated");
+    expect(notion.content).toBe(
+      `Created by Amun.\nUpdated by Amun (check).\n\n${marker}`,
+    );
+    expect(notion.calls).toEqual(["send", "update_content"]);
+  });
+
+  it("falls back to replacing the content, still keeping the marker", async () => {
+    const notion = mock((command) =>
+      command === "update_content" ? "validation_error" : undefined,
+    );
+    const base = notion.snapshot();
+    const outcome = await updateNotionPage(
+      request(base, "Created by Amun.\nMore."),
+      notion.io(),
+    );
+    expect(outcome.state).toBe("updated");
+    expect(notion.content).toBe(`Created by Amun.\nMore.\n\n${marker}`);
+    expect(notion.calls).toEqual(["send", "update_content", "replace_content"]);
+  });
+
+  it("reports Notion's error as a refusal and leaves the page alone", async () => {
+    const notion = mock(() => "403 restricted_resource");
+    const base = notion.snapshot();
+    expect(
+      await updateNotionPage(
+        request(base, "Created by Amun.\nMore."),
+        notion.io(),
+      ),
+    ).toEqual({ state: "refused", detail: "403 restricted_resource" });
+    expect(notion.content).toBe(start);
+  });
+
+  it("refuses to write when the page changed in Notion", async () => {
+    const notion = mock();
+    const base = notion.snapshot();
+    const outcome = await updateNotionPage(
+      request({ ...base, version: "older" }, "x"),
+      notion.io(),
+    );
+    expect(outcome.state).toBe("changed");
+    expect(notion.calls).toEqual([]);
   });
 });
 
