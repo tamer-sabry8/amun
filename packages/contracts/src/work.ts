@@ -1087,8 +1087,44 @@ export const toolsReport = z.strictObject({
   ),
 });
 export type ToolsReport = z.infer<typeof toolsReport>;
+
+/** Where a payload broke the contract: paths and codes only, never values. */
+export function issueReasons(error: z.ZodError, limit = 20) {
+  const seen = new Set<string>();
+  for (const issue of error.issues) {
+    const keys =
+      issue.code === "unrecognized_keys" ? ` [${issue.keys.join(",")}]` : "";
+    seen.add(`${issue.path.join(".") || "(root)"}: ${issue.code}${keys}`);
+    if (seen.size >= limit) break;
+  }
+  return [...seen];
+}
+/** Why a failure happened, as paths and codes only (never values). */
+export function failureReasons(error: unknown): string[] {
+  if (error instanceof z.ZodError) return issueReasons(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  return [
+    `(snapshot): ${error instanceof Error ? error.name : "error"}${
+      typeof code === "string" ? " " + code.slice(0, 64) : ""
+    }`,
+  ];
+}
+const reasonList = z.array(z.string().max(300)).max(20);
+/** The service could not build the workspace snapshot. */
+export const workSnapshotFailed = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-snapshot-failed"),
+  reasons: reasonList,
+});
+/** The renderer could not read a snapshot; it tells the service why. */
+export const workDiagnostic = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-diagnostic"),
+  reasons: reasonList,
+});
 export const workEvent = z.discriminatedUnion("kind", [
   toolsReport,
+  workSnapshotFailed,
   workAttachmentResult,
   planPlacesResult,
   contentSearchResult,

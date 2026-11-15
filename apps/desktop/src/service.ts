@@ -124,6 +124,8 @@ import {
   toolsCommand,
   workAttachment,
   workDelegate,
+  workDiagnostic,
+  failureReasons,
 } from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -226,6 +228,27 @@ const workspaceService = new WorkspaceService(
 );
 // UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
 const workStore = new WorkStore(workspace, redactor);
+let lastWorkFailure = "";
+/** Reports a reason once per change: to Diagnostics and to this process's stderr. */
+function reportWorkFailure(event: string, reasons: string[]) {
+  const text = reasons.join("; ");
+  if (text === lastWorkFailure) return;
+  lastWorkFailure = text;
+  logger.error(event, { reasons });
+  process.stderr.write(`amun-service: ${event}: ${text}\n`);
+}
+/** Runs a work command; a snapshot that cannot be built becomes a plain failure event. */
+function handleWork(message: unknown) {
+  try {
+    return workStore.handle(message);
+  } catch (error) {
+    const reasons = failureReasons(error);
+    reportWorkFailure("work.snapshot.failed", reasons);
+    return [
+      { version: 1 as const, kind: "work-snapshot-failed" as const, reasons },
+    ];
+  }
+}
 /** The Azure DevOps project a work area publishes to, with its connection. */
 function adoConnection(workAreaId: string | null) {
   const mapped = workAreaId
@@ -1926,7 +1949,7 @@ process.parentPort?.on("message", (event) => {
           stored,
           (pageId) => !!planPublisher.notionPage(pageId),
         );
-      const events = refusal ? [refusal] : workStore.handle(message.data);
+      const events = refusal ? [refusal] : handleWork(message.data);
       for (const event of events) port.postMessage(event);
       if (allowed) void delegations.allow(allowed).catch(() => undefined);
       const result = events.find((event) => event.kind === "work-result");
@@ -2036,6 +2059,10 @@ process.parentPort?.on("message", (event) => {
           return;
         await open([url.href]);
       })();
+    } else if (message.data?.kind === "work-diagnostic") {
+      const parsed = workDiagnostic.safeParse(message.data);
+      if (parsed.success)
+        reportWorkFailure("work.snapshot.unreadable", parsed.data.reasons);
     } else if (message.data?.kind === "content-search") {
       const parsed = contentSearch.safeParse(message.data);
       if (!parsed.success) return;

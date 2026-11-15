@@ -50,6 +50,7 @@ import { Settings } from "./lazy.tsx";
 import {
   connectWorkStore,
   council,
+  retryWorkSnapshot,
   work,
   workAsync,
   workStore,
@@ -58,6 +59,36 @@ import { acceptOffer } from "./accept-offer.ts";
 import { areaOf, homeModel, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
+
+function WorkspaceFailure({ reasons }: { reasons: string[] }) {
+  const [copied, setCopied] = useState(false);
+  const details = reasons.length ? reasons.join("\n") : "No details";
+  return (
+    <div role="alert" style={{ padding: 48 }}>
+      <p>Amun couldn’t open your workspace. Your data is safe.</p>
+      <p className="muted small" aria-live="polite">
+        {copied ? "Details copied" : ""}
+      </p>
+      <div className="rb-inline">
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(details)
+              .then(() => setCopied(true))
+              .catch(() => setCopied(false));
+          }}
+        >
+          Copy details
+        </button>
+        <button className="btn" type="button" onClick={retryWorkSnapshot}>
+          Try again
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   const bridgeState = useSyncExternalStore(
@@ -209,6 +240,13 @@ export function App() {
     setFirst(null);
     dispatch({ type: "go", route: "home" });
   }, [openAreaGone]);
+  if (!snapshot && state.failure)
+    return (
+      <div className="rb setup">
+        <WorkspaceFailure reasons={state.failure} />
+        <AuthPrompt />
+      </div>
+    );
   if (!snapshot)
     return (
       <div className="rb setup">

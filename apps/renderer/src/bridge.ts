@@ -1,5 +1,9 @@
 import { updateResult } from "../../../packages/contracts/src/stakeholder.ts";
-import { workEvent } from "../../../packages/contracts/src/work.ts";
+import {
+  workEvent,
+  workSnapshot,
+  issueReasons,
+} from "../../../packages/contracts/src/work.ts";
 import {
   chatResult,
   backlogResult,
@@ -110,6 +114,21 @@ export function initializeBridge() {
       const work = workEvent.safeParse(message.data);
       if (work.success) {
         for (const listener of eventListeners) listener(work.data);
+        return;
+      }
+      // A snapshot that does not read must never leave the window waiting.
+      if (message.data?.kind === "work-snapshot") {
+        const broken = workSnapshot.safeParse(message.data);
+        const reasons = broken.success
+          ? ["(root): invalid_union"]
+          : issueReasons(broken.error);
+        port?.postMessage({ version: 1, kind: "work-diagnostic", reasons });
+        const failed = {
+          version: 1,
+          kind: "work-snapshot-failed",
+          reasons,
+        };
+        for (const listener of eventListeners) listener(failed);
         return;
       }
       const workspace = workspaceEvent.safeParse(message.data);
