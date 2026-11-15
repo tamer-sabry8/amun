@@ -145,6 +145,13 @@
   font-weight: 500;
   border-radius: 4px;
 }
+.rb summary.link {
+  list-style: none;
+  cursor: pointer;
+}
+.rb summary.link::-webkit-details-marker {
+  display: none;
+}
 .rb .link:hover {
   text-decoration: underline;
   text-underline-offset: 3px;

@@ -379,6 +379,24 @@ async function adoTypeInfo(workAreaId: string | null) {
 }
 // An approved plan is written to its destinations here. Each destination
 // reuses its existing connection; a missing one blocks that item only.
+const noAzureProject =
+  "Choose the Azure DevOps project in this project’s Backlog panel first.";
+function savedPublishingSource(id: string) {
+  const saved = workspace
+    .prepare(
+      "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
+    )
+    .pluck()
+    .get() as string | undefined;
+  try {
+    const reference: unknown = saved ? JSON.parse(saved) : undefined;
+    return typeof reference === "string"
+      ? { id, title: "", kind: "ado", reference }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const planPublisher: PlanPublisher = new PlanPublisher(
   workspace,
   workStore,
@@ -1416,17 +1434,21 @@ process.parentPort?.on("message", (event) => {
             ? workspaceService.productSources(request.productId)
             : null;
       if (!sources) return;
-      const source = sources.find(
-        (s) => s.id === request.sourceId && s.kind === "ado",
-      );
+      const source =
+        sources.find((s) => s.id === request.sourceId && s.kind === "ado") ??
+        (readOnlySprints
+          ? // The project the work already publishes to: a mapped Azure
+            // project of the product, else the one saved for publication.
+            (sources.find((s) => s.kind === "ado" && s.reference) ??
+            savedPublishingSource(request.sourceId))
+          : undefined);
       const meta = {
         kind: "backlog-result",
         productId: request.productId,
         requestId: request.requestId,
       };
       const read = async () => {
-        if (!source?.reference)
-          throw Error("Map an Azure project in Product context.");
+        if (!source?.reference) throw Error(noAzureProject);
         const { connection, collection, project } = projectSource(
           source.reference,
           authMetadata.list(),
@@ -1558,8 +1580,9 @@ process.parentPort?.on("message", (event) => {
         .then((reply) => {
           if (
             !closed &&
-            workspaceService.snapshot().productContext?.productId ===
-              request.productId
+            (readOnlySprints ||
+              workspaceService.snapshot().productContext?.productId ===
+                request.productId)
           )
             port.postMessage(reply);
         });

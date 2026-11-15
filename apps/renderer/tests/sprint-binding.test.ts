@@ -43,7 +43,13 @@ it("uses the binding Backlog saved for the chosen work area", () => {
     sourceId: "s1",
     team: "POCs Team",
   });
-  expect(resolveSprintBinding(store, areas, "a2")).toBeNull();
+  // No saved board: the project the work already publishes to is read.
+  expect(resolveSprintBinding(store, areas, "a2")).toEqual({
+    productId: expect.any(String),
+    sourceId: "publishing",
+    team: "",
+  });
+  expect(resolveSprintBinding(store, areas, "no-product")).toBeNull();
 });
 
 it("for all work areas, prefers the default team, then the most recent binding", () => {
@@ -55,6 +61,10 @@ it("for all work areas, prefers the default team, then the most recent binding",
   expect(resolveSprintBinding(store, areas, "")?.productId).toBe("p1");
 });
 
-it("reports no binding when nothing is saved", () => {
-  expect(resolveSprintBinding(memory(), areas, "")).toBeNull();
+it("falls back to the publishing project, without a team, when nothing is saved", () => {
+  expect(resolveSprintBinding(memory(), areas, "")).toMatchObject({
+    sourceId: "publishing",
+    team: "",
+  });
+  expect(resolveSprintBinding(memory(), [], "")).toBeNull();
 });

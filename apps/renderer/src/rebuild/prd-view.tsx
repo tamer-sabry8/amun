@@ -413,8 +413,8 @@ export function PrdView({
   if (!objective)
     return (
       <p className="muted" role="status">
-        Start a Firstmate interview from the product overview to create an
-        objective.
+        No PRD yet. Ask Firstmate in this project’s conversation to write one,
+        and it will appear here.
       </p>
     );
   const { prd, proposal, understanding: u } = objective;

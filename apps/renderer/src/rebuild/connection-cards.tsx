@@ -1,7 +1,13 @@
 // Settings › Tools: one card per outside service (Azure DevOps, GitHub,
 // Notion, Obsidian). Same bridge messages and checks as the earlier
 // Connections tab; only the view is new.
-import { useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import { obsidianEndpoints } from "../../../../packages/contracts/src/auth.ts";
 import { bridge } from "../bridge.ts";
 import { Icon } from "../icons.tsx";
@@ -49,6 +55,9 @@ const views: Record<string, View> = {
   checking: { tone: "checking", icon: "checking", text: "Checking…" },
   ready: { tone: "connected", icon: "check", text: "Connected" },
   error: { tone: "error", icon: "close", text: "Not working" },
+  // The saved sign-in could not be read yet (for example a pending Keychain
+  // prompt), so nothing is known about it.
+  unknown: { tone: "signed-out", icon: "warning", text: "Not checked yet" },
   cancelled: { tone: "signed-out", icon: "warning", text: "Sign-in cancelled" },
 };
 const viewOf = (status: string | undefined) =>
@@ -244,6 +253,29 @@ export function ConnectionCards() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [adding, setAdding] = useState<Kind | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const before = useRef(new Map<string, string>());
+  const waiting = state.connections.some((item) => item.status === "unknown");
+  // A sign-in that could not be read is looked at again while this is open,
+  // and tested as soon as it can be read.
+  useEffect(() => {
+    for (const item of state.connections) {
+      if (
+        before.current.get(item.id) === "unknown" &&
+        item.status === "configured"
+      )
+        auth({
+          action: "check",
+          connection: { kind: item.kind, baseUrl: item.baseUrl },
+        });
+      before.current.set(item.id, item.status);
+    }
+  }, [state.connections]);
+  useEffect(() => {
+    if (!waiting) return;
+    auth({ action: "list" });
+    const timer = setInterval(() => auth({ action: "list" }), 10_000);
+    return () => clearInterval(timer);
+  }, [waiting]);
   return (
     <div style={{ display: "grid", gap: 8 }}>
       {services.map((service) => {
@@ -255,13 +287,15 @@ export function ConnectionCards() {
           ? (state.modelStatus["notion-mcp"] ?? mine[0]?.status)
           : mine.some((item) => item.status === "error")
             ? "error"
-            : mine.length
-              ? mine.every((item) => item.status === "ready")
-                ? "ready"
-                : mine.some((item) => item.status === "checking")
-                  ? "checking"
-                  : "configured"
-              : "missing";
+            : mine.some((item) => item.status === "unknown")
+              ? "unknown"
+              : mine.length
+                ? mine.every((item) => item.status === "ready")
+                  ? "ready"
+                  : mine.some((item) => item.status === "checking")
+                    ? "checking"
+                    : "configured"
+                : "missing";
         const view = viewOf(status);
         return (
           <div className="rb-provider" key={service.kind}>

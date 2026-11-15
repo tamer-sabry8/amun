@@ -1110,4 +1110,8 @@ ALTER TABLE library_outputs ADD COLUMN acceptance_at TEXT;`,
   // and a fingerprint of its content), so a later update can stop when someone
   // changed the page in Notion in between.
   `ALTER TABLE plan_writes ADD COLUMN page_version TEXT;`,
+  // 41 · Version 1 of a document that existed before versions were kept was
+  // filled in as the owner's, which nobody recorded. Those rows have no known author.
+  `ALTER TABLE library_output_versions ADD COLUMN author_known INTEGER NOT NULL DEFAULT 1;
+UPDATE library_output_versions SET author_known=0 WHERE version=1 AND author='owner';`,
 ] as const;

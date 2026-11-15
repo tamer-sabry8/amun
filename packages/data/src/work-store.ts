@@ -2,6 +2,8 @@
 // Decisions come from packages/domain/src/work; this file persists them.
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
+import { planItemKey, sameKind } from "./plan-publication.ts";
 import { WorkReminders } from "./work-reminders.ts";
 import { searchContent } from "./content-search.ts";
 import { Redactor } from "../../security/src/redaction.ts";
@@ -117,7 +119,7 @@ export class WorkStore {
   private static readonly versionsShown = 30;
   private versionsOf(outputId: string, approved: unknown) {
     const rows = this.all(
-      "SELECT version,body,author,created_at FROM library_output_versions WHERE output_id=? ORDER BY version DESC LIMIT ?",
+      "SELECT version,body,author,author_known,created_at FROM library_output_versions WHERE output_id=? ORDER BY version DESC LIMIT ?",
       outputId,
       WorkStore.versionsShown,
     );
@@ -127,7 +129,9 @@ export class WorkStore {
       approvedVersion: approved === null ? null : Number(approved),
       versions: rows.map((row) => ({
         version: Number(row.version),
-        author: row.author as "owner" | "firstmate" | "agent",
+        author: row.author_known
+          ? (row.author as "owner" | "firstmate" | "agent")
+          : null,
         createdAt: String(row.created_at),
         body: String(row.body),
       })),
@@ -241,6 +245,7 @@ export class WorkStore {
 
   snapshot(): WorkSnapshot {
     this.adoptProducts();
+    this.resolveSuperseded();
     this.adoptRfps();
     this.run(
       "UPDATE work_attention SET state='open',snoozed_until=NULL WHERE state='snoozed' AND snoozed_until<=?",
@@ -1727,9 +1732,18 @@ export class WorkStore {
           );
         const role = this.clean(command.role);
         let agent = this.get(
-          "SELECT id FROM work_agents WHERE lower(role)=lower(?)",
+          "SELECT id,state,now_doing FROM work_agents WHERE lower(role)=lower(?)",
           role,
         );
+        // A new task starts without the last task's output.
+        const nowDoing =
+          command.nowDoing === null ? null : this.clean(command.nowDoing);
+        const startsTask =
+          !!agent &&
+          command.state === "working" &&
+          (agent.state === "idle" ||
+            agent.state === "done" ||
+            agent.now_doing !== nowDoing);
         if (!agent) {
           // An agent Firstmate brought in for this job only.
           const id = randomUUID();
@@ -1744,9 +1758,11 @@ export class WorkStore {
         this.run(
           "UPDATE work_agents SET state=?,now_doing=?,enabled=1 WHERE id=?",
           command.state,
-          command.nowDoing === null ? null : this.clean(command.nowDoing),
+          nowDoing,
           agent.id,
         );
+        if (command.output === undefined && startsTask)
+          this.run("UPDATE work_agents SET output='' WHERE id=?", agent.id);
         if (command.output !== undefined)
           this.run(
             "UPDATE work_agents SET output=? WHERE id=?",
@@ -2431,6 +2447,87 @@ export class WorkStore {
       ref: "plan:" + planId,
     });
     return { ref: planId, step: { published: false } };
+  }
+
+  /**
+   * An item an old plan failed to create may since have been published by
+   * another plan in the same work area. It is then linked to that item, so the
+   * old plan stops reporting it as unpublished and a retry cannot create it
+   * again.
+   */
+  private resolveSuperseded() {
+    let plans: Record<string, unknown>[];
+    try {
+      plans = this.all(
+        "SELECT id,work_area_id,destination,approved_json,results_json FROM work_plans WHERE state IN ('failed','partial') AND results_json IS NOT NULL",
+      );
+    } catch {
+      return;
+    }
+    for (const plan of plans) {
+      const failed = (
+        list(plan.results_json) as { id: string; state: string }[]
+      ).filter((result) => result.state === "failed");
+      if (!failed.length) continue;
+      const items = list(plan.approved_json) as {
+        id: string;
+        summary: string;
+        fields: Record<string, string | number | null>;
+      }[];
+      let others: Record<string, unknown>[];
+      try {
+        others = this.all(
+          `SELECT w.item_id,w.external_id,w.url,p.approved_json FROM plan_writes w JOIN work_plans p ON p.id=w.plan_id
+           WHERE w.plan_id<>? AND w.state='created' AND w.external_id IS NOT NULL AND p.work_area_id IS ?
+           AND w.destination=? ORDER BY p.created_at,w.rowid`,
+          String(plan.id),
+          (plan.work_area_id as string | null) ?? null,
+          "ado",
+        );
+      } catch {
+        continue;
+      }
+      if (!others.length || plan.destination !== "ado") continue;
+      const found: {
+        id: string;
+        state: "created";
+        externalId: string;
+        url?: string;
+        linked: true;
+      }[] = [];
+      for (const result of failed) {
+        const item = items.find((entry) => entry.id === result.id);
+        if (!item || adoWorkItemOf(item.fields).named) continue;
+        const key = planItemKey(item);
+        const match = others.find((other) => {
+          const before = (list(other.approved_json) as typeof items).find(
+            (entry) => entry.id === other.item_id,
+          );
+          if (!before) return false;
+          const then = planItemKey(before);
+          return then.title === key.title && sameKind(then.type, key.type);
+        });
+        if (match)
+          found.push({
+            id: result.id,
+            state: "created",
+            externalId: String(match.external_id),
+            ...(match.url ? { url: String(match.url) } : {}),
+            linked: true,
+          });
+      }
+      if (!found.length) continue;
+      for (const result of found)
+        this.run(
+          "UPDATE plan_writes SET state='created',external_id=?,url=?,note=? WHERE plan_id=? AND item_id=?",
+          result.externalId,
+          result.url ?? null,
+          `Already exists as #${result.externalId}; linked, not created.`,
+          String(plan.id),
+          result.id,
+        );
+      this.recordResults(String(plan.id), found);
+    }
   }
 
   private recordResults(

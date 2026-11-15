@@ -58,6 +58,7 @@ import { Composer } from "./composer.tsx";
 import { sprintReplies, useAzureSprints } from "./sprint-azure.ts";
 import { holdSprintContext, sprintContextText } from "./sprint-context.ts";
 import { BrowserPane } from "./work-session.tsx";
+import { MarkdownMessage } from "./markdown-doc.tsx";
 import { council as councilCommand, work, workAsync } from "./store.ts";
 import {
   areaOf,
@@ -283,12 +284,34 @@ function Team({
     </div>
   );
 }
+/** What an agent has produced for its current task, formatted like the chat. */
+export function AgentOutput({
+  output,
+  onLink,
+}: {
+  output: string;
+  onLink?(url: string): void;
+}) {
+  return (
+    <div>
+      <span className="muted">Output so far</span>
+      {output ? (
+        <MarkdownMessage text={output} {...(onLink && { onLink })} />
+      ) : (
+        <p>No output yet</p>
+      )}
+    </div>
+  );
+}
 export function Agents({
   snapshot,
   model,
+  onLink,
 }: {
   snapshot: Snapshot;
   model: string | null;
+  /** Opens a link from an agent's output; without it links stay plain text. */
+  onLink?(url: string): void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [watch, setWatch] = useState(false);
@@ -379,10 +402,7 @@ export function Agents({
               <span className="muted">Now doing · </span>
               {agent.nowDoing ?? "Nothing right now"}
             </p>
-            <p style={{ whiteSpace: "pre-wrap" }}>
-              <span className="muted">Output so far · </span>
-              {agent.output || "No output yet"}
-            </p>
+            <AgentOutput output={agent.output} {...(onLink && { onLink })} />
             {watch && (
               <AgentWatch
                 agentId={agent.id}
@@ -1663,10 +1683,12 @@ export function Portfolio({
                 <span className="meta">
                   {[
                     typeLabels[area.type],
-                    area.type === "project" && area.client,
+                    area.type === "project" ? area.client : null,
                     groupName(snapshot, area.groupId) ?? "No group yet",
                     area.status,
-                  ].join(" · ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
                 {area.purpose && <span className="meta">{area.purpose}</span>}
                 {openBlockers(snapshot.blockers, area.id).map((item) => (

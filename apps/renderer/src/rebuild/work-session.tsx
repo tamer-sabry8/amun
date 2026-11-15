@@ -1,5 +1,6 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
+import { BlockerRow } from "./blocker-row.tsx";
 import { useEffect, useRef, useState } from "react";
 import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
@@ -2088,25 +2089,12 @@ export function WorkSession({
                 </p>
               )}
               {openBlockers(snapshot.blockers, areaId).map((item) => (
-                <div className="rb-inline amber" key={item.id} role="group">
-                  <div className="row">
-                    <div className="grow">
-                      <strong>Blocked: {item.title}</strong>
-                      <div className="muted small">
-                        {blockerLine(item, now)}
-                      </div>
-                    </div>
-                    <button
-                      className="btn quiet"
-                      aria-label={`Mark “${item.title}” as unblocked`}
-                      onClick={() =>
-                        work("resolve-blocker", { blockerId: item.id })
-                      }
-                    >
-                      It’s unblocked
-                    </button>
-                  </div>
-                </div>
+                <BlockerRow
+                  key={item.id}
+                  blocker={item}
+                  projectName={area.name}
+                  now={now}
+                />
               ))}
               {context.objectives.map((objective) => (
                 <div

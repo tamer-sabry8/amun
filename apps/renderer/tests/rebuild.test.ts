@@ -6,9 +6,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
 import { leaksRuntimeVocabulary } from "../../../packages/domain/src/work/shell.ts";
 import { Island, Sidebar } from "../src/rebuild/chrome.tsx";
+import { BlockerRow } from "../src/rebuild/blocker-row.tsx";
+import { VersionHistory } from "../src/rebuild/document-versions.tsx";
 import { Home, IntakeCard } from "../src/rebuild/home.tsx";
 import { DecisionsPanel, LibraryPanel, Rail } from "../src/rebuild/rail.tsx";
-import { Portfolio, Rfps, Roadmap, Sprints } from "../src/rebuild/screens.tsx";
+import {
+  AgentOutput,
+  Portfolio,
+  Rfps,
+  Roadmap,
+  Sprints,
+} from "../src/rebuild/screens.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
   agentNews,
@@ -677,6 +685,39 @@ describe("destinations", () => {
     );
     expect(html).toContain("TICAO");
     expect(html).not.toContain("Supplier research");
+  });
+  it("Portfolio cards never print a raw true or false", () => {
+    const state = snapshot({
+      areas: [
+        area("p", { type: "product", name: "Invites" }),
+        area("r", { type: "rfp", name: "Smart Inspection" }),
+        area("c", { type: "project", name: "Portal", client: "DMT" }),
+      ],
+    });
+    const html = text(
+      renderToStaticMarkup(
+        createElement(Portfolio, { snapshot: state, onWork: noop }),
+      ),
+    );
+    expect(html).not.toMatch(/\b(false|true|null|undefined)\b/);
+    expect(html).toContain("DMT");
+  });
+  it("an agent's output is formatted, with links only when they can be opened", () => {
+    const output =
+      "## Findings\n\n1. **Fast** result\n\nSee [the site](https://example.com/a).";
+    const html = renderToStaticMarkup(createElement(AgentOutput, { output }));
+    expect(html).toContain("<h2");
+    expect(html).toContain("<strong>Fast</strong>");
+    expect(html).not.toContain("**");
+    expect(html).not.toContain("<button");
+    expect(
+      renderToStaticMarkup(
+        createElement(AgentOutput, { output, onLink: noop }),
+      ),
+    ).toContain("<button");
+    expect(
+      text(renderToStaticMarkup(createElement(AgentOutput, { output: "" }))),
+    ).toContain("No output yet");
   });
   it("RFPs is a tracking pipeline with the proposed stages", () => {
     const state = snapshot({
@@ -1456,5 +1497,53 @@ describe("accepting an offer", () => {
     );
     expect(result.areaId).toBeNull();
     expect(queue.pending("w1")).toEqual([]);
+  });
+});
+
+describe("shared blocker row and version authors", () => {
+  it("shows an open blocker with its action inside a project", () => {
+    const html = renderToStaticMarkup(
+      createElement(BlockerRow, {
+        blocker: {
+          id: "b1",
+          workAreaId: "a1",
+          title: "API key",
+          owner: "Priya",
+          raisedAt: "2026-11-12T01:00:00Z",
+          resolvedAt: null,
+        },
+        projectName: "Atlas",
+        now,
+      }),
+    );
+    expect(html).toContain("Blocked · Atlas");
+    expect(html).toContain("Priya · raised today");
+    expect(html).toContain("It’s unblocked");
+  });
+  it("names the recorded author and none for legacy versions", () => {
+    const entry = (version: number, author: "owner" | "firstmate" | null) => ({
+      version,
+      author,
+      createdAt: "2026-11-12T01:00:00Z",
+      body: "x",
+    });
+    const html = renderToStaticMarkup(
+      createElement(VersionHistory, {
+        item: {
+          id: "o1",
+          version: 3,
+          approvedVersion: null,
+          versions: [entry(3, "firstmate"), entry(2, "owner"), entry(1, null)],
+        } as never,
+        version: null,
+        onOpen: () => undefined,
+        onClose: () => undefined,
+      }),
+    );
+    expect(html).toContain("Firstmate");
+    expect(html).toContain("You");
+    expect(html.match(/ · You/g)).toHaveLength(1);
+    expect(html.match(/ · Firstmate/g)).toHaveLength(1);
+    expect(html).not.toMatch(/Version 1[^<]*<\/span><span[^>]*>[^<]*· /);
   });
 });

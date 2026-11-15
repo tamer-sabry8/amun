@@ -237,7 +237,7 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
 
     // PRD and Backlog panes use the shell's own look, not the earlier workspace.
     await page.getByRole("button", { name: "PRD", exact: true }).click();
-    await expect(page.getByText("Start a Firstmate interview")).toBeVisible();
+    await expect(page.getByText("No PRD yet")).toBeVisible();
     await expect(page.locator(".legacy-surface")).toHaveCount(0);
     await shot(page, "07a-prd-pane");
     await page.getByRole("button", { name: "Close the document" }).click();

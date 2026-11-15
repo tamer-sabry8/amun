@@ -612,8 +612,8 @@ describe("local-only requests", () => {
 });
 
 describe("looking for an Azure item Amun already created", () => {
-  it("asks for the exact title and type the item would be created with", async () => {
-    const asked: string[][] = [];
+  it("asks for the exact title under every story type, the resolved one first", async () => {
+    const asked: (string | string[])[][] = [];
     const target = adoPlanTarget(
       "https://devops.example/Collection/",
       "POCs",
@@ -631,7 +631,12 @@ describe("looking for an Azure item Amun already created", () => {
       externalId: "1091018",
       url: "https://devops.example/Collection/POCs/_workitems/edit/1091018",
     });
-    expect(asked).toEqual([["Invite <10> testers", "Product Backlog Item"]]);
+    expect(asked).toEqual([
+      [
+        "Invite <10> testers",
+        ["Product Backlog Item", "User Story", "Requirement", "Issue"],
+      ],
+    ]);
   });
 });
 

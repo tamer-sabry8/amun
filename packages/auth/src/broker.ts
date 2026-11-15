@@ -11,7 +11,14 @@ export interface Connection {
   baseUrl: string;
 }
 export type ConnectionStatus =
-  "missing" | "configured" | "checking" | "ready" | "error";
+  | "missing"
+  | "configured"
+  | "checking"
+  | "ready"
+  | "error"
+  // The credential could not be read (Keychain pending, denied or timed out),
+  // so nothing was learned about the sign-in itself.
+  | "unknown";
 export interface Keyring {
   get(account: string): string | undefined;
   set(account: string, value: string): void;
@@ -113,7 +120,7 @@ export class AuthBroker {
       if (secret) this.redactor.register(secret);
       return secret ? "configured" : "missing";
     } catch {
-      return "error";
+      return "unknown";
     }
   }
   async check(connection: Connection): Promise<ConnectionStatus> {
@@ -121,20 +128,31 @@ export class AuthBroker {
     const generation = this.next(connection);
     this.states.set(id, "checking");
     let state: ConnectionStatus;
+    let secret: string | undefined;
+    let readable = true;
     try {
-      const secret = this.reader
+      secret = this.reader
         ? await this.read(connection)
         : this.keyring.get(this.account(connection));
-      if (!secret) state = "missing";
-      else {
-        this.redactor.register(secret);
-        state = (await this.probe(connection, secret)) ? "ready" : "error";
-      }
     } catch {
-      state = "error";
+      readable = false;
+    }
+    if (!readable) state = "unknown";
+    else if (!secret) state = "missing";
+    else {
+      this.redactor.register(secret);
+      try {
+        state = (await this.probe(connection, secret)) ? "ready" : "error";
+      } catch {
+        state = "error";
+      }
     }
     if (this.generations.get(id) !== generation) return this.status(connection);
-    this.states.set(id, state);
+    if (state === "unknown") {
+      // Not a finding about the sign-in: remembered only until the next read.
+      this.states.delete(id);
+      this.stored.set(id, "unknown");
+    } else this.states.set(id, state);
     return state;
   }
   /** Service-only capability: never expose this callback or the credential through IPC. */
@@ -177,7 +195,7 @@ export class AuthBroker {
           if (secret) this.redactor.register(secret);
           this.stored.set(id, secret ? "configured" : "missing");
         } catch {
-          this.stored.set(id, "error");
+          this.stored.set(id, "unknown");
         }
       }),
     );

@@ -95,12 +95,16 @@ export function Settings({
   councilStatus,
   section,
   onSection,
+  skillsProductId = null,
+  onSkillsProduct = () => undefined,
 }: {
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
   councilStatus: CouncilStatus | null;
   section: SettingsSection;
   onSection(section: SettingsSection): void;
+  skillsProductId?: string | null;
+  onSkillsProduct?(productId: string): void;
 }) {
   const [group, setGroup] = useState("");
   const [permission, setPermission] = useState({
@@ -585,15 +589,42 @@ export function Settings({
                 Skills you install appear in the composer under /. Each one is
                 reviewed before it is used.
               </p>
-              {workspace?.productContext ? (
-                <SkillsPanel
-                  key={workspace.productContext.productId}
-                  context={workspace.productContext}
-                />
-              ) : (
+              {!workspace?.products.length ? (
                 <p className="muted">
-                  Open a product to add or review its skills.
+                  Create a product first, then add its skills here.
                 </p>
+              ) : (
+                <>
+                  {workspace.products.length > 1 && (
+                    <span className="row muted small">
+                      Product
+                      <select
+                        aria-label="Product"
+                        value={skillsProductId ?? ""}
+                        onChange={(event) =>
+                          onSkillsProduct(event.target.value)
+                        }
+                      >
+                        {workspace.products.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  )}
+                  {workspace.productContext &&
+                  workspace.productContext.productId === skillsProductId ? (
+                    <SkillsPanel
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                    />
+                  ) : (
+                    <p className="muted" role="status">
+                      Opening…
+                    </p>
+                  )}
+                </>
               )}
             </section>
           )}

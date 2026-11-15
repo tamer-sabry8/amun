@@ -21,7 +21,9 @@ export type SprintItems = {
 type Intent = "load" | "refresh" | "team";
 
 export const sprintReplies = {
-  noProject: "Connect an Azure DevOps project in Product context first.",
+  noProject:
+    "Choose the Azure DevOps project in this project’s Backlog panel first.",
+  silent: "Azure DevOps did not answer. Try /sprint refresh again.",
   noTeam: "Choose a team first, like /sprint team POCs Team.",
   needName: "Tell me the team name, like /sprint team POCs Team.",
   loading: "Loading sprints…",
@@ -37,6 +39,8 @@ export const sprintReplies = {
   itemsNone: "This sprint has no work items yet.",
   itemsMore: "Showing the first 200 work items.",
 };
+
+export const sprintTimeoutMs = 20_000;
 
 export function useAzureSprints(
   areas: readonly SprintArea[],
@@ -57,6 +61,12 @@ export function useAzureSprints(
       const id = crypto.randomUUID();
       pending.current = { id, intent };
       if (intent !== "load") say(sprintReplies.loading);
+      // A request that gets no answer must not leave "Loading" on screen.
+      setTimeout(() => {
+        if (pending.current?.id !== id) return;
+        pending.current = null;
+        if (intent !== "load") say(sprintReplies.silent);
+      }, sprintTimeoutMs);
       bridge.send({
         version: 1,
         kind: "backlog-read",
@@ -76,6 +86,12 @@ export function useAzureSprints(
       const id = crypto.randomUUID();
       itemsPending.current = { id, sprint };
       setItems({ sprint, state: "loading", items: [], more: false });
+      setTimeout(() => {
+        if (itemsPending.current?.id !== id) return;
+        itemsPending.current = null;
+        setItems({ sprint, state: "error", items: [], more: false });
+        say(sprintReplies.silent);
+      }, sprintTimeoutMs);
       bridge.send({
         version: 1,
         kind: "backlog-read",

@@ -15,7 +15,7 @@ import {
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
 import { reminderTime } from "../../../../packages/domain/src/work/reminders.ts";
-import { blockerLine } from "../../../../packages/domain/src/work/blockers.ts";
+import { BlockerRow } from "./blocker-row.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Composer } from "./composer.tsx";
@@ -720,38 +720,13 @@ export function Home({
             </div>
           </header>
           {blocked.map((item) => (
-            <div
-              className="rb-att"
+            <BlockerRow
               key={item.id}
-              onClick={() => onOpen(item.workAreaId)}
-            >
-              <div>
-                <div className="label">
-                  Blocked · {areaOf(snapshot, item.workAreaId)?.name}
-                </div>
-                <button
-                  className="title"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpen(item.workAreaId);
-                  }}
-                >
-                  {item.title}
-                </button>
-                <div className="detail">{blockerLine(item, now)}</div>
-              </div>
-              <div className="row" onClick={(event) => event.stopPropagation()}>
-                <button
-                  className="btn"
-                  aria-label={`Mark “${item.title}” as unblocked`}
-                  onClick={() =>
-                    work("resolve-blocker", { blockerId: item.id })
-                  }
-                >
-                  It’s unblocked
-                </button>
-              </div>
-            </div>
+              blocker={item}
+              projectName={areaOf(snapshot, item.workAreaId)?.name}
+              now={now}
+              onOpen={() => onOpen(item.workAreaId)}
+            />
           ))}
           {reminders.map((item) => (
             <div className="rb-att" key={item.id}>

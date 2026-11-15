@@ -20,6 +20,8 @@ export type SprintArea = {
   createdAt: string;
 };
 
+/** Stands for the Azure DevOps project the work already publishes to. */
+export const publishingSource = "publishing";
 const defaultKey = "amun.sprints.default";
 
 export function readSprintDefault(
@@ -59,9 +61,11 @@ function bindingFor(
     boards.map((b) => b.sourceId),
   );
   const board = boards.find((b) => b.sourceId === chosen) ?? boards[0];
+  // Without a saved board, the project that publication already uses is read;
+  // the team then comes from /sprint team.
   return board
     ? { productId, sourceId: board.sourceId, team: board.team }
-    : null;
+    : { productId, sourceId: publishingSource, team: "" };
 }
 
 /** A chosen work area wins; otherwise the default team, then the most recent. */
@@ -78,7 +82,8 @@ export function resolveSprintBinding(
   if (
     saved &&
     areas.some((a) => a.productId === saved.productId) &&
-    readBoard(store, saved.productId, saved.sourceId)
+    (saved.sourceId === publishingSource ||
+      readBoard(store, saved.productId, saved.sourceId))
   )
     return saved;
   const recent = areas
@@ -88,9 +93,11 @@ export function resolveSprintBinding(
         a.lastContextAt ?? a.createdAt,
       ),
     );
+  let fallback: SprintBinding | null = null;
   for (const area of recent) {
     const found = bindingFor(store, area.productId!);
-    if (found) return found;
+    if (found?.team) return found;
+    fallback ??= found;
   }
-  return null;
+  return fallback;
 }

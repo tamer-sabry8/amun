@@ -360,7 +360,10 @@ export function adoPlanTarget(
   client: {
     write(step: AdoStep, parent: null): Promise<{ id: number }>;
     find(step: AdoStep, parent: null): Promise<{ id: number } | undefined>;
-    existing?(title: string, type: string): Promise<{ id: number } | undefined>;
+    existing?(
+      title: string,
+      type: string | string[],
+    ): Promise<{ id: number } | undefined>;
     item?(id: number): Promise<{
       id: number;
       rev: number;
@@ -507,9 +510,20 @@ export function adoPlanTarget(
       if (!client.existing || adoWorkItemOf(item.fields).named)
         return undefined;
       const prepared = await step(item);
+      // A story may already exist under whichever story type the project
+      // uses, so the type it was requested with is not the only one looked up.
+      const family = storyAliases.includes(prepared.type.toLowerCase())
+        ? [
+            ...new Set([
+              prepared.type,
+              ...storyTypes,
+              ...((await backlog())?.story ? [(await backlog())!.story!] : []),
+            ]),
+          ]
+        : prepared.type;
       const found = await client.existing(
         String(prepared.fields["System.Title"]),
-        prepared.type,
+        family,
       );
       return found ? receipt(found.id) : undefined;
     },

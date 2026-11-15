@@ -371,7 +371,7 @@ export const workSnapshot = z.strictObject({
         .array(
           z.strictObject({
             version: z.number().int().min(1),
-            author: documentAuthor,
+            author: documentAuthor.nullable(),
             createdAt: stamp,
             body: z.string(),
           }),

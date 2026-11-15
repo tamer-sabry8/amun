@@ -36,8 +36,9 @@ export function VersionHistory({
       <div style={{ display: "grid", gap: 12 }}>
         <div className="rb-inline amber" role="status">
           <span>
-            You are reading version {open.version}, saved {when(open.createdAt)}{" "}
-            by {authorLabel[open.author]}. It can’t be edited here.
+            You are reading version {open.version}, saved {when(open.createdAt)}
+            {open.author && ` by ${authorLabel[open.author]}`}. It can’t be
+            edited here.
           </span>
           <div className="row">
             {open.version !== item.version && (
@@ -85,7 +86,8 @@ export function VersionHistory({
                 {entry.version === item.version ? " (current)" : ""}
               </span>
               <span className="muted small" style={{ display: "block" }}>
-                {when(entry.createdAt)} · {authorLabel[entry.author]}
+                {when(entry.createdAt)}
+                {entry.author && ` · ${authorLabel[entry.author]}`}
               </span>
             </span>
             <span />

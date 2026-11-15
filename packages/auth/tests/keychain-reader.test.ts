@@ -55,7 +55,7 @@ it("lists connections at once and says so when the Keychain prompt is unanswered
     await vi.advanceTimersByTimeAsync(60_000);
     expect(events.at(-1)).toMatchObject({
       kind: "auth-connections",
-      connections: [{ status: "error" }],
+      connections: [{ status: "unknown" }],
     });
   } finally {
     vi.useRealTimers();

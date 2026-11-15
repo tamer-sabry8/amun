@@ -131,9 +131,21 @@ it("does not leak probe or keyring errors to connection status", async () => {
       throw Error("CANARY");
     },
   );
+  // The credential could not be read, so nothing is claimed about the sign-in.
   expect(
     await broker.check({ kind: "github", baseUrl: "https://github.com" }),
-  ).toBe("error");
+  ).toBe("unknown");
+});
+
+it("reports a refused sign-in as an error only when the credential was read", async () => {
+  const broker = new AuthBroker(
+    "workspace",
+    { get: () => "token", set: () => {}, delete: () => {} },
+    new Redactor(),
+    async () => false,
+  );
+  const github = { kind: "github" as const, baseUrl: "https://github.com" };
+  expect(await broker.check(github)).toBe("error");
 });
 
 it("ignores stale probe results after credentials are replaced or forgotten", async () => {

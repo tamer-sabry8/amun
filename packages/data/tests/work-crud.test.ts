@@ -293,6 +293,42 @@ describe("what an agent is doing", () => {
   });
 });
 
+describe("an agent that starts a new task", () => {
+  it("does not keep showing the last task's output", () => {
+    const role = (name: string) =>
+      snap().agents.find((item) => item.role === name);
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "Competitive analysis",
+    });
+    send("agent-status", {
+      role: "Analyst",
+      state: "done",
+      nowDoing: null,
+      output: "# Competitive analysis",
+    });
+    // The finished output stays visible while the agent is idle.
+    expect(role("Analyst")!.output).toBe("# Competitive analysis");
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "A new note",
+    });
+    expect(role("Analyst")).toMatchObject({
+      nowDoing: "A new note",
+      output: "",
+    });
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "A new note",
+      output: "Draft so far",
+    });
+    expect(role("Analyst")!.output).toBe("Draft so far");
+  });
+});
+
 describe("blockers", () => {
   const blockers = () => snap().blockers;
   it("record who owns them and when they were raised, and can be re-owned and cleared", () => {

@@ -557,3 +557,74 @@ describe("updating a Notion page Amun created", () => {
     expect(writes).toBeLessThanOrEqual(2);
   });
 });
+
+describe("retrying a plan whose story another plan already published", () => {
+  it("links it instead of creating a third copy, and clears the failure", async () => {
+    const old = approved([
+      {
+        summary: "Admin picks the invitee role",
+        fields: { type: "User Story" },
+      },
+    ]);
+    ado.script = ["reject", "reject"];
+    await publisher.publish(old);
+    expect(plan(old).state).toBe("failed");
+    expect(ado.writes).toHaveLength(2);
+
+    // Another plan created the same story under the project's own type.
+    const other = approved([
+      {
+        summary: "Admin picks the invitee role",
+        fields: { type: "Product Backlog Item" },
+      },
+    ]);
+    await publisher.publish(other);
+    expect(ado.writes).toHaveLength(3);
+    const created = plan(other).results[0]!.externalId;
+
+    await publisher.publish(old, { retryFailed: true });
+    expect(ado.writes).toHaveLength(3);
+    expect(plan(old).state).toBe("published");
+    expect(plan(old).results).toEqual([
+      expect.objectContaining({ externalId: created, linked: true }),
+    ]);
+  });
+
+  it("clears the failure on its own when the same story was published elsewhere", async () => {
+    const old = approved([
+      {
+        summary: "Admin picks the invitee role",
+        fields: { type: "User Story" },
+      },
+    ]);
+    ado.script = ["reject", "reject"];
+    await publisher.publish(old);
+    await publisher.publish(
+      approved([
+        {
+          summary: "Admin picks the invitee role",
+          fields: { type: "Product Backlog Item" },
+        },
+      ]),
+    );
+    expect(plan(old).state).toBe("published");
+    expect(
+      store
+        .snapshot()
+        .attention.some(
+          (row) => row.ref === "failure:" + old && row.state !== "done",
+        ),
+    ).toBe(false);
+  });
+
+  it("creates nothing on a retry when the check cannot be made", async () => {
+    const old = approved([{ summary: "Another story", fields: {} }]);
+    ado.script = ["reject", "reject"];
+    await publisher.publish(old);
+    ado.existing = async () => {
+      throw Error("offline");
+    };
+    await publisher.publish(old, { retryFailed: true });
+    expect(ado.writes).toHaveLength(2);
+  });
+});

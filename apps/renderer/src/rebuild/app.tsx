@@ -179,19 +179,48 @@ export function App() {
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, [layout.palette, layout.rail, bridgeState.prompt]);
-  // The earlier PRD and backlog flows follow the selected product.
+  // The earlier PRD and backlog flows follow the selected product. In
+  // Settings › Skills they follow the product chosen there, which starts as
+  // the one the owner last opened.
   const activeArea = snapshot ? areaOf(snapshot, layout.workAreaId) : null;
+  const [lastProduct, setLastProduct] = useState<string | null>(null);
+  const [skillsProduct, setSkillsProduct] = useState("");
   useEffect(() => {
-    const productId = activeArea?.productId ?? null;
+    if (activeArea?.productId) setLastProduct(activeArea.productId);
+  }, [activeArea?.productId]);
+  const products = bridgeState.workspace?.products ?? [];
+  const recentProduct = (snapshot?.areas ?? [])
+    .filter((area) => area.productId)
+    .sort((a, b) =>
+      (b.lastContextAt ?? b.createdAt).localeCompare(
+        a.lastContextAt ?? a.createdAt,
+      ),
+    )[0]?.productId;
+  const recentArea = [...(snapshot?.areas ?? [])].sort((a, b) =>
+    (b.lastContextAt ?? b.createdAt).localeCompare(
+      a.lastContextAt ?? a.createdAt,
+    ),
+  )[0]?.id;
+  const settingsProduct =
+    [skillsProduct, lastProduct, recentProduct].find((id) =>
+      products.some((product) => product.id === id),
+    ) ??
+    products[0]?.id ??
+    null;
+  const wantedProduct =
+    layout.route === "settings" && section === "skills"
+      ? settingsProduct
+      : (activeArea?.productId ?? null);
+  useEffect(() => {
     const preferences = bridgeState.workspace?.preferences;
-    if (preferences && preferences.productId !== productId)
+    if (preferences && preferences.productId !== wantedProduct)
       bridge.send({
         version: 1,
         kind: "workspace",
         action: "preferences",
-        preferences: { ...preferences, productId },
+        preferences: { ...preferences, productId: wantedProduct },
       });
-  }, [activeArea?.productId, bridgeState.workspace?.preferences.productId]);
+  }, [wantedProduct, bridgeState.workspace?.preferences.productId]);
   useEffect(() => {
     dispatch({
       type: "artifact",
@@ -534,7 +563,14 @@ export function App() {
             }}
           />
         ) : layout.route === "agents" ? (
-          <Agents snapshot={snapshot} model={model} />
+          <Agents
+            snapshot={snapshot}
+            model={model}
+            {...(recentArea && {
+              onLink: (url: string) =>
+                openWork(recentArea, undefined, { kind: "browser", url }),
+            })}
+          />
         ) : layout.route === "council" ? (
           <Council
             snapshot={snapshot}
@@ -590,6 +626,8 @@ export function App() {
             councilStatus={state.council}
             section={section}
             onSection={setSection}
+            skillsProductId={settingsProduct}
+            onSkillsProduct={setSkillsProduct}
           />
         )}
         {layout.rail && !expandedRail && (

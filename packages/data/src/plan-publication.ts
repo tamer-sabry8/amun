@@ -107,6 +107,19 @@ export function planItemKey(item: {
     type: same(type),
   };
 }
+// Azure DevOps projects name their stories differently (Agile, Scrum, CMMI,
+// Basic), and a story is created under the project's own name when the
+// requested one is missing, so all of them count as the same kind of item.
+const storyFamily = new Set([
+  "user story",
+  "product backlog item",
+  "requirement",
+  "issue",
+  "story",
+  "backlog item",
+]);
+export const sameKind = (a: string, b: string) =>
+  !a || !b || a === b || (storyFamily.has(a) && storyFamily.has(b));
 /** One first attempt and one retry of an item confirmed missing. */
 export const planWriteBudget = 2;
 
@@ -219,10 +232,7 @@ export class PlanPublisher {
       ).find((entry) => entry.id === row.item_id);
       if (!before || adoWorkItemOf(before.fields).named) continue;
       const other = planItemKey(before);
-      if (
-        other.title === key.title &&
-        (!other.type || !key.type || other.type === key.type)
-      )
+      if (other.title === key.title && sameKind(other.type, key.type))
         return {
           externalId: row.external_id,
           ...(row.url ? { url: row.url } : {}),
@@ -492,41 +502,12 @@ export class PlanPublisher {
         results.push({ id: row.item_id, state: sent ? "unknown" : "failed" });
         continue;
       }
-      // An item that already exists is linked, never created a second time.
-      if (
-        row.destination === "ado" &&
-        row.state === "pending" &&
-        row.attempts === 0 &&
-        !reconcileOnly
-      ) {
-        try {
-          const existing = await this.duplicate(
-            planId,
-            source,
-            row.destination,
-            scope,
-            api,
-          );
-          if (existing) {
-            done(row, {
-              ...existing,
-              note: `Already exists as #${existing.externalId}; linked, not created.`,
-            });
-            continue;
-          }
-        } catch {
-          this.set(planId, row.item_id, {
-            note: "Could not check whether this already exists, so nothing was created.",
-          });
-          results.push({ id: row.item_id, state: "failed" });
-          continue;
-        }
-      }
       let state: WriteState = row.state;
       let attempts = row.attempts;
       let settled = false;
       // A retried item may have landed since it was reported missing.
       let lookFirst = only !== null && state === "missing";
+      let checked = false;
       while (!settled) {
         if (state === "sent" || state === "unknown" || lookFirst) {
           lookFirst = false;
@@ -553,6 +534,33 @@ export class PlanPublisher {
           results.push({ id: row.item_id, state: "failed" });
           settled = true;
           break;
+        }
+        // An item that already exists is linked, never created a second
+        // time, whichever way it got here: first publish, retry or recovery.
+        if (row.destination === "ado" && !checked) {
+          checked = true;
+          try {
+            const existing = await this.duplicate(
+              planId,
+              source,
+              row.destination,
+              scope,
+              api,
+            );
+            if (existing) {
+              done(row, {
+                ...existing,
+                note: `Already exists as #${existing.externalId}; linked, not created.`,
+              });
+              break;
+            }
+          } catch {
+            this.set(planId, row.item_id, {
+              note: "Could not check whether this already exists, so nothing was created.",
+            });
+            results.push({ id: row.item_id, state: "failed" });
+            break;
+          }
         }
         attempts += 1;
         state = "sent";
