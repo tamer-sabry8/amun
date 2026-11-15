@@ -1916,6 +1916,8 @@ export function WorkSession({
           key={seed?.nonce ?? "composer"}
           initial={seed?.text ?? ""}
           autoFocus
+          skills
+          onBoard={(url) => onPane({ kind: "browser", url })}
           busy={busy}
           model={model}
           placeholder={

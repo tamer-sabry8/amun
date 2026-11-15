@@ -12,8 +12,7 @@ import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
-import { NativePiPanel } from "../native-pi-panel.tsx";
-import { AgentsPanel } from "../agents-panel.tsx";
+import { ConversationTools, FirstmateRuntime } from "./advanced-panels.tsx";
 import { BackupPanel, SkillsPanel } from "./settings-panels.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
@@ -604,23 +603,11 @@ export function Settings({
             <section aria-labelledby="rb-s-adv" style={{ maxWidth: "none" }}>
               <h2 id="rb-s-adv">Advanced</h2>
               <p className="muted">
-                Runtime controls, sessions and diagnostics. Most people never
-                need these.
+                Firstmate’s runtime and tools for your conversation. Most people
+                never need these.
               </p>
-              <details>
-                <summary className="link">Agent runtime and sessions</summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <AgentsPanel onOpenWorker={() => undefined} />
-                </div>
-              </details>
-              <details>
-                <summary className="link">
-                  Firstmate conversation, commands and imports
-                </summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <NativePiPanel />
-                </div>
-              </details>
+              <FirstmateRuntime />
+              <ConversationTools />
               <p className="muted small">
                 The earlier workspace remains available for comparison at Amun’s
                 address with ?legacy=1.

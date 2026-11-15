@@ -48,6 +48,58 @@ export function composerCommand(input: string) {
   return { name: match[1]!, argument: match[2] ?? "" };
 }
 
+/** Firstmate's built-in skills, with one plain line each (upstream README). */
+export const firstmateCommands = [
+  {
+    name: "afk",
+    hint: "",
+    description: "Keep an eye on things while you step away",
+  },
+  {
+    name: "quiet",
+    hint: "",
+    description: "Hold routine updates while you keep chatting",
+  },
+  {
+    name: "ahoy",
+    hint: "",
+    description: "Catch up on what happened and what still needs you",
+  },
+  {
+    name: "bearings",
+    hint: "[file] [include PRs]",
+    description: "A short digest of where everything stands",
+  },
+  {
+    name: "updatefirstmate",
+    hint: "",
+    description: "Check for a Firstmate update, with your approval",
+  },
+  {
+    name: "stow",
+    hint: "",
+    description: "Save what this session learned to Firstmate's memory",
+  },
+  {
+    name: "calm",
+    hint: "",
+    description: "Show a quieter view of the conversation",
+  },
+  {
+    name: "supervision-model",
+    hint: "",
+    description: "See or change how Firstmate supervises",
+  },
+];
+
+/** Only the Firstmate skills, parsed with the same rules as the legacy panel. */
+export function firstmateCommand(input: string) {
+  const parsed = composerCommand(input);
+  return parsed && firstmateCommands.some(({ name }) => name === parsed.name)
+    ? parsed
+    : null;
+}
+
 export function piModelShortcut(
   event: Pick<
     KeyboardEvent,

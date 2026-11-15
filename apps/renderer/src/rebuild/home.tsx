@@ -587,6 +587,7 @@ export function Home({
         key={seed?.nonce ?? "composer"}
         initial={seed?.text ?? ""}
         autoFocus
+        skills
         placeholder={placeholder}
         chips={pending ? [] : chips}
         model={model}

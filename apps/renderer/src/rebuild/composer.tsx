@@ -17,6 +17,11 @@ import { Icon } from "../icons.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { takeOff } from "./motion.ts";
 import { useDismiss } from "./use-dismiss.ts";
+import { firstmateCommands } from "../composer-command.ts";
+import {
+  FirstmateCommandReply,
+  useFirstmateCommands,
+} from "./firstmate-commands.tsx";
 
 export const allCommands: SlashCommand[] = [
   ...builtInCommands,
@@ -56,6 +61,8 @@ export function Composer({
   onPick,
   onRemoveFile,
   pickNonce = 0,
+  skills = false,
+  onBoard,
 }: {
   placeholder?: string;
   chips?: string[];
@@ -75,7 +82,12 @@ export function Composer({
   onRemoveFile?(name: string): void;
   /** Changing this opens the file picker, e.g. for "Choose another file". */
   pickNonce?: number;
+  /** Offer Firstmate's built-in skills in the "/" list and run them here. */
+  skills?: boolean;
+  /** Opens a Bearings board; without it the board link is left out. */
+  onBoard?(url: string): void;
 }) {
+  const commands = useFirstmateCommands();
   const [draft, setDraft] = useState(initial);
   const [own, setFiles] = useState<string[]>([]);
   const files = attached ?? own;
@@ -94,7 +106,10 @@ export function Composer({
   const trigger = dismissed ? null : composerTrigger(draft, caret);
   const options =
     trigger?.trigger === "/"
-      ? matchCommands(allCommands, trigger.query).map((command) => ({
+      ? matchCommands(
+          skills ? [...allCommands, ...firstmateCommands] : allCommands,
+          trigger.query,
+        ).map((command) => ({
           key: command.name,
           label: "/" + command.name,
           hint: command.description,
@@ -145,6 +160,11 @@ export function Composer({
     const text = draft.trim();
     if ((!text && !files.length) || busy) return;
     recognition.current?.stop();
+    if (skills && !files.length && commands.send(text)) {
+      setPlus(false);
+      setDraft("");
+      return;
+    }
     takeOff(sendButton.current?.firstElementChild);
     onSend(text, files);
     setPlus(false);
@@ -209,6 +229,7 @@ export function Composer({
 
   return (
     <div className="rb-composer-wrap">
+      {skills && <FirstmateCommandReply state={commands} onBoard={onBoard} />}
       {chips.length > 0 && (
         <div className="rb-chips">
           {chips.map((chip) => (
