@@ -6,6 +6,9 @@ import { bridge } from "../bridge.ts";
 
 const template =
   "Summarize the release using source records. Cite each completed item and list unresolved questions.";
+// Skills written in the form here were stored as "Custom editor".
+const originLabel = (origin: string) =>
+  origin === "Custom editor" ? "Written here" : origin;
 const firstLine = (text: string) =>
   (
     text.split("\n").find((line) => line.trim() && !line.startsWith("---")) ??
@@ -25,7 +28,8 @@ export function SkillsPanel({
     [files, setFiles] = useState<File[]>([]),
     [address, setAddress] = useState(""),
     [looking, setLooking] = useState(false),
-    [removing, setRemoving] = useState<string | null>(null);
+    [removing, setRemoving] = useState<string | null>(null),
+    [adding, setAdding] = useState(false);
   const notice = useSyncExternalStore(
     bridge.subscribe,
     () => bridge.getSnapshot().notice,
@@ -52,13 +56,13 @@ export function SkillsPanel({
                 <span className="name">{r.name}</span>
                 <br />
                 <span className="muted small">
-                  {firstLine(r.source) || r.origin}
+                  {firstLine(r.source) || originLabel(r.origin)}
                 </span>
                 <details>
                   <summary className="link small">
                     Read the instructions
                   </summary>
-                  <p className="muted small">From {r.origin}</p>
+                  <p className="muted small">From {originLabel(r.origin)}</p>
                   <pre className="small" style={{ whiteSpace: "pre-wrap" }}>
                     {r.source}
                   </pre>
@@ -71,13 +75,18 @@ export function SkillsPanel({
               <span className="row wrap">
                 <button
                   className="btn"
-                  onClick={() =>
+                  onClick={() => {
                     send("decide-skill", {
                       review: r.id,
                       digest: r.digest,
                       approve: true,
-                    })
-                  }
+                    });
+                    // The skill is in; the form starts empty for the next one.
+                    setName("");
+                    edit("");
+                    setOrigin("Amun templates");
+                    setAdding(false);
+                  }}
                 >
                   Approve {r.name}
                 </button>
@@ -101,7 +110,9 @@ export function SkillsPanel({
               <span>
                 <span className="name">{s.name}</span>
                 <br />
-                <span className="muted small">From {s.origin}</span>
+                <span className="muted small">
+                  From {originLabel(s.origin)}
+                </span>
               </span>
               <span>
                 <span className="tag good">Reviewed and on</span>
@@ -143,7 +154,10 @@ export function SkillsPanel({
       ) : (
         <p className="muted">No skills yet. Add one below.</p>
       )}
-      <details>
+      <details
+        open={adding}
+        onToggle={(event) => setAdding(event.currentTarget.open)}
+      >
         <summary className="link">Add a skill</summary>
         <div className="rb-inline" style={{ marginTop: 10 }}>
           <label className="field">

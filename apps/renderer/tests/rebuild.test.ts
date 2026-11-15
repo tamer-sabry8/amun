@@ -16,6 +16,7 @@ import {
   Rfps,
   Roadmap,
   Sprints,
+  SprintTimeline,
 } from "../src/rebuild/screens.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
@@ -803,6 +804,39 @@ describe("destinations", () => {
     expect(html).toContain("1 blocked");
     expect(html).toContain("Changed in ADO");
     expect(html).toContain("Preview only · No Azure DevOps changes");
+  });
+  it("Timeline keeps a draft bar inside its own row", () => {
+    const state = snapshot({ areas: [area("ticao", { name: "TICAO" })] });
+    const draft = {
+      id: "d",
+      workAreaId: "ticao",
+      name: "Sprint 1",
+      team: "Team",
+      start: "2026-11-09T00:00:00Z",
+      end: "2026-11-22T00:00:00Z",
+      goal: "",
+      draft: true,
+      done: 0,
+      total: 0,
+      blocked: 0,
+      changedInAdo: false,
+      capacity: null,
+      stories: [],
+      out: [],
+    };
+    const html = renderToStaticMarkup(
+      createElement(SprintTimeline, {
+        snapshot: state,
+        sprints: [draft],
+        range: { start: "2026-11-02", end: "2026-11-30" },
+        weeks: ["W1"],
+        onOpen: noop,
+      } as never),
+    );
+    expect(html).toMatch(
+      /<div class="rb-timeline">.*<div class="track"><button[^>]*class="bar draft"[^>]*>Sprint 1 draft<\/button><\/div><\/div>$/,
+    );
+    expect(html).not.toContain("display:contents");
   });
   it("Roadmap shows Now / Next / Later with RICE badges and commitment", () => {
     const item = {

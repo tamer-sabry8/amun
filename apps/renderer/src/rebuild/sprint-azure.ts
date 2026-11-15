@@ -9,7 +9,11 @@ import {
   writeSprintDefault,
   type SprintArea,
 } from "./sprint-binding.ts";
-import type { SprintCommand } from "../../../../packages/domain/src/work/planning.ts";
+import {
+  adoSprintsLine,
+  type AdoSprint,
+  type SprintCommand,
+} from "../../../../packages/domain/src/work/planning.ts";
 
 type Reply = Extract<BacklogResult, { view: "sprints" }>;
 export type SprintItems = {
@@ -27,10 +31,8 @@ export const sprintReplies = {
   noTeam: "Choose a team first, like /sprint team POCs Team.",
   needName: "Tell me the team name, like /sprint team POCs Team.",
   loading: "Loading sprints…",
-  loaded: (count: number, team: string) =>
-    count
-      ? `Showing ${count} sprint${count === 1 ? "" : "s"} for ${team}.`
-      : `${team} has no current or upcoming sprints.`,
+  loaded: (sprints: AdoSprint[], team: string, now = Date.now()) =>
+    adoSprintsLine(sprints, team, now),
   switched: (team: string) => `Now showing ${team}.`,
   saved: (team: string) => `${team} is now your default team.`,
   lost: "Connection interrupted. Try /sprint refresh.",
@@ -191,12 +193,7 @@ export function useAzureSprints(
         if (parsed.data.view !== "sprints") return;
         setReply(parsed.data);
         if (now.intent === "refresh")
-          say(
-            sprintReplies.loaded(
-              parsed.data.sprints.length,
-              parsed.data.team.name,
-            ),
-          );
+          say(sprintReplies.loaded(parsed.data.sprints, parsed.data.team.name));
         if (now.intent === "team")
           say(sprintReplies.switched(parsed.data.team.name));
       }),

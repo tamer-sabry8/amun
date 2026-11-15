@@ -224,6 +224,33 @@ export function adoSprints(
     ];
   });
 }
+const endedOn = (ms: number) =>
+  new Date(ms).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+/** The Azure sprint that ended most recently, when none is current or upcoming. */
+export function latestEndedSprint(sprints: Sprint[], now: number) {
+  return (
+    sprints
+      .filter((sprint) => !sprint.draft && Date.parse(sprint.end) < now)
+      .sort((a, b) => b.end.localeCompare(a.end))[0] ?? null
+  );
+}
+/** One plain line about the sprints Azure DevOps returned for a team. */
+export function adoSprintsLine(items: AdoSprint[], team: string, now: number) {
+  const sprints = adoSprints(items, team, "", "");
+  if (sprints.some((sprint) => Date.parse(sprint.end) >= now) || !items.length)
+    return items.length
+      ? `Showing ${items.length} sprint${items.length === 1 ? "" : "s"} for ${team}.`
+      : `${team} has no current or upcoming sprints.`;
+  const latest = latestEndedSprint(sprints, now);
+  return latest
+    ? `${team} has no current or upcoming sprints. Its latest was ${latest.name} (ended ${endedOn(Date.parse(latest.end))}).`
+    : `Showing ${items.length} sprint${items.length === 1 ? "" : "s"} for ${team}.`;
+}
 export function sprintOverview(
   sprints: Sprint[],
   now: number,

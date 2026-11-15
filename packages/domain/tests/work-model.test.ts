@@ -11,10 +11,12 @@ import {
   type SupportingRecord,
   type WorkArea,
 } from "../src/work/model.ts";
+import { adoSprintsLine } from "../src/work/planning.ts";
 import {
   appliedRule,
   approvalSurface,
   approveLabel,
+  planNoun,
   authority,
   changeSinceApproval,
   gateFor,
@@ -432,6 +434,43 @@ describe("approve plans, not clicks", () => {
     expect(approveLabel(6)).toBe("Approve and publish 6 stories");
     expect(approveLabel(1)).toBe("Approve and publish 1 story");
     expect(approveLabel(2, "edit")).toBe("Approve and publish 2 edits");
+  });
+  it("names a Task a task, a mix items, and an unknown type nothing", () => {
+    const fields = (type?: string) => (type ? { type } : {});
+    expect(planNoun([{ kind: "Task", fields: {} }])).toBe("task");
+    expect(planNoun([{ fields: fields("Product Backlog Item") }])).toBe(
+      "product backlog item",
+    );
+    expect(
+      planNoun([
+        { kind: "Task", fields: {} },
+        { kind: "Bug", fields: {} },
+      ]),
+    ).toBe("item");
+    expect(planNoun([{ fields: {} }])).toBeNull();
+    expect(approveLabel(2, "item")).toBe("Approve and publish 2 items");
+  });
+  it("says when a team's only sprints are over", () => {
+    const sprint = {
+      id: "1",
+      name: "Sprint 5",
+      start: "2021-03-01",
+      finish: "2021-03-14",
+    };
+    const now = Date.parse("2026-11-15");
+    expect(adoSprintsLine([sprint], "POCs Team", now)).toBe(
+      "POCs Team has no current or upcoming sprints. Its latest was Sprint 5 (ended 14 Mar 2021).",
+    );
+    expect(
+      adoSprintsLine(
+        [
+          sprint,
+          { ...sprint, id: "2", name: "Sprint 6", finish: "2026-12-01" },
+        ],
+        "POCs Team",
+        now,
+      ),
+    ).toBe("Showing 2 sprints for POCs Team.");
   });
 });
 

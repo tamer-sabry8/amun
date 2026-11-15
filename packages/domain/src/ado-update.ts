@@ -33,3 +33,36 @@ export function adoWorkItemOf(fields: Record<string, unknown>) {
   }
   return { named: false as const, id: null };
 }
+
+const parentLabels = new Set([
+  "parent",
+  "parentid",
+  "parentitem",
+  "parentworkitem",
+  "parentworkitemid",
+  "parentworkitemnumber",
+  "parentlink",
+  "parenturl",
+  "underitem",
+]);
+/** True for a field label that names the existing parent of a new item. */
+export const isAdoParentReference = (key: string) =>
+  parentLabels.has(label(key));
+
+/**
+ * The existing work item a new item is created under. `id` is null when what
+ * the plan wrote is not a work item number or link.
+ */
+export function adoParentOf(fields: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(fields)) {
+    if (!isAdoParentReference(key)) continue;
+    const text = value === null || value === undefined ? "" : String(value);
+    if (!text.trim()) continue;
+    const match =
+      /^#?(\d{1,9})$/.exec(text.trim()) ??
+      /\/_?workitems(?:\/edit)?\/(\d{1,9})(?:[/?#]|$)/i.exec(text.trim());
+    const id = match ? Number(match[1]) : 0;
+    return { named: true as const, id: id > 0 ? id : null };
+  }
+  return { named: false as const, id: null };
+}

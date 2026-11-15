@@ -81,7 +81,10 @@ import {
 import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
 import { createHash } from "node:crypto";
 import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
-import { adoWorkItemOf } from "../../../packages/domain/src/ado-update.ts";
+import {
+  adoParentOf,
+  adoWorkItemOf,
+} from "../../../packages/domain/src/ado-update.ts";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
   nativePiCommand,
@@ -147,6 +150,7 @@ import {
   notionUpdateRefusalEvent,
   notionPlanTarget,
   notionPageOf,
+  notionUpdateText,
   notionChangedNote,
 } from "./plan-targets.ts";
 import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
@@ -2250,6 +2254,53 @@ process.parentPort?.on("message", (event) => {
             }
           }),
         );
+        // A new item named under an existing one: read-only check that the
+        // parent is a work item in this same project, so the owner sees it.
+        const parents = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const named = adoParentOf(item.fields);
+            if (destination !== "ado" || !named.named) return null;
+            if (adoWorkItemOf(item.fields).named)
+              return {
+                id: named.id ? String(named.id) : "",
+                title: null,
+                problem:
+                  "Amun can only set a parent when it creates a new item, not on an existing one.",
+              };
+            if (!named.id)
+              return {
+                id: "",
+                title: null,
+                problem:
+                  "The parent is not an Azure DevOps work item number. Ask Firstmate to fix it.",
+              };
+            try {
+              const connection = await adoConnection(plan.workAreaId);
+              const now = await new AdoWriteClient(
+                connection.source.collection,
+                connection.source.project,
+                connection.transport,
+              ).item(named.id);
+              const title = now.fields["System.Title"];
+              return {
+                id: String(named.id),
+                title: typeof title === "string" ? title : null,
+                problem: null,
+              };
+            } catch {
+              return {
+                id: String(named.id),
+                title: null,
+                problem: `Amun could not open #${named.id} in this Azure DevOps project, so it cannot be approved. Ask Firstmate to check the parent number.`,
+              };
+            }
+          }),
+        );
         if (closed) return;
         port.postMessage({
           version: 1,
@@ -2285,18 +2336,32 @@ process.parentPort?.on("message", (event) => {
                 : null;
             const note = written.find((entry) => entry.id === item.id)?.note;
             const update = updates[plan.items.indexOf(item)] ?? null;
+            const parent = parents[plan.items.indexOf(item)] ?? null;
             const page =
               destination === "notion" ? notionPageOf(item.fields) : undefined;
             const receipt = page ? planPublisher.notionPage(page) : undefined;
-            const content = item.fields.body ?? item.fields.description;
-            const title = item.fields.title;
-            const change =
-              receipt &&
-              typeof content === "string" &&
-              typeof title === "string"
-                ? lineDiff(
-                    `Title: ${receipt.title}\n${receipt.body}`,
-                    `Title: ${title}\n${content}`,
+            const result = receipt
+              ? notionUpdateText(
+                  { title: receipt.title, body: receipt.body },
+                  item.fields,
+                )
+              : undefined;
+            const change = result
+              ? lineDiff(
+                  `Title: ${receipt!.title}\n${receipt!.body}`,
+                  `Title: ${result.title}\n${result.body}`,
+                )
+              : null;
+            const newTitle = item.fields.title;
+            const newBody = item.fields.body ?? item.fields.description;
+            const content =
+              destination === "notion" && !page
+                ? String(
+                    typeof newBody === "string" && newBody.trim()
+                      ? newBody
+                      : typeof newTitle === "string" && newTitle.trim()
+                        ? newTitle
+                        : item.summary,
                   )
                 : null;
             return {
@@ -2304,8 +2369,13 @@ process.parentPort?.on("message", (event) => {
               destination,
               kind,
               existing: existing[plan.items.indexOf(item)] ?? null,
-              note: note?.startsWith("“") ? note : null,
+              note:
+                note?.startsWith("“") || note?.startsWith("Linked under")
+                  ? note
+                  : null,
+              ...(parent ? { parent } : {}),
               ...(page ? { kind: "page update", change } : {}),
+              ...(content !== null ? { content } : {}),
               ...(update
                 ? { kind: "work item update", change: update.change }
                 : {}),
@@ -2317,23 +2387,27 @@ process.parentPort?.on("message", (event) => {
                   : place && destination === "notion"
                     ? page
                       ? `Page Amun created under “${place}”`
-                      : `New page under “${place}”`
+                      : `Under: ${place}`
                     : place,
               problem: update?.problem
                 ? update.problem
-                : page
-                  ? !receipt
-                    ? "Amun did not create this page, so it will not change it."
-                    : !receipt.version
-                      ? "Amun did not record how this page looked when it wrote it, so it will not change it."
-                      : null
-                  : place
-                    ? null
-                    : destination === "ado"
-                      ? "No Azure DevOps project is chosen for this work yet."
-                      : destination === "notion"
-                        ? "No Notion destination is chosen yet."
-                        : `Publishing to ${trackerName(destination)} is not available yet.`,
+                : parent?.problem
+                  ? parent.problem
+                  : page
+                    ? !receipt
+                      ? "Amun did not create this page, so it will not change it."
+                      : !receipt.version
+                        ? "Amun did not record how this page looked when it wrote it, so it will not change it."
+                        : !result
+                          ? "An update needs the new content, or the lines to add, but not both."
+                          : null
+                    : place
+                      ? null
+                      : destination === "ado"
+                        ? "No Azure DevOps project is chosen for this work yet."
+                        : destination === "notion"
+                          ? "No Notion destination is chosen yet."
+                          : `Publishing to ${trackerName(destination)} is not available yet.`,
             };
           }),
         });
@@ -3275,10 +3349,37 @@ process.parentPort?.on("message", (event) => {
           "notion-cancel",
           "notion-disconnect",
           "notion-target",
+          "notion-status",
         ].includes(parsedAuth.data.action)
       ) {
         const command = parsedAuth.data;
-        if (command.action === "notion-target") {
+        // What is saved is known without any network or Keychain access.
+        const savedMark = () =>
+          !!workspace
+            .prepare(
+              "SELECT 1 FROM workspace_settings WHERE id IN ('notion.saved','notion.destination') LIMIT 1",
+            )
+            .get();
+        const setSaved = (saved: boolean) =>
+          saved
+            ? workspace
+                .prepare(
+                  "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.saved','true') ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+                )
+                .run()
+            : workspace
+                .prepare(
+                  "DELETE FROM workspace_settings WHERE id='notion.saved'",
+                )
+                .run();
+        if (command.action === "notion-status") {
+          port.postMessage({
+            version: 1,
+            kind: "auth-status",
+            id: "notion-mcp",
+            status: savedMark() ? "configured" : "missing",
+          });
+        } else if (command.action === "notion-target") {
           void notionConnection
             .inspectTarget(command.url)
             .then((destination) => {
@@ -3316,7 +3417,7 @@ process.parentPort?.on("message", (event) => {
             .then(() => {
               workspace
                 .prepare(
-                  "DELETE FROM workspace_settings WHERE id='notion.destination'",
+                  "DELETE FROM workspace_settings WHERE id IN ('notion.destination','notion.saved')",
                 )
                 .run();
               port.postMessage({
@@ -3358,6 +3459,7 @@ process.parentPort?.on("message", (event) => {
               command.action === "notion-connect",
             )
             .then(() => {
+              setSaved(true);
               port.postMessage({
                 version: 1,
                 kind: "auth-status",

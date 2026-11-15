@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
-import { planItemKey, sameKind } from "./plan-publication.ts";
+import { planItemKey, sameItem } from "./plan-publication.ts";
 import { WorkReminders } from "./work-reminders.ts";
 import { searchContent } from "./content-search.ts";
 import { Redactor } from "../../security/src/redaction.ts";
@@ -2505,7 +2505,7 @@ export class WorkStore {
           );
           if (!before) return false;
           const then = planItemKey(before);
-          return then.title === key.title && sameKind(then.type, key.type);
+          return sameItem(then, key);
         });
         if (match)
           found.push({

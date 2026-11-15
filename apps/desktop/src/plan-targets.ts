@@ -31,8 +31,10 @@ import {
 } from "../../../packages/connectors-ado/src/governed-writes.ts";
 import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
 import {
+  adoParentOf,
   adoWorkItemOf,
   isAdoItemReference,
+  isAdoParentReference,
 } from "../../../packages/domain/src/ado-update.ts";
 
 const storyTypes = [
@@ -148,9 +150,11 @@ function planFields(item: PlanWriteItem, project: string, collection?: string) {
     const key = label.toLowerCase().replace(/[^a-z0-9]/g, "");
     const name = isAdoItemReference(label)
       ? "item"
-      : update && assigneeNames.has(key)
-        ? "assignee"
-        : fieldNames[key];
+      : isAdoParentReference(label)
+        ? "parent"
+        : update && assigneeNames.has(key)
+          ? "assignee"
+          : fieldNames[key];
     if (!name || (update && !updateAllowed.has(name))) {
       refused.push(label);
       continue;
@@ -165,6 +169,10 @@ function planFields(item: PlanWriteItem, project: string, collection?: string) {
     );
   if (fields.title && fields.title !== item.summary.trim())
     throw new PlanNotSent("The title in the fields differs from the title.");
+  if (fields.parent && !adoParentOf({ parent: fields.parent }).id)
+    throw new PlanNotSent(
+      `“${fields.parent}” is not an Azure DevOps work item number, so it cannot be the parent.`,
+    );
   const named = fields.project;
   if (named && !ownProject(named, project, collection))
     throw new PlanNotSent(`“${named}” is not the project ${project}.`);
@@ -358,11 +366,15 @@ export function adoPlanTarget(
   project: string,
   reader: { processSchema(): Promise<AzureProcessSchema> },
   client: {
-    write(step: AdoStep, parent: null): Promise<{ id: number }>;
-    find(step: AdoStep, parent: null): Promise<{ id: number } | undefined>;
+    write(step: AdoStep, parent: number | null): Promise<{ id: number }>;
+    find(
+      step: AdoStep,
+      parent: number | null,
+    ): Promise<{ id: number } | undefined>;
     existing?(
       title: string,
       type: string | string[],
+      parent?: number | null,
     ): Promise<{ id: number } | undefined>;
     item?(id: number): Promise<{
       id: number;
@@ -417,6 +429,20 @@ export function adoPlanTarget(
     return planned;
   };
   const updated = (id: number) => ({ ...receipt(id), updated: true });
+  const parentOf = (item: PlanWriteItem) => adoParentOf(item.fields).id;
+  const under = (parent: number | null) =>
+    parent ? `Linked under #${parent}.` : undefined;
+  // The parent must be a real item in this project before anything is sent.
+  const checkParent = async (parent: number | null) => {
+    if (!parent || !client.item) return;
+    try {
+      await client.item(parent);
+    } catch {
+      throw new PlanNotSent(
+        `Amun could not open #${parent} in ${project}, so nothing was created. Check the parent number.`,
+      );
+    }
+  };
   return {
     async write(item) {
       if (adoWorkItemOf(item.fields).named) {
@@ -468,8 +494,11 @@ export function adoPlanTarget(
           ? error
           : new PlanNotSent("Azure DevOps could not be read.");
       }
+      const parent = parentOf(item);
+      await checkParent(parent);
       try {
-        return receipt((await client.write(prepared, null)).id);
+        const created = await client.write(prepared, parent);
+        return { ...receipt(created.id), note: under(parent) };
       } catch (error) {
         // Only Azure saying the type is not in this project is retried, once,
         // with the project's own type: same fields and marker, so nothing can
@@ -485,12 +514,15 @@ export function adoPlanTarget(
           throw error;
         }
         const created =
-          (await client.find(retry, null)) ?? (await client.write(retry, null));
+          (await client.find(retry, parent)) ??
+          (await client.write(retry, parent));
         const learned = types.learned?.() ?? {};
         types.learn?.({ ...learned, [isTask ? "task" : "story"]: own });
         return {
           ...receipt(created.id),
-          note: `“${prepared.type}” is not a work item type in ${project}, so this was created as a ${own}.`,
+          note:
+            `“${prepared.type}” is not a work item type in ${project}, so this was created as a ${own}.` +
+            (parent ? ` ${under(parent)}` : ""),
         };
       }
     },
@@ -503,8 +535,9 @@ export function adoPlanTarget(
           ? updated(planned.id)
           : undefined;
       }
-      const found = await client.find(await step(item), null);
-      return found ? receipt(found.id) : undefined;
+      const parent = parentOf(item);
+      const found = await client.find(await step(item), parent);
+      return found ? { ...receipt(found.id), note: under(parent) } : undefined;
     },
     async existing(item) {
       if (!client.existing || adoWorkItemOf(item.fields).named)
@@ -524,6 +557,7 @@ export function adoPlanTarget(
       const found = await client.existing(
         String(prepared.fields["System.Title"]),
         family,
+        parentOf(item),
       );
       return found ? receipt(found.id) : undefined;
     },
@@ -742,6 +776,10 @@ const notionNames: Record<string, string> = {
   title: "title",
   body: "body",
   description: "body",
+  append: "append",
+  appendtext: "append",
+  addline: "append",
+  addlines: "append",
   parentpageid: "parent",
   parentid: "parent",
   parent: "parent",
@@ -793,7 +831,38 @@ function notionPage(item: PlanWriteItem, destination: NotionDestination) {
       );
   }
   const title = fields.title ?? item.summary;
-  return { title, body: fields.body ?? title, page: fields.page };
+  return {
+    title,
+    body: fields.body ?? title,
+    page: fields.page,
+    append: fields.append,
+  };
+}
+
+/**
+ * The exact title and content an update leaves on a page Amun created: new
+ * values given in full, or lines appended to what Amun last wrote.
+ */
+export function notionUpdateText(
+  receipt: { title: string; body: string },
+  fields: Record<string, unknown>,
+) {
+  const get = (...names: string[]) => {
+    for (const [key, value] of Object.entries(fields))
+      if (
+        names.includes(key.toLowerCase().replace(/[^a-z0-9]/g, "")) &&
+        typeof value === "string" &&
+        value.trim()
+      )
+        return value.trim();
+  };
+  const title = get("title") ?? receipt.title;
+  if (!title) return undefined;
+  const body = get("body", "description");
+  const append = get("append", "appendtext", "addline", "addlines");
+  if (append && body) return undefined;
+  if (append) return { title, body: receipt.body + "\n" + append, append };
+  return body ? { title, body } : undefined;
 }
 
 /** What the owner approved for one update, checked against Amun's receipts. */
@@ -801,6 +870,9 @@ export interface NotionPageReceipt {
   marker: string;
   version: string | null;
   url: string | null;
+  /** What Amun last wrote, so lines can be appended to it. */
+  title?: string;
+  body?: string;
 }
 function updateOf(
   item: PlanWriteItem,
@@ -821,15 +893,15 @@ function updateOf(
     throw new PlanNotSent(
       "Amun did not record how this page looked when it wrote it, so it will not change it. Nothing was sent.",
     );
-  if (
-    typeof item.fields.title !== "string" ||
-    !item.fields.title.trim() ||
-    !(item.fields.body ?? item.fields.description)
-  )
+  const result = notionUpdateText(
+    { title: receipt.title ?? "", body: receipt.body ?? "" },
+    item.fields,
+  );
+  if (!result)
     throw new PlanNotSent(
-      "An update needs both the new title and the new content. Nothing was sent.",
+      "An update needs the new content, or the lines to add, but not both. Nothing was sent.",
     );
-  return { pageId: named, receipt, title: page.title, body: page.body };
+  return { pageId: named, receipt, title: result.title, body: result.body };
 }
 
 export function notionPlanTarget(

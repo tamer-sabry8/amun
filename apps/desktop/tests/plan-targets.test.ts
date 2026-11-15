@@ -10,6 +10,7 @@ import {
   localPlanRefusal,
   notionUpdateRefusal,
   notionChangedNote,
+  notionUpdateText,
   notionUpdateRefusalEvent,
   notionPlanTarget,
 } from "../src/plan-targets.ts";
@@ -354,6 +355,81 @@ describe("Azure DevOps rejected work item type", () => {
     );
     expect((await target.write(planned())).externalId).toBe("99");
     expect(sent).toEqual(["User Story"]);
+  });
+});
+
+describe("Azure DevOps parent link", () => {
+  const taskSchema = process("Agile", "User Story", "Task");
+  const make = (opts: { openable?: boolean; found?: boolean } = {}) => {
+    const writes: { type: string; parent: unknown }[] = [];
+    const finds: unknown[] = [];
+    const target = adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => taskSchema },
+      {
+        write: async (step: { type: string }, parent?: number | null) => {
+          writes.push({ type: step.type, parent });
+          return { id: 55 };
+        },
+        find: async (_step: unknown, parent?: number | null) => {
+          finds.push(parent);
+          return opts.found ? { id: 56 } : undefined;
+        },
+        item: async (id: number) => {
+          if (opts.openable === false) throw Error("404");
+          return { id, fields: {} };
+        },
+      } as never,
+    );
+    return { target, writes, finds };
+  };
+  const task = (parent: string | number) =>
+    item({ type: "Task", Parent: parent });
+
+  it("creates the Task with its parent and records the link", async () => {
+    const { target, writes } = make();
+    const result = await target.write(task("#1091018"));
+    expect(writes).toEqual([{ type: "Task", parent: 1091018 }]);
+    expect(result.externalId).toBe("55");
+    expect(result.note).toBe("Linked under #1091018.");
+  });
+  it("sends nothing when the parent cannot be opened", async () => {
+    const { target, writes } = make({ openable: false });
+    await expect(target.write(task(1091018))).rejects.toBeInstanceOf(
+      PlanNotSent,
+    );
+    expect(writes).toEqual([]);
+  });
+  it("refuses a parent that is not a work item number", async () => {
+    const { target, writes } = make();
+    await expect(target.write(task("the epic"))).rejects.toBeInstanceOf(
+      PlanNotSent,
+    );
+    expect(writes).toEqual([]);
+  });
+  it("looks up an uncertain write by marker and parent", async () => {
+    const { target, finds } = make();
+    await target.find(task(1091018));
+    expect(finds).toEqual([1091018]);
+  });
+  it("looks for a same-title Task under the same parent only", async () => {
+    const asked: unknown[] = [];
+    const target = adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => taskSchema },
+      {
+        write: async () => ({ id: 1 }),
+        find: async () => undefined,
+        existing: async (title: string, type: unknown, parent: unknown) => {
+          asked.push([title, type, parent]);
+          return { id: 56 };
+        },
+      } as never,
+    );
+    expect((await target.existing!(task(1091018)))?.externalId).toBe("56");
+    expect(asked).toEqual([["Invite <10> testers", "Task", 1091018]]);
   });
 });
 
@@ -711,6 +787,29 @@ describe("Notion page updates", () => {
       version: "v2",
     });
     expect(sent).toEqual(["v1:New"]);
+  });
+
+  it("appends lines to what Amun wrote, and the card text matches", async () => {
+    const sent: string[] = [];
+    const target = notionPlanTarget(
+      destination,
+      "ws",
+      connection({ state: "updated", version: "v2" }, sent),
+      () => ({ ...receipt, title: "QA notes", body: "Line one" }),
+    );
+    const fields = { page: pageId, append: "Line two" };
+    await target.write({ ...update(), fields });
+    expect(sent).toEqual(["v1:Line one\nLine two"]);
+    expect(
+      notionUpdateText({ title: "QA notes", body: "Line one" }, fields),
+    ).toEqual({
+      title: "QA notes",
+      body: "Line one\nLine two",
+      append: "Line two",
+    });
+    expect(
+      notionUpdateText({ title: "T", body: "B" }, { append: "x", body: "y" }),
+    ).toBeUndefined();
   });
 
   it("stops with the newer page's link when it changed in Notion", async () => {

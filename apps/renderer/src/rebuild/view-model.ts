@@ -8,7 +8,10 @@ import {
   rankWork,
   type Attention,
 } from "../../../../packages/domain/src/work/home.ts";
-import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import {
+  approveLabel,
+  planNoun,
+} from "../../../../packages/domain/src/work/permissions.ts";
 import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import {
   agentCatalog,
@@ -180,7 +183,7 @@ export function trayFor(snapshot: Snapshot, attentionId: string) {
     plan,
     approve: approveLabel(
       plan.items.length,
-      plan.kind === "stories" ? "story" : "change",
+      planNoun(plan.items) ?? (plan.kind === "stories" ? "story" : "change"),
     ),
     showAll: `Show all ${plan.items.length} items`,
   };
@@ -638,6 +641,54 @@ export function publicationLines(
   return lines.slice(-limit);
 }
 /**
+ * The Notion pages Amun created from this work area, one line each, so
+ * Firstmate can name the right one when asked to change it: title, page id,
+ * link, when created and when last updated by Amun.
+ */
+export function notionPageLines(
+  snapshot: Snapshot,
+  areaId: string,
+  limit = 20,
+) {
+  const pages = new Map<
+    string,
+    { title: string; url: string; created: string; updated: string }
+  >();
+  const plans = snapshot.plans
+    .filter((plan) => plan.workAreaId === areaId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (const plan of plans)
+    for (const result of plan.results) {
+      if (result.state !== "created" || !result.externalId) continue;
+      const item = plan.items.find((entry) => entry.id === result.id);
+      if (!item) continue;
+      const own = item.fields.destination;
+      const destination =
+        typeof own === "string" && own.trim()
+          ? own.trim().toLowerCase()
+          : plan.destination;
+      if (destination !== "notion") continue;
+      const day = plan.createdAt.slice(0, 10);
+      const known = pages.get(result.externalId);
+      const title =
+        typeof item.fields.title === "string" && item.fields.title.trim()
+          ? item.fields.title.trim()
+          : (known?.title ?? item.summary);
+      pages.set(result.externalId, {
+        title,
+        url: result.url ?? known?.url ?? "",
+        created: known?.created ?? day,
+        updated: day,
+      });
+    }
+  return [...pages.entries()]
+    .slice(-limit)
+    .map(
+      ([id, page]) =>
+        `“${page.title}” page id ${id}${page.url ? ", " + page.url : ""}, created ${page.created}, last updated by Amun ${page.updated}`,
+    );
+}
+/**
  * The header for every turn: Firstmate's conversation is shared by all work
  * areas, so each turn names the one it is about, with its own record.
  */
@@ -659,7 +710,12 @@ export function areaTurnContext(
   /** Objectives already linked here, and the other areas that could be linked. */
   objectives: string[] = [],
   areaNamesInGroup: string[] = [],
+  /** Notion pages Amun created here (`notionPageLines`). */
+  notionPages: string[] = [],
 ) {
+  const pageList = notionPages.length
+    ? ` Notion pages Amun created in this work area (the only ones Amun can update; use the exact page id as the item's "page" field): ${notionPages.join("; ")}.`
+    : "";
   const tracked = objectives.length
     ? ` Objectives linked to this work area: ${objectives.join("; ")}.`
     : "";
@@ -684,7 +740,7 @@ export function areaTurnContext(
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
   const types = tracker ? ` ${tracker}` : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${types}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${pageList}${types}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {
@@ -715,7 +771,7 @@ export const amunProtocol = [
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
-  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps, new item: type, description, acceptance (one criterion per line), area, iteration. Azure DevOps, existing item (moving it to a sprint or changing who it is assigned to): workitem (its number) plus iteration and/or assignedto (a name or email), and nothing else. Notion: title (the page title), body. Leave out anything else, such as an estimate, because it will be refused, and never name a different project or parent. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
+  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Amun raises the plan and may refuse it; never say a review card or plan is ready, shown or waiting, only that you have asked Amun to raise it for approval. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps, new item: type, description, acceptance (one criterion per line), area, iteration, and parent (the number of an existing work item in this same project to create it under, for example a Task under #123: set type to the task type and parent to "123"). Amun can set that parent link: it checks the parent exists, shows "Under #123" on the review card for the owner to approve, and verifies the link after creating. Never say Amun cannot set a parent or that the item will be standalone. Azure DevOps, existing item (moving it to a sprint or changing who it is assigned to): workitem (its number) plus iteration and/or assignedto (a name or email), and nothing else. Notion, new page: title (the page title), body; it goes under the Notion destination chosen in Settings, which the review card shows. Notion, update of a page Amun created (listed above in this work area): page (its exact page id or link from that list), plus title (optional; kept when left out) and either body (the whole new text) or append (only the lines to add at the end of the existing text), never both; the review card shows the exact result for the owner to approve. Amun cannot update any page it did not create, so say so plainly and do not raise a plan for one. Leave out anything else, such as an estimate, because it will be refused, and never name a different project. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',

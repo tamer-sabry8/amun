@@ -209,6 +209,27 @@ export function countedNoun(count: number, noun: string) {
   return `${count} ${count === 1 ? noun : plural}`;
 }
 
+const taskNames = new Set(["task", "sub-task", "subtask", "sub task"]);
+/**
+ * What a plan's items are called on its button: their own type in lower case
+ * ("task", "product backlog item"), "item" when they differ, and null when
+ * no item says. `kind` is the project's name for the type, when known.
+ */
+export function planNoun(
+  items: {
+    kind?: string | null | undefined;
+    fields: Record<string, string | number | null>;
+  }[],
+) {
+  const names = items.map((item) => {
+    const own = item.kind ?? item.fields.type ?? item.fields["Work item type"];
+    const name = typeof own === "string" ? own.trim().toLowerCase() : "";
+    return taskNames.has(name) ? "task" : name;
+  });
+  if (names.every((name) => !name)) return null;
+  return new Set(names).size === 1 ? names[0]! : "item";
+}
+
 export function approveLabel(count: number, noun = "story") {
   return `Approve and publish ${countedNoun(count, noun)}`;
 }

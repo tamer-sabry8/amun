@@ -11,7 +11,13 @@ import {
   openBlockers,
 } from "../../../../packages/domain/src/work/blockers.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import {
   horizonBoard,
   orgChart,
@@ -22,12 +28,14 @@ import {
   riceBadge,
   roadmapViews,
   adoSprints,
+  latestEndedSprint,
   sprintCommand,
   sprintOverview,
   sprintRow,
   sprintTabs,
   sprintViews,
   timelineBar,
+  type Sprint,
   type AgentNode,
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
@@ -907,6 +915,66 @@ export function Roadmap({
 }
 
 // ── Sprints ──────────────────────────────────────────────────────────────────
+/** Sprint dates by work area. Every bar sits inside its own area's row. */
+export function SprintTimeline({
+  snapshot,
+  sprints,
+  range,
+  weeks,
+  onOpen,
+}: {
+  snapshot: Snapshot;
+  sprints: (Sprint & { draft: boolean })[];
+  range: { start: string; end: string };
+  weeks: string[];
+  onOpen(sprint: Sprint): void;
+}) {
+  return (
+    <div className="rb-timeline">
+      <span />
+      <div className="axis">
+        {weeks.map((week) => (
+          <span key={week}>{week}</span>
+        ))}
+      </div>
+      {[...new Set(sprints.map((sprint) => sprint.workAreaId))].map((id) => (
+        <Fragment key={id}>
+          <div className="label">
+            <div style={{ fontWeight: 600 }}>{areaOf(snapshot, id)?.name}</div>
+            <div className="muted small">
+              {sprints.find((sprint) => sprint.workAreaId === id)?.team}
+            </div>
+          </div>
+          <div className="track">
+            {sprints
+              .filter((sprint) => sprint.workAreaId === id)
+              .map((sprint) => {
+                const bar = timelineBar(sprint, range);
+                return (
+                  bar && (
+                    <button
+                      key={sprint.id}
+                      className={"bar" + (sprint.draft ? " draft" : "")}
+                      style={{
+                        left: `${bar.left * 100}%`,
+                        width: `${bar.width * 100}%`,
+                        justifyContent: "flex-start",
+                      }}
+                      onClick={() => onOpen(sprint)}
+                    >
+                      {sprint.name}
+                      {sprint.draft ? " draft" : ""}
+                    </button>
+                  )
+                );
+              })}
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 export function Sprints({
   snapshot,
   now,
@@ -974,6 +1042,9 @@ export function Sprints({
         })
       : [];
   const overview = [...sprints, ...fromAzure];
+  // Azure answered, but nothing is current or upcoming: say what it did return.
+  const lastAzure =
+    azure.reply && fromAzure.length ? latestEndedSprint(fromAzure, now) : null;
   const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
   const azureDetail = new Map(
     (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
@@ -1331,12 +1402,27 @@ export function Sprints({
               },
             )}
           </div>
-          {!sprintOverview(overview, now, areaId || undefined).length && (
-            <p className="muted">
-              No current or upcoming sprints. Ask Firstmate to plan one with
-              /sprint plan.
-            </p>
-          )}
+          {!sprintOverview(overview, now, areaId || undefined).length &&
+            (lastAzure ? (
+              <p className="muted">
+                {azure.reply?.team.name} has no current or upcoming sprints. Its
+                latest was {lastAzure.name} (ended {shortDate(lastAzure.end)}).{" "}
+                <button
+                  className="link"
+                  onClick={() => {
+                    setSprintId(lastAzure.id);
+                    setTab("Summary");
+                  }}
+                >
+                  Open {lastAzure.name}
+                </button>
+              </p>
+            ) : (
+              <p className="muted">
+                No current or upcoming sprints. Ask Firstmate to plan one with
+                /sprint plan.
+              </p>
+            ))}
         </section>
       )}
       {view === "timeline" && (
@@ -1345,57 +1431,16 @@ export function Sprints({
           <p className="muted small" style={{ margin: "4px 0 12px" }}>
             Solid = current or upcoming sprint · Outline = next draft
           </p>
-          <div className="rb-timeline">
-            <span />
-            <div className="axis">
-              {weeks.map((week) => (
-                <span key={week}>{week}</span>
-              ))}
-            </div>
-            {[...new Set(sprints.map((sprint) => sprint.workAreaId))].map(
-              (id) => (
-                <div key={id} style={{ display: "contents" }}>
-                  <div className="label">
-                    <div style={{ fontWeight: 600 }}>
-                      {areaOf(snapshot, id)?.name}
-                    </div>
-                    <div className="muted small">
-                      {sprints.find((sprint) => sprint.workAreaId === id)?.team}
-                    </div>
-                  </div>
-                  <div className="track">
-                    {sprints
-                      .filter((sprint) => sprint.workAreaId === id)
-                      .map((sprint) => {
-                        const bar = timelineBar(sprint, range);
-                        return (
-                          bar && (
-                            <button
-                              key={sprint.id}
-                              className={"bar" + (sprint.draft ? " draft" : "")}
-                              style={{
-                                left: `${bar.left * 100}%`,
-                                width: `${bar.width * 100}%`,
-                                justifyContent: "flex-start",
-                              }}
-                              onClick={() =>
-                                sprint.draft
-                                  ? setView("plan")
-                                  : setSprintId(sprint.id)
-                              }
-                            >
-                              {sprint.name}
-                              {sprint.draft ? " draft" : ""}
-                            </button>
-                          )
-                        );
-                      })}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-          {!sprints.length && (
+          <SprintTimeline
+            snapshot={snapshot}
+            sprints={overview}
+            range={range}
+            weeks={weeks}
+            onOpen={(sprint) =>
+              sprint.draft ? setView("plan") : setSprintId(sprint.id)
+            }
+          />
+          {!overview.length && (
             <p className="muted" style={{ marginTop: 12 }}>
               No sprints to show yet.
             </p>

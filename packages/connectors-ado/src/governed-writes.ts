@@ -174,10 +174,14 @@ export class AdoWriteClient {
     return this.verify(result.workItems[0]!.id, step, parent);
   }
   /**
-   * Read-only: the lowest-numbered item in this project with this exact title
-   * and type that Amun created (it carries an Amun marker tag).
+   * Read-only: the lowest-numbered item in this project with this exact title,
+   * type and parent that Amun created (it carries an Amun marker tag).
    */
-  async existing(title: string, type: string | string[]) {
+  async existing(
+    title: string,
+    type: string | string[],
+    parent: number | null = null,
+  ) {
     const types = Array.isArray(type) ? type : [type];
     const quote = (value: string) => value.replaceAll("'", "''");
     const result = (await this.call("POST", "wiql", {
@@ -194,7 +198,14 @@ export class AdoWriteClient {
       const tags = String(item.fields["System.Tags"] ?? "")
         .split(";")
         .map((t) => t.trim());
-      if (tags.some((t) => t.startsWith("Amun-"))) return { id: item.id };
+      const above = item.relations
+        ?.filter((r) => r.rel === "System.LinkTypes.Hierarchy-Reverse")
+        .map((r) => Number(/\/workitems\/(\d+)$/i.exec(r.url)?.[1]));
+      const sameParent = parent
+        ? above?.includes(parent)
+        : !above || above.length === 0;
+      if (sameParent && tags.some((t) => t.startsWith("Amun-")))
+        return { id: item.id };
     }
     return undefined;
   }

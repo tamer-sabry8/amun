@@ -270,6 +270,18 @@ export function ConnectionCards() {
       before.current.set(item.id, item.status);
     }
   }, [state.connections]);
+  // Opening Tools asks what is saved for Notion, then tests it once. This is
+  // not part of startup, so a Keychain prompt appears only here.
+  const notionNow = state.modelStatus["notion-mcp"];
+  const notionTested = useRef(false);
+  useEffect(() => {
+    auth({ action: "notion-status" });
+  }, []);
+  useEffect(() => {
+    if (notionNow !== "configured" || notionTested.current) return;
+    notionTested.current = true;
+    auth({ action: "notion-check" });
+  }, [notionNow]);
   useEffect(() => {
     if (!waiting) return;
     auth({ action: "list" });

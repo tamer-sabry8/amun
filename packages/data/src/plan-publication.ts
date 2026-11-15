@@ -7,7 +7,7 @@
 // same approval, still uncertain → reported as "unknown" for the owner.
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
+import { adoParentOf, adoWorkItemOf } from "../../domain/src/ado-update.ts";
 
 export interface PlanWriteItem {
   id: string;
@@ -95,7 +95,10 @@ const same = (value: unknown) =>
   typeof value === "string"
     ? value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase()
     : "";
-/** The title and type a planned item would be created with, normalised. */
+/**
+ * The title, type and parent a planned item would be created with,
+ * normalised. A parent is the existing work item's number, or "" for none.
+ */
 export function planItemKey(item: {
   summary: string;
   fields: Record<string, string | number | null>;
@@ -105,8 +108,14 @@ export function planItemKey(item: {
   return {
     title: same(typeof own === "string" && own.trim() ? own : item.summary),
     type: same(type),
+    parent: String(adoParentOf(item.fields).id ?? ""),
   };
 }
+/** Same title, same kind and the same parent: a link, never a create. */
+export const sameItem = (
+  a: ReturnType<typeof planItemKey>,
+  b: ReturnType<typeof planItemKey>,
+) => a.title === b.title && sameKind(a.type, b.type) && a.parent === b.parent;
 // Azure DevOps projects name their stories differently (Agile, Scrum, CMMI,
 // Basic), and a story is created under the project's own name when the
 // requested one is missing, so all of them count as the same kind of item.
@@ -232,7 +241,7 @@ export class PlanPublisher {
       ).find((entry) => entry.id === row.item_id);
       if (!before || adoWorkItemOf(before.fields).named) continue;
       const other = planItemKey(before);
-      if (other.title === key.title && sameKind(other.type, key.type))
+      if (sameItem(other, key))
         return {
           externalId: row.external_id,
           ...(row.url ? { url: row.url } : {}),

@@ -6,6 +6,8 @@ import {
   PlanBlocked,
   PlanChanged,
   PlanPublisher,
+  planItemKey,
+  sameItem,
   type PlanTarget,
   type PlanWriteItem,
 } from "../src/plan-publication.ts";
@@ -626,5 +628,20 @@ describe("retrying a plan whose story another plan already published", () => {
     };
     await publisher.publish(old, { retryFailed: true });
     expect(ado.writes).toHaveLength(2);
+  });
+});
+
+describe("parent links in the duplicate guard", () => {
+  const key = (parent: string) =>
+    planItemKey({
+      id: "i",
+      summary: "QA task",
+      fields: { type: "Task", Parent: parent },
+      marker: "m",
+      destination: "ado",
+    } as never);
+  it("treats the same title and kind under the same parent as one item", () => {
+    expect(sameItem(key("1091018"), key("1091018"))).toBe(true);
+    expect(sameItem(key("1091018"), key("1091019"))).toBe(false);
   });
 });

@@ -9,9 +9,11 @@ import {
   previewNote,
   updateMessage,
 } from "../../../../packages/domain/src/work/home.ts";
+import { adoParentOf } from "../../../../packages/domain/src/ado-update.ts";
 import {
   approveLabel,
   countedNoun,
+  planNoun,
 } from "../../../../packages/domain/src/work/permissions.ts";
 import {
   rfpAuthoringBoundary,
@@ -103,6 +105,7 @@ import {
   amunProtocol,
   areaTurnContext,
   publicationLines,
+  notionPageLines,
   standingPermissionLines,
   areaOf,
   parseAmunActions,
@@ -416,6 +419,11 @@ interface Place {
   change?:
     { kind: "same" | "add" | "remove"; text: string }[] | null | undefined;
   changedInNotion?: boolean | undefined;
+  content?: string | null | undefined;
+  parent?:
+    | { id: string; title: string | null; problem: string | null }
+    | null
+    | undefined;
 }
 /** Where each item of a plan would go, asked from the service. */
 function usePlaces(planId: string, fingerprint: string) {
@@ -461,7 +469,7 @@ function askTrackerTypes(areaId: string) {
 }
 const trackerLine = (types: TrackerTypes | null) =>
   types
-    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one; Amun uses the project's own.`
+    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one or asks for a sub-task under an existing item (then use the sub-task type and the parent field); Amun uses the project's own.`
     : "";
 
 type PlanEntry = Snapshot["plans"][number];
@@ -489,6 +497,7 @@ function PlanItem({
         `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
     )
     .join(" · ");
+  const parent = place?.parent;
   const settled = plan.state !== "proposed" && plan.state !== "approved";
   return (
     <span style={{ display: "grid", gap: 4 }}>
@@ -505,6 +514,12 @@ function PlanItem({
               </span>
             )}
           </span>
+          {parent && !parent.problem && (
+            <span className="small">
+              Under #{parent.id}
+              {parent.title ? ` · ${parent.title}` : ""}
+            </span>
+          )}
           {place?.existing && (
             <span className="small" role="status">
               <span className="tag warn">Already there</span>{" "}
@@ -529,6 +544,21 @@ function PlanItem({
                   </span>
                 ),
               )}
+            </span>
+          ) : place?.content ? (
+            <span
+              className="small"
+              role="group"
+              aria-label="Exactly what the page will say"
+              tabIndex={0}
+              style={{
+                display: "block",
+                whiteSpace: "pre-wrap",
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+            >
+              {place.content}
             </span>
           ) : (
             <span className="muted small">{fields || "No field changes"}</span>
@@ -649,13 +679,12 @@ function PlanReview({
   if (!plan) return <p className="muted">That plan is no longer available.</p>;
   const changed = plan.state === "proposed" && seen !== plan.fingerprint;
   // The real work item type, when every item goes to one the project names.
-  const kinds = new Set(
-    plan.items.map(
-      (item) => places.find((entry) => entry.id === item.id)?.kind,
-    ),
+  const realType = planNoun(
+    plan.items.map((item) => ({
+      kind: places.find((entry) => entry.id === item.id)?.kind,
+      fields: item.fields,
+    })),
   );
-  const [onlyKind] = kinds;
-  const realType = kinds.size === 1 && onlyKind ? onlyKind.toLowerCase() : null;
   const noun = realType ?? (plan.kind === "stories" ? "story" : "change");
   const proposed = plan.state === "proposed";
   const ticked = plan.items.filter((item) => !skipped.includes(item.id));
@@ -664,6 +693,13 @@ function PlanReview({
     (item) => item.splitFrom === plan.id && item.state === "proposed",
   );
   const pick = proposed && plan.items.length > 1;
+  // A parent that cannot be read, or is still being checked, blocks approval.
+  const parentBlocked = ticked.some((item) => {
+    if (!adoParentOf(item.fields).named) return false;
+    const entry = places.find((place) => place.id === item.id);
+    if (entry && entry.destination !== "ado") return false;
+    return !entry?.parent || !!entry.parent.problem;
+  });
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ fontSize: 20 }}>{plan.summary || "Proposed changes"}</h2>
@@ -771,7 +807,7 @@ function PlanReview({
           <div className="row">
             <button
               className="btn primary"
-              disabled={changed || !ticked.length}
+              disabled={changed || !ticked.length || parentBlocked}
               onClick={() =>
                 work("approve-plan", {
                   planId: plan.id,
@@ -1162,7 +1198,7 @@ export function WorkSession({
           work("message", {
             workAreaId: areaId,
             role: "firstmate",
-            text: result.message,
+            text: `Nothing was raised for your approval. ${result.message}`,
             card: { kind: "plan-refused" },
           });
       })();
@@ -1600,6 +1636,7 @@ export function WorkSession({
           (item) => item.groupId === context.area.groupId && item.id !== areaId,
         )
         .map((item) => item.name),
+      notionPageLines(snapshot, areaId),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`
