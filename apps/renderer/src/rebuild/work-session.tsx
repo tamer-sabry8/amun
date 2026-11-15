@@ -1,7 +1,7 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { WorkspaceSnapshot } from "@amun/contracts";
+import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   failureOverflow,
   planStateNote,
@@ -23,6 +23,7 @@ import {
   minRatio,
   modelDisplay,
 } from "../../../../packages/domain/src/work/shell.ts";
+import { previewSource } from "../../../../packages/domain/src/work/prototype-source.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
 import { useDismiss } from "./use-dismiss.ts";
@@ -757,6 +758,7 @@ export function OutputDoc({
   outputId,
   editing,
   onAsk,
+  onPreview,
   citations,
 }: {
   snapshot: Snapshot;
@@ -764,9 +766,30 @@ export function OutputDoc({
   outputId: string;
   editing: boolean;
   onAsk(text: string): void;
+  onPreview?(url: string): void;
   citations?: Citations;
 }) {
   const item = snapshot.library.find((entry) => entry.id === outputId);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState("");
+  const waiting = useRef("");
+  useEffect(
+    () =>
+      bridge.onEvent((raw) => {
+        const result = previewResult.safeParse(raw);
+        if (!result.success || result.data.id !== waiting.current) return;
+        waiting.current = "";
+        setPreviewing(false);
+        setPreviewNotice(result.data.url ? "" : result.data.message);
+        if (result.data.url) onPreview?.(result.data.url);
+      }),
+    [onPreview],
+  );
+  useEffect(() => {
+    waiting.current = "";
+    setPreviewing(false);
+    setPreviewNotice("");
+  }, [outputId]);
   const [body, setBody] = useState(item?.body ?? "");
   const area = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setBody(item?.body ?? ""), [outputId]);
@@ -780,6 +803,8 @@ export function OutputDoc({
   const record = item.section === "record";
   const approval = approvalOf(item);
   const unknownItems = checklistSummary(body).unknown;
+  const openable =
+    !editing && !!onPreview && previewSource(item.type, item.body) !== null;
   const save = (next: string) => {
     if (record || next === item.body) return;
     work("save-output", {
@@ -844,6 +869,30 @@ export function OutputDoc({
             <span className="tag">From the Library</span>
           )}
         </div>
+        {openable && (
+          <div className="row">
+            <button
+              className="btn quiet"
+              disabled={previewing}
+              onClick={() => {
+                waiting.current = crypto.randomUUID();
+                setPreviewing(true);
+                setPreviewNotice("");
+                bridge.send({
+                  version: 1,
+                  kind: "output-preview",
+                  id: waiting.current,
+                  outputId: item.id,
+                });
+              }}
+            >
+              Open preview
+            </button>
+            <span className="note" role="status">
+              {previewing ? "Opening the preview…" : previewNotice}
+            </span>
+          </div>
+        )}
         {!editing ? (
           <MarkdownDoc
             body={body}
@@ -2766,6 +2815,7 @@ export function WorkSession({
                   outputId={pane.id}
                   editing={editing}
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
+                  onPreview={(url) => onPane({ kind: "browser", url })}
                   citations={citations}
                 />
               )}

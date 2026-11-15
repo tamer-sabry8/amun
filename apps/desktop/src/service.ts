@@ -14,7 +14,12 @@ import {
   acceptFirstRunPrompts,
   readyFor,
 } from "../../../packages/crew/src/first-run-prompts.ts";
-import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
+import {
+  prototypeCommand,
+  previewCommand,
+} from "../../../packages/contracts/src/prototype.ts";
+import { previewSource } from "../../../packages/domain/src/work/prototype-source.ts";
+import { openHtmlPreview } from "./prototype-preview.ts";
 import { implementationRun } from "./implementation-run.ts";
 import {
   deliveryCharter,
@@ -984,7 +989,20 @@ process.parentPort?.on("message", (event) => {
       );
     },
   );
-  port.once("close", () => void prototypes.close());
+  // Finished prototype pages, served from Amun itself; one per output.
+  const pages = new Map<
+    string,
+    { html: string; page: Awaited<ReturnType<typeof openHtmlPreview>> }
+  >();
+  const closePages = async () => {
+    const open = [...pages.values()];
+    pages.clear();
+    await Promise.all(open.map((entry) => entry.page.close().catch(() => {})));
+  };
+  port.once("close", () => {
+    void prototypes.close();
+    void closePages();
+  });
   // Firstmate hands work to an agent: a real Claude Code or Codex worker,
   // started and messaged by Firstmate's own scripts, works from the agent's
   // brief, and its result returns to the chat it was asked in.
@@ -1454,6 +1472,55 @@ process.parentPort?.on("message", (event) => {
               request.productId
           )
             port.postMessage(reply);
+        });
+    } else if (message.data?.kind === "output-preview") {
+      const parsed = previewCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      void (async () => {
+        const row = workspace
+          .prepare("SELECT type,body FROM library_outputs WHERE id=?")
+          .get(cmd.outputId) as { type: string; body: string } | undefined;
+        const source = row && previewSource(row.type, row.body);
+        if (!source)
+          return {
+            id: cmd.id,
+            message: "There is no prototype page to show in this item yet.",
+          };
+        if (source.kind === "url")
+          return { id: cmd.id, url: source.url, message: "Preview opened." };
+        const known = pages.get(cmd.outputId);
+        if (known?.html !== source.html) {
+          await known?.page.close().catch(() => {});
+          pages.delete(cmd.outputId);
+          if (pages.size >= 8) {
+            const [oldest] = pages.keys();
+            if (oldest) {
+              await pages
+                .get(oldest)
+                ?.page.close()
+                .catch(() => {});
+              pages.delete(oldest);
+            }
+          }
+          pages.set(cmd.outputId, {
+            html: source.html,
+            page: await openHtmlPreview(source.html, () => !closed),
+          });
+        }
+        return {
+          id: cmd.id,
+          url: pages.get(cmd.outputId)!.page.url,
+          message: "Preview opened.",
+        };
+      })()
+        .catch(() => ({
+          id: cmd.id,
+          message: "The preview could not be opened. Please try again.",
+        }))
+        .then((r) => {
+          if (!closed)
+            port.postMessage({ kind: "output-preview-result", ...r });
         });
     } else if (message.data?.kind === "prototype") {
       const parsed = prototypeCommand.safeParse(message.data);

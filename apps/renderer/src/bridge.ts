@@ -15,6 +15,7 @@ import {
   prResult,
   deliveryResult,
   prototypeResult,
+  previewResult,
   crewRoster,
   crewInventory,
   diagnosticsResult,
@@ -151,6 +152,7 @@ export function initializeBridge() {
       }
       const pull = deliveryResult
         .or(prototypeResult)
+        .or(previewResult)
         .or(prResult)
         .safeParse(message.data);
       if (pull.success) {

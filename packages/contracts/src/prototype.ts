@@ -37,3 +37,15 @@ export const prototypeResult = z.object({
   url: z.url().optional(),
   proposal: z.boolean().optional(),
 });
+export const previewCommand = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("output-preview"),
+  id: z.uuid(),
+  outputId: z.string().min(1).max(200),
+});
+export const previewResult = z.object({
+  kind: z.literal("output-preview-result"),
+  id: z.uuid(),
+  url: z.url().optional(),
+  message: z.string(),
+});
