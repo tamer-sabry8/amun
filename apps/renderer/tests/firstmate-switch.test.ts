@@ -79,3 +79,26 @@ it("does not let a turn sent before a switch answer, resend or replace the new c
   reply(stale.id, conversation(two, "github-copilot/old", "Assistant: stale"));
   expect(fm.currentModel()).toBeNull();
 });
+
+it("tells listeners when a primed conversation reveals its model", async () => {
+  const fm = await import("../src/rebuild/firstmate.ts");
+  const seen: (string | null)[] = [];
+  const listener = () => seen.push(fm.currentModel());
+  const first = fake.sent.length;
+  fm.subscribeModel(listener);
+  fm.subscribeModel(listener);
+  await tick();
+  // First load opens the conversation once, without any message.
+  expect(fake.sent.length).toBeLessThanOrEqual(first + 1);
+  fake.product = "three";
+  fake.update();
+  await tick();
+  const before = fake.sent.length;
+  const open = fake.sent.at(-1)!;
+  expect(open.command).toBe("conversation");
+  reply(open.id, conversation(two, "github-copilot/claude-sonnet-5.5"));
+  await tick();
+  expect(seen.at(-1)).toBe("github-copilot/claude-sonnet-5.5");
+  expect(fm.currentModel()).toBe("github-copilot/claude-sonnet-5.5");
+  expect(fake.sent.length).toBe(before);
+});

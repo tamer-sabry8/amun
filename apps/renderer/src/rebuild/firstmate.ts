@@ -287,6 +287,8 @@ function prime() {
           acceptsImage: opened.acceptsImage === true,
           replyCount: countOf(opened),
         };
+      if (generation === contextGeneration && session)
+        for (const listener of modelListeners) listener();
     })
     .finally(() => {
       if (generation === contextGeneration) priming = null;
@@ -335,6 +337,14 @@ export async function chooseModel(id: string): Promise<boolean> {
   for (const listener of modelListeners) listener();
   return true;
 }
+/** Listens for model changes; the first subscriber also primes the model. */
+export function subscribeModel(listener: () => void) {
+  modelListeners.add(listener);
+  void prime();
+  return () => {
+    modelListeners.delete(listener);
+  };
+}
 /** The full id of the model in use, e.g. "github-copilot/claude-sonnet-5". */
 export const currentModel = () => session?.model ?? null;
 
@@ -344,19 +354,16 @@ export function useFirstmateModel() {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    // Shortly after opening, so the label is right before the first message.
-    const first = setTimeout(() => void prime(), 1200);
     const sync = () => {
       if (mounted.current && (session?.model ?? null) !== model)
         setModel(session?.model ?? null);
     };
     const timer = setInterval(sync, 1500);
-    modelListeners.add(sync);
+    const unsubscribe = subscribeModel(sync);
     return () => {
       mounted.current = false;
-      clearTimeout(first);
       clearInterval(timer);
-      modelListeners.delete(sync);
+      unsubscribe();
     };
   }, [model]);
   return modelDisplay(model);
