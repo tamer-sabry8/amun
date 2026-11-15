@@ -182,6 +182,20 @@ it("starts a worker, shows who is working, and brings the result back to the cha
   ]);
 });
 
+it("files an acceptance checklist with unknown evidence shown as unknown, never passed", async () => {
+  const delegations = make();
+  const id = (await delegations.start({ ...job, acceptance: true }))!;
+  expect(await readFile(join(root, id, "brief.md"), "utf8")).toContain(
+    "acceptance checklist",
+  );
+  await work(id, "- [x] Booking works\n- [x] Pay works — Evidence: test run 9");
+  await until(() => of("save-output").length === 1);
+  expect(of("save-output")[0]).toMatchObject({
+    type: "acceptance",
+    body: "- [ ] Booking works — Evidence: unknown\n- [x] Pay works — Evidence: test run 9",
+  });
+});
+
 it("uses Codex when that is the tool that is on, and says so when none is", async () => {
   await make({ harness: () => "codex" }).start(job);
   expect(delivered[0]!.harness).toBe("codex");

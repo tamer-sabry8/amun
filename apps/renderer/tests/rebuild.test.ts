@@ -559,6 +559,7 @@ describe("rail panels", () => {
       updatedAt: "2026-11-10",
       version: 1,
       approvedVersion: null,
+      acceptance: null,
       versions: [],
     },
     {
@@ -574,6 +575,7 @@ describe("rail panels", () => {
       updatedAt: "2026-11-11",
       version: 1,
       approvedVersion: null,
+      acceptance: null,
       versions: [],
     },
     {
@@ -589,6 +591,7 @@ describe("rail panels", () => {
       updatedAt: "2026-11-11",
       version: 1,
       approvedVersion: null,
+      acceptance: null,
       versions: [],
     },
   ];

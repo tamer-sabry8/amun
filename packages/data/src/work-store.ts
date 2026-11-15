@@ -446,6 +446,16 @@ export class WorkStore {
             body: String(row.body),
             updatedAt: String(row.updated_at),
             ...this.versionsOf(String(row.id), row.approved_version),
+            acceptance:
+              row.acceptance === null || row.acceptance === undefined
+                ? null
+                : {
+                    decision: row.acceptance as
+                      "accepted" | "not_yet" | "rejected",
+                    version: Number(row.acceptance_version),
+                    reason: String(row.acceptance_reason ?? ""),
+                    decidedAt: String(row.acceptance_at),
+                  },
           })),
           ...records.map((record) => ({
             id: record.id,
@@ -467,6 +477,7 @@ export class WorkStore {
             updatedAt: record.updatedAt,
             version: 1,
             approvedVersion: null,
+            acceptance: null,
             versions: [],
           })),
         ],
@@ -1625,6 +1636,33 @@ export class WorkStore {
           "UPDATE library_outputs SET approved_version=?,approved_at=? WHERE id=?",
           command.approved ? Number(row.latest) : null,
           command.approved ? now : null,
+          command.outputId,
+        );
+        return { ref: command.outputId };
+      }
+      case "record-acceptance": {
+        const row = this.get(
+          "SELECT o.type,(SELECT MAX(version) FROM library_output_versions WHERE output_id=o.id) AS latest FROM library_outputs o WHERE o.id=?",
+          command.outputId,
+        );
+        if (!row)
+          throw new WorkError("That document is no longer there.", {
+            reason: "missing_output",
+          });
+        if (row.type !== "acceptance")
+          throw new WorkError("Only an acceptance checklist can be accepted.", {
+            reason: "not_a_checklist",
+          });
+        if (command.decision !== null && !command.reason)
+          throw new WorkError("Add a short reason for your decision.", {
+            reason: "reason_needed",
+          });
+        this.run(
+          "UPDATE library_outputs SET acceptance=?,acceptance_version=?,acceptance_reason=?,acceptance_at=? WHERE id=?",
+          command.decision,
+          command.decision ? Number(row.latest) : null,
+          command.decision ? this.clean(command.reason) : null,
+          command.decision ? now : null,
           command.outputId,
         );
         return { ref: command.outputId };

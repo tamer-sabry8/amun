@@ -391,4 +391,39 @@ describe("document versions and approval", () => {
       send("approve-output", { outputId: "nope", approved: true }).ok,
     ).toBe(false);
   });
+
+  it("records the owner's acceptance of a checklist on the version decided, apart from approval", () => {
+    const id = doc({
+      type: "acceptance",
+      body: "- [ ] A — Evidence: PR 1",
+    }).ref!;
+    doc({ outputId: id, type: "acceptance", body: "- [ ] A — Evidence: PR 2" });
+    const decide = (decision: string | null, reason = "") =>
+      send("record-acceptance", { outputId: id, decision, reason });
+    expect(decide("accepted").ok).toBe(false);
+    expect(decide("not_yet", "Billing has no evidence yet").ok).toBe(true);
+    expect(item(id).acceptance).toMatchObject({
+      decision: "not_yet",
+      version: 2,
+      reason: "Billing has no evidence yet",
+    });
+    expect(item(id).approvedVersion).toBeNull();
+    doc({ outputId: id, type: "acceptance", body: "changed" });
+    expect(item(id).acceptance?.version).toBe(2);
+    expect(decide("accepted", "All cited").ok).toBe(true);
+    expect(item(id).acceptance).toMatchObject({
+      decision: "accepted",
+      version: 3,
+    });
+    expect(decide(null).ok).toBe(true);
+    expect(item(id).acceptance).toBeNull();
+    const plain = doc({ body: "x" }).ref!;
+    expect(
+      send("record-acceptance", {
+        outputId: plain,
+        decision: "accepted",
+        reason: "ok",
+      }).ok,
+    ).toBe(false);
+  });
 });

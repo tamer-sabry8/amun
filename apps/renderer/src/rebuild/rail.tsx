@@ -29,6 +29,7 @@ const typeNames: Record<string, string> = {
   deck: "Deck",
   update: "Update",
   doc: "Doc",
+  acceptance: "Acceptance checklist",
   council_report: "Council report",
   idea: "Idea",
   problem: "Problem",

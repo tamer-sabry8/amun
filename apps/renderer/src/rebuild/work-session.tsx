@@ -40,7 +40,17 @@ import {
 } from "./markdown-doc.tsx";
 import { citationContext, type Cite } from "./citations.ts";
 import { browserStore, readSource } from "../backlog-selection.ts";
-import { approvalLabel, approvalOf } from "./document-approval.ts";
+import {
+  acceptanceLabel,
+  approvalLabel,
+  approvalOf,
+  decisionWords,
+  type Decision,
+} from "./document-approval.ts";
+import {
+  acceptanceType,
+  checklistSummary,
+} from "../../../../packages/domain/src/work/acceptance.ts";
 import { VersionHistory } from "./document-versions.tsx";
 import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
@@ -769,6 +779,7 @@ export function OutputDoc({
     return <p className="muted">That item is no longer in the Library.</p>;
   const record = item.section === "record";
   const approval = approvalOf(item);
+  const unknownItems = checklistSummary(body).unknown;
   const save = (next: string) => {
     if (record || next === item.body) return;
     work("save-output", {
@@ -807,6 +818,26 @@ export function OutputDoc({
               className={"tag" + (approval.state === "changed" ? " warn" : "")}
             >
               {approvalLabel(approval)}
+            </span>
+          )}
+          {item.acceptance && (
+            <span
+              className={
+                "tag" +
+                (item.acceptance.decision !== "accepted" ||
+                item.version > item.acceptance.version
+                  ? " warn"
+                  : "")
+              }
+            >
+              {acceptanceLabel(item)}
+            </span>
+          )}
+          {item.type === acceptanceType && unknownItems > 0 && (
+            <span className="tag warn">
+              {unknownItems === 1
+                ? "1 item has no evidence yet"
+                : `${unknownItems} items have no evidence yet`}
             </span>
           )}
           {!item.workAreaIds.includes(areaId) && (
@@ -936,6 +967,9 @@ export function WorkSession({
   );
   const [editing, setEditing] = useState(true);
   const [renaming, setRenaming] = useState(false);
+  /** The decision being written for a checklist; its reason is asked first. */
+  const [deciding, setDeciding] = useState<Decision | null>(null);
+  const [decisionProblem, setDecisionProblem] = useState("");
   /** Version history of the open document: the list ("list") or one version. */
   const [history, setHistory] = useState<"list" | number | null>(null);
   const titleRoot = useRef<HTMLElement>(null);
@@ -944,6 +978,8 @@ export function WorkSession({
   useEffect(() => {
     setMenu((current) => (current === "title" ? null : current));
     setHistory(null);
+    setDeciding(null);
+    setDecisionProblem("");
   }, [openDocument]);
   const [dragging, setDragging] = useState(false);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
@@ -1195,6 +1231,7 @@ export function WorkSession({
         agent: proposed.agent,
         title: proposed.title,
         task: delegationTask(proposed.task, lastRequest.current),
+        ...(proposed.acceptance ? { acceptance: true } : {}),
       });
     else if (proposed.do === "delete")
       // Deleting is the owner's call: Firstmate can only ask.
@@ -2522,20 +2559,58 @@ export function WorkSession({
                   >
                     Version history
                   </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(null);
-                      work("approve-output", {
-                        outputId: output.id,
-                        approved: approvalOf(output).state !== "approved",
-                      });
-                    }}
-                  >
-                    {approvalOf(output).state === "approved"
-                      ? "Remove approval"
-                      : "Mark as approved"}
-                  </button>
+                  {output.type === acceptanceType ? (
+                    <>
+                      {(["accepted", "not_yet", "rejected"] as const).map(
+                        (decision) => (
+                          <button
+                            key={decision}
+                            role="menuitem"
+                            onClick={() => {
+                              setMenu(null);
+                              setDecisionProblem("");
+                              setDeciding(decision);
+                            }}
+                          >
+                            {decision === "accepted"
+                              ? "Accept"
+                              : decision === "not_yet"
+                                ? "Not yet"
+                                : "Reject"}
+                          </button>
+                        ),
+                      )}
+                      {output.acceptance && (
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            setMenu(null);
+                            work("record-acceptance", {
+                              outputId: output.id,
+                              decision: null,
+                            });
+                          }}
+                        >
+                          Clear my decision
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(null);
+                        work("approve-output", {
+                          outputId: output.id,
+                          approved: approvalOf(output).state !== "approved",
+                        });
+                      }}
+                    >
+                      {approvalOf(output).state === "approved"
+                        ? "Remove approval"
+                        : "Mark as approved"}
+                    </button>
+                  )}
                   <button
                     role="menuitem"
                     onClick={() => {
@@ -2637,6 +2712,52 @@ export function WorkSession({
                   onOpen={(version) => setHistory(version ?? "list")}
                   onClose={() => setHistory(null)}
                 />
+              )}
+              {pane.kind === "output" && output && deciding && (
+                <form
+                  className="rb-inline amber"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    const reason = String(
+                      new FormData(event.currentTarget).get("reason") ?? "",
+                    ).trim();
+                    const result = await workAsync("record-acceptance", {
+                      outputId: output.id,
+                      decision: deciding,
+                      reason,
+                    });
+                    if (result.ok) setDeciding(null);
+                    else setDecisionProblem(result.message);
+                  }}
+                >
+                  <label className="field">
+                    <span>
+                      {decisionWords[deciding]}: say why in a few words. This
+                      only records your decision; nothing is published or
+                      merged.
+                    </span>
+                    <input
+                      name="reason"
+                      type="text"
+                      maxLength={500}
+                      autoFocus
+                      required
+                    />
+                  </label>
+                  <span role="alert">{decisionProblem}</span>
+                  <div className="row">
+                    <button className="btn" type="submit">
+                      Save my decision
+                    </button>
+                    <button
+                      className="btn quiet"
+                      type="button"
+                      onClick={() => setDeciding(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
               )}
               {pane.kind === "output" && history === null && (
                 <OutputDoc

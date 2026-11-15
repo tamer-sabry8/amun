@@ -1100,4 +1100,10 @@ END;
 CREATE TRIGGER content_index_message_drop AFTER DELETE ON work_messages BEGIN
   DELETE FROM content_index WHERE kind='message' AND ref=old.id;
 END;`,
+  // 39 · The owner's acceptance of a checklist document: the decision, the
+  // version it was made on and a short reason. Latest decision only.
+  `ALTER TABLE library_outputs ADD COLUMN acceptance TEXT CHECK (acceptance IN ('accepted','not_yet','rejected'));
+ALTER TABLE library_outputs ADD COLUMN acceptance_version INTEGER;
+ALTER TABLE library_outputs ADD COLUMN acceptance_reason TEXT;
+ALTER TABLE library_outputs ADD COLUMN acceptance_at TEXT;`,
 ] as const;

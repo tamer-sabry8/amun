@@ -31,3 +31,19 @@ export const authorLabel = {
   firstmate: "Firstmate",
   agent: "A crew agent",
 } as const;
+
+export type Decision = "accepted" | "not_yet" | "rejected";
+export const decisionWords: Record<Decision, string> = {
+  accepted: "Accepted",
+  not_yet: "Not yet",
+  rejected: "Rejected",
+};
+
+/** The owner's acceptance of a checklist, kept apart from approval and publishing. */
+export function acceptanceLabel(item: Pick<Library, "version" | "acceptance">) {
+  const { acceptance } = item;
+  if (!acceptance) return "";
+  return item.version > acceptance.version
+    ? `Changed since your decision (v${acceptance.version} ${decisionWords[acceptance.decision].toLowerCase()})`
+    : `${decisionWords[acceptance.decision]} (v${acceptance.version})`;
+}

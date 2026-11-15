@@ -9,6 +9,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { agentProfile } from "../../../packages/domain/src/work/agents.ts";
+import {
+  acceptanceType,
+  normalizeChecklist,
+} from "../../../packages/domain/src/work/acceptance.ts";
 import { rfpResponseDelegation } from "../../../packages/domain/src/work/rfp-boundary.ts";
 
 export type Harness = "claude" | "codex" | "pi";
@@ -59,6 +63,8 @@ interface Job {
   harness: Harness;
   activityId: string | null;
   startedAt: number;
+  /** An acceptance checklist, filed as such with honest evidence. */
+  acceptance?: boolean;
   state: "waiting-owner" | "sent" | "done" | "failed";
   /**
    * Whether the result is filed as a Library draft. Absent on jobs finished
@@ -85,6 +91,7 @@ export function agentBrief(input: {
   area: { name: string; type: string; purpose: string };
   result: string;
   sources?: string;
+  acceptance?: boolean | undefined;
 }) {
   const profile = agentProfile(input.agent);
   return [
@@ -124,6 +131,12 @@ export function agentBrief(input: {
     "- You report to Firstmate. Never address the owner.",
     "- Produce the deliverable only. Do not write to Azure DevOps, Notion, GitHub or any repository, and do not change any other file.",
     "- If something you need is missing, say what is missing in the result instead of guessing.",
+    ...(input.acceptance
+      ? [
+          '- This is an acceptance checklist. Write one task line per item, "- [ ] what must be true", and end each line with "Evidence:" and where it comes from: a test result, a pull request, a document, or "unknown".',
+          '- Cite only evidence you can see in the source documents. If you cannot see it, write "Evidence: unknown". Never tick an item without evidence and never guess that a test passed.',
+        ]
+      : []),
     `- Write the finished result as Markdown to ${JSON.stringify(input.result)} and nothing else.`,
     `- When the result is complete, and only then, create an empty file named "done" in the same folder. Until that file exists your work is treated as unfinished.`,
     "",
@@ -166,6 +179,7 @@ export class Delegations {
     agent: string;
     title: string;
     task: string;
+    acceptance?: boolean | undefined;
   }) {
     const area = this.deps.area(input.workAreaId);
     if (!area) return null;
@@ -205,6 +219,7 @@ export class Delegations {
         agent,
         area,
         result,
+        ...(input.acceptance ? { acceptance: true } : {}),
         sources: this.deps.sources?.(input.workAreaId, input.task) ?? "",
       }),
       { mode: 0o600, flag: "wx" },
@@ -227,6 +242,7 @@ export class Delegations {
       harness,
       activityId: activity.ref,
       startedAt: Date.now(),
+      ...(input.acceptance ? { acceptance: true } : {}),
       state: "sent",
     };
     await this.save(job);
@@ -383,9 +399,11 @@ export class Delegations {
         action: "save-output",
         outputId: "delegation-" + job.id,
         groupId: area.groupId,
-        type: "doc",
+        type: job.acceptance ? acceptanceType : "doc",
         title: `${job.title} (${job.agent})`.slice(0, 250),
-        body: text.slice(0, 90_000),
+        body: job.acceptance
+          ? normalizeChecklist(text.slice(0, 90_000))
+          : text.slice(0, 90_000),
         workAreaIds: [job.workAreaId],
         author: "agent",
       }).ok;

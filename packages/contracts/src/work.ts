@@ -354,6 +354,16 @@ export const workSnapshot = z.strictObject({
       version: z.number().int().min(1).default(1),
       /** The version the owner approved, if any. */
       approvedVersion: z.number().int().min(1).nullable().default(null),
+      /** The owner's acceptance of a checklist: separate from any publishing. */
+      acceptance: z
+        .strictObject({
+          decision: z.enum(["accepted", "not_yet", "rejected"]),
+          version: z.number().int().min(1),
+          reason: z.string(),
+          decidedAt: stamp,
+        })
+        .nullable()
+        .default(null),
       /** The newest versions first, each with the text as it was then. */
       versions: z
         .array(
@@ -722,6 +732,12 @@ export const workCommand = z.discriminatedUnion("action", [
   }),
   // Only the owner's title menu sends this; nothing else approves a document.
   act("approve-output", { outputId: id, approved: z.boolean() }),
+  // Only the owner's title menu sends this; it never publishes or merges.
+  act("record-acceptance", {
+    outputId: id,
+    decision: z.enum(["accepted", "not_yet", "rejected"]).nullable(),
+    reason: z.string().trim().max(500).default(""),
+  }),
   act("record-decision", {
     decisionId: id.optional(),
     groupId: id.nullable(),
@@ -873,6 +889,8 @@ export const workDelegate = z.strictObject({
   agent: name,
   title: name,
   task: z.string().trim().min(1).max(8000),
+  /** The job is an acceptance checklist: every item cites its evidence. */
+  acceptance: z.boolean().optional(),
 });
 /** A file added from the composer: read on the Mac and filed in the Library. */
 export const workAttachment = z.strictObject({
