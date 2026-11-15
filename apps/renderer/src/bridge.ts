@@ -22,6 +22,8 @@ import {
   previewResult,
   crewRoster,
   crewInventory,
+  crewSessionText,
+  codeChangeResult,
   diagnosticsResult,
   type WorkspaceSnapshot,
   type AuthEvent,
@@ -173,6 +175,8 @@ export function initializeBridge() {
         .or(prototypeResult)
         .or(previewResult)
         .or(prResult)
+        .or(codeChangeResult)
+        .or(crewSessionText)
         .safeParse(message.data);
       if (pull.success) {
         for (const f of eventListeners) f(pull.data);

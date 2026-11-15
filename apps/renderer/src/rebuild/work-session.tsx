@@ -446,7 +446,12 @@ function usePlaces(planId: string, fingerprint: string) {
   return places;
 }
 
-type TrackerTypes = { project: string; story: string; task: string | null };
+type TrackerTypes = {
+  project: string;
+  story: string;
+  task: string | null;
+  needs: { type: string; fields: string[] }[];
+};
 const trackerCache = new Map<string, TrackerTypes>();
 /**
  * The work item types of the area's Azure DevOps project, so Firstmate
@@ -466,8 +471,8 @@ function askTrackerTypes(areaId: string) {
     const stop = bridge.onEvent((raw) => {
       const event = trackerTypesResult.safeParse(raw);
       if (!event.success || event.data.workAreaId !== areaId) return;
-      const { project, story, task } = event.data;
-      finish(project && story ? { project, story, task } : null);
+      const { project, story, task, needs } = event.data;
+      finish(project && story ? { project, story, task, needs } : null);
     });
     const timer = setTimeout(() => finish(null), 2500);
     bridge.send({ version: 1, kind: "tracker-types", workAreaId: areaId });
@@ -475,7 +480,12 @@ function askTrackerTypes(areaId: string) {
 }
 const trackerLine = (types: TrackerTypes | null) =>
   types
-    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one or asks for a sub-task under an existing item (then use the sub-task type and the parent field); Amun uses the project's own.`
+    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one or asks for a sub-task under an existing item (then use the sub-task type and the parent field); Amun uses the project's own.${types.needs
+        .map(
+          (need) =>
+            ` ${types.project} requires ${need.fields.join(", ")} for ${countedNoun(2, need.type).slice(2)}: ask the owner for ${need.fields.length === 1 ? "that value" : "those values"} before proposing the item, then put each in the item's fields under that name. Never choose one yourself.`,
+        )
+        .join("")}`
     : "";
 
 type PlanEntry = Snapshot["plans"][number];
@@ -1088,7 +1098,6 @@ export function WorkSession({
   onResize,
   onExpand,
   onGroupNeeded,
-  onDiagnostics,
   onSettings,
 }: {
   snapshot: Snapshot;
@@ -1105,10 +1114,17 @@ export function WorkSession({
   onResize(ratio: number): void;
   onExpand(): void;
   onGroupNeeded(): void;
-  onDiagnostics(): void;
   onSettings(): void;
 }) {
   const context = workContext(snapshot, areaId, now);
+  // The failure's own details are its plan's per-item reasons.
+  const failureRef = context?.failure?.ref;
+  const failurePlanId = failureRef?.startsWith("failure:")
+    ? failureRef.slice(8)
+    : null;
+  const failurePlan = snapshot.plans.some((plan) => plan.id === failurePlanId)
+    ? failurePlanId
+    : null;
   const [busy, setBusy] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
   const [menu, setMenu] = useState<"title" | "mode" | "area" | "fail" | null>(
@@ -2118,15 +2134,17 @@ export function WorkSession({
                 role="menu"
                 style={{ right: 8, top: "calc(100% + 4px)" }}
               >
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setMenu(null);
-                    onDiagnostics();
-                  }}
-                >
-                  {failureOverflow[0]}
-                </button>
+                {failurePlan && (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(null);
+                      onPane({ kind: "plan", id: failurePlan });
+                    }}
+                  >
+                    {failureOverflow[0]}
+                  </button>
+                )}
                 <button
                   role="menuitem"
                   onClick={async () => {

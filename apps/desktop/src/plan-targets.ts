@@ -6,6 +6,7 @@ import type { AdoStep } from "../../../packages/data/src/ado-batch.ts";
 import {
   PlanChanged,
   PlanNotSent,
+  PlanRefused,
   redactedError,
   refusalReason,
   type PlanTarget,
@@ -28,6 +29,7 @@ import {
 } from "../../../packages/auth/src/notion-page-update.ts";
 
 import {
+  AdoRejected,
   AdoTypeMissing,
   sameAdoField,
 } from "../../../packages/connectors-ado/src/governed-writes.ts";
@@ -142,7 +144,13 @@ const updateAllowed = new Set([
   "destination",
 ]);
 
-function planFields(item: PlanWriteItem, project: string, collection?: string) {
+function planFields(
+  item: PlanWriteItem,
+  project: string,
+  collection?: string,
+  /** Collects labels the project's own required fields may claim. */
+  extras?: Record<string, string>,
+) {
   const fields: Record<string, string> = {};
   const refused: string[] = [];
   const update = adoWorkItemOf(item.fields).named;
@@ -157,6 +165,10 @@ function planFields(item: PlanWriteItem, project: string, collection?: string) {
         : update && assigneeNames.has(key)
           ? "assignee"
           : fieldNames[key];
+    if (!name && extras && !update) {
+      extras[label] = value;
+      continue;
+    }
     if (!name || (update && !updateAllowed.has(name))) {
       refused.push(label);
       continue;
@@ -203,6 +215,62 @@ export function pickAdoType(
   );
 }
 
+type AdoField = AzureProcessSchema["types"][number]["fields"][number];
+const flat = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+const listed = (names: string[]) =>
+  names.length < 2
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+// Azure refuses these as text; the rest travel as the owner wrote them.
+const numericField =
+  /^Microsoft\.VSTS\.Scheduling\.|^Microsoft\.VSTS\.Common\.(Priority|BusinessValue|TimeCriticality|StackRank)$/;
+/**
+ * The fields a project requires of a work item type that Amun cannot fill
+ * itself: the owner has to give a value for each. Fields Azure fills by
+ * default, and its own bookkeeping fields, are not asked for.
+ */
+export function requiredAdoFields(type: { fields: AdoField[] }) {
+  return type.fields.filter(
+    (field) =>
+      field.required &&
+      (!field.referenceName.startsWith("System.") ||
+        ["System.Description", "System.AssignedTo"].includes(
+          field.referenceName,
+        )) &&
+      (field.defaultValue === null || field.defaultValue === ""),
+  );
+}
+/** What Firstmate must ask for, per type, in the owner's words. */
+export function adoRequiredNotes(
+  schema: AzureProcessSchema,
+  names: AdoTypeNames,
+) {
+  return [names.story, names.task].flatMap((name) => {
+    const type = schema.types.find((entry) => sameName(entry.name, name ?? ""));
+    const fields = type
+      ? requiredAdoFields(type).filter(
+          (field) =>
+            !["System.Description", "System.AssignedTo"].includes(
+              field.referenceName,
+            ) &&
+            field.referenceName !== "Microsoft.VSTS.Common.AcceptanceCriteria",
+        )
+      : [];
+    return type && fields.length
+      ? [
+          {
+            type: type.name,
+            fields: fields.map((field) =>
+              field.allowedValues.length
+                ? `${field.name} (one of ${field.allowedValues.slice(0, 12).join(", ")})`
+                : field.name,
+            ),
+          },
+        ]
+      : [];
+  });
+}
+
 /** The exact Azure work item a plan item becomes. Same input, same step. */
 export function adoStep(
   item: PlanWriteItem,
@@ -215,7 +283,8 @@ export function adoStep(
 ): AdoStep {
   if (adoWorkItemOf(item.fields).named)
     throw new PlanNotSent("This changes an existing work item, not a new one.");
-  const supplied = planFields(item, project, collection);
+  const extras: Record<string, string> = {};
+  const supplied = planFields(item, project, collection, extras);
   const wanted = override ?? supplied.type ?? null;
   const type = pickAdoType(wanted, schema, names);
   if (!type)
@@ -279,6 +348,42 @@ export function adoStep(
       );
     fields["System.IterationPath"] = iteration;
   }
+  // Values the owner gave for the fields this type requires. Anything else
+  // is refused rather than dropped, as before.
+  const required = requiredAdoFields(type);
+  const unclaimed: string[] = [];
+  for (const [label, value] of Object.entries(extras)) {
+    const key = flat(label);
+    const field = required.find(
+      (entry) =>
+        flat(entry.name) === key ||
+        flat(entry.referenceName) === key ||
+        flat(entry.referenceName.split(".").at(-1) ?? "") === key,
+    );
+    if (!field) {
+      unclaimed.push(label);
+      continue;
+    }
+    const allowed = field.allowedValues.find((entry) => sameName(entry, value));
+    if (field.allowedValues.length && !allowed)
+      throw new PlanNotSent(
+        `“${label}” must be one of ${field.allowedValues.slice(0, 12).join(", ")} for a ${type.name} in ${project}.`,
+      );
+    const number = Number(value.replace(",", "."));
+    fields[field.referenceName] =
+      numericField.test(field.referenceName) && Number.isFinite(number)
+        ? number
+        : (allowed ?? value);
+  }
+  if (unclaimed.length)
+    throw new PlanNotSent(
+      `Amun cannot send ${unclaimed.map((name) => `“${name}”`).join(", ")} to Azure DevOps yet. Remove ${unclaimed.length === 1 ? "it" : "them"} or leave ${unclaimed.length === 1 ? "it" : "them"} blank.`,
+    );
+  const missing = required.filter((field) => !(field.referenceName in fields));
+  if (missing.length)
+    throw new PlanNotSent(
+      `${project} needs ${listed(missing.map((field) => field.name))} for ${/^[aeiou]/i.test(type.name) ? "an" : "a"} ${type.name}. Tell Firstmate the ${missing.length === 1 ? "value" : "values"} and it will add ${missing.length === 1 ? "it" : "them"} to the plan before you approve.`,
+    );
   return {
     itemId: item.id,
     parentId: null,
@@ -476,6 +581,18 @@ export function adoPlanTarget(
     }
     return planned;
   };
+  // Azure answered with a refusal, so nothing was created: say why and do
+  // not look it up or send it again.
+  const refusedByAzure = (error: unknown) => {
+    if (
+      error instanceof AdoRejected &&
+      error.status >= 400 &&
+      error.status < 500 &&
+      error.status !== 408 &&
+      error.status !== 429
+    )
+      throw new PlanRefused(refusalReason("ado", error));
+  };
   const updated = (id: number) => ({ ...receipt(id), updated: true });
   const parentOf = (item: PlanWriteItem) => adoParentOf(item.fields).id;
   const under = (parent: number | null) =>
@@ -548,6 +665,7 @@ export function adoPlanTarget(
         const created = await client.write(prepared, parent);
         return { ...receipt(created.id), note: under(parent) };
       } catch (error) {
+        refusedByAzure(error);
         // Only Azure saying the type is not in this project is retried, once,
         // with the project's own type: same fields and marker, so nothing can
         // be duplicated, and still under the owner's one approval.
@@ -561,9 +679,15 @@ export function adoPlanTarget(
         } catch {
           throw error;
         }
-        const created =
-          (await client.find(retry, parent)) ??
-          (await client.write(retry, parent));
+        let created: { id: number };
+        try {
+          created =
+            (await client.find(retry, parent)) ??
+            (await client.write(retry, parent));
+        } catch (second) {
+          refusedByAzure(second);
+          throw second;
+        }
         const learned = types.learned?.() ?? {};
         types.learn?.({ ...learned, [isTask ? "task" : "story"]: own });
         return {

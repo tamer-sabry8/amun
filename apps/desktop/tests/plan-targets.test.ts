@@ -3,6 +3,7 @@ import {
   adoPlanTarget,
   adoPayloadNote,
   adoStep,
+  adoRequiredNotes,
   adoUpdate,
   adoUpdateChange,
   resolveAdoTypes,
@@ -15,8 +16,14 @@ import {
   notionUpdateRefusalEvent,
   notionPlanTarget,
 } from "../src/plan-targets.ts";
-import { AdoTypeMissing } from "../../../packages/connectors-ado/src/governed-writes.ts";
-import { PlanNotSent } from "../../../packages/data/src/plan-publication.ts";
+import {
+  AdoRejected,
+  AdoTypeMissing,
+} from "../../../packages/connectors-ado/src/governed-writes.ts";
+import {
+  PlanNotSent,
+  PlanRefused,
+} from "../../../packages/data/src/plan-publication.ts";
 import type { AzureProcessSchema } from "../../../packages/contracts/src/backlog.ts";
 
 const field = (referenceName: string) => ({
@@ -214,6 +221,98 @@ describe("Azure DevOps plan items", () => {
         "POCs",
       ),
     ).toThrow(/no Description field/);
+  });
+  describe("fields the project requires", () => {
+    const need = (referenceName: string, name: string, extra = {}) => ({
+      referenceName,
+      name,
+      required: true,
+      allowedValues: [],
+      defaultValue: null,
+      ...extra,
+    });
+    const required = {
+      types: [
+        {
+          name: "Task",
+          fields: [
+            field("System.Title"),
+            need("System.State", "State"),
+            need("Microsoft.VSTS.Scheduling.RemainingWork", "Remaining Work"),
+            need("Microsoft.VSTS.Common.Activity", "Activity", {
+              allowedValues: ["Development", "Testing"],
+            }),
+            need("Microsoft.VSTS.Common.Priority", "Priority", {
+              defaultValue: 2,
+            }),
+          ],
+        },
+      ],
+      areas: [],
+      iterations: [],
+    } as unknown as AzureProcessSchema;
+    it("names what is missing in plain words and blocks the item", () => {
+      expect(() => adoStep(item({ type: "Task" }), required, "POCs")).toThrow(
+        "POCs needs Remaining Work and Activity for a Task. Tell Firstmate the values and it will add them to the plan before you approve.",
+      );
+      expect(
+        adoPayloadNote(item({ type: "Task" }), required, "POCs", undefined, {
+          task: "Task",
+        }).problem,
+      ).toMatch(/needs Remaining Work and Activity/);
+    });
+    it("sends exactly the values given, as numbers where Azure expects them", () => {
+      const step = adoStep(
+        item({ type: "Task", "Remaining Work": "6", activity: "testing" }),
+        required,
+        "POCs",
+      );
+      expect(step.fields).toMatchObject({
+        "Microsoft.VSTS.Scheduling.RemainingWork": 6,
+        "Microsoft.VSTS.Common.Activity": "Testing",
+      });
+    });
+    it("refuses a value the field does not allow", () => {
+      expect(() =>
+        adoStep(
+          item({ type: "Task", "Remaining Work": "6", Activity: "Napping" }),
+          required,
+          "POCs",
+        ),
+      ).toThrow(/must be one of Development, Testing/);
+    });
+    it("tells Firstmate what to ask for", () => {
+      expect(adoRequiredNotes(required, { task: "Task" })).toEqual([
+        {
+          type: "Task",
+          fields: ["Remaining Work", "Activity (one of Development, Testing)"],
+        },
+      ]);
+    });
+    it("records a 4xx refusal as not created, with Azure's reason", async () => {
+      let writes = 0;
+      const target = adoPlanTarget(
+        "https://ado.example/Collection",
+        "POCs",
+        { processSchema: async () => schema },
+        {
+          write: async () => {
+            writes += 1;
+            throw new AdoRejected(
+              400,
+              "TF401320: Rule Error for field Remaining Work.",
+            );
+          },
+          find: async () => undefined,
+        },
+      );
+      const error = await target.write(item()).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PlanRefused);
+      expect((error as Error).message).toMatch(
+        /^Azure DevOps refused it: TF401320/,
+      );
+      expect(writes).toBe(1);
+    });
   });
   it("refuses a type, area or iteration the project does not have", () => {
     expect(() => adoStep(item({ type: "Epic" }), schema, "POCs")).toThrow(

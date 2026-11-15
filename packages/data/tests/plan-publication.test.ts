@@ -331,6 +331,31 @@ describe("a write that never left the Mac", () => {
   });
 });
 
+describe("a refusal from the destination", () => {
+  it("is recorded as not created with its reason, never as being checked", async () => {
+    const { PlanRefused } = await import("../src/plan-publication.ts");
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    let calls = 0;
+    const refusing = new PlanPublisher(db, store, async () => ({
+      async write() {
+        calls++;
+        throw new PlanRefused(
+          "Azure DevOps refused it: TF401320 Remaining Work is required",
+        );
+      },
+      async find() {
+        throw Error("lookup must not run");
+      },
+    }));
+    await refusing.publish(id);
+    expect(calls).toBe(1);
+    expect(plan(id).results[0]!.state).toBe("failed");
+    expect(refusing.writes(id)[0]).toMatchObject({
+      note: expect.stringContaining("TF401320"),
+    });
+  });
+});
+
 describe("approving only some items", () => {
   it("approves and publishes the ticked item and leaves the other waiting", async () => {
     const proposed = send("propose-plan", {

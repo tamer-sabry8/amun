@@ -60,6 +60,11 @@ export type ResolveTarget = (
 export class PlanBlocked extends Error {}
 /** Thrown by `write` when the request provably never left the Mac. */
 export class PlanNotSent extends Error {}
+/**
+ * The destination answered and refused: nothing was created, so the item is
+ * recorded as not created with its reason and never looked up or retried.
+ */
+export class PlanRefused extends PlanNotSent {}
 /** An update stopped because the page changed since Amun wrote it. */
 export class PlanChanged extends PlanNotSent {
   constructor(
@@ -694,12 +699,18 @@ export class PlanPublisher {
           );
           this.set(planId, row.item_id, {
             note:
-              error instanceof PlanNotSent
-                ? error.message.slice(0, 300)
-                : refusalReason(row.destination, error),
+              error instanceof PlanRefused
+                ? error.message.slice(0, 400)
+                : error instanceof PlanNotSent
+                  ? error.message.slice(0, 300)
+                  : refusalReason(row.destination, error),
             ...(error instanceof PlanChanged ? { url: error.url } : {}),
           });
-          if (error instanceof PlanNotSent) {
+          if (error instanceof PlanRefused) {
+            this.set(planId, row.item_id, { state: "missing" });
+            results.push({ id: row.item_id, state: "failed" });
+            settled = true;
+          } else if (error instanceof PlanNotSent) {
             // Nothing left the Mac, so there is nothing to look up.
             state = "missing";
             this.set(planId, row.item_id, { state });

@@ -553,10 +553,6 @@ export function App() {
               setSection("groups");
               go("settings");
             }}
-            onDiagnostics={() => {
-              setSection("advanced");
-              go("settings");
-            }}
             onSettings={() => {
               setSection("models");
               go("settings");

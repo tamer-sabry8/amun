@@ -148,6 +148,7 @@ import { productScope } from "./product-scope.ts";
 import {
   adoPlanTarget,
   adoPayloadNote,
+  adoRequiredNotes,
   adoUpdate,
   adoUpdateChange,
   type AdoTypeNames,
@@ -2694,6 +2695,10 @@ process.parentPort?.on("message", (event) => {
             project: info?.project ?? null,
             story: info?.names.story ?? null,
             task: info?.names.task ?? null,
+            needs:
+              info?.schema && info.names
+                ? adoRequiredNotes(info.schema, info.names)
+                : [],
           }),
         );
     } else if (message.data?.kind === "work-delegate") {

@@ -1029,6 +1029,15 @@ export const trackerTypesResult = z.strictObject({
   project: z.string().max(256).nullable(),
   story: z.string().max(128).nullable(),
   task: z.string().max(128).nullable(),
+  /** Fields the project requires per type that the owner must give values for. */
+  needs: z
+    .array(
+      z.strictObject({
+        type: z.string().max(128),
+        fields: z.array(z.string().max(256)).max(20),
+      }),
+    )
+    .max(4),
 });
 /** Check or retry an approved plan's outstanding items; never a new approval. */
 export const planPublish = z.strictObject({

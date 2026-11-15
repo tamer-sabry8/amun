@@ -396,6 +396,6 @@ export function nextRetry(input: {
     : ("surface" as const);
 }
 export const failureOverflow = [
-  "View diagnostics",
+  "See why it failed",
   "Copy log for a coding agent",
 ] as const;
