@@ -45,7 +45,7 @@ import {
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
-import { AgentsPanel } from "./lazy.tsx";
+import { AgentWatch } from "./agent-watch.tsx";
 import { Composer } from "./composer.tsx";
 import { useAzureSprints } from "./sprint-azure.ts";
 import { BrowserPane } from "./work-session.tsx";
@@ -375,10 +375,11 @@ export function Agents({
               {agent.output || "No output yet"}
             </p>
             {watch && (
-              // The live, read-only session view from the delivery runtime.
-              <div className="legacy-surface">
-                <AgentsPanel onOpenWorker={() => undefined} />
-              </div>
+              <AgentWatch
+                agentId={agent.id}
+                launcherId={agent.launcherId}
+                name={agent.role}
+              />
             )}
           </div>
         </section>
