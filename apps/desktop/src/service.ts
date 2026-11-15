@@ -49,7 +49,11 @@ import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
 import { crewProfile } from "../../../packages/crew/src/crew-profile.ts";
 import { readCrewBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
-import { crewList } from "../../../packages/contracts/src/crew.ts";
+import {
+  crewList,
+  crewSessionRead,
+} from "../../../packages/contracts/src/crew.ts";
+import { captureOwnedTmux } from "../../../packages/crew/src/capture-owned-tmux.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
   readHosting,
@@ -1134,6 +1138,7 @@ process.parentPort?.on("message", (event) => {
     (event) => port.postMessage(event),
   );
   let rosterBusy = false;
+  let readingSession = false;
   let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
@@ -1201,6 +1206,32 @@ process.parentPort?.on("message", (event) => {
         })
         .finally(() => {
           rosterBusy = false;
+        });
+    } else if (crewSessionRead.safeParse(message.data).success) {
+      if (readingSession) return;
+      readingSession = true;
+      const { taskId } = crewSessionRead.parse(message.data);
+      const root = process.env.AMUN_CREW_RECEIPTS,
+        binary = process.env.AMUN_TMUX_BINARY;
+      void (
+        root && binary
+          ? captureOwnedTmux(root, taskId, binary, (text) =>
+              redactor.text(text),
+            )
+          : Promise.resolve(null)
+      )
+        .then((text) => {
+          if (!closed)
+            port.postMessage({
+              version: 1,
+              kind: "crew-session-text",
+              taskId,
+              live: text !== null,
+              text: text ?? "",
+            });
+        })
+        .finally(() => {
+          readingSession = false;
         });
     } else if (crewList.safeParse(message.data).success) {
       if (listingCrew) return;

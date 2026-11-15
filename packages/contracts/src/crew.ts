@@ -50,6 +50,19 @@ export const crewObservation = z.strictObject({
   run: run.optional(),
 });
 
+export const crewSessionRead = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-session-read"),
+  taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+});
+export const crewSessionText = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("crew-session-text"),
+  taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+  live: z.boolean(),
+  text: z.string().max(32768),
+});
+
 export const crewList = z.strictObject({
   version: z.literal(1),
   kind: z.literal("crew-list"),

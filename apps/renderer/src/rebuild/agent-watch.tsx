@@ -1,8 +1,9 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   crewObservation,
   crewRoster,
   crewInventory,
+  crewSessionText,
 } from "../../../../packages/contracts/src/crew.ts";
 import { bridge } from "../bridge.ts";
 
@@ -73,6 +74,43 @@ export function AgentWatch({
     return off;
   }, [connected, generation, taskId]);
 
+  const [session, setSession] = useState<{
+    taskId: string;
+    live: boolean;
+    text: string;
+  } | null>(null);
+  const screen = useRef<HTMLPreElement>(null);
+  const pinned = useRef(true);
+
+  // Read-only: asks the service for the crewmate's latest lines every 2 s while this panel is open.
+  useEffect(() => {
+    setSession(null);
+    pinned.current = true;
+    if (!connected || !taskId) return;
+    const off = bridge.onEvent((raw) => {
+      const checked = crewSessionText.safeParse(raw);
+      if (checked.success && checked.data.taskId === taskId)
+        setSession({
+          taskId,
+          live: checked.data.live,
+          text: checked.data.text,
+        });
+    });
+    const ask = () =>
+      bridge.send({ version: 1, kind: "crew-session-read", taskId });
+    ask();
+    const timer = setInterval(ask, 2000);
+    return () => {
+      clearInterval(timer);
+      off();
+    };
+  }, [connected, generation, taskId]);
+
+  useEffect(() => {
+    const box = screen.current;
+    if (box && pinned.current) box.scrollTop = box.scrollHeight;
+  }, [session?.text]);
+
   const result = observed?.generation === generation ? observed.result : null;
   const rows: [string, string][] = member
     ? [
@@ -134,6 +172,40 @@ export function AgentWatch({
             </div>
           ))}
         </div>
+      )}
+      {connected && member && (
+        <section
+          aria-label="Live session"
+          style={{ display: "grid", gap: 6, marginTop: 8 }}
+        >
+          <h3 style={{ margin: 0 }}>Live session</h3>
+          {session?.live ? (
+            <>
+              <p className="muted small">
+                Watching {name} · updates every 2 seconds
+              </p>
+              <pre
+                ref={screen}
+                className="rb-session"
+                tabIndex={0}
+                aria-label={"Live session of " + name}
+                onScroll={(event) => {
+                  const box = event.currentTarget;
+                  pinned.current =
+                    box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+                }}
+              >
+                {session.text || "Nothing on screen yet."}
+              </pre>
+            </>
+          ) : (
+            <p className="muted small" role="status" aria-live="polite">
+              {session
+                ? name + " isn't running a session right now."
+                : "Checking…"}
+            </p>
+          )}
+        </section>
       )}
     </div>
   );
