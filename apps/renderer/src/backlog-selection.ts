@@ -12,7 +12,7 @@ const sourceKey = (productId: string) => `amun.backlog.source:${productId}`;
 const boardKey = (productId: string, sourceId: string) =>
   `amun.backlog.board:${productId}:${sourceId}`;
 
-export function browserStore(): SelectionStore | undefined {
+export function browserStore(): ScannableStore | undefined {
   try {
     return typeof localStorage === "undefined" ? undefined : localStorage;
   } catch {
@@ -84,4 +84,27 @@ export function writeBoard(
     boardKey(productId, sourceId),
     selection?.team ? JSON.stringify(selection) : "",
   );
+}
+
+export type ScannableStore = SelectionStore & Pick<Storage, "key" | "length">;
+
+/** Every project of a product that has a saved board, in storage order. */
+export function savedBoards(
+  store: ScannableStore | undefined,
+  productId: string,
+) {
+  const prefix = boardKey(productId, "");
+  const found: { sourceId: string; team: string; level: string }[] = [];
+  try {
+    for (let i = 0; store && i < store.length; i++) {
+      const key = store.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const sourceId = key.slice(prefix.length);
+      const board = readBoard(store, productId, sourceId);
+      if (sourceId && board) found.push({ sourceId, ...board });
+    }
+  } catch {
+    // An unreadable store only means nothing is remembered.
+  }
+  return found;
 }

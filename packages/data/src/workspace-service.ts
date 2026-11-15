@@ -64,6 +64,19 @@ export class WorkspaceService {
       )
       .run(JSON.stringify(preferences));
   }
+  /** Mapped sources of any product, for read-only lookups that need no open product. */
+  productSources(productId: string) {
+    return this.db
+      .prepare(
+        "SELECT id,title,kind,external_id AS reference FROM sources WHERE product_id=? ORDER BY title,id",
+      )
+      .all(productId) as {
+      id: string;
+      title: string;
+      kind: string;
+      reference: string | null;
+    }[];
+  }
   private productContext(productId: string | null) {
     if (!productId) return null;
     const product = this.db

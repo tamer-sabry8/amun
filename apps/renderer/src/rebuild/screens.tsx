@@ -881,14 +881,12 @@ export function Sprints({
   snapshot,
   now,
   model,
-  productContext = null,
   onWork,
   onReview,
 }: {
   snapshot: Snapshot;
   now: number;
   model: string | null;
-  productContext?: Parameters<typeof useAzureSprints>[0];
   onWork(areaId: string, message?: string): void;
   onReview(planId: string, workAreaId: string | null): void;
 }) {
@@ -911,7 +909,7 @@ export function Sprints({
       ...sprint,
       workAreaName: areaOf(snapshot, sprint.workAreaId)?.name ?? "",
     }));
-  const azure = useAzureSprints(productContext, setNote);
+  const azure = useAzureSprints(areas, areaId, setNote);
   const azureArea = areas.find(
     (area) => area.productId === azure.productId && azure.productId,
   );

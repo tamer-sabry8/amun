@@ -531,7 +531,6 @@ export function App() {
             snapshot={snapshot}
             now={now}
             model={model}
-            productContext={bridgeState.workspace?.productContext ?? null}
             onWork={(id, message) => openWork(id, message)}
             onReview={(planId, areaId) =>
               areaId &&

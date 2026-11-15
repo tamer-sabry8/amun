@@ -1092,8 +1092,17 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       const request = parsed.data;
       const context = workspaceService.snapshot().productContext;
-      if (context?.productId !== request.productId) return;
-      const source = context.sources.find(
+      // Sprints are read-only and follow the saved binding, not the open product.
+      const readOnlySprints =
+        request.kind === "backlog-read" && request.action === "sprints";
+      const sources =
+        context?.productId === request.productId
+          ? context.sources
+          : readOnlySprints
+            ? workspaceService.productSources(request.productId)
+            : null;
+      if (!sources) return;
+      const source = sources.find(
         (s) => s.id === request.sourceId && s.kind === "ado",
       );
       const meta = {

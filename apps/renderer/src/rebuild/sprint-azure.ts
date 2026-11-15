@@ -1,21 +1,16 @@
 // Read-only Azure DevOps sprints for the Sprints Overview. Commands arrive
 // through the composer; nothing here writes to Azure DevOps.
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  backlogResult,
-  type BacklogResult,
-  type WorkspaceSnapshot,
-} from "@amun/contracts";
+import { backlogResult, type BacklogResult } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import { browserStore } from "../backlog-selection.ts";
 import {
-  browserStore,
-  readBoard,
-  readSource,
-  writeBoard,
-} from "../backlog-selection.ts";
+  resolveSprintBinding,
+  writeSprintDefault,
+  type SprintArea,
+} from "./sprint-binding.ts";
 import type { SprintCommand } from "../../../../packages/domain/src/work/planning.ts";
 
-type Context = NonNullable<WorkspaceSnapshot["productContext"]>;
 type Reply = Extract<BacklogResult, { view: "sprints" }>;
 type Intent = "load" | "refresh" | "team";
 
@@ -33,34 +28,17 @@ export const sprintReplies = {
   lost: "Connection interrupted. Try /sprint refresh.",
 };
 
-/** Which mapped Azure project to read, as the Backlog screen chooses it. */
-export function sprintSource(context: Context | null) {
-  const sources = (context?.sources ?? []).filter(
-    (s) => s.kind === "ado" && s.reference,
-  );
-  const saved = context
-    ? readSource(
-        browserStore(),
-        context.productId,
-        sources.map((s) => s.id),
-      )
-    : "";
-  return sources.find((s) => s.id === saved) ?? sources[0] ?? null;
-}
-
 export function useAzureSprints(
-  context: Context | null,
+  areas: readonly SprintArea[],
+  areaId: string,
   say: (note: string) => void,
 ) {
   const [reply, setReply] = useState<Reply>();
   const pending = useRef<{ id: string; intent: Intent } | null>(null);
-  const productId = context?.productId ?? "";
-  const source = sprintSource(context);
-  const sourceId = source?.id ?? "";
-  const saved = () =>
-    productId && sourceId
-      ? readBoard(browserStore(), productId, sourceId)
-      : undefined;
+  const binding = resolveSprintBinding(browserStore(), areas, areaId);
+  const productId = binding?.productId ?? "";
+  const sourceId = binding?.sourceId ?? "";
+  const savedTeam = binding?.team ?? "";
 
   const read = useCallback(
     (team: string, intent: Intent) => {
@@ -84,9 +62,8 @@ export function useAzureSprints(
   useEffect(() => {
     setReply(undefined);
     pending.current = null;
-    const team = saved()?.team;
-    if (team) read(team, "load");
-  }, [productId, sourceId]);
+    if (savedTeam) read(savedTeam, "load");
+  }, [productId, sourceId, savedTeam]);
 
   useEffect(
     () =>
@@ -132,20 +109,21 @@ export function useAzureSprints(
   );
 
   const run = (command: SprintCommand) => {
-    if (!source) return say(sprintReplies.noProject);
+    if (!binding) return say(sprintReplies.noProject);
     if (command.kind === "team") {
       if (!command.name) return say(sprintReplies.needName);
       return read(command.name, "team");
     }
     if (command.kind === "refresh") {
-      const team = reply?.team.id ?? saved()?.team;
+      const team = reply?.team.id ?? savedTeam;
       return team ? read(team, "refresh") : say(sprintReplies.noTeam);
     }
     if (command.kind === "default") {
       if (!reply) return say(sprintReplies.noTeam);
-      writeBoard(browserStore(), productId, sourceId, {
+      writeSprintDefault(browserStore(), {
+        productId,
+        sourceId,
         team: reply.team.id,
-        level: saved()?.level ?? "",
       });
       say(sprintReplies.saved(reply.team.name));
     }
