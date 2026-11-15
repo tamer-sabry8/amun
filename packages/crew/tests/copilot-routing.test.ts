@@ -3,6 +3,7 @@ import {
   allowedProviders,
   chooseCopilotModel,
   CopilotUnavailable,
+  savedModelLabel,
   testProviders,
 } from "../src/copilot-routing.ts";
 
@@ -57,5 +58,42 @@ describe("chooseCopilotModel", () => {
     expect(
       chooseCopilotModel([{ provider: "other", id: "x" }], {}, declared),
     ).toBeUndefined();
+  });
+});
+
+describe("savedModelLabel", () => {
+  const signedIn = ["github-copilot"];
+  it("uses the saved Copilot model, else the pinned default", () => {
+    expect(
+      savedModelLabel(
+        { defaultProvider: "github-copilot", defaultModel: "gpt-5" },
+        signedIn,
+      ),
+    ).toEqual({ model: "github-copilot/gpt-5", needsConversation: false });
+    expect(savedModelLabel({}, signedIn).model).toBe(
+      "github-copilot/claude-sonnet-5.5",
+    );
+    expect(
+      savedModelLabel({ defaultProvider: "other", defaultModel: "x" }, signedIn)
+        .model,
+    ).toBe("github-copilot/claude-sonnet-5.5");
+  });
+  it("shows no model before Copilot is signed in, even with a saved choice", () => {
+    expect(
+      savedModelLabel(
+        { defaultProvider: "github-copilot", defaultModel: "gpt-5" },
+        [],
+      ),
+    ).toEqual({ model: null, needsConversation: false });
+    expect(savedModelLabel(undefined, [])).toEqual({
+      model: null,
+      needsConversation: false,
+    });
+  });
+  it("leaves declared test fixtures to the conversation", () => {
+    expect(savedModelLabel({}, signedIn, ["amun-queue"])).toEqual({
+      model: null,
+      needsConversation: true,
+    });
   });
 });

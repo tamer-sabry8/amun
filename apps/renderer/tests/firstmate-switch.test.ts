@@ -80,25 +80,59 @@ it("does not let a turn sent before a switch answer, resend or replace the new c
   expect(fm.currentModel()).toBeNull();
 });
 
-it("tells listeners when a primed conversation reveals its model", async () => {
+it("shows the saved model on the label without opening the conversation", async () => {
   const fm = await import("../src/rebuild/firstmate.ts");
+  fake.event({ kind: "service-lost" });
   const seen: (string | null)[] = [];
   const listener = () => seen.push(fm.currentModel());
   const first = fake.sent.length;
   fm.subscribeModel(listener);
   fm.subscribeModel(listener);
   await tick();
-  // First load opens the conversation once, without any message.
-  expect(fake.sent.length).toBeLessThanOrEqual(first + 1);
+  const read = fake.sent.slice(first);
+  expect(read.map((c) => c.command)).toEqual(["default-model"]);
+  reply(read[0]!.id, {
+    kind: "message",
+    text: JSON.stringify({
+      model: "github-copilot/claude-sonnet-5.5",
+      needsConversation: false,
+    }),
+  });
+  await tick();
+  expect(seen.at(-1)).toBe("github-copilot/claude-sonnet-5.5");
+  // A context switch with nothing open only rereads the saved default.
   fake.product = "three";
   fake.update();
   await tick();
-  const before = fake.sent.length;
-  const open = fake.sent.at(-1)!;
-  expect(open.command).toBe("conversation");
-  reply(open.id, conversation(two, "github-copilot/claude-sonnet-5.5"));
+  expect(fake.sent.slice(first).map((c) => c.command)).toEqual([
+    "default-model",
+    "default-model",
+  ]);
+  // Sending a message is what opens the conversation.
+  const send = fm.askFirstmate("Hello");
   await tick();
-  expect(seen.at(-1)).toBe("github-copilot/claude-sonnet-5.5");
-  expect(fm.currentModel()).toBe("github-copilot/claude-sonnet-5.5");
-  expect(fake.sent.length).toBe(before);
+  expect(fake.sent.at(-1)!.command).toBe("conversation");
+  reply(fake.sent.at(-1)!.id, conversation(two, "github-copilot/chosen"));
+  await tick();
+  expect(fm.currentModel()).toBe("github-copilot/chosen");
+  void send;
+});
+
+it("opens the conversation for the label only when the saved files cannot say", async () => {
+  const fm = await import("../src/rebuild/firstmate.ts");
+  fake.event({ kind: "service-lost" });
+  const before = fake.sent.length;
+  fm.subscribeModel(() => {});
+  await tick();
+  const read = fake.sent.at(before)!;
+  expect(read.command).toBe("default-model");
+  reply(read.id, {
+    kind: "message",
+    text: JSON.stringify({ model: null, needsConversation: true }),
+  });
+  await tick();
+  expect(fake.sent.slice(before).map((c) => c.command)).toEqual([
+    "default-model",
+    "conversation",
+  ]);
 });

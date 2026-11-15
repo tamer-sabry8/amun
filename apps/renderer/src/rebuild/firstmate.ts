@@ -28,6 +28,7 @@ function resetContext(text: string) {
   contextGeneration++;
   session = null;
   priming = null;
+  reading = null;
   const pending = [...waiting.values()];
   waiting.clear();
   for (const done of pending) done({ kind: "message", text });
@@ -40,11 +41,13 @@ function listen() {
     const next = bridge.getSnapshot().workspace?.preferences.productId ?? null;
     if (next === product) return;
     product = next;
+    // Only a conversation that was already open is reopened; otherwise the
+    // label keeps coming from the saved default and no worker is started.
+    const wasOpen = !!session || !!priming || waiting.size > 0;
     resetContext(
       "The conversation changed. Read it before sending another message.",
     );
-    // Learn the new conversation's model right away instead of staying on Auto.
-    void prime();
+    void (wasOpen ? prime() : readSavedModel());
     for (const listener of modelListeners) listener();
   });
   bridge.onEvent((raw) => {
@@ -272,6 +275,34 @@ export async function askFirstmate(
 }
 
 let priming: Promise<void> | null = null;
+/** The default model read from Pi's saved settings, with no conversation open. */
+let savedModel: string | null = null;
+let reading: Promise<void> | null = null;
+/** Reads the saved default for the prompt box; falls back to the conversation only when it cannot know. */
+function readSavedModel(): Promise<void> {
+  if (session || priming) return priming ?? Promise.resolve();
+  if (reading) return reading;
+  const generation = contextGeneration;
+  reading = run("default-model", "")
+    .then((result) => {
+      if (generation !== contextGeneration || session) return;
+      let known: { model?: unknown; needsConversation?: unknown } = {};
+      try {
+        known = JSON.parse(String(result.text ?? "{}")) ?? {};
+      } catch {
+        known = { needsConversation: true };
+      }
+      if (known.needsConversation === true) return prime();
+      const next = typeof known.model === "string" ? known.model : null;
+      if (next === savedModel) return;
+      savedModel = next;
+      for (const listener of modelListeners) listener();
+    })
+    .finally(() => {
+      if (generation === contextGeneration) reading = null;
+    });
+  return reading;
+}
 /** Opens the conversation once, so the model in use is known before a message. */
 function prime() {
   if (session || priming) return priming ?? Promise.resolve();
@@ -340,28 +371,31 @@ export async function chooseModel(id: string): Promise<boolean> {
   for (const listener of modelListeners) listener();
   return true;
 }
-/** Listens for model changes; the first subscriber also primes the model. */
+/** Listens for model changes; the label is read from saved settings, not the worker. */
 export function subscribeModel(listener: () => void) {
   modelListeners.add(listener);
-  void prime();
+  void readSavedModel();
   return () => {
     modelListeners.delete(listener);
   };
 }
 /** The full id of the model in use, e.g. "github-copilot/claude-sonnet-5". */
-export const currentModel = () => session?.model ?? null;
+export const currentModel = () => session?.model ?? savedModel;
 
 /** The provider and model Firstmate is using, for the prompt box. */
 export function useFirstmateModel() {
-  const [model, setModel] = useState<string | null>(session?.model ?? null);
+  const [model, setModel] = useState<string | null>(currentModel());
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     const sync = () => {
-      if (mounted.current && (session?.model ?? null) !== model)
-        setModel(session?.model ?? null);
+      if (mounted.current && currentModel() !== model) setModel(currentModel());
     };
-    const timer = setInterval(sync, 1500);
+    const timer = setInterval(() => {
+      sync();
+      // A sign-in elsewhere changes what the saved files say.
+      if (!currentModel()) void readSavedModel();
+    }, 1500);
     const unsubscribe = subscribeModel(sync);
     return () => {
       mounted.current = false;

@@ -84,3 +84,29 @@ export async function selectCopilotModel(
     declaredTest,
   );
 }
+
+/**
+ * The model the prompt box can show without starting the conversation worker:
+ * the saved Copilot choice (or the pinned default) once Copilot is signed in.
+ * Declared test fixtures pick their own model, so only the conversation knows it.
+ */
+export function savedModelLabel(
+  settings: unknown,
+  credentialProviders: readonly string[],
+  declaredTest: readonly string[] = [],
+): { model: string | null; needsConversation: boolean } {
+  if (declaredTest.length) return { model: null, needsConversation: true };
+  if (!credentialProviders.includes(copilotProvider))
+    return { model: null, needsConversation: false };
+  const saved =
+    settings && typeof settings === "object"
+      ? (settings as Record<string, unknown>)
+      : {};
+  const model =
+    saved.defaultProvider === copilotProvider &&
+    typeof saved.defaultModel === "string" &&
+    /^[\w.:-]{1,128}$/.test(saved.defaultModel)
+      ? saved.defaultModel
+      : copilotDefaultModel;
+  return { model: `${copilotProvider}/${model}`, needsConversation: false };
+}

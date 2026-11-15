@@ -98,6 +98,11 @@ import { CouncilService } from "../../../packages/council/src/service.ts";
 import { gitFetcher } from "../../../packages/council/src/git-fetcher.ts";
 import { Room } from "../../../packages/council/src/room.ts";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import {
+  savedModelLabel,
+  testProviders,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import {
   councilCommand,
   planOpen,
@@ -2036,6 +2041,29 @@ process.parentPort?.on("message", (event) => {
         return;
       if (nativeRequest.success && nativeRequest.data.action === "run") {
         const request = nativeRequest.data;
+        if (request.command === "default-model") {
+          // The prompt box's label: read from Pi's saved files, no worker.
+          const read = (name: string) =>
+            readFile(join(process.env.AMUN_AUTH_ROOT!, name), "utf8")
+              .then((text) => JSON.parse(text) as unknown)
+              .catch(() => undefined);
+          void Promise.all([read("settings.json"), read("auth.json")]).then(
+            ([settings, credentials]) =>
+              sendNative(request.id, {
+                kind: "message",
+                text: JSON.stringify(
+                  savedModelLabel(
+                    settings,
+                    credentials && typeof credentials === "object"
+                      ? Object.keys(credentials)
+                      : [],
+                    testProviders(process.env),
+                  ),
+                ),
+              }),
+          );
+          return;
+        }
         if (request.command === "mcp" && request.argument === "obsidian") {
           const configured = authMetadata
             .list()
