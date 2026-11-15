@@ -1,6 +1,6 @@
 // Native Settings panels that replace the earlier embedded surfaces:
 // the skill library and encrypted backup controls.
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 
@@ -22,7 +22,15 @@ export function SkillsPanel({
   const [name, setName] = useState("release-notes"),
     [source, edit] = useState(template),
     [origin, setOrigin] = useState("Amun templates"),
-    [files, setFiles] = useState<File[]>([]);
+    [files, setFiles] = useState<File[]>([]),
+    [address, setAddress] = useState(""),
+    [looking, setLooking] = useState(false),
+    [removing, setRemoving] = useState<string | null>(null);
+  const notice = useSyncExternalStore(
+    bridge.subscribe,
+    () => bridge.getSnapshot().notice,
+    () => "",
+  );
   const send = (action: string, fields: Record<string, unknown>) =>
     bridge.send({
       version: 1,
@@ -33,6 +41,7 @@ export function SkillsPanel({
     });
   const reviews = context.skillLibrary?.reviews ?? [],
     installed = context.skillLibrary?.installed ?? [];
+  useEffect(() => setLooking(false), [reviews.length, notice]);
   return (
     <section aria-label="Skill library" style={{ display: "grid", gap: 14 }}>
       {reviews.length + installed.length > 0 ? (
@@ -97,15 +106,36 @@ export function SkillsPanel({
               <span>
                 <span className="tag good">Reviewed and on</span>
               </span>
-              <span>
-                <button
-                  className="btn quiet"
-                  onClick={() =>
-                    send("use-skill", { name: s.name, digest: s.digest })
-                  }
-                >
-                  Use in Firstmate’s draft
-                </button>
+              <span className="row wrap">
+                {removing === s.name ? (
+                  <>
+                    <span className="muted small">
+                      Remove {s.name}? Firstmate will stop using it.
+                    </span>
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        send("remove-skill", { name: s.name });
+                        setRemoving(null);
+                      }}
+                    >
+                      Yes, remove {s.name}
+                    </button>
+                    <button
+                      className="btn quiet"
+                      onClick={() => setRemoving(null)}
+                    >
+                      Keep {s.name}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="btn quiet"
+                    onClick={() => setRemoving(s.name)}
+                  >
+                    Remove {s.name}
+                  </button>
+                )}
               </span>
             </div>
           ))}
@@ -149,6 +179,39 @@ export function SkillsPanel({
               ))}
             </div>
           )}
+          <form
+            style={{ display: "grid", gap: 10 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              setLooking(true);
+              bridge.send({
+                version: 1,
+                kind: "skill-fetch",
+                productId: context.productId,
+                url: address,
+              });
+            }}
+          >
+            <label className="field">
+              Or get skills from a Git address
+              <input
+                type="url"
+                required
+                placeholder="https://github.com/owner/skills"
+                pattern="https://.*"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </label>
+            <span className="row">
+              <button className="btn" disabled={looking}>
+                Find skills
+              </button>
+            </span>
+            <p className="muted small" role="status" aria-live="polite">
+              {looking ? "Looking for skills…" : notice}
+            </p>
+          </form>
           <form
             style={{ display: "grid", gap: 10 }}
             onSubmit={(e) => {

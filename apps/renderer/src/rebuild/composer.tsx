@@ -1,7 +1,14 @@
 // Composer (Q27, Q70): `+` add things · `/` skills and commands · `@` agents
 // and work areas. Routing is automatic and shown as a label. The mic only
 // dictates into the box; nothing runs until the user sends.
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
+import { bridge } from "../bridge.ts";
 import {
   builtInCommands,
   composerTrigger,
@@ -88,6 +95,21 @@ export function Composer({
   onBoard?(url: string): void;
 }) {
   const commands = useFirstmateCommands();
+  const workspace = useSyncExternalStore(
+    bridge.subscribe,
+    () => bridge.getSnapshot().workspace,
+    () => null,
+  );
+  // Skills the owner has reviewed and approved in Settings.
+  const mySkills = skills
+    ? (workspace?.productContext?.skillLibrary?.installed ?? []).filter(
+        (skill) =>
+          ![...allCommands, ...firstmateCommands].some(
+            (command) => command.name === skill.name,
+          ),
+      )
+    : [];
+  const wantedSkill = useRef<string | null>(null);
   const [draft, setDraft] = useState(initial);
   const [own, setFiles] = useState<string[]>([]);
   const files = attached ?? own;
@@ -107,7 +129,17 @@ export function Composer({
   const options =
     trigger?.trigger === "/"
       ? matchCommands(
-          skills ? [...allCommands, ...firstmateCommands] : allCommands,
+          skills
+            ? [
+                ...allCommands,
+                ...firstmateCommands,
+                ...mySkills.map((skill) => ({
+                  name: skill.name,
+                  hint: "",
+                  description: "Your skill",
+                })),
+              ]
+            : allCommands,
           trigger.query,
         ).map((command) => ({
           key: command.name,
@@ -134,6 +166,24 @@ export function Composer({
     element.style.height = Math.min(element.scrollHeight, 200) + "px";
   }, [draft]);
   useEffect(() => () => recognition.current?.stop(), []);
+  useEffect(
+    () =>
+      bridge.onEvent((event) => {
+        const draftEvent = event as { kind?: string; text?: string };
+        if (
+          draftEvent.kind === "workspace-skill-draft" &&
+          wantedSkill.current &&
+          typeof draftEvent.text === "string"
+        ) {
+          wantedSkill.current = null;
+          setDraft(draftEvent.text);
+          setCaret(draftEvent.text.length);
+          setDismissed(true);
+          area.current?.focus();
+        }
+      }),
+    [],
+  );
   useEffect(() => {
     if (pickNonce) picker.current?.click();
   }, [pickNonce]);
@@ -151,6 +201,23 @@ export function Composer({
     if (!trigger) return;
     const start =
       trigger.trigger === "/" ? 0 : draft.slice(0, caret).lastIndexOf("@");
+    const skill =
+      trigger.trigger === "/"
+        ? mySkills.find((item) => "/" + item.name + " " === insert)
+        : undefined;
+    if (skill) {
+      // The approved instructions fill the box for the owner to read and edit;
+      // nothing is sent until they press Send.
+      wantedSkill.current = skill.name;
+      bridge.send({
+        version: 1,
+        kind: "workspace",
+        action: "use-skill",
+        productId: workspace!.productContext!.productId,
+        name: skill.name,
+        digest: skill.digest,
+      });
+    }
     const next = draft.slice(0, start) + insert + draft.slice(caret);
     change(next, start + insert.length);
     area.current?.focus();

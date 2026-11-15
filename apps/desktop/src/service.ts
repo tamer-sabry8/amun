@@ -207,7 +207,11 @@ const serviceStartedAt = new Date();
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 let syncingMemory = false;
-const workspaceService = new WorkspaceService(workspace, redactor);
+const workspaceService = new WorkspaceService(
+  workspace,
+  redactor,
+  join(workspaceRoot, "skills-store"),
+);
 // UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
 const workStore = new WorkStore(workspace, redactor);
 /** The Azure DevOps project a work area publishes to, with its connection. */
@@ -1580,6 +1584,10 @@ process.parentPort?.on("message", (event) => {
         .then((reply) => {
           if (!closed) port.postMessage(reply);
         });
+    } else if (message.data?.kind === "skill-fetch") {
+      void workspaceService.fetchSkills(message.data).then((reply) => {
+        if (!closed) port.postMessage(reply);
+      });
     } else if (message.data?.kind === "document-import") {
       void workspaceService.importDocument(message.data).then((reply) => {
         if (!closed) port.postMessage(reply);
