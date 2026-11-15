@@ -2,6 +2,7 @@
 // Decisions come from packages/domain/src/work; this file persists them.
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { WorkReminders } from "./work-reminders.ts";
 import { Redactor } from "../../security/src/redaction.ts";
 import {
   setupState,
@@ -57,7 +58,7 @@ export function withoutDeleted(snapshot: WorkSnapshot): WorkSnapshot {
   const dead = (id: unknown) => typeof id === "string" && gone.has(id);
   const kept = (ids: unknown) =>
     Array.isArray(ids) ? ids.filter((id) => !dead(id)) : ids;
-  const unlinkOnly = new Set(["council", "decisions"]);
+  const unlinkOnly = new Set(["council", "decisions", "reminders"]);
   const result: Record<string, unknown> = { ...snapshot };
   for (const [key, value] of Object.entries(snapshot)) {
     if (!Array.isArray(value)) continue;
@@ -93,7 +94,9 @@ export class WorkStore {
     this.db = db;
     this.redactor = redactor;
     this.now = now;
+    this.reminders = new WorkReminders(db, now, (text) => this.clean(text));
   }
+  readonly reminders: WorkReminders;
   private stamp() {
     return this.now().toISOString();
   }
@@ -387,6 +390,7 @@ export class WorkStore {
           raisedAt: String(row.raised_at),
           resolvedAt: (row.resolved_at as string | null) ?? null,
         })),
+        reminders: this.reminders.list(),
         rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map(
           (row) => ({
             id: String(row.work_area_id),
@@ -1314,6 +1318,17 @@ export class WorkStore {
         if (!changed) throw new WorkError("That blocker is already cleared.");
         return { ref: command.blockerId };
       }
+      case "reminder":
+        return this.reminders.request(command.text, command.workAreaId);
+      case "finish-reminder":
+        this.reminders.finish(command.reminderId);
+        return {};
+      case "snooze-reminder":
+        this.reminders.snooze(command.reminderId);
+        return {};
+      case "cancel-reminder":
+        this.reminders.cancel(command.reminderId);
+        return {};
       case "resolve-blocker":
         // Clearing twice changes nothing.
         this.run(
@@ -2242,13 +2257,8 @@ export class WorkStore {
           })),
         },
       };
-    if (step.step === "reminder_unavailable")
-      return {
-        ok: false,
-        message:
-          "Reminders aren't available in Amun yet, so nothing was created. Add it to your calendar for now.",
-        step,
-      };
+    if (step.step === "reminder")
+      return { ...this.reminders.request(command.text, null), step };
     if (step.step === "unreadable")
       return {
         ok: false,

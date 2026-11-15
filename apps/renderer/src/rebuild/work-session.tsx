@@ -81,6 +81,7 @@ import {
   findFact,
 } from "../../../../packages/domain/src/work/facts.ts";
 import { findNamed } from "../../../../packages/domain/src/work/flows.ts";
+import { reminderIntent } from "../../../../packages/domain/src/work/reminders.ts";
 import {
   agentNews,
   delegationTask,
@@ -1385,6 +1386,19 @@ export function WorkSession({
   const [pickNonce, setPickNonce] = useState(0);
   const send = async (typed: string) => {
     if ((!typed.trim() && !attachments.files.length) || !context) return;
+    // A reminder is kept by Amun and answered here; it is not sent on to
+    // Firstmate's model and creates no work.
+    if (!attachments.files.length && reminderIntent(typed)) {
+      const text = typed.trim();
+      await workAsync("message", { workAreaId: areaId, role: "you", text });
+      const result = await workAsync("reminder", { text, workAreaId: areaId });
+      await workAsync("message", {
+        workAreaId: areaId,
+        role: "firstmate",
+        text: result.message,
+      });
+      return;
+    }
     // Files in the draft travel with this message.
     const files = await attachments.take();
     const text =

@@ -165,6 +165,22 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await page.getByRole("menuitem", { name: "Upload files" }).click();
     expect((await chooser).isMultiple()).toBe(true);
     await expect(page.getByRole("menu", { name: "Add" })).toHaveCount(0);
+    // A reminder is kept, not filed as work, and comes back on Home.
+    await composer.fill("Remind me in 3 seconds to review the QA PRD");
+    await composer.press("Enter");
+    await expect(page.getByText(/^Okay\. I’ll remind you/)).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Choose where this belongs" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Reminder: review the QA PRD")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("button", {
+        name: "Mark the reminder “review the QA PRD” as done",
+      })
+      .click();
+    await expect(page.getByText("Reminder: review the QA PRD")).toHaveCount(0);
     await composer.fill("Create a product called Agentic Platform");
     await composer.press("Enter");
     await expect(

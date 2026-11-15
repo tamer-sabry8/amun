@@ -100,6 +100,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     attention: [],
     plans: [],
     blockers: [],
+    reminders: [],
     rfps: [],
     roadmap: [],
     sprints: [],

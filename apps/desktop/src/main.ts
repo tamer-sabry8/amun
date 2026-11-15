@@ -16,6 +16,7 @@ import {
   session,
   utilityProcess,
   MessageChannelMain,
+  Notification,
   type UtilityProcess,
 } from "electron";
 import { join } from "node:path";
@@ -69,6 +70,35 @@ function mcpModules() {
   return app.isPackaged
     ? join(process.resourcesPath, "mcp/node_modules")
     : join(app.getAppPath(), "../../runtime/mcp/node_modules");
+}
+function showReminders(list: unknown[]): void {
+  if (!Notification.isSupported()) return;
+  for (const item of list.slice(0, 5)) {
+    if (!item || typeof item !== "object") continue;
+    const { text, dueAt, missed } = item as Record<string, unknown>;
+    if (typeof text !== "string") continue;
+    const time =
+      typeof dueAt === "string"
+        ? new Date(dueAt).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "";
+    const note = new Notification({
+      title: missed ? `Reminder · missed at ${time}` : "Reminder",
+      body: text.slice(0, 200),
+    });
+    note.on("click", () => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) return;
+      if (window.isMinimized()) window.restore();
+      if (hideWindowsForTests({ isPackaged: app.isPackaged, env: process.env }))
+        return;
+      window.show();
+      window.focus();
+    });
+    note.show();
+  }
 }
 function startService(): void {
   if (quitting) return;
@@ -155,6 +185,17 @@ function startService(): void {
   );
   service = child;
   child.on("message", (message: unknown) => {
+    if (
+      message &&
+      typeof message === "object" &&
+      "kind" in message &&
+      message.kind === "reminders-due" &&
+      "reminders" in message &&
+      Array.isArray(message.reminders)
+    ) {
+      showReminders(message.reminders);
+      return;
+    }
     if (
       message &&
       typeof message === "object" &&

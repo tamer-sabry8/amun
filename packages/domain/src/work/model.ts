@@ -1,6 +1,7 @@
 // UX rebuild conceptual model (Amun_UX_Rebuild_Handoff §3, reconciled §3).
 // Groups scope everything; work areas, supporting records, objectives and
 // execution records stay distinct. Pure logic only: no storage, no I/O.
+import { reminderIntent, type ReminderIntent } from "./reminders.ts";
 
 export const workTypes = ["product", "project", "task", "rfp"] as const;
 export type WorkType = (typeof workTypes)[number];
@@ -195,7 +196,7 @@ export function linkRecord(
 export type IntakeStep =
   | { step: "ask_group" }
   | { step: "unreadable" }
-  | { step: "reminder_unavailable" }
+  | { step: "reminder"; intent: ReminderIntent }
   | { step: "save_record"; type: RecordType; ask: "link" }
   | { step: "define_objective" }
   | { step: "route_execution" }
@@ -225,15 +226,9 @@ export function groupMentioned(
   return named.length === 1 ? named[0]!.id : null;
 }
 
-const POLITE = String.raw`(?:(?:please|pls|can you|could you|would you|will you|kindly|hey|hi|ok(?:ay)?|and|then)[\s,]+)*`;
-const REMINDER_REQUEST = new RegExp(
-  String.raw`^\s*${POLITE}(?:(?:remind\s+me\b)|(?:set\s+(?:up\s+)?(?:an?\s+|another\s+)?(?:\w+\s+)?reminder\b)|(?:(?:create|add|make|schedule)\s+(?:me\s+)?(?:an?\s+)?reminder\b)|(?:reminder\s*:))`,
-  "i",
-);
-
-/** A request to be reminded later, which Amun cannot do yet. */
+/** A request to add, list or cancel reminders; none of them is work. */
 export function isReminderRequest(text: string): boolean {
-  return REMINDER_REQUEST.test(text);
+  return reminderIntent(text) !== null;
 }
 
 /** F1 intake: group first, then kind, then link. Never creates a duplicate silently. */
@@ -247,8 +242,8 @@ export function intake(input: {
 }): IntakeStep {
   const kind = classifyMaterial(input);
   if (kind.kind === "unreadable") return { step: "unreadable" };
-  if (!input.fileNames?.length && isReminderRequest(input.text))
-    return { step: "reminder_unavailable" };
+  const reminder = input.fileNames?.length ? null : reminderIntent(input.text);
+  if (reminder) return { step: "reminder", intent: reminder };
   if (input.groupId === null && input.groups.length !== 1)
     return { step: "ask_group" };
   const groupId = input.groupId ?? input.groups[0]!.id;

@@ -14,6 +14,7 @@ import {
   gateLabels,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
+import { reminderTime } from "../../../../packages/domain/src/work/reminders.ts";
 import { blockerLine } from "../../../../packages/domain/src/work/blockers.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
@@ -567,6 +568,10 @@ export function Home({
   });
   // Blockers wait here with the rest, each with its owner and age.
   const blocked = filter === "open" ? scopedBlockers(snapshot) : [];
+  const reminders =
+    filter === "open"
+      ? snapshot.reminders.filter((item) => item.state === "due")
+      : [];
   const openRow = (id: string) => {
     const item = snapshot.attention.find((entry) => entry.id === id);
     onOpen(item?.workAreaId ?? null);
@@ -620,7 +625,7 @@ export function Home({
       />
     </>
   );
-  if (view.welcome)
+  if (view.welcome && !reminders.length)
     return (
       <div className="rb-scroll">
         <div className="rb-page">
@@ -690,7 +695,9 @@ export function Home({
         <section className="rb-panel" aria-labelledby="rb-att-h">
           <header>
             <h2 id="rb-att-h">Needs your attention</h2>
-            <span className="count">{view.rows.length + blocked.length}</span>
+            <span className="count">
+              {view.rows.length + blocked.length + reminders.length}
+            </span>
             <span className="grow" />
             {kinds && (
               <button className="btn quiet" onClick={() => setKinds(null)}>
@@ -746,6 +753,41 @@ export function Home({
               </div>
             </div>
           ))}
+          {reminders.map((item) => (
+            <div className="rb-att" key={item.id}>
+              <div>
+                <div className="label">
+                  {item.missedAt
+                    ? "Missed at " + reminderTime(item.missedAt, new Date(now))
+                    : "Now"}
+                  {item.workAreaId &&
+                    " · " + areaOf(snapshot, item.workAreaId)?.name}
+                </div>
+                <div className="title">Reminder: {item.text}</div>
+              </div>
+              <div className="row">
+                <button
+                  className="btn"
+                  aria-label={`Mark the reminder “${item.text}” as done`}
+                  onClick={() =>
+                    work("finish-reminder", { reminderId: item.id })
+                  }
+                >
+                  Done
+                </button>
+                <button
+                  className="btn quiet"
+                  aria-label={`Snooze the reminder “${item.text}” for 10 minutes`}
+                  onClick={() => {
+                    work("snooze-reminder", { reminderId: item.id });
+                    onNote("Okay. I’ll remind you again in 10 minutes.");
+                  }}
+                >
+                  Snooze 10 minutes
+                </button>
+              </div>
+            </div>
+          ))}
           {rows.length ? (
             rows.map((row) => (
               <Row
@@ -764,7 +806,7 @@ export function Home({
                 onAccepted={onNote}
               />
             ))
-          ) : blocked.length ? null : (
+          ) : blocked.length || reminders.length ? null : (
             <p className="rb-empty">
               {filter === "open"
                 ? "Nothing needs you right now."

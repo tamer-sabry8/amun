@@ -275,6 +275,19 @@ export const workSnapshot = z.strictObject({
       resolvedAt: stamp.nullable(),
     }),
   ),
+  reminders: z
+    .array(
+      z.strictObject({
+        id,
+        text: z.string(),
+        dueAt: stamp,
+        workAreaId: id.nullable(),
+        state: z.enum(["scheduled", "due", "done", "cancelled"]),
+        /** The time it was due, when Amun was closed or asleep then. */
+        missedAt: stamp.nullable(),
+      }),
+    )
+    .default([]),
   rfps: z.array(
     z.strictObject({
       id,
@@ -632,6 +645,10 @@ export const workCommand = z.discriminatedUnion("action", [
   }),
   act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
   act("resolve-blocker", { blockerId: id }),
+  act("reminder", { text: z.string().max(16384), workAreaId: id.nullable() }),
+  act("finish-reminder", { reminderId: id }),
+  act("snooze-reminder", { reminderId: id }),
+  act("cancel-reminder", { reminderId: id }),
   act("save-rfp", {
     areaId: id.optional(),
     groupId: id.nullable(),

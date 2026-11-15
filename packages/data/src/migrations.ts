@@ -1046,4 +1046,18 @@ ALTER TABLE library_outputs ADD COLUMN approved_at TEXT;`,
   // 36 · An objective can carry a due date. Its title stays the existing
   // metric column, and an unknown baseline stays NULL (never invented).
   `ALTER TABLE work_objectives ADD COLUMN due_date TEXT;`,
+  // 37 · Reminders: a time, some words and the work area it was asked in, if
+  // any. A reminder is never a work item. One that came due while Amun was
+  // closed or asleep keeps the time it was due (missed_at).
+  `CREATE TABLE work_reminders (
+  id TEXT PRIMARY KEY NOT NULL,
+  text TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  work_area_id TEXT REFERENCES work_areas(id),
+  state TEXT NOT NULL CHECK (state IN ('scheduled','due','done','cancelled')),
+  missed_at TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE INDEX work_reminders_due ON work_reminders(state,due_at);`,
 ] as const;

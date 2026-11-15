@@ -614,8 +614,11 @@ let togglingCalm = false;
 let backupBusy = false;
 const reminderListeners = new Set<() => void>();
 function checkReminders(missed: boolean) {
-  if (workspaceService.reminders.deliver(Date.now(), missed))
+  const due = workStore.reminders.deliver(missed);
+  if (workspaceService.reminders.deliver(Date.now(), missed) || due.length)
     for (const refresh of reminderListeners) refresh();
+  if (due.length)
+    process.parentPort?.postMessage({ kind: "reminders-due", reminders: due });
 }
 checkReminders(true);
 setInterval(() => checkReminders(false), 1000).unref();
@@ -690,7 +693,10 @@ process.parentPort?.on("message", (event) => {
 
   const port = event.ports[0];
   if (!port) return;
-  const refreshReminders = () => port.postMessage(workspaceService.snapshot());
+  const refreshReminders = () => {
+    port.postMessage(workspaceService.snapshot());
+    port.postMessage(workStore.snapshot());
+  };
   reminderListeners.add(refreshReminders);
   port.once("close", () => reminderListeners.delete(refreshReminders));
   let notionPreview: { title: string; text: string; at: number } | undefined;
