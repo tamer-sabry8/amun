@@ -5,6 +5,7 @@ type Pr = {
   pullRequestId: number;
   title: string;
   description?: string;
+  createdBy?: { displayName?: string };
   status: string;
   mergeStatus: string;
   isDraft?: boolean;
@@ -130,6 +131,10 @@ export function azurePulls(
       return rows.map((x) => ({
         number: x.pullRequestId,
         title: x.title,
+        ...(x.createdBy?.displayName
+          ? { author: x.createdBy.displayName }
+          : {}),
+        draft: x.isDraft === true,
         url:
           collection +
           e(project) +

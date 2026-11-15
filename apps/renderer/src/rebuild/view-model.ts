@@ -304,6 +304,7 @@ export type AmunAction =
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
   | { do: "client"; name: string | null }
+  | { do: "repo"; url: string }
   | {
       do: "objective";
       title: string;
@@ -427,6 +428,23 @@ function action(raw: unknown): AmunAction | null {
           ? input.name.replace(/\s+/g, " ").trim().slice(0, 200)
           : null;
       return name === null ? null : { do: "client", name: name || null };
+    }
+    case "repo": {
+      // Only a plain https address: no sign-in details, query or fragment.
+      try {
+        const url = new URL(typeof input.url === "string" ? input.url : "");
+        if (
+          url.protocol !== "https:" ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash
+        )
+          return null;
+        return { do: "repo", url: url.href.replace(/\/$/, "").slice(0, 2000) };
+      } catch {
+        return null;
+      }
     }
     case "objective": {
       // Only what the owner stated: a missing or unreadable value stays unknown.
@@ -689,6 +707,7 @@ export const amunProtocol = [
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
+  '{"do":"repo","url":"https://github.com/owner/name"} connects the repository this project\'s code lives in, straight away, when the owner tells you which repository to use. It only lets Amun read its pull requests: nothing is merged or changed there, and merging always needs the owner\'s approval. Say in one short line that it is connected.',
   '{"do":"objective","title":"what we are measuring or aiming for","baseline":number,"target":number,"due":"YYYY-MM-DD","areas":["names of other work areas in this group to link"]} saves an objective on this Mac straight away when the owner writes "Objective: …", and links it to this work area plus any areas they name. Leave baseline, target and due out unless the owner gave them: never guess a baseline or a date; a missing baseline shows as unknown. {"do":"objective-link","objective":"words from its title","areas":["work area names"]} links an existing objective to more work areas in this group when the owner asks. Neither needs approval or is a plan, and neither changes anything outside Amun. Say in one short line what you saved or linked.',
   '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
   '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',

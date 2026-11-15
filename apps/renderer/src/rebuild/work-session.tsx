@@ -32,6 +32,7 @@ import { FirstmateMark } from "./firstmate-mark.tsx";
 import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
+import { PullRequests } from "./pull-requests.tsx";
 import { takeSprintContext } from "./sprint-context.ts";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
@@ -121,6 +122,7 @@ export type PaneTarget =
   | { kind: "plan"; id: string }
   | { kind: "prd" }
   | { kind: "backlog" }
+  | { kind: "pulls" }
   | { kind: "browser"; url: string }
   | null;
 
@@ -1192,6 +1194,27 @@ export function WorkSession({
       // Inside Amun and undone by setting it again; only projects have one.
       if (context?.area.type === "project")
         work("update-area", { areaId, patch: { client: proposed.name } });
+    } else if (proposed.do === "repo") {
+      // Read-only mapping on this Mac; merging stays a governed plan.
+      const pid = context?.area.productId ?? null;
+      const mapped = workspace?.productContext;
+      if (pid && mapped?.productId === pid) {
+        if (!mapped.sources.some((s) => s.reference === proposed.url))
+          bridge.send({
+            version: 1,
+            kind: "workspace",
+            action: "map-source",
+            productId: pid,
+            sourceKind: "repo",
+            title: proposed.url.split("/").slice(-2).join("/").slice(0, 512),
+            reference: proposed.url,
+          });
+      } else
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: "Open Pull requests once, then ask me again to connect the repository.",
+        });
     } else if (proposed.do === "objective" || proposed.do === "objective-link")
       void (async () => {
         // Inside Amun: saved at once, and its links stay in this group.
@@ -1736,7 +1759,9 @@ export function WorkSession({
           ? "PRD"
           : pane?.kind === "backlog"
             ? "Backlog"
-            : (output?.title ?? "");
+            : pane?.kind === "pulls"
+              ? "Pull requests"
+              : (output?.title ?? "");
   const newOutput = async () => {
     const result = await workAsync("save-output", {
       groupId: area.groupId,
@@ -1939,6 +1964,12 @@ export function WorkSession({
                 onClick={() => onPane({ kind: "backlog" })}
               >
                 Backlog
+              </button>
+              <button
+                className="btn quiet"
+                onClick={() => onPane({ kind: "pulls" })}
+              >
+                Pull requests
               </button>
             </>
           )}
@@ -2878,6 +2909,18 @@ export function WorkSession({
                   citations={citations}
                 />
               )}
+              {pane.kind === "pulls" &&
+                (workspace?.productContext?.productId === area.productId ? (
+                  <PullRequests
+                    key={workspace.productContext.productId}
+                    context={workspace.productContext}
+                    onAsk={(text) => setSeed({ text, nonce: Date.now() })}
+                  />
+                ) : (
+                  <p className="muted" role="status">
+                    Opening…
+                  </p>
+                ))}
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
                   <div className="rb-embedded">
