@@ -74,7 +74,27 @@ function listen() {
     done(event.data.result);
   });
 }
-function run(command: string, argument: string) {
+/** The service runs one native operation at a time and refuses the rest with this text. */
+const nativeBusy = "Wait for the current native operation.";
+/**
+ * Runs a native command. A refusal because another operation is still out
+ * means the command never ran, so it is offered again rather than reported as
+ * a failure: a message must not be lost because the machine was slow.
+ */
+async function run(command: string, argument: string) {
+  const until = Date.now() + 150_000;
+  for (;;) {
+    const result = await runOnce(command, argument);
+    if (
+      result.kind !== "message" ||
+      result.text !== nativeBusy ||
+      Date.now() > until
+    )
+      return result;
+    await new Promise((done) => setTimeout(done, 400));
+  }
+}
+function runOnce(command: string, argument: string) {
   listen();
   return new Promise<{ kind: string; [key: string]: unknown }>((resolve) => {
     const id = crypto.randomUUID();

@@ -77,6 +77,10 @@ function startService(): void {
         AMUN_E2E_TEST_PROVIDERS: app.isPackaged
           ? ""
           : (process.env.AMUN_E2E_TEST_PROVIDERS ?? ""),
+        // Test-only delay for native turns; never passed on packaged runs.
+        AMUN_E2E_SLOW_NATIVE_MS: app.isPackaged
+          ? ""
+          : (process.env.AMUN_E2E_SLOW_NATIVE_MS ?? ""),
         AMUN_APP_VERSION: app.getVersion(),
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),

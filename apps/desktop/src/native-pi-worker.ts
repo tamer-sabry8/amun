@@ -600,6 +600,16 @@ process.stdin.on("data", (chunk: string) => {
           await resourceDirectories(root!);
           await reviewed!.refresh();
         }
+        {
+          // Test-only: the app passes this on unpackaged runs only.
+          const slow = Number(process.env.AMUN_E2E_SLOW_NATIVE_MS);
+          if (
+            slow > 0 &&
+            (command.command === "conversation" ||
+              command.command === "conversation-send")
+          )
+            await new Promise((done) => setTimeout(done, slow));
+        }
         if (command.command === "conversation-send") {
           if (testProviders(process.env).length > 0 && !authenticatedModel())
             throw new CopilotUnavailable(

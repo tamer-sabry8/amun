@@ -1172,6 +1172,16 @@ export function WorkSession({
       return;
     }
     inFlight.add(areaId);
+    // A message that is out stays saved until Firstmate has answered, so a
+    // slow turn, a reload or a retry can never leave the newest one unsaved.
+    if (!retry)
+      holdMessage(areaId, {
+        text,
+        scoped,
+        activityId,
+        image,
+        reason: "busy" as const,
+      });
     setProblem("");
     setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
@@ -1226,7 +1236,7 @@ export function WorkSession({
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
       // Only the message this turn carried leaves the wait; a newer one stays.
-      if (retry && heldMessage(areaId)?.scoped === scoped) {
+      if (heldMessage(areaId)?.scoped === scoped) {
         releaseMessage(areaId);
         setWaiting(null);
       }
@@ -1265,6 +1275,8 @@ export function WorkSession({
       return;
     } else {
       setProblem(turn.reason);
+      // This turn failed for a reason other than a provider: it is not kept.
+      if (heldMessage(areaId)?.scoped === scoped) releaseMessage(areaId);
       // A message queued behind this failed turn is still sent.
       if (heldMessage(areaId)) retryWaiting();
     }
