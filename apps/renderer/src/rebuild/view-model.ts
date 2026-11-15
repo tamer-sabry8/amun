@@ -404,19 +404,28 @@ export function agentNews(
   messages: { role: string; text: string; card?: unknown }[],
 ) {
   const last = messages.findLastIndex((message) => message.role === "you");
-  const fresh = messages
-    .slice(last + 1)
-    .filter(
-      (message) =>
-        (message.card as { kind?: unknown } | null | undefined)?.kind ===
-        "agent-result",
-    )
+  const after = messages.slice(last + 1);
+  const kind = (message: { card?: unknown }) =>
+    (message.card as { kind?: unknown } | null | undefined)?.kind;
+  const fresh = after
+    .filter((message) => kind(message) === "agent-result")
     .map((message) => message.text.slice(0, 12000));
-  return fresh.length
-    ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
+  const refused = after
+    .filter((message) => kind(message) === "plan-refused")
+    .map((message) => message.text.slice(0, 2000));
+  const refusals = refused.length
+    ? "[Amun refused the plan you just proposed, so no plan exists and nothing is waiting for approval. The owner has been told: " +
+      refused.join(" ") +
+      " Correct anything you said about that plan.]\n\n"
+    : "";
+  return (
+    refusals +
+    (fresh.length
+      ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
         fresh.join("\n\n---\n\n") +
         "\n[End of what your agents finished.]\n\n"
-    : "";
+      : "")
+  );
 }
 /**
  * What this kind of work is for. An RFP in Amun is tracked (client, owner,
@@ -429,12 +438,14 @@ export function workTypeGuard(
     client: string;
     deadline: string | null;
     responseOwner: string | null;
+    accountOwner?: string | null;
+    presales?: string | null;
     stage: string;
   } | null,
 ) {
   if (type !== "rfp") return "";
   const known = record
-    ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, stage ${record.stage}.`
+    ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, Sales or account owner ${record.accountOwner || "not set"}, Pre-sales contact ${record.presales || "not set"}, stage ${record.stage}.`
     : "";
   const authority = record
     ? " This record is authoritative for this work area only: never use or offer client, deadline, owner or stage values from another work area or an earlier conversation; if they differ from the record, the record wins."

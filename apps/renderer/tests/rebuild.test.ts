@@ -1010,6 +1010,27 @@ describe("what Firstmate is told about its agents' work", () => {
     text,
     card: { kind: "agent-result", agent: "QA", title: "Check the flow" },
   });
+  it("is told when Amun refused its plan, once", () => {
+    const refused = {
+      role: "firstmate",
+      text: "I can't update that page.",
+      card: { kind: "plan-refused" },
+    };
+    const news = agentNews([
+      { role: "you", text: "Update the page" },
+      { role: "firstmate", text: "The plan below updates it.", card: null },
+      refused,
+    ]);
+    expect(news).toContain("refused the plan");
+    expect(news).toContain("I can't update that page.");
+    expect(
+      agentNews([
+        { role: "you", text: "Update the page" },
+        refused,
+        { role: "you", text: "Ok" },
+      ]),
+    ).toBe("");
+  });
   it("gets results finished since the owner last wrote, once", () => {
     const news = agentNews([
       { role: "you", text: "Have the flow checked" },
@@ -1125,10 +1146,14 @@ describe("what Firstmate is told about where it runs and what an RFP is", () => 
       client: "QA Sandbox",
       deadline: "2026-12-01T00:00:00.000Z",
       responseOwner: null,
+      accountOwner: "Sara",
+      presales: "",
       stage: "received",
     });
     expect(guard).toContain("client QA Sandbox, deadline 2026-12-01");
     expect(guard).toContain("response owner not set");
+    expect(guard).toContain("Sales or account owner Sara");
+    expect(guard).toContain("Pre-sales contact not set");
   });
   it("gives each turn only its own area's record", () => {
     const rec = (client: string, deadline: string, stage: string) => ({

@@ -848,17 +848,28 @@ export function WorkSession({
         workAreaIds: [areaId],
       });
     else if (proposed.do === "plan")
-      work("propose-plan", {
-        groupId: null,
-        workAreaId: areaId,
-        planKind: proposed.planKind,
-        destination: proposed.destination,
-        summary: proposed.summary,
-        items: proposed.items.map((item) => ({
-          id: crypto.randomUUID(),
-          ...item,
-        })),
-      });
+      void (async () => {
+        const result = await workAsync("propose-plan", {
+          groupId: null,
+          workAreaId: areaId,
+          planKind: proposed.planKind,
+          destination: proposed.destination,
+          summary: proposed.summary,
+          items: proposed.items.map((item) => ({
+            id: crypto.randomUUID(),
+            ...item,
+          })),
+        });
+        // A refused plan never exists, so say so here; Firstmate is told with
+        // the owner's next message (see agentNews).
+        if (!result.ok)
+          work("message", {
+            workAreaId: areaId,
+            role: "firstmate",
+            text: result.message,
+            card: { kind: "plan-refused" },
+          });
+      })();
     else if (proposed.do === "question" || proposed.do === "offer")
       work("attention", {
         attentionKind: proposed.do,
