@@ -156,6 +156,18 @@ export class ActionStore {
       })
       .immediate();
   }
+  /** The owner declined: the action can never run. */
+  reject(id: string): void {
+    this.db
+      .transaction(() => {
+        const state = transition(this.read(id).state, "rejected");
+        this.db.prepare("UPDATE actions SET state=? WHERE id=?").run(state, id);
+        this.db
+          .prepare("UPDATE outbox SET state='rejected' WHERE action_id=?")
+          .run(id);
+      })
+      .immediate();
+  }
   private invalidate(id: string): void {
     this.db
       .prepare(

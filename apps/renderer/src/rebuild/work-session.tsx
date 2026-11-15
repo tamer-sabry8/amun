@@ -1392,6 +1392,7 @@ export function WorkSession({
         title: proposed.title,
         task: delegationTask(proposed.task, lastRequest.current),
         ...(proposed.acceptance ? { acceptance: true } : {}),
+        ...(proposed.repo ? { repo: proposed.repo } : {}),
       });
     else if (proposed.do === "delete")
       // Deleting is the owner's call: Firstmate can only ask.

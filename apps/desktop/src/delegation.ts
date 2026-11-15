@@ -52,8 +52,32 @@ export interface DelegationDeps {
   deliver(harness: Harness, id: string, text: string): Promise<void>;
   /** Removes secrets before text is shown or stored. */
   redact(text: string): string;
+  /**
+   * Code changes in a connected repository. Amun keeps its own copy of the
+   * repository; the agent works only in the worktree it is given and never
+   * commits, pushes or opens anything. The owner reviews the exact change.
+   */
+  code?: {
+    prepare(input: {
+      workAreaId: string;
+      agent: string;
+      title: string;
+      repo: string;
+    }): Promise<CodeWorktree | { refusal: string }>;
+    open(id: string): Promise<CodeWorktree>;
+    /** The agent finished: raises the review for the owner. */
+    submit(id: string, summary: string): Promise<void>;
+  };
   pollMs?: number;
   timeoutMs?: number;
+}
+export interface CodeWorktree {
+  id: string;
+  worktree: string;
+  branch: string;
+  base: string;
+  /** owner/name */
+  repo: string;
 }
 interface Job {
   id: string;
@@ -71,6 +95,8 @@ interface Job {
    * before this was tracked.
    */
   saved?: boolean;
+  /** The job changes code in Amun's own copy of a repository. */
+  code?: CodeWorktree;
 }
 /** The answer that lets a worker use its own folder. */
 export const allowWorker = "Allow it";
@@ -92,6 +118,8 @@ export function agentBrief(input: {
   result: string;
   sources?: string;
   acceptance?: boolean | undefined;
+  code?: CodeWorktree | undefined;
+  revise?: string | undefined;
 }) {
   const profile = agentProfile(input.agent);
   return [
@@ -101,6 +129,14 @@ export function agentBrief(input: {
     "",
     "## The job",
     input.task,
+    ...(input.revise
+      ? [
+          "",
+          "## The owner asked for changes",
+          "You already changed this working copy. The owner read it and asked for this to be different. Update the files in place:",
+          input.revise,
+        ]
+      : []),
     "",
     "## What it is for",
     `${input.area.type}: ${input.area.name}` +
@@ -129,7 +165,17 @@ export function agentBrief(input: {
     "",
     "## Rules",
     "- You report to Firstmate. Never address the owner.",
-    "- Produce the deliverable only. Do not write to Azure DevOps, Notion, GitHub or any repository, and do not change any other file.",
+    ...(input.code
+      ? [
+          `- Work only inside ${JSON.stringify(input.code.worktree)}. It is Amun's own copy of ${input.code.repo}, on the new branch ${input.code.branch}. Change files there and nowhere else on this Mac.`,
+          "- Do not run git commit, push, merge, rebase, branch or any command that talks to GitHub, and do not edit anything inside a .git folder. Amun commits and opens the pull request only after the owner has read your exact change.",
+          "- Do not add links to files outside the project, binary files or submodules.",
+          "- Make the smallest change that does the job and keep the project's existing style. Run the project's own tests if it has them and say what you ran.",
+          '- In the result, start with one line "Title: <a short, plain pull request title>", then say in a few plain sentences what you changed and why.',
+        ]
+      : [
+          "- Produce the deliverable only. Do not write to Azure DevOps, Notion, GitHub or any repository, and do not change any other file.",
+        ]),
     "- If something you need is missing, say what is missing in the result instead of guessing.",
     ...(input.acceptance
       ? [
@@ -180,6 +226,10 @@ export class Delegations {
     title: string;
     task: string;
     acceptance?: boolean | undefined;
+    /** A connected repository (its address) in which the job changes code. */
+    repo?: string | undefined;
+    /** Asks for changes to a code change already made in a worktree. */
+    revise?: { codeId: string; note: string } | undefined;
   }) {
     const area = this.deps.area(input.workAreaId);
     if (!area) return null;
@@ -208,6 +258,40 @@ export class Delegations {
       );
       return null;
     }
+    let code: CodeWorktree | undefined;
+    if (input.revise || input.repo) {
+      if (!this.deps.code) {
+        this.say(
+          input.workAreaId,
+          `I could not hand this to ${agent}: changing code in a repository is not available here.`,
+        );
+        return null;
+      }
+      try {
+        const opened = input.revise
+          ? await this.deps.code.open(input.revise.codeId)
+          : await this.deps.code.prepare({
+              workAreaId: input.workAreaId,
+              agent,
+              title: input.title,
+              repo: input.repo!,
+            });
+        if ("refusal" in opened) {
+          this.say(input.workAreaId, opened.refusal);
+          return null;
+        }
+        code = opened;
+      } catch (error) {
+        this.say(
+          input.workAreaId,
+          `I could not set up a working copy for ${agent}. ` +
+            (error instanceof Error && error.message
+              ? this.deps.redact(error.message)
+              : "Nothing was changed."),
+        );
+        return null;
+      }
+    }
     const id = randomUUID();
     const dir = this.dir(id);
     const result = join(dir, "result.md");
@@ -220,6 +304,8 @@ export class Delegations {
         area,
         result,
         ...(input.acceptance ? { acceptance: true } : {}),
+        code,
+        revise: input.revise?.note,
         sources: this.deps.sources?.(input.workAreaId, input.task) ?? "",
       }),
       { mode: 0o600, flag: "wx" },
@@ -243,6 +329,7 @@ export class Delegations {
       activityId: activity.ref,
       startedAt: Date.now(),
       ...(input.acceptance ? { acceptance: true } : {}),
+      ...(code ? { code } : {}),
       state: "sent",
     };
     await this.save(job);
@@ -306,7 +393,10 @@ export class Delegations {
       job.harness,
       job.id,
       `Job from Firstmate for the ${job.agent} agent. Read ${JSON.stringify(join(dir, "brief.md"))}. ` +
-        `Write ONLY ${JSON.stringify(join(dir, "result.md"))} as a private mode 0600 Markdown file, then create an empty file ${JSON.stringify(join(dir, "done"))}. Do not change any other file.`,
+        `Write ONLY ${JSON.stringify(join(dir, "result.md"))} as a private mode 0600 Markdown file, then create an empty file ${JSON.stringify(join(dir, "done"))}. ` +
+        (job.code
+          ? `Change files only inside ${JSON.stringify(job.code.worktree)}; do not commit or push.`
+          : "Do not change any other file."),
     );
     return true;
   }
@@ -502,6 +592,22 @@ export class Delegations {
         silent: true,
       });
     if (!this.deps.area(job.workAreaId)) return;
+    if (text && state === "done" && job.code && this.deps.code) {
+      // The change goes to the owner as an exact review, not to the Library.
+      try {
+        await this.deps.code.submit(job.code.id, text);
+        return;
+      } catch (error) {
+        this.say(
+          job.workAreaId,
+          `${job.agent} finished, but I could not prepare the change for your review. ` +
+            (error instanceof Error && error.message
+              ? this.deps.redact(error.message)
+              : "Nothing was sent."),
+        );
+        return;
+      }
+    }
     if (text) {
       // Kept as a draft beside the conversation, and said in the chat. The
       // card marks it as an agent's work, so Firstmate is told about it with

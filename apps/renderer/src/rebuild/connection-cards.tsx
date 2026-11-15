@@ -8,6 +8,8 @@ import {
   useSyncExternalStore,
   type FormEvent,
 } from "react";
+import { nativePiEvent } from "../../../../packages/contracts/src/native-pi.ts";
+import { copyText } from "./clipboard.ts";
 import { obsidianEndpoints } from "../../../../packages/contracts/src/auth.ts";
 import { bridge } from "../bridge.ts";
 import { Icon } from "../icons.tsx";
@@ -34,7 +36,8 @@ const services: {
   {
     kind: "github",
     name: "GitHub",
-    purpose: "Read repositories and pull requests.",
+    purpose:
+      "Read repositories and pull requests, and open pull requests once you approve a code change.",
     defaultUrl: "https://github.com",
   },
   {
@@ -249,6 +252,121 @@ function NotionControls({ status }: { status: string | undefined }) {
   );
 }
 
+// Reconnect GitHub with permission to change code in private repositories.
+// Same device sign-in steps as before: copy the code, open the browser,
+// check, or cancel.
+function GithubAccess({ onDone }: { onDone: () => void }) {
+  const [code, setCode] = useState<string | null>(null),
+    [text, setText] = useState(""),
+    [busy, setBusy] = useState(false);
+  const request = useRef("");
+  useEffect(
+    () =>
+      bridge.onEvent((value) => {
+        const event = nativePiEvent.safeParse(value);
+        if (!event.success || event.data.id !== request.current) return;
+        const result = event.data.result;
+        setBusy(false);
+        if (result.kind === "github-device") {
+          setCode(result.code);
+          return;
+        }
+        if (result.kind === "message") {
+          setText(result.text);
+          setCode(null);
+          onDone();
+          auth({ action: "list" });
+        }
+      }),
+    [onDone],
+  );
+  const run = (argument: string) => {
+    const id = crypto.randomUUID();
+    request.current = id;
+    setBusy(true);
+    bridge.send({
+      version: 1,
+      kind: "native-pi",
+      action: "run",
+      id,
+      command: "mcp",
+      argument,
+    });
+  };
+  if (code === null)
+    return (
+      <span className="row wrap" style={{ gridColumn: "1 / -1" }}>
+        <button
+          className="btn quiet"
+          disabled={busy}
+          onClick={() => run("github-repo-connect")}
+        >
+          Reconnect GitHub with access to private repositories
+        </button>
+        <span className="muted small" role="status" aria-live="polite">
+          {text}
+        </span>
+      </span>
+    );
+  return (
+    <section
+      className="rb-inline"
+      aria-label="GitHub sign-in code"
+      style={{ gridColumn: "1 / -1" }}
+    >
+      <label className="field">
+        <span>Code to enter on GitHub</span>
+        <input
+          autoFocus
+          value={code}
+          readOnly
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      </label>
+      <span className="note">
+        Copy this code, open GitHub in your browser and paste it on the device
+        page.
+      </span>
+      <span className="row wrap">
+        <button
+          className="btn"
+          onClick={() =>
+            void copyText(code).then((ok) =>
+              setText(ok ? "Code copied." : "Couldn’t copy. Select the code."),
+            )
+          }
+        >
+          Copy code
+        </button>
+        <button
+          className="btn quiet"
+          disabled={busy}
+          onClick={() => run("github-open")}
+        >
+          Open GitHub
+        </button>
+        <button
+          className="btn quiet"
+          disabled={busy}
+          onClick={() => run("github-finish")}
+        >
+          I’ve entered the code
+        </button>
+        <button
+          className="btn quiet"
+          disabled={busy}
+          onClick={() => run("github-cancel")}
+        >
+          Cancel
+        </button>
+      </span>
+      <span className="muted small" role="status" aria-live="polite">
+        {text}
+      </span>
+    </section>
+  );
+}
+
 export function ConnectionCards() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const [adding, setAdding] = useState<Kind | null>(null);
@@ -413,6 +531,9 @@ export function ConnectionCards() {
                   )}
                 </div>
               ))
+            )}
+            {service.kind === "github" && (
+              <GithubAccess onDone={() => undefined} />
             )}
             {!notion && adding === service.kind && (
               <SaveForm

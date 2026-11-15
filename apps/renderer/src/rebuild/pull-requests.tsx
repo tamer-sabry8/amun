@@ -5,6 +5,7 @@ import {
   type WorkspaceSnapshot,
 } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import { CodeChangeCards } from "./code-change-cards.tsx";
 import {
   changeSummary,
   checksLabel,
@@ -197,6 +198,7 @@ export function PullRequests({
           </button>
         </div>
         {statusLine}
+        <CodeChangeCards product={product} onOpened={() => send("list")} />
         <div className="rb-rows">
           {rows.map((row) => {
             const checks = checksLabel(row.checks);

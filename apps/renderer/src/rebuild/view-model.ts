@@ -330,6 +330,7 @@ export type AmunAction =
       title: string;
       task: string;
       acceptance?: boolean;
+      repo?: string;
     };
 
 const text = (value: unknown, max = 4000) =>
@@ -499,6 +500,11 @@ function action(raw: unknown): AmunAction | null {
       // Only an agent from the catalogue: a name the model made up is dropped.
       const agent = agentProfile(text(input.agent, 80) ?? "")?.name;
       const task = text(input.task, 8000);
+      const repo = /^https:\/\/[^\s"']{1,500}$/.test(
+        text(input.repo, 512) ?? "",
+      )
+        ? text(input.repo, 512)!
+        : null;
       return agent && task
         ? {
             do: "delegate",
@@ -506,6 +512,7 @@ function action(raw: unknown): AmunAction | null {
             title: text(input.title, 120) ?? task.slice(0, 80),
             task,
             ...(input.acceptance === true ? { acceptance: true } : {}),
+            ...(repo ? { repo } : {}),
           }
         : null;
     }
@@ -763,11 +770,11 @@ export const amunProtocol = [
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
-  '{"do":"repo","url":"https://github.com/owner/name"} connects the repository this project\'s code lives in, straight away, when the owner tells you which repository to use. It only lets Amun read its pull requests: nothing is merged or changed there, and merging always needs the owner\'s approval. Say in one short line that it is connected.',
+  '{"do":"repo","url":"https://github.com/owner/name"} connects the repository this project\'s code lives in, straight away, when the owner tells you which repository to use. It lets Amun read its pull requests. Your agents can also change code in it, but only in Amun\'s own copy: the owner reads the exact change, and only after they approve does Amun open a pull request. Nothing is ever merged by an agent, and merging always needs the owner\'s approval. Say in one short line that it is connected.',
   '{"do":"objective","title":"what we are measuring or aiming for","baseline":number,"target":number,"due":"YYYY-MM-DD","areas":["names of other work areas in this group to link"]} saves an objective on this Mac straight away when the owner writes "Objective: …", and links it to this work area plus any areas they name. Leave baseline, target and due out unless the owner gave them: never guess a baseline or a date; a missing baseline shows as unknown. {"do":"objective-link","objective":"words from its title","areas":["work area names"]} links an existing objective to more work areas in this group when the owner asks. Neither needs approval or is a plan, and neither changes anything outside Amun. Say in one short line what you saved or linked.',
   '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
   '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',
-  `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} (add "acceptance":true when the owner asks for an acceptance checklist for a story or deliverable: give it to QA, and the checklist comes back for the owner to accept or not) hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
+  `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} (add "repo":"https://github.com/owner/name", the connected repository, when the owner asks for a change to code in it: pick the agent whose job it is; it works in Amun\'s own copy, you never edit code yourself, and the owner reviews the exact change before any pull request is opened; add "acceptance":true when the owner asks for an acceptance checklist for a story or deliverable: give it to QA, and the checklist comes back for the owner to accept or not) hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',

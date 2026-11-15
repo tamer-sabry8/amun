@@ -29,6 +29,11 @@ import { loadEndpointReceipt } from "../../../packages/crew/src/endpoint-receipt
 import { deliveryCommand } from "../../../packages/contracts/src/crew.ts";
 import { readPullWorkspace } from "./pr-workspace.ts";
 import { prCommand } from "../../../packages/contracts/src/pr-workspace.ts";
+import { codeChangeCommand } from "../../../packages/contracts/src/code-change.ts";
+import { CodeChanges } from "./code-change.ts";
+import { CodeChangeError, CodeWorkspace, gitRunner } from "./code-workspace.ts";
+import { githubCode } from "./github-code.ts";
+import { repositoryTarget } from "./pr-repositories.ts";
 import { ChatSession } from "./firstmate-chat.ts";
 import { FirstmateChat } from "../../../packages/data/src/firstmate-chat.ts";
 import { runAdoOperation } from "./ado-operations.ts";
@@ -1063,6 +1068,73 @@ process.parentPort?.on("message", (event) => {
     }
     throw Error("Connect the mapped repository host in Settings.");
   };
+  // Every sign-in saved for a host. Writing picks the first one GitHub says
+  // may write to the repository; nothing here is logged or stored again.
+  const repositoryTokens = async (url: string) => {
+    const found: string[] = [];
+    const conn = authMetadata
+      .list()
+      .find(
+        (c) =>
+          c.kind === "github" &&
+          new URL(c.baseUrl).href.replace(/\/$/, "") ===
+            new URL(url).href.replace(/\/$/, ""),
+      );
+    const secret = conn
+      ? await credentials.get(
+          workspaceIdentity(workspace) + "/" + connectionId(conn),
+        )
+      : null;
+    if (secret) found.push(secret);
+    if (url === "https://github.com") {
+      try {
+        const stored = JSON.parse(
+          (await credentials.get(githubAccount)) ?? "null",
+        );
+        const grant = githubGrant.parse(stored?.grant);
+        if (
+          !grant.expires_in ||
+          Date.now() < stored.savedAt + grant.expires_in * 1000
+        )
+          found.push(grant.access_token);
+      } catch {
+        // No device sign-in saved.
+      }
+    }
+    for (const token of found) redactor.register(token);
+    return found;
+  };
+  const sayInArea = (workAreaId: string, text: string) => {
+    const events = workStore.handle({
+      version: 1,
+      kind: "work",
+      action: "message",
+      workAreaId,
+      role: "firstmate",
+      text,
+    });
+    if (!closed) for (const event of events) port.postMessage(event);
+  };
+  const codeChanges = new CodeChanges({
+    db: workspace,
+    root: workspaceRoot!,
+    workspace: new CodeWorkspace(
+      workspaceRoot!,
+      gitRunner(process.env.AMUN_GIT_BINARY || "git"),
+    ),
+    host: githubCode,
+    tokens: repositoryTokens,
+    say: sayInArea,
+    revise: async (meta, note) => {
+      await delegations.start({
+        workAreaId: meta.workAreaId,
+        agent: meta.agent,
+        title: meta.title,
+        task: "Change the working copy as the owner asked.",
+        revise: { codeId: meta.id, note },
+      });
+    },
+  });
   const prototypes = new PrototypeSession(
     workspace,
     workspaceRoot!,
@@ -1166,6 +1238,70 @@ process.parentPort?.on("message", (event) => {
         limit: 100_000,
         forAgent: true,
       });
+    },
+    code: {
+      async prepare(input) {
+        const snapshot = workspaceService.snapshot();
+        const product = snapshot.preferences.productId;
+        const wanted = (() => {
+          try {
+            const t = repositoryTarget(input.repo);
+            return t.provider === "GitHub"
+              ? `${t.origin}/${t.owner}/${t.repo}`.toLowerCase()
+              : "";
+          } catch {
+            return "";
+          }
+        })();
+        const source = (snapshot.productContext?.sources ?? []).find((item) => {
+          if (item.kind !== "repo" || !item.reference) return false;
+          try {
+            const t = repositoryTarget(item.reference);
+            return (
+              t.provider === "GitHub" &&
+              `${t.origin}/${t.owner}/${t.repo}`.toLowerCase() === wanted
+            );
+          } catch {
+            return false;
+          }
+        });
+        if (!product || !source)
+          return {
+            refusal:
+              "I can only change code in a repository connected to this project. Tell me which repository to use first.",
+          };
+        try {
+          const { meta, worktree } = await codeChanges.prepare({
+            product,
+            workAreaId: input.workAreaId,
+            agent: input.agent,
+            title: input.title,
+            repo: source.reference!,
+          });
+          return {
+            id: meta.id,
+            worktree,
+            branch: meta.branch,
+            base: meta.base,
+            repo: `${meta.owner}/${meta.name}`,
+          };
+        } catch (error) {
+          if (error instanceof CodeChangeError)
+            return { refusal: redactor.text(error.message) };
+          throw error;
+        }
+      },
+      async open(id) {
+        const meta = await codeChanges.meta(id);
+        return {
+          id,
+          worktree: join(workspaceRoot!, "code", id, "worktree"),
+          branch: meta.branch,
+          base: meta.base,
+          repo: `${meta.owner}/${meta.name}`,
+        };
+      },
+      submit: (id, summary) => codeChanges.submit(id, summary),
     },
     harness() {
       // All delegated work runs on Pi with GitHub Copilot; there is no Claude or Codex fallback.
@@ -1757,6 +1893,42 @@ process.parentPort?.on("message", (event) => {
         }))
         .then((r) => {
           if (product() === parsed.data.product) port.postMessage(r);
+        });
+    } else if (message.data?.kind === "code-change") {
+      const parsed = codeChangeCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      const product = () =>
+        closed ? null : workspaceService.snapshot().preferences.productId;
+      void (async () => {
+        if (product() !== cmd.product) throw new CodeChangeError("");
+        let note = "";
+        try {
+          if (cmd.action === "approve")
+            note = await codeChanges.approve(
+              cmd.product,
+              cmd.reviewId,
+              cmd.binding,
+            );
+          else if (cmd.action === "changes")
+            await codeChanges.changes(cmd.product, cmd.reviewId, cmd.note);
+        } catch (error) {
+          note =
+            error instanceof CodeChangeError
+              ? redactor.text(error.message).slice(0, 512)
+              : "That did not go through. Nothing was sent twice; check the change again.";
+        }
+        return {
+          kind: "code-change-result",
+          id: cmd.id,
+          product: cmd.product,
+          message: note,
+          cards: await codeChanges.cards(cmd.product),
+        };
+      })()
+        .catch(() => null)
+        .then((r) => {
+          if (r && product() === cmd.product) port.postMessage(r);
         });
     } else if (message.data?.kind === "firstmate-chat") {
       void chatSession.handle(message.data);

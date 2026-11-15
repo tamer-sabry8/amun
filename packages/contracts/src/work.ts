@@ -893,6 +893,11 @@ export const workDelegate = z.strictObject({
   task: z.string().trim().min(1).max(8000),
   /** The job is an acceptance checklist: every item cites its evidence. */
   acceptance: z.boolean().optional(),
+  /** The job changes code in this connected repository (its https address). */
+  repo: z
+    .url({ protocol: /^https$/ })
+    .max(512)
+    .optional(),
 });
 /** A file added from the composer: read on the Mac and filed in the Library. */
 export const workAttachment = z.strictObject({
