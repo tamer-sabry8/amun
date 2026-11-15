@@ -285,8 +285,12 @@ function chooseGraphics(): void {
       join(app.getPath("userData"), "graphics-preference.json"),
     ),
   );
-  if (graphics.mode === "in-process")
+  if (graphics.mode === "in-process") {
     app.commandLine.appendSwitch("in-process-gpu");
+    // Same trade and same fallback as graphics: the network service shares the
+    // main process instead of holding its own copy of the framework (~45 MiB).
+    app.commandLine.appendSwitch("enable-features", "NetworkServiceInProcess2");
+  }
   try {
     writeGraphicsState(file, graphics);
   } catch {
