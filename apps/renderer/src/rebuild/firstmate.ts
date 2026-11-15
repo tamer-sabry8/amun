@@ -13,7 +13,11 @@ interface Session {
   text: string;
   /** Whether the current model can look at an image. */
   acceptsImage: boolean;
+  /** How many replies the conversation holds; a new one raises it. */
+  replyCount: number | null;
 }
+const countOf = (result: Record<string, unknown>) =>
+  typeof result.replyCount === "number" ? result.replyCount : null;
 let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
 let listening = false;
@@ -186,6 +190,7 @@ export async function askFirstmate(
       model: (opened.model as string | null) ?? null,
       text: String(opened.text ?? ""),
       acceptsImage: opened.acceptsImage === true,
+      replyCount: countOf(opened),
     };
   }
   if (!session.model) {
@@ -205,7 +210,8 @@ export async function askFirstmate(
       reason:
         "The model Firstmate is using can’t look at images. Choose one that can under Accounts and models, or remove the image and send again.",
     };
-  const before = session.text;
+  const before = session.text,
+    beforeCount = session.replyCount;
   const argument = JSON.stringify({
     sessionId: session.sessionId,
     model: session.model,
@@ -243,8 +249,16 @@ export async function askFirstmate(
     model: (result.model as string | null) ?? null,
     text: String(result.text ?? ""),
     acceptsImage: result.acceptsImage === true,
+    replyCount: countOf(result),
   };
-  const reply = replyFromTranscript(before, session.text, text);
+  const reply =
+    beforeCount !== null && session.replyCount !== null
+      ? session.replyCount > beforeCount &&
+        typeof result.latestReply === "string" &&
+        result.latestReply.trim()
+        ? result.latestReply.trim()
+        : null
+      : replyFromTranscript(before, session.text, text);
   return reply
     ? { ok: true, reply, model: session.model }
     : {
@@ -271,6 +285,7 @@ function prime() {
           model: (opened.model as string | null) ?? null,
           text: String(opened.text ?? ""),
           acceptsImage: opened.acceptsImage === true,
+          replyCount: countOf(opened),
         };
     })
     .finally(() => {
@@ -315,6 +330,7 @@ export async function chooseModel(id: string): Promise<boolean> {
       model: (refreshed.model as string | null) ?? id,
       text: String(refreshed.text ?? ""),
       acceptsImage: refreshed.acceptsImage === true,
+      replyCount: countOf(refreshed),
     };
   for (const listener of modelListeners) listener();
   return true;

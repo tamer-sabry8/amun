@@ -30,6 +30,7 @@ export function offerTurns(storage: Storage | null) {
   } catch {
     // A damaged list only loses the pending request, never the offer.
   }
+  const listeners = new Set<() => void>();
   const save = () => {
     try {
       storage?.setItem(key, JSON.stringify([...turns.values()]));
@@ -43,6 +44,7 @@ export function offerTurns(storage: Storage | null) {
       if (turns.has(turn.id)) return false;
       turns.set(turn.id, { ...turn, state: "queued" });
       save();
+      for (const listener of [...listeners]) listener();
       return true;
     },
     /**
@@ -71,6 +73,11 @@ export function offerTurns(storage: Storage | null) {
     done(id: string) {
       live.delete(id);
       if (turns.delete(id)) save();
+    },
+    /** Tells the listener whenever a new request is queued. */
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
     },
     pending: (areaId: string) =>
       [...turns.values()].filter((turn) => turn.areaId === areaId),

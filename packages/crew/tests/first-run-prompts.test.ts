@@ -92,6 +92,7 @@ it("checks the worktree before each answer and answers each prompt once", async 
   expect(taken).toEqual({
     taken: ["trusted-folder", "trusted-hooks"],
     blocked: null,
+    ready: true,
   });
   expect(sent).toEqual(["Enter", "Down", "Enter"]);
   expect(checks).toBe(2);
@@ -150,7 +151,11 @@ it("keeps waiting while the tool is still starting, then answers", async () => {
       return "";
     },
   });
-  expect(taken).toEqual({ taken: ["trusted-folder"], blocked: null });
+  expect(taken).toEqual({
+    taken: ["trusted-folder"],
+    blocked: null,
+    ready: true,
+  });
   expect(sent).toEqual(["Enter"]);
 });
 
@@ -169,7 +174,7 @@ it("gives up quietly when there is nothing to answer", async () => {
       return "";
     },
   });
-  expect(taken).toEqual({ taken: [], blocked: null });
+  expect(taken).toEqual({ taken: [], blocked: null, ready: true });
   expect(sent).toEqual([]);
 });
 
@@ -190,7 +195,11 @@ it("answers nothing until the owner has allowed it, and says what is waiting", a
       return "";
     },
   });
-  expect(result).toEqual({ taken: [], blocked: "trusted-folder" });
+  expect(result).toEqual({
+    taken: [],
+    blocked: "trusted-folder",
+    ready: false,
+  });
   expect(sent).toEqual([]);
   expect(checks).toBe(0);
 });
@@ -229,9 +238,69 @@ it("tells Pi's idle screen apart from Codex's, and from its trust question", asy
   // Ready is noticed straight away, not after the full wait.
   const idle = await run(piIdle, 60);
   expect(idle.captures).toBeLessThan(5);
-  expect(idle.result).toEqual({ taken: [], blocked: null });
-  // Pi's own trust question is never taken for ready, and never answered.
+  expect(idle.result).toEqual({ taken: [], blocked: null, ready: true });
+  // Pi's own trust question is never taken for ready, and never answered
+  // unless the cursor is on the plain "Trust" option.
   const asking = await run(piTrust, 6);
-  expect(asking.captures).toBe(6);
-  expect(asking.result.taken).toEqual([]);
+  expect(asking.captures).toBeLessThanOrEqual(2);
+  expect(asking.result).toEqual({
+    taken: [],
+    blocked: "trusted-folder",
+    ready: false,
+  });
+});
+
+it("reports Pi's trust question as blocked when not allowed, and answers it only after the check when allowed", async () => {
+  const piOption = piTrust.replace(
+    "  Saved",
+    "  → Trust\n  Do not trust\n  Saved",
+  );
+  const events: string[] = [];
+  const run = (allow: boolean) => {
+    events.length = 0;
+    let answered = false;
+    return acceptFirstRunPrompts({
+      target: "firstmate:fm-amun-pi",
+      worktree,
+      allow,
+      ready: readyFor("pi"),
+      waitMs: 1,
+      polls: 5,
+      verify: async () => void events.push("verify"),
+      async tmux(args) {
+        if (args[0] === "send-keys") {
+          events.push(args.at(-1)!);
+          answered = true;
+          return "";
+        }
+        return answered ? piIdle : piOption;
+      },
+    });
+  };
+  expect(await run(false)).toEqual({
+    taken: [],
+    blocked: "trusted-folder",
+    ready: false,
+  });
+  expect(events).toEqual([]);
+  expect(await run(true)).toEqual({
+    taken: ["trusted-folder"],
+    blocked: null,
+    ready: true,
+  });
+  expect(events).toEqual(["verify", "Enter"]);
+});
+
+it("does not report ready when polling runs out", async () => {
+  const result = await acceptFirstRunPrompts({
+    target: "firstmate:fm-amun-pi",
+    worktree,
+    allow: true,
+    ready: readyFor("pi"),
+    waitMs: 1,
+    polls: 3,
+    verify: async () => undefined,
+    tmux: async () => "starting…",
+  });
+  expect(result).toEqual({ taken: [], blocked: "timeout", ready: false });
 });

@@ -921,7 +921,7 @@ process.parentPort?.on("message", (event) => {
         "tmux-" + process.getuid!(),
         "default",
       );
-      const { blocked } = await acceptFirstRunPrompts({
+      const { blocked, ready } = await acceptFirstRunPrompts({
         target: "firstmate:fm-amun-" + harness,
         worktree,
         allow,
@@ -937,6 +937,8 @@ process.parentPort?.on("message", (event) => {
             ),
           ),
       });
+      if (blocked === "timeout" || (!blocked && !ready))
+        throw new Error("The worker did not reach its prompt in time.");
       return blocked ? "asks-trust" : "ready";
     },
     async workerGone(harness) {

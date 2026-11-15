@@ -1227,6 +1227,19 @@ describe("accepting an offer", () => {
     expect(claimed.interrupted).toHaveLength(1);
     expect(after.queue(turn)).toBe(true);
   });
+  it("tells a subscriber when an offer is queued, so an open work area sends it at once", () => {
+    const queue = offerTurns(memory());
+    const sent: string[] = [];
+    const stop = queue.subscribe(() =>
+      sent.push(...queue.claim("w1").send.map((t) => t.id)),
+    );
+    queue.queue(turn);
+    queue.queue(turn);
+    expect(sent).toEqual(["o1"]);
+    stop();
+    queue.queue({ ...turn, id: "o3" });
+    expect(sent).toEqual(["o1"]);
+  });
   it("does nothing for an offer that is already closed", () => {
     const queue = offerTurns(memory());
     const result = acceptOffer(

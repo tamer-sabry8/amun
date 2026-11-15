@@ -72,6 +72,13 @@ export function firstRunPrompt(
     /^Review hooks/.test(on)
   )
     return { step: "trusted-hooks", keys: ["Down", "Enter"] };
+  if (piAsking.test(screen) && squeeze(screen).includes(squeeze(worktree)))
+    // Pi's own project-trust question. It is answered only when the cursor is
+    // on the plain "Trust" option, which saves trust for this folder alone.
+    return {
+      step: "trusted-folder",
+      keys: /^\s*[→›❯>]\s*(?:✓\s*)?Trust\s*$/m.test(screen) ? ["Enter"] : [],
+    };
   return null;
 }
 
@@ -79,11 +86,14 @@ export function firstRunPrompt(
  * Watches the worker's pane for a short while and answers the two first-run
  * prompts if they appear. Returns what it answered, in order.
  */
-export async function acceptFirstRunPrompts(
-  input: FirstRunInput,
-): Promise<{ taken: FirstRunStep[]; blocked: FirstRunStep | null }> {
+export async function acceptFirstRunPrompts(input: FirstRunInput): Promise<{
+  taken: FirstRunStep[];
+  blocked: FirstRunStep | "timeout" | null;
+  ready: boolean;
+}> {
   const taken: FirstRunStep[] = [];
-  let quiet = 0;
+  let quiet = 0,
+    ready = false;
   for (let poll = 0; poll < (input.polls ?? 60); poll++) {
     let screen = "";
     try {
@@ -92,7 +102,8 @@ export async function acceptFirstRunPrompts(
       // The pane is not there yet, or has gone: nothing to answer.
     }
     const prompt = firstRunPrompt(screen, input.worktree);
-    if (prompt && !input.allow) return { taken, blocked: prompt.step };
+    if (prompt && (!input.allow || !prompt.keys.length))
+      return { taken, blocked: prompt.step, ready: false };
     if (prompt && !taken.includes(prompt.step)) {
       // Each kind is answered once, and only after the check passes.
       await input.verify();
@@ -109,9 +120,13 @@ export async function acceptFirstRunPrompts(
     ) {
       // The tool is at its own prompt: nothing more to answer. Seen twice,
       // so a screen caught between two prompts is not mistaken for ready.
-      if (++quiet >= 2) break;
+      if (++quiet >= 2) {
+        ready = true;
+        break;
+      }
     } else quiet = 0;
     await new Promise((resolve) => setTimeout(resolve, input.waitMs ?? 2000));
   }
-  return { taken, blocked: null };
+  // Running out of time is not readiness: nothing may be sent to the worker.
+  return { taken, blocked: ready ? null : "timeout", ready };
 }

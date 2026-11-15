@@ -225,6 +225,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
     title: z.string().max(256),
     text: z.string().max(262144),
     omittedItems: z.number().int().min(0).max(10000),
+    replyCount: z.number().int().min(0).optional(),
+    latestReply: z.string().max(262144).optional(),
   }),
   z.strictObject({
     kind: z.literal("import-review"),

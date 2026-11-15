@@ -1087,19 +1087,29 @@ export function WorkSession({
       message.scoped.includes(amunProtocol),
     );
   };
+  const sendRef = useRef(send);
+  sendRef.current = send;
   useEffect(() => {
     // Offers the owner accepted: each becomes a real request to Firstmate
     // here, once. One a restart cut short is said so, and not sent again.
+    // Claiming again on every new acceptance sends an offer for the work that
+    // is already open straight away; claimed turns are never claimed twice.
     if (!context) return;
-    const { send: queued, interrupted } = pendingOffers.claim(areaId);
-    if (interrupted.length)
-      work("message", {
-        workAreaId: areaId,
-        role: "firstmate",
-        text: "Amun closed while I was starting the draft you asked for, so I cannot tell whether it finished. Read the conversation above before asking again.",
-      });
-    for (const turn of queued)
-      void send(turn.text).finally(() => pendingOffers.done(turn.id));
+    const claim = () => {
+      const { send: queued, interrupted } = pendingOffers.claim(areaId);
+      if (interrupted.length)
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: "Amun closed while I was starting the draft you asked for, so I cannot tell whether it finished. Read the conversation above before asking again.",
+        });
+      for (const turn of queued)
+        void sendRef
+          .current(turn.text)
+          .finally(() => pendingOffers.done(turn.id));
+    };
+    claim();
+    return pendingOffers.subscribe(claim);
   }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.

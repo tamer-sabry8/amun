@@ -119,3 +119,34 @@ it("says when the newest assistant reply is cut and drops an unfinished action",
   expect(view.text).toContain("Plan.");
   expect(view.text).not.toContain("```amun");
 });
+it("returns only the newest reply when the bounded transcript skips messages", () => {
+  const act = (n: string) => '```amun\n{"do":"plan","n":"' + n + '"}\n```';
+  const first = act("one") + "x".repeat(50000);
+  const second = act("two") + "y".repeat(50000);
+  const turn1 = [msg("user", "u".repeat(150000)), msg("assistant", first)];
+  const v1 = nativeConversationView(id, "T", turn1, new Redactor());
+  const turn2 = [
+    ...turn1,
+    msg("user", "q".repeat(200000)),
+    msg("assistant", second),
+  ];
+  const v2 = nativeConversationView(id, "T", turn2, new Redactor());
+  expect(v1.replyCount).toBe(1);
+  expect(v1.latestReply).toBe(first);
+  expect(v2.replyCount).toBe(2);
+  expect(v2.latestReply).toBe(second);
+  expect(v2.latestReply).not.toContain("one");
+  // The count keeps rising when older entries fall outside the window.
+  const many = Array.from({ length: 1100 }, () => msg("assistant", "a"));
+  expect(nativeConversationView(id, "T", many, new Redactor()).replyCount).toBe(
+    1100,
+  );
+  // A newest reply that is too large to read is never replaced by an older one.
+  const huge = nativeConversationView(
+    id,
+    "T",
+    [...turn1, msg("assistant", "z".repeat(300000))],
+    new Redactor(),
+  );
+  expect(huge.latestReply).toBeUndefined();
+});

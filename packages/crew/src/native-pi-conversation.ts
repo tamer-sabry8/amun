@@ -18,6 +18,14 @@ function boundedConversationText(
     parts = 0,
     oversized = false;
   const messages: ViewMessage[] = [];
+  let replyCount = 0,
+    latestRaw: string | null = null;
+  for (const entry of entries.slice(0, -MAX_ENTRIES))
+    if (
+      ownDataField(entry, "type") === "message" &&
+      ownDataField(ownDataField(entry, "message"), "role") === "assistant"
+    )
+      replyCount++;
   for (const entry of entries.slice(-MAX_ENTRIES)) {
     const message = ownDataField(entry, "message"),
       role = ownDataField(message, "role");
@@ -27,6 +35,10 @@ function boundedConversationText(
     ) {
       omittedItems++;
       continue;
+    }
+    if (role === "assistant") {
+      replyCount++;
+      latestRaw = null;
     }
     const content = ownDataField(message, "content"),
       raw: string[] = [];
@@ -59,6 +71,7 @@ function boundedConversationText(
       omittedItems++;
       continue;
     }
+    if (role === "assistant") latestRaw = raw.join("\n");
     messages.push({
       label: role === "user" ? "User" : "Assistant",
       text: raw.join("\n"),
@@ -100,10 +113,28 @@ function boundedConversationText(
     .flatMap((m, i) => (chosen.has(i) ? [label(m) + m.text] : []))
     .join("\n\n");
   omittedItems += messages.length - chosen.size;
+  // The newest reply is read on its own, so what the owner sees in the
+  // bounded transcript never decides which reply counts as new.
+  let latestReply: string | null = null;
+  if (latestRaw !== null) {
+    latestReply = redactor.text(latestRaw);
+    if (latestReply.length > VIEW_TEXT_LIMIT) {
+      latestReply = latestReply.slice(
+        0,
+        VIEW_TEXT_LIMIT - partialNotice.length,
+      );
+      const open = latestReply.lastIndexOf("```amun");
+      if (open >= 0 && !latestReply.includes("```", open + 7))
+        latestReply = latestReply.slice(0, open);
+      latestReply += partialNotice;
+    }
+  }
   return {
     title: redactor.text(title || "Amun conversation"),
     text,
     omittedItems,
+    replyCount,
+    latestReply,
   };
 }
 function conversationDetails(entries: unknown, redactor: Redactor) {
@@ -197,6 +228,10 @@ export function nativeConversationView(
     title: preview.title,
     text: preview.text,
     omittedItems: preview.omittedItems,
+    replyCount: preview.replyCount,
+    ...(preview.latestReply === null
+      ? {}
+      : { latestReply: preview.latestReply }),
     ...conversationDetails(entries, redactor),
   };
 }
