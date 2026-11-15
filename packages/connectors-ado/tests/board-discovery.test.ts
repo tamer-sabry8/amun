@@ -230,3 +230,30 @@ it("reads a team's current and upcoming sprints, read-only and bounded", async (
   ]);
   expect(await d.sprints("West Team", 1)).toHaveLength(1);
 });
+it("reads the story and task types from the default team's backlog configuration once", async () => {
+  const get = vi.fn(async (_method: string, url: string) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/_apis/projects/POCs"))
+      return { status: 200, data: { defaultTeam: { name: "POCs Team" } } };
+    expect(path).toBe(
+      "/Collection/POCs/POCs%20Team/_apis/work/backlogconfiguration",
+    );
+    return {
+      status: 200,
+      data: {
+        requirementBacklog: {
+          defaultWorkItemType: { name: "Product Backlog Item" },
+          workItemTypes: [{ name: "Product Backlog Item" }, { name: "Bug" }],
+        },
+        taskBacklog: { workItemTypes: [{ name: "Task" }] },
+      },
+    };
+  });
+  const d = new BoardDiscovery(base, "POCs", get);
+  expect(await d.backlogTypes()).toEqual({
+    story: "Product Backlog Item",
+    task: "Task",
+  });
+  await d.backlogTypes();
+  expect(get).toHaveBeenCalledTimes(2);
+});

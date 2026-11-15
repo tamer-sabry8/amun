@@ -1,4 +1,5 @@
 import type { Transport } from "./client.ts";
+import { isMissingTypeText } from "./governed-writes.ts";
 /** Use the supported SDK transport, explicitly pinning routes in the proof client to Server 2022 API 7.0. */
 export function azureTransport(base: string, pat: string): Transport {
   let api:
@@ -52,7 +53,17 @@ export function azureTransport(base: string, pat: string): Transport {
         error && typeof error === "object" && "statusCode" in error
           ? error.statusCode
           : undefined;
-      if (typeof status === "number") return { status, data: null };
+      // Only the classification of a missing work item type is passed on.
+      if (typeof status === "number")
+        return {
+          status,
+          data:
+            (status === 400 || status === 404) &&
+            error instanceof Error &&
+            isMissingTypeText(error.message)
+              ? { typeKey: "WorkItemTypeDoesNotExistException" }
+              : null,
+        };
       throw new Error("Azure transport failed");
     }
   };

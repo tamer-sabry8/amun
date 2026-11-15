@@ -107,6 +107,7 @@ import {
   councilCommand,
   planOpen,
   planPlaces,
+  trackerTypes,
   planPublish,
   toolsCommand,
   workAttachment,
@@ -122,6 +123,9 @@ import {
 } from "../../../packages/data/src/plan-publication.ts";
 import {
   adoPlanTarget,
+  type AdoTypeNames,
+  pickAdoType,
+  resolveAdoTypes,
   localClaimRefusalEvent,
   notionUpdateRefusalEvent,
   notionPlanTarget,
@@ -200,6 +204,121 @@ let syncingMemory = false;
 const workspaceService = new WorkspaceService(workspace, redactor);
 // UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
 const workStore = new WorkStore(workspace, redactor);
+/** The Azure DevOps project a work area publishes to, with its connection. */
+function adoConnection(workAreaId: string | null) {
+  const mapped = workAreaId
+    ? (workspace
+        .prepare(
+          "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
+        )
+        .pluck()
+        .get(workAreaId) as string | undefined)
+    : undefined;
+  const saved = workspace
+    .prepare(
+      "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
+    )
+    .pluck()
+    .get() as string | undefined;
+  const reference = mapped ?? (saved ? JSON.parse(saved) : undefined);
+  if (typeof reference !== "string")
+    throw new PlanBlocked(
+      "Choose the Azure DevOps project for this work before publishing.",
+    );
+  let source: ReturnType<typeof projectSource<Connection>>;
+  try {
+    source = projectSource(reference, authMetadata.list());
+  } catch {
+    throw new PlanBlocked(
+      "Connect the Azure DevOps collection in Settings, then retry.",
+    );
+  }
+  const secret = authKeyring().get(
+    workspaceIdentity(workspace) + "/" + connectionId(source.connection),
+  );
+  if (!secret)
+    throw new PlanBlocked(
+      "Connect the Azure DevOps collection in Settings, then retry.",
+    );
+  redactor.register(secret);
+  const transport = azureTransport(source.collection, secret);
+  const discovery = new BoardDiscovery(
+    source.collection,
+    source.project,
+    transport,
+  );
+  const typesKey = "work.ado.types:" + reference;
+  return {
+    source,
+    transport,
+    discovery,
+    /** The story and task types Amun has learned for this project. */
+    learned(): AdoTypeNames | undefined {
+      try {
+        const saved = workspace
+          .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+          .pluck()
+          .get(typesKey);
+        const value: unknown =
+          typeof saved === "string" ? JSON.parse(saved) : null;
+        if (!value || typeof value !== "object") return undefined;
+        const { story, task } = value as Record<string, unknown>;
+        return {
+          ...(typeof story === "string" ? { story } : {}),
+          ...(typeof task === "string" ? { task } : {}),
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    learn(names: AdoTypeNames) {
+      const merged = { ...this.learned(), ...names };
+      const clean = Object.fromEntries(
+        Object.entries(merged).filter(([, value]) => typeof value === "string"),
+      );
+      if (JSON.stringify(clean) === JSON.stringify(this.learned() ?? {}))
+        return;
+      workspace
+        .prepare(
+          "INSERT INTO workspace_settings(id,value_json) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+        )
+        .run(typesKey, JSON.stringify(clean));
+    },
+  };
+}
+/**
+ * The story and task types a work area's Azure DevOps project uses, for the
+ * review card and Firstmate. Read-only; a slow or failed read gives what was
+ * learned before, or nothing.
+ */
+async function adoTypeInfo(workAreaId: string | null) {
+  let connection: ReturnType<typeof adoConnection>;
+  try {
+    connection = adoConnection(workAreaId);
+  } catch {
+    return null;
+  }
+  const learned = connection.learned();
+  const wait = new Promise<undefined>((resolve) =>
+    setTimeout(() => resolve(undefined), 4000).unref(),
+  );
+  const [backlog, schema] = await Promise.all([
+    Promise.race([connection.discovery.backlogTypes(), wait]).catch(
+      () => undefined,
+    ),
+    Promise.race([connection.discovery.processSchema(), wait]).catch(
+      () => undefined,
+    ),
+  ]);
+  const names = schema
+    ? resolveAdoTypes(schema, backlog, learned)
+    : {
+        story: backlog?.story ?? learned?.story,
+        task: backlog?.task ?? learned?.task,
+      };
+  if (backlog?.story) connection.learn(names);
+  return { project: connection.source.project, names, schema };
+}
 // An approved plan is written to its destinations here. Each destination
 // reuses its existing connection; a missing one blocks that item only.
 const planPublisher = new PlanPublisher(
@@ -207,47 +326,21 @@ const planPublisher = new PlanPublisher(
   workStore,
   async (destination, scope) => {
     if (destination === "ado") {
-      const mapped = scope.workAreaId
-        ? (workspace
-            .prepare(
-              "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
-            )
-            .pluck()
-            .get(scope.workAreaId) as string | undefined)
-        : undefined;
-      const saved = workspace
-        .prepare(
-          "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
-        )
-        .pluck()
-        .get() as string | undefined;
-      const reference = mapped ?? (saved ? JSON.parse(saved) : undefined);
-      if (typeof reference !== "string")
-        throw new PlanBlocked(
-          "Choose the Azure DevOps project for this work before publishing.",
-        );
-      let source: ReturnType<typeof projectSource<Connection>>;
-      try {
-        source = projectSource(reference, authMetadata.list());
-      } catch {
-        throw new PlanBlocked(
-          "Connect the Azure DevOps collection in Settings, then retry.",
-        );
-      }
-      const secret = authKeyring().get(
-        workspaceIdentity(workspace) + "/" + connectionId(source.connection),
-      );
-      if (!secret)
-        throw new PlanBlocked(
-          "Connect the Azure DevOps collection in Settings, then retry.",
-        );
-      redactor.register(secret);
-      const transport = azureTransport(source.collection, secret);
+      const connection = adoConnection(scope.workAreaId);
       return adoPlanTarget(
-        source.collection,
-        source.project,
-        new BoardDiscovery(source.collection, source.project, transport),
-        new AdoWriteClient(source.collection, source.project, transport),
+        connection.source.collection,
+        connection.source.project,
+        connection.discovery,
+        new AdoWriteClient(
+          connection.source.collection,
+          connection.source.project,
+          connection.transport,
+        ),
+        {
+          backlog: () => connection.discovery.backlogTypes(),
+          learned: () => connection.learned(),
+          learn: (names) => connection.learn(names),
+        },
       );
     }
     if (destination === "notion") {
@@ -1781,44 +1874,92 @@ process.parentPort?.on("message", (event) => {
           return null;
         }
       };
-      port.postMessage({
-        version: 1,
-        kind: "plan-places-result",
-        planId: plan.id,
-        places: plan.items.map((item) => {
-          const own = item.fields.destination;
-          const destination =
-            typeof own === "string" && own.trim()
-              ? own.trim().toLowerCase()
-              : plan.destination;
-          const area = item.fields.area;
-          const place =
-            destination === "ado"
-              ? ado()
-              : destination === "notion"
-                ? setting("notion.destination.title")
-                : destination === "amun"
-                  ? "Amun"
-                  : null;
-          return {
-            id: item.id,
-            destination,
-            place:
-              place && destination === "ado" && typeof area === "string"
-                ? `${place} · ${area}`
-                : place && destination === "notion"
-                  ? `New page under “${place}”`
-                  : place,
-            problem: place
-              ? null
-              : destination === "ado"
-                ? "No Azure DevOps project is chosen for this work yet."
+      const post = (info: Awaited<ReturnType<typeof adoTypeInfo>>) => {
+        if (closed) return;
+        const written = planPublisher.writes(plan.id);
+        port.postMessage({
+          version: 1,
+          kind: "plan-places-result",
+          planId: plan.id,
+          places: plan.items.map((item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const area = item.fields.area;
+            const place =
+              destination === "ado"
+                ? ado()
                 : destination === "notion"
-                  ? "No Notion destination is chosen yet."
-                  : `Publishing to ${trackerName(destination)} is not available yet.`,
-          };
-        }),
-      });
+                  ? setting("notion.destination.title")
+                  : destination === "amun"
+                    ? "Amun"
+                    : null;
+            const wanted =
+              typeof item.fields.type === "string" && item.fields.type.trim()
+                ? item.fields.type.trim()
+                : null;
+            const kind =
+              destination === "ado" && info
+                ? ((info.schema
+                    ? pickAdoType(wanted, info.schema, info.names)?.name
+                    : undefined) ??
+                  wanted ??
+                  info.names.story ??
+                  null)
+                : null;
+            const note = written.find((entry) => entry.id === item.id)?.note;
+            return {
+              id: item.id,
+              destination,
+              kind,
+              note: note?.startsWith("“") ? note : null,
+              place:
+                place && destination === "ado" && typeof area === "string"
+                  ? `${place} · ${area}`
+                  : place && destination === "notion"
+                    ? `New page under “${place}”`
+                    : place,
+              problem: place
+                ? null
+                : destination === "ado"
+                  ? "No Azure DevOps project is chosen for this work yet."
+                  : destination === "notion"
+                    ? "No Notion destination is chosen yet."
+                    : `Publishing to ${trackerName(destination)} is not available yet.`,
+            };
+          }),
+        });
+      };
+      if (
+        plan.items.some((item) => {
+          const own = item.fields.destination;
+          return (
+            (typeof own === "string" && own.trim()
+              ? own.trim().toLowerCase()
+              : plan.destination) === "ado"
+          );
+        })
+      )
+        void adoTypeInfo(plan.workAreaId).then(post, () => post(null));
+      else post(null);
+    } else if (message.data?.kind === "tracker-types") {
+      const parsed = trackerTypes.safeParse(message.data);
+      if (!parsed.success) return;
+      const workAreaId = parsed.data.workAreaId;
+      void adoTypeInfo(workAreaId)
+        .catch(() => null)
+        .then((info) =>
+          port.postMessage({
+            version: 1,
+            kind: "tracker-types-result",
+            workAreaId,
+            project: info?.project ?? null,
+            story: info?.names.story ?? null,
+            task: info?.names.task ?? null,
+          }),
+        );
     } else if (message.data?.kind === "work-delegate") {
       const parsed = workDelegate.safeParse(message.data);
       if (!parsed.success) return;

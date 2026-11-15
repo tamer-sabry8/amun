@@ -203,9 +203,14 @@ export function approvalSurface(plan: {
     : "tray";
 }
 
-export function approveLabel(count: number, noun = "story") {
+/** "1 story", "2 product backlog items". */
+export function countedNoun(count: number, noun: string) {
   const plural = noun.endsWith("y") ? noun.slice(0, -1) + "ies" : noun + "s";
-  return `Approve and publish ${count} ${count === 1 ? noun : plural}`;
+  return `${count} ${count === 1 ? noun : plural}`;
+}
+
+export function approveLabel(count: number, noun = "story") {
+  return `Approve and publish ${countedNoun(count, noun)}`;
 }
 
 export interface WriteResult {

@@ -17,12 +17,61 @@ import {
   type NotionDestination,
 } from "../../../packages/auth/src/notion-result.ts";
 
+import { AdoTypeMissing } from "../../../packages/connectors-ado/src/governed-writes.ts";
+
 const storyTypes = [
   "User Story",
   "Product Backlog Item",
   "Requirement",
   "Issue",
 ];
+const storyAliases = [...storyTypes, "Story", "Backlog Item"].map((name) =>
+  name.toLowerCase(),
+);
+const taskAliases = ["task", "sub-task", "subtask", "sub task"];
+// What each built-in process calls its stories (Scrum PBI, Agile User Story,
+// Basic Issue, CMMI Requirement); used only when the team's backlog
+// configuration cannot be read.
+const processStories: [RegExp, string][] = [
+  [/scrum/i, "Product Backlog Item"],
+  [/agile/i, "User Story"],
+  [/basic/i, "Issue"],
+  [/cmmi/i, "Requirement"],
+];
+/** The project's own work item types for a story and for its sub-tasks. */
+export interface AdoTypeNames {
+  story?: string | undefined;
+  task?: string | undefined;
+}
+const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Chooses the story and task type this project really has: the team's
+ * backlog configuration first, then what Amun learned here before, then the
+ * process template, then any known story type the project contains.
+ */
+export function resolveAdoTypes(
+  schema: AzureProcessSchema,
+  backlog?: AdoTypeNames,
+  learned?: AdoTypeNames,
+): AdoTypeNames {
+  const has = (name?: string) =>
+    name
+      ? schema.types.find((entry) => sameName(entry.name, name))?.name
+      : undefined;
+  const process = schema.process ?? "";
+  return {
+    story: [
+      backlog?.story,
+      learned?.story,
+      processStories.find(([pattern]) => pattern.test(process))?.[1],
+      ...storyTypes,
+    ]
+      .map(has)
+      .find(Boolean),
+    task: [backlog?.task, learned?.task, "Task"].map(has).find(Boolean),
+  };
+}
 const escape = (value: string) =>
   value
     .replaceAll("&", "&amp;")
@@ -91,22 +140,41 @@ function planFields(item: PlanWriteItem, project: string, collection?: string) {
   return fields;
 }
 
+/**
+ * The project's type for a planned type name, or for none: a generic story or
+ * task name the project does not have means the project's own.
+ */
+export function pickAdoType(
+  wanted: string | null,
+  schema: AzureProcessSchema,
+  names: AdoTypeNames,
+) {
+  const named = (name?: string) =>
+    name ? schema.types.find((entry) => sameName(entry.name, name)) : undefined;
+  if (!wanted) return named(names.story);
+  return (
+    named(wanted) ??
+    (storyAliases.includes(wanted.toLowerCase())
+      ? named(names.story)
+      : taskAliases.includes(wanted.toLowerCase())
+        ? named(names.task)
+        : undefined)
+  );
+}
+
 /** The exact Azure work item a plan item becomes. Same input, same step. */
 export function adoStep(
   item: PlanWriteItem,
   schema: AzureProcessSchema,
   project: string,
   collection?: string,
+  names: AdoTypeNames = resolveAdoTypes(schema),
+  /** The type to use instead of the planned one, after Azure rejected it. */
+  override?: string,
 ): AdoStep {
   const supplied = planFields(item, project, collection);
-  const wanted = supplied.type ?? null;
-  const type = wanted
-    ? schema.types.find(
-        (entry) => entry.name.toLowerCase() === wanted.toLowerCase(),
-      )
-    : storyTypes
-        .map((name) => schema.types.find((entry) => entry.name === name))
-        .find((entry) => entry);
+  const wanted = override ?? supplied.type ?? null;
+  const type = pickAdoType(wanted, schema, names);
   if (!type)
     throw new PlanNotSent(
       wanted
@@ -169,6 +237,15 @@ export function adoStep(
   };
 }
 
+export interface AdoTypeSource {
+  /** The team's backlog configuration; a failed read falls back to the rest. */
+  backlog?(): Promise<AdoTypeNames>;
+  /** What Amun learned about this project before. */
+  learned?(): AdoTypeNames | undefined;
+  /** Remembers a mapping so later plans use it directly. */
+  learn?(names: AdoTypeNames): void;
+}
+
 export function adoPlanTarget(
   collection: string,
   project: string,
@@ -177,18 +254,37 @@ export function adoPlanTarget(
     write(step: AdoStep, parent: null): Promise<{ id: number }>;
     find(step: AdoStep, parent: null): Promise<{ id: number } | undefined>;
   },
+  types: AdoTypeSource = {},
 ): PlanTarget {
   const receipt = (id: number) => ({
     externalId: String(id),
     url: `${collection}${encodeURIComponent(project)}/_workitems/edit/${id}`,
   });
   let schema: Promise<AzureProcessSchema> | undefined;
-  const step = async (item: PlanWriteItem) =>
+  const read = () => (schema ??= reader.processSchema());
+  const backlog = async () => {
+    try {
+      return (await types.backlog?.()) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  let names: Promise<AdoTypeNames> | undefined;
+  const resolved = () =>
+    (names ??= (async () => {
+      const found = await backlog();
+      const result = resolveAdoTypes(await read(), found, types.learned?.());
+      if (found?.story) types.learn?.(result);
+      return result;
+    })());
+  const step = async (item: PlanWriteItem, override?: string) =>
     adoStep(
       item,
-      await (schema ??= reader.processSchema()),
+      await read(),
       project,
       collection,
+      await resolved(),
+      override,
     );
   return {
     async write(item) {
@@ -201,7 +297,31 @@ export function adoPlanTarget(
           ? error
           : new PlanNotSent("Azure DevOps could not be read.");
       }
-      return receipt((await client.write(prepared, null)).id);
+      try {
+        return receipt((await client.write(prepared, null)).id);
+      } catch (error) {
+        // Only Azure saying the type is not in this project is retried, once,
+        // with the project's own type: same fields and marker, so nothing can
+        // be duplicated, and still under the owner's one approval.
+        if (!(error instanceof AdoTypeMissing)) throw error;
+        const isTask = taskAliases.includes(prepared.type.toLowerCase());
+        const own = (await backlog())?.[isTask ? "task" : "story"];
+        if (!own || sameName(own, prepared.type)) throw error;
+        let retry: AdoStep;
+        try {
+          retry = await step(item, own);
+        } catch {
+          throw error;
+        }
+        const created =
+          (await client.find(retry, null)) ?? (await client.write(retry, null));
+        const learned = types.learned?.() ?? {};
+        types.learn?.({ ...learned, [isTask ? "task" : "story"]: own });
+        return {
+          ...receipt(created.id),
+          note: `“${prepared.type}” is not a work item type in ${project}, so this was created as a ${own}.`,
+        };
+      }
     },
     async find(item) {
       const found = await client.find(await step(item), null);

@@ -1,6 +1,19 @@
 import type { Transport } from "./client.ts";
 import { azurePathSegment } from "./path.ts";
 import type { AdoStep, AdoReceipt } from "../../data/src/ado-batch.ts";
+/** Azure's rejection of a create because the work item type is not in the project. */
+export class AdoTypeMissing extends Error {}
+const missingTypeText =
+  /TF26199|VS402\d+|work item type\b[^.]*\b(does not exist|not found)\b|is not a work item type|WorkItemType(NotFound|DoesNotExist)/i;
+/** True for Azure's wording when a work item type is not in the project. */
+export const isMissingTypeText = (text: string) => missingTypeText.test(text);
+const typeMissing = (status: number, data: unknown) => {
+  if (status !== 400 && status !== 404) return false;
+  const body = data && typeof data === "object" ? (data as object) : {};
+  return ["typeKey", "message"].some(
+    (key) => key in body && isMissingTypeText(String((body as never)[key])),
+  );
+};
 type Item = AdoReceipt & {
   fields: Record<string, unknown>;
   relations?: { rel: string; url: string }[];
@@ -24,10 +37,17 @@ export class AdoWriteClient {
       (route.includes("?") ? "&" : "?") +
       "api-version=7.0";
     const r = await this.transport(method, url, body);
-    if (r.status < 200 || r.status >= 300)
+    if (r.status < 200 || r.status >= 300) {
+      if (
+        method === "POST" &&
+        route.startsWith("workitems/$") &&
+        typeMissing(r.status, r.data)
+      )
+        throw new AdoTypeMissing("request_rejected_" + r.status);
       throw Error(
         r.status === 412 ? "revision_conflict" : "request_rejected_" + r.status,
       );
+    }
     return r.data;
   }
   async item(id: number) {

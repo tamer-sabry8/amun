@@ -28,6 +28,10 @@ export class BoardDiscovery {
     string,
     { expires: number; values: unknown[] }
   >();
+  private readonly types = new Map<
+    string,
+    { expires: number; value: { story?: string; task?: string } }
+  >();
   private readonly project: string;
   private readonly transport: Transport;
 
@@ -232,6 +236,63 @@ export class BoardDiscovery {
       });
     }
     return found.sort((a, b) => a.start.localeCompare(b.start)).slice(0, limit);
+  }
+  /**
+   * The project's own types for stories and for their tasks, from the team's
+   * read-only backlog configuration. Cached per team.
+   */
+  async backlogTypes(team?: string) {
+    const key = team ?? "";
+    const hit = this.types.get(key);
+    if (hit && hit.expires > Date.now()) return hit.value;
+    let name = team;
+    if (!name) {
+      const project = await this.get(
+        new URL(
+          "_apis/projects/" + this.project + "?includeCapabilities=true",
+          this.base,
+        ),
+      );
+      name =
+        record(project) &&
+        record(project.defaultTeam) &&
+        typeof project.defaultTeam.name === "string"
+          ? project.defaultTeam.name
+          : undefined;
+    }
+    if (!name) return {};
+    const data = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(name) +
+          "/_apis/work/backlogconfiguration",
+        this.base,
+      ),
+    );
+    const first = (level: unknown) => {
+      if (!record(level)) return undefined;
+      const fallback = record(level.defaultWorkItemType)
+        ? level.defaultWorkItemType.name
+        : undefined;
+      if (typeof fallback === "string") return fallback;
+      const names = Array.isArray(level.workItemTypes)
+        ? level.workItemTypes
+        : [];
+      const one = names.find(
+        (type) => record(type) && typeof type.name === "string",
+      );
+      return record(one) ? (one.name as string) : undefined;
+    };
+    const value: { story?: string; task?: string } = {};
+    if (record(data)) {
+      const story = first(data.requirementBacklog);
+      const task = first(data.taskBacklog);
+      if (story) value.story = story;
+      if (task) value.task = task;
+    }
+    this.types.set(key, { expires: Date.now() + 600000, value });
+    return value;
   }
   async levels(team: string, refresh = false) {
     return (

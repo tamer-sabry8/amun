@@ -549,6 +549,8 @@ export function areaTurnContext(
   facts: string[] = [],
   /** Standing permissions for this group, as "Create items in Notion". */
   permissions?: string[],
+  /** Which Azure DevOps work item types this project uses. */
+  tracker = "",
 ) {
   const allowed =
     permissions === undefined
@@ -564,7 +566,8 @@ export function areaTurnContext(
     area.type === "project"
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}]\n${workTypeGuard(area.type, record)}`;
+  const types = tracker ? ` ${tracker}` : "";
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}${types}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {

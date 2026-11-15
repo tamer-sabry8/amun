@@ -901,8 +901,26 @@ export const planPlacesResult = z.strictObject({
       place: z.string().nullable(),
       /** What to do when there is no place. */
       problem: z.string().nullable(),
+      /** The work item type Azure DevOps will create, in the project's words. */
+      kind: z.string().max(128).nullable().optional(),
+      /** Said when an item was created as a different type than planned. */
+      note: z.string().max(400).nullable().optional(),
     }),
   ),
+});
+/** Asks which work item types a work area's Azure DevOps project uses. */
+export const trackerTypes = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("tracker-types"),
+  workAreaId: id,
+});
+export const trackerTypesResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("tracker-types-result"),
+  workAreaId: id,
+  project: z.string().max(256).nullable(),
+  story: z.string().max(128).nullable(),
+  task: z.string().max(128).nullable(),
 });
 /** Check or retry an approved plan's outstanding items; never a new approval. */
 export const planPublish = z.strictObject({
@@ -984,6 +1002,7 @@ export const workEvent = z.discriminatedUnion("kind", [
   toolsReport,
   workAttachmentResult,
   planPlacesResult,
+  trackerTypesResult,
   workSnapshot,
   councilStatus,
   z.strictObject({

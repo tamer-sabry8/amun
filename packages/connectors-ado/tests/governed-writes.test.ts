@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { AdoWriteClient } from "../src/governed-writes.ts";
+import { AdoTypeMissing, AdoWriteClient } from "../src/governed-writes.ts";
 const base = "https://example.test/C/";
 it("creates at the root with the approved marker and parent, verifies the receipt, then commits separately using the reviewed revision", async () => {
   const calls: { method: string; url: string; body: unknown }[] = [];
@@ -141,4 +141,33 @@ it("accepts Azure rich-text block-end spacing but rejects changed text", async (
   });
   fields["System.Description"] = "<ul><li>The result was visible. </li> </ul>";
   await expect(client.verify(2, step, null)).rejects.toThrow("verification");
+});
+it("marks only Azure's missing-type rejection of a create", async () => {
+  const step = {
+    itemId: "i",
+    type: "User Story",
+    parentId: null,
+    fields: { "System.Title": "T" },
+    marker: "Amun-1",
+    revision: 0,
+    remoteId: null,
+  };
+  const reply = (status: number, data: unknown) =>
+    new AdoWriteClient(base, "POCs", async () => ({ status, data }));
+  await expect(
+    reply(404, { typeKey: "WorkItemTypeDoesNotExistException" }).write(
+      step,
+      null,
+    ),
+  ).rejects.toBeInstanceOf(AdoTypeMissing);
+  await expect(
+    reply(400, {
+      message: "TF26199: The work item type User Story does not exist.",
+    }).write(step, null),
+  ).rejects.toBeInstanceOf(AdoTypeMissing);
+  const other = await reply(400, { message: "Field is required" })
+    .write(step, null)
+    .catch((error: Error) => error);
+  expect(other).not.toBeInstanceOf(AdoTypeMissing);
+  expect((other as Error).message).toBe("request_rejected_400");
 });

@@ -19,6 +19,8 @@ export interface PlanWriteItem {
 export interface PlanReceipt {
   externalId: string;
   url?: string | undefined;
+  /** Said when the item was created differently from the plan. */
+  note?: string | undefined;
 }
 export interface PlanTarget {
   /** Creates the item. Throws when the outcome is a failure or uncertain. */
@@ -210,7 +212,7 @@ export class PlanPublisher {
         state: "created",
         external_id: receipt.externalId,
         url: receipt.url ?? null,
-        note: null,
+        note: receipt.note ?? null,
       });
       results.push({
         id: row.item_id,

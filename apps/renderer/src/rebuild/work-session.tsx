@@ -8,7 +8,10 @@ import {
   previewNote,
   updateMessage,
 } from "../../../../packages/domain/src/work/home.ts";
-import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import {
+  approveLabel,
+  countedNoun,
+} from "../../../../packages/domain/src/work/permissions.ts";
 import {
   rfpAuthoringBoundary,
   scopeCheck,
@@ -55,7 +58,10 @@ import {
   portionWords,
   useAttachments,
 } from "./attachments.ts";
-import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
+import {
+  planPlacesResult,
+  trackerTypesResult,
+} from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
@@ -392,6 +398,8 @@ interface Place {
   destination: string;
   place: string | null;
   problem: string | null;
+  kind?: string | null | undefined;
+  note?: string | null | undefined;
 }
 /** Where each item of a plan would go, asked from the service. */
 function usePlaces(planId: string, fingerprint: string) {
@@ -407,6 +415,38 @@ function usePlaces(planId: string, fingerprint: string) {
   }, [planId, fingerprint]);
   return places;
 }
+
+type TrackerTypes = { project: string; story: string; task: string | null };
+const trackerCache = new Map<string, TrackerTypes>();
+/**
+ * The work item types of the area's Azure DevOps project, so Firstmate
+ * proposes the project's own type from the start. Read once per area; a slow
+ * or missing answer only means Firstmate is not told.
+ */
+function askTrackerTypes(areaId: string) {
+  const known = trackerCache.get(areaId);
+  if (known) return Promise.resolve(known);
+  return new Promise<TrackerTypes | null>((resolve) => {
+    const finish = (value: TrackerTypes | null) => {
+      stop();
+      clearTimeout(timer);
+      if (value) trackerCache.set(areaId, value);
+      resolve(value);
+    };
+    const stop = bridge.onEvent((raw) => {
+      const event = trackerTypesResult.safeParse(raw);
+      if (!event.success || event.data.workAreaId !== areaId) return;
+      const { project, story, task } = event.data;
+      finish(project && story ? { project, story, task } : null);
+    });
+    const timer = setTimeout(() => finish(null), 2500);
+    bridge.send({ version: 1, kind: "tracker-types", workAreaId: areaId });
+  });
+}
+const trackerLine = (types: TrackerTypes | null) =>
+  types
+    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one; Amun uses the project's own.`
+    : "";
 
 type PlanEntry = Snapshot["plans"][number];
 function PlanItem({
@@ -441,6 +481,7 @@ function PlanItem({
         <>
           <span className="row wrap small">
             <span className="tag">{trackerName(destination)}</span>
+            {place?.kind && <span className="tag">{place.kind}</span>}
             {place?.place && <span className="muted">{place.place}</span>}
             {place?.problem && (
               <span style={{ color: "var(--amun-status-signed-out)" }}>
@@ -459,6 +500,7 @@ function PlanItem({
               ? " #" + result.externalId
               : ""}
           </span>
+          {place?.note && <span className="muted">{place.note}</span>}
           {result.url && (
             <button
               className="link"
@@ -527,7 +569,15 @@ function PlanReview({
   const places = usePlaces(planId, plan?.fingerprint ?? "");
   if (!plan) return <p className="muted">That plan is no longer available.</p>;
   const changed = plan.state === "proposed" && seen !== plan.fingerprint;
-  const noun = plan.kind === "stories" ? "story" : "change";
+  // The real work item type, when every item goes to one the project names.
+  const kinds = new Set(
+    plan.items.map(
+      (item) => places.find((entry) => entry.id === item.id)?.kind,
+    ),
+  );
+  const [onlyKind] = kinds;
+  const realType = kinds.size === 1 && onlyKind ? onlyKind.toLowerCase() : null;
+  const noun = realType ?? (plan.kind === "stories" ? "story" : "change");
   const proposed = plan.state === "proposed";
   const ticked = plan.items.filter((item) => !skipped.includes(item.id));
   // Items left out of an earlier approval of this plan, still waiting.
@@ -539,9 +589,11 @@ function PlanReview({
     <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ fontSize: 20 }}>{plan.summary || "Proposed changes"}</h2>
       <p className="muted">
-        To {planDestinations(plan)} · {plan.items.length}{" "}
-        {plan.items.length === 1 ? "item" : "items"} ·{" "}
-        {planStateNote(plan.state, plan.destination)}
+        To {planDestinations(plan)} ·{" "}
+        {realType
+          ? countedNoun(plan.items.length, realType)
+          : `${plan.items.length} ${plan.items.length === 1 ? "item" : "items"}`}{" "}
+        · {planStateNote(plan.state, plan.destination)}
       </p>
       <div style={{ display: "grid", gap: 14 }}>
         {plan.items.map((item) => {
@@ -1248,6 +1300,7 @@ export function WorkSession({
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
     const record = snapshot.rfps.find((item) => item.id === areaId);
+    const tracker = await askTrackerTypes(areaId);
     const header = areaTurnContext(
       context.area,
       typeLabels[context.area.type],
@@ -1260,6 +1313,7 @@ export function WorkSession({
         .slice(0, 30)
         .map(factLine),
       standingPermissionLines(snapshot, context.area.groupId ?? null),
+      trackerLine(tracker),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   adoPlanTarget,
   adoStep,
+  resolveAdoTypes,
   claimsNotionPageUpdate,
   localClaimRefusalEvent,
   localPlanRefusal,
@@ -9,6 +10,7 @@ import {
   notionUpdateRefusalEvent,
   notionPlanTarget,
 } from "../src/plan-targets.ts";
+import { AdoTypeMissing } from "../../../packages/connectors-ado/src/governed-writes.ts";
 import { PlanNotSent } from "../../../packages/data/src/plan-publication.ts";
 import type { AzureProcessSchema } from "../../../packages/contracts/src/backlog.ts";
 
@@ -196,6 +198,159 @@ describe("Azure DevOps plan items", () => {
       },
     );
     await expect(target.write(item())).rejects.toBeInstanceOf(PlanNotSent);
+  });
+});
+
+const process = (process: string, ...names: string[]) =>
+  ({
+    process,
+    areas: ["POCs"],
+    iterations: ["POCs"],
+    types: names.map((name) => ({
+      name,
+      fields: [field("System.Title"), field("System.Description")],
+    })),
+  }) as unknown as AzureProcessSchema;
+const processes = [
+  ["Scrum", "Product Backlog Item"],
+  ["Agile", "User Story"],
+  ["Basic", "Issue"],
+  ["CMMI", "Requirement"],
+] as const;
+
+describe("Azure DevOps work item types by process", () => {
+  it.each(processes)(
+    "%s: a generic story name becomes the project's own %s",
+    (name, story) => {
+      const only = process(name, "Bug", "Task", story);
+      expect(adoStep(item(), only, "POCs").type).toBe(story);
+      expect(adoStep(item({ type: "User Story" }), only, "POCs").type).toBe(
+        story,
+      );
+      expect(adoStep(item({ type: "Sub-task" }), only, "POCs").type).toBe(
+        "Task",
+      );
+    },
+  );
+  it("prefers the team's backlog configuration over the process name", () => {
+    const both = process("Agile", "User Story", "Product Backlog Item", "Task");
+    expect(resolveAdoTypes(both, { story: "Product Backlog Item" }).story).toBe(
+      "Product Backlog Item",
+    );
+    expect(
+      resolveAdoTypes(both, undefined, { story: "Product Backlog Item" }).story,
+    ).toBe("Product Backlog Item");
+    expect(resolveAdoTypes(both).story).toBe("User Story");
+  });
+  it("keeps a type the project has and refuses an unknown one", () => {
+    const scrum = process("Scrum", "Product Backlog Item", "Bug", "Task");
+    expect(adoStep(item({ type: "Bug" }), scrum, "POCs").type).toBe("Bug");
+    expect(() => adoStep(item({ type: "Epic" }), scrum, "POCs")).toThrow(
+      PlanNotSent,
+    );
+  });
+});
+
+describe("Azure DevOps rejected work item type", () => {
+  // The cached schema still claims "User Story" exists; Azure says it does not.
+  const stale = process("Agile", "User Story", "Product Backlog Item", "Task");
+  // Learned from an earlier plan, so the first attempt uses the stale type.
+  const make = (
+    write: (type: string) => Promise<{ id: number }>,
+    found = false,
+  ) => {
+    const sent: { type: string; marker: string; fields: unknown }[] = [];
+    const learned: unknown[] = [];
+    const target = adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => stale },
+      {
+        write: async (step) => {
+          sent.push(step);
+          return write(step.type);
+        },
+        find: async () => (found ? { id: 99 } : undefined),
+      },
+      {
+        backlog: async () => ({ story: "Product Backlog Item" }),
+        learned: () => ({ story: "User Story" }),
+        learn: (names) => learned.push(names),
+      },
+    );
+    return { target, sent, learned };
+  };
+  const planned = () => item({ type: "User Story", description: "Why" });
+  const reject = (type: string) => {
+    if (type === "User Story") throw new AdoTypeMissing("rejected");
+    return Promise.resolve({ id: 7 });
+  };
+
+  it("retries once with the project's story type and says so", async () => {
+    const { target, sent, learned } = make(async (type) => reject(type));
+    const receipt = await target.write(planned());
+    expect(receipt.externalId).toBe("7");
+    expect(receipt.note).toMatch(/User Story.*Product Backlog Item/);
+    expect(sent.map((step) => step.type)).toEqual([
+      "User Story",
+      "Product Backlog Item",
+    ]);
+    expect(sent[1]?.marker).toBe(sent[0]?.marker);
+    expect(sent[1]?.fields).toEqual(sent[0]?.fields);
+    expect(learned.at(-1)).toMatchObject({ story: "Product Backlog Item" });
+  });
+  it("does not retry any other failure", async () => {
+    const { target, sent } = make(async () => {
+      throw Error("request_rejected_400");
+    });
+    await expect(target.write(planned())).rejects.toThrow(
+      "request_rejected_400",
+    );
+    expect(sent).toHaveLength(1);
+  });
+  it("retries at most once", async () => {
+    const sent: string[] = [];
+    const target = adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => stale },
+      {
+        write: async (step) => {
+          sent.push(step.type);
+          throw new AdoTypeMissing("always");
+        },
+        find: async () => undefined,
+      },
+      {
+        backlog: async () => ({ story: "Product Backlog Item" }),
+        learned: () => ({ story: "User Story" }),
+      },
+    );
+    await expect(target.write(planned())).rejects.toBeInstanceOf(
+      AdoTypeMissing,
+    );
+    expect(sent).toEqual(["User Story", "Product Backlog Item"]);
+  });
+  it("links an item that already exists instead of creating it again", async () => {
+    const sent: string[] = [];
+    const target = adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      { processSchema: async () => stale },
+      {
+        write: async (step) => {
+          sent.push(step.type);
+          throw new AdoTypeMissing("x");
+        },
+        find: async () => ({ id: 99 }),
+      },
+      {
+        backlog: async () => ({ story: "Product Backlog Item" }),
+        learned: () => ({ story: "User Story" }),
+      },
+    );
+    expect((await target.write(planned())).externalId).toBe("99");
+    expect(sent).toEqual(["User Story"]);
   });
 });
 
