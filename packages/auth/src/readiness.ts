@@ -35,7 +35,7 @@ export async function checkPiReadiness(
       throw error;
     }
   },
-): Promise<"configured" | "missing" | "error"> {
+): Promise<"configured" | "missing" | "error" | "unknown"> {
   try {
     if (!modelLoginOptions.some((option) => option.provider === provider))
       return "error";
@@ -63,6 +63,7 @@ export async function checkPiReadiness(
       return parseReadiness(provider, output);
     });
   } catch {
-    return "error";
+    // A timeout, spawn failure or unsafe store says nothing about the sign-in.
+    return "unknown";
   }
 }

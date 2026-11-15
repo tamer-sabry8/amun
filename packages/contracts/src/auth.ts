@@ -89,6 +89,7 @@ const status = z.enum([
   "checking",
   "ready",
   "error",
+  "unknown",
   "cancelled",
 ]);
 export const authEvent = z.discriminatedUnion("kind", [

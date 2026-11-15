@@ -54,7 +54,7 @@ it("runs only the supported scoped JSON check under a lock and returns no raw cr
           throw Error("secret");
         },
       ),
-    ).toBe("error");
+    ).toBe("unknown");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

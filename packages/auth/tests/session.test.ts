@@ -97,7 +97,9 @@ it("validates commands, persists only connection metadata, clears secrets from r
 });
 
 function modelSession(
-  readiness: (provider: string) => Promise<"configured" | "missing" | "error">,
+  readiness: (
+    provider: string,
+  ) => Promise<"configured" | "missing" | "error" | "unknown">,
 ) {
   const statuses: string[] = [];
   let finish: () => void = () => undefined;
@@ -147,7 +149,7 @@ it("keeps a missing or failing check as it is", async () => {
     throw Error("lock timeout");
   });
   await broken.ask("readiness", "openrouter");
-  expect(broken.statuses.at(-1)).toBe("openrouter:error");
+  expect(broken.statuses.at(-1)).toBe("openrouter:unknown");
 });
 
 it("runs a check asked for during a sign-in once the sign-in ends", async () => {

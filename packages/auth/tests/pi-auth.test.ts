@@ -70,8 +70,18 @@ it("readiness uses the pinned CLI result and cannot leak credentials or imply su
       "github-copilot",
       JSON.stringify({ provider: "other", status: "ready" }),
     ),
-  ).toBe("error");
-  expect(parseReadiness("openrouter", "not json")).toBe("error");
+  ).toBe("unknown");
+  expect(parseReadiness("openrouter", "not json")).toBe("unknown");
+  expect(
+    parseReadiness(
+      "github-copilot",
+      JSON.stringify({
+        provider: "github-copilot",
+        status: "not_ready",
+        reason: "token_expired",
+      }),
+    ),
+  ).toBe("unknown");
   expect(
     parseReadiness(
       "openrouter",
@@ -81,7 +91,7 @@ it("readiness uses the pinned CLI result and cannot leak credentials or imply su
         credentials: "secret",
       }),
     ),
-  ).toBe("error");
+  ).toBe("unknown");
 });
 it("binds Copilot browser handoff to the selected supported GHE.com tenant", async () => {
   const { copilotHost } = await import("../src/pi-auth.ts");

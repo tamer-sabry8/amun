@@ -1,6 +1,12 @@
 // First-run wizard (handoff §5): four prompt-led steps. Setup only; it never
 // starts work. Every step can be skipped and finished later in Settings.
-import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { modelLoginOptions } from "@amun/contracts";
 import {
   groupCards,
@@ -99,6 +105,7 @@ function askCheck(provider: string) {
   phases.set(provider, "asked");
   bridge.send({ version: 1, kind: "auth", action: "readiness", provider });
 }
+const rechecked = new Set<string>();
 let watchingSignIns = false;
 function watchSignIns() {
   if (watchingSignIns) return;
@@ -115,7 +122,10 @@ function watchSignIns() {
       else if (status === "configured" && phase === "running") {
         phases.set(provider, "passed");
         changed = true;
-      } else if (["missing", "error", "cancelled"].includes(status) && phase) {
+      } else if (
+        ["missing", "error", "unknown", "cancelled"].includes(status) &&
+        phase
+      ) {
         phases.delete(provider);
         changed = true;
       }
@@ -157,8 +167,24 @@ export function ModelCards() {
       if (due || bridge.getSnapshot().modelStatus[provider] === undefined)
         askCheck(provider);
   }, [state.status]);
+  const recheck = useRef(new Map<string, number>());
+  useEffect(() => {
+    const timers = recheck.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   useEffect(() => {
     for (const [provider, status] of Object.entries(state.modelStatus)) {
+      // An unanswered check is asked once more after a short wait, once per launch.
+      if (status === "unknown" && !rechecked.has(provider)) {
+        rechecked.add(provider);
+        recheck.current.set(
+          provider,
+          window.setTimeout(() => askCheck(provider), 30_000),
+        );
+      }
       if (status === "ready" && !worked.includes(provider)) {
         const next = [...worked, provider];
         localStorage.setItem(readyKey, JSON.stringify(next));
@@ -180,11 +206,17 @@ export function ModelCards() {
     note: string,
   ) => {
     const view = connectionStatus({
-      state: fromLegacyStatus(state.modelStatus[provider], {
-        everReady: worked.includes(provider),
-        attempted: attempted.includes(provider),
-        checked: checked.includes(provider),
-      }),
+      state: fromLegacyStatus(
+        // Not heard yet on a live connection: the check is on its way.
+        state.modelStatus[provider] ??
+          (state.status === "Connected" ? "checking" : undefined),
+        {
+          everReady: worked.includes(provider),
+          attempted: attempted.includes(provider),
+          checked: checked.includes(provider),
+        },
+      ),
+      finished: state.modelStatus[provider] === "unknown",
     });
     return (
       <div className="rb-provider" key={provider + type}>

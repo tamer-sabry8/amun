@@ -674,6 +674,17 @@ describe("connection status (Q11–Q12)", () => {
       text: "Checking…",
       action: null,
     });
+    // Pending has no action; a finished-but-unknown check keeps the neutral
+    // text and offers the way back in.
+    expect(connectionStatus({ state: "checking", finished: true })).toEqual({
+      icon: "checking",
+      tone: "checking",
+      text: "Checking…",
+      action: "Try again",
+    });
+    expect(
+      connectionStatus({ state: "checking", finished: false }).action,
+    ).toBe(null);
     expect(connectionStatus({ state: "connected" })).toMatchObject({
       text: "Connected",
       action: null,
@@ -715,6 +726,9 @@ describe("connection status (Q11–Q12)", () => {
     expect(fromLegacyStatus(undefined)).toBe("signed_out");
     expect(fromLegacyStatus("missing")).toBe("signed_out");
     expect(fromLegacyStatus("cancelled")).toBe("signed_out");
+    // A check that could not answer is never "signed out".
+    expect(fromLegacyStatus("unknown")).toBe("checking");
+    expect(fromLegacyStatus("unknown", { attempted: true })).toBe("checking");
     expect(fromLegacyStatus("checking")).toBe("checking");
     expect(fromLegacyStatus("configured")).toBe("checking");
     expect(fromLegacyStatus("ready")).toBe("connected");

@@ -271,6 +271,8 @@ export type ConnectionState =
   "checking" | "signed_in" | "connected" | "signed_out" | "not_working";
 export function connectionStatus(input: {
   state: ConnectionState;
+  /** The check has finished without an answer: still neutral, but recoverable. */
+  finished?: boolean;
   reason?: "out_of_credits" | "service_down" | "model_not_enabled" | null;
 }) {
   const reasons = {
@@ -283,7 +285,7 @@ export function connectionStatus(input: {
       icon: "checking",
       tone: "checking",
       text: "Checking…",
-      action: null,
+      action: input.finished ? "Try again" : null,
     };
   // Signed in and accepted, but no model has answered yet. Kept apart from
   // "Connected", which is only claimed after a real reply.
@@ -341,7 +343,9 @@ export function fromLegacyStatus(
 ): ConnectionState {
   const value = (status ?? "missing").toLowerCase();
   if (value === "configured" && history.checked) return "signed_in";
-  if (value === "checking" || value === "configured") return "checking";
+  // "unknown" means the check could not answer; it is never "signed out".
+  if (value === "checking" || value === "configured" || value === "unknown")
+    return "checking";
   if (value === "ready" || value === "connected") return "connected";
   if (value === "error" || value === "failed")
     return history.everReady || history.attempted

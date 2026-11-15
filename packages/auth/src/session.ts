@@ -24,7 +24,7 @@ export class AuthSession {
   private readonly start: StartLogin;
   private readonly readiness: (
     provider: string,
-  ) => Promise<"configured" | "missing" | "error">;
+  ) => Promise<"configured" | "missing" | "error" | "unknown">;
   private login: LoginProcess | undefined;
   /** Providers whose check was asked for while a sign-in was running. */
   private readonly deferred = new Set<string>();
@@ -61,11 +61,11 @@ export class AuthSession {
     });
     // "configured" means the credential is stored and Pi accepts it. It is
     // not proof that a model answers, so it is never promoted to "ready".
-    let status: "configured" | "missing" | "error";
+    let status: "configured" | "missing" | "error" | "unknown";
     try {
       status = await this.readiness(provider);
     } catch {
-      status = "error";
+      status = "unknown";
     }
     this.send({ version: 1, kind: "auth-status", id: provider, status });
   }

@@ -104,7 +104,7 @@ export async function preparePiAuth(root: string): Promise<string> {
 export function parseReadiness(
   provider: string,
   output: string,
-): "configured" | "missing" | "error" {
+): "configured" | "missing" | "unknown" {
   try {
     if (output.length > 65536) throw Error();
     const data: unknown = JSON.parse(output);
@@ -126,8 +126,10 @@ export function parseReadiness(
         data.reason === "credentials_not_configured")
     )
       return "missing";
-    return "error";
+    // Any other answer cannot tell a rejected credential from a passing
+    // problem (expired access token, network), so it is not "signed out".
+    return "unknown";
   } catch {
-    return "error";
+    return "unknown";
   }
 }
