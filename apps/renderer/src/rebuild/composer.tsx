@@ -16,6 +16,7 @@ import { councilCommands } from "../../../../packages/domain/src/work/council.ts
 import { Icon } from "../icons.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { takeOff } from "./motion.ts";
+import { useDismiss } from "./use-dismiss.ts";
 
 export const allCommands: SlashCommand[] = [
   ...builtInCommands,
@@ -86,6 +87,8 @@ export function Composer({
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const addMenu = useRef<HTMLDivElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const addRoots = useRef([addMenu, addButton]).current;
   const recognition = useRef<Recognition | null>(null);
 
   const trigger = dismissed ? null : composerTrigger(draft, caret);
@@ -120,6 +123,10 @@ export function Composer({
     if (pickNonce) picker.current?.click();
   }, [pickNonce]);
 
+  useDismiss(plus, addRoots, (reason) => {
+    setPlus(false);
+    if (reason === "escape") area.current?.focus();
+  });
   const change = (text: string, position = text.length) => {
     setDraft(text);
     setCaret(position);
@@ -140,6 +147,7 @@ export function Composer({
     recognition.current?.stop();
     takeOff(sendButton.current?.firstElementChild);
     onSend(text, files);
+    setPlus(false);
     setDraft("");
     setFiles([]);
   };
@@ -342,6 +350,7 @@ export function Composer({
             className="icon-btn"
             aria-label="Add files, screenshots or sources"
             aria-expanded={plus}
+            ref={addButton}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setPlus(!plus)}
           >

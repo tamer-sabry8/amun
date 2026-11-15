@@ -21,6 +21,7 @@ import {
 } from "../../../../packages/domain/src/work/shell.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
+import { useDismiss } from "./use-dismiss.ts";
 import { scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
@@ -835,6 +836,12 @@ export function WorkSession({
   );
   const [editing, setEditing] = useState(true);
   const [renaming, setRenaming] = useState(false);
+  const titleRoot = useRef<HTMLElement>(null);
+  useDismiss(menu === "title", titleRoot, () => setMenu(null));
+  const openDocument = pane?.kind === "output" ? pane.id : null;
+  useEffect(() => {
+    setMenu((current) => (current === "title" ? null : current));
+  }, [openDocument]);
   const [dragging, setDragging] = useState(false);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
     null,
@@ -1898,7 +1905,7 @@ export function WorkSession({
             }}
           />
           <section className="rb-artifact" aria-label={paneTitle || "Document"}>
-            <header>
+            <header ref={titleRoot}>
               {renaming && output ? (
                 <form
                   className="grow"
