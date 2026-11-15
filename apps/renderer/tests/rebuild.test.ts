@@ -1022,6 +1022,38 @@ describe("blockers from the chat", () => {
   });
 });
 
+describe("standing permissions in the turn", () => {
+  it("are told to Firstmate read-only, and only when a group is known", () => {
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      "Work",
+      undefined,
+      [],
+      [],
+      ["Create items in Notion"],
+    );
+    expect(text).toContain("Create items in Notion");
+    expect(text).toContain("only the owner changes them");
+    expect(
+      areaTurnContext(
+        { type: "task", name: "T" },
+        "Task",
+        "Work",
+        undefined,
+        [],
+        [],
+        [],
+      ),
+    ).toContain(
+      "set for this group (read-only: only the owner changes them, in Settings): none.",
+    );
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("Standing permissions");
+  });
+});
+
 describe("renaming from the chat", () => {
   const block = (value: unknown) =>
     "```amun\n" + JSON.stringify(value) + "\n```";

@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import {
   gateLabels,
+  permissionChanges,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
 import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
@@ -22,7 +23,12 @@ import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
 import { ConnectionCards } from "./connection-cards.tsx";
 import { council, work } from "./store.ts";
-import { groupName, shortDate, type Snapshot } from "./view-model.ts";
+import {
+  groupName,
+  permissionText,
+  shortDate,
+  type Snapshot,
+} from "./view-model.ts";
 
 export const settingsSections = [
   ["models", "Accounts and models"],
@@ -321,6 +327,34 @@ export function Settings({
                     None. Firstmate asks before each change outside a
                     conversation’s scope.
                   </p>
+                )}
+                {snapshot.permissions.length > 0 && (
+                  <section aria-label="Recent changes" className="rb-rows">
+                    <h4>Recent changes</h4>
+                    {permissionChanges(snapshot.permissions).map((change) => (
+                      <div
+                        className="rb-rowitem"
+                        key={`${change.id}-${change.kind}`}
+                      >
+                        <span>
+                          <span className="name">
+                            You{" "}
+                            {change.kind === "allowed"
+                              ? "allowed"
+                              : "took away"}{" "}
+                            {permissionText(change.action, change.destination)}
+                          </span>
+                          <br />
+                          <span className="muted small">
+                            {groupName(snapshot, change.groupId)}
+                          </span>
+                        </span>
+                        <span className="muted small">
+                          {shortDate(change.at)}
+                        </span>
+                      </div>
+                    ))}
+                  </section>
                 )}
                 <form
                   className="row wrap"

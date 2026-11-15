@@ -90,6 +90,59 @@ export function authority(
     : { allowed: false, ask: "approval" };
 }
 
+export interface PermissionChange {
+  id: string;
+  kind: "allowed" | "revoked";
+  at: string;
+  groupId: string;
+  destination: string;
+  action: string;
+}
+
+/**
+ * Every grant and revoke the owner made, newest first. A revoke keeps its
+ * row, so the history is the rows themselves; nothing else is stored.
+ */
+export function permissionChanges(
+  permissions: {
+    id: string;
+    groupId: string;
+    destination: string;
+    action: string;
+    createdAt: string;
+    revokedAt: string | null;
+  }[],
+  limit = 20,
+): PermissionChange[] {
+  const changes = permissions.flatMap((item) => {
+    const base = {
+      id: item.id,
+      groupId: item.groupId,
+      destination: item.destination,
+      action: item.action,
+    };
+    const allowed: PermissionChange = {
+      ...base,
+      kind: "allowed",
+      at: item.createdAt,
+    };
+    return item.revokedAt
+      ? [allowed, { ...base, kind: "revoked" as const, at: item.revokedAt }]
+      : [allowed];
+  });
+  // A revoke in the same instant as its grant is the later event.
+  const order = (change: PermissionChange) =>
+    change.kind === "revoked" ? 1 : 0;
+  return changes
+    .sort(
+      (a, b) =>
+        b.at.localeCompare(a.at) ||
+        order(b) - order(a) ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, limit);
+}
+
 export interface PlanItem {
   id: string;
   summary: string;

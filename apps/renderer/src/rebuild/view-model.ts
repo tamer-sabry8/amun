@@ -9,6 +9,7 @@ import {
   type Attention,
 } from "../../../../packages/domain/src/work/home.ts";
 import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import {
   agentCatalog,
   agentProfile,
@@ -50,6 +51,23 @@ export function factsFor(snapshot: Snapshot, groupId: string | null) {
   return snapshot.memory.facts.filter(
     (fact) => fact.groupId === null || fact.groupId === groupId,
   );
+}
+
+/** "Create items in Notion": what a standing permission lets Firstmate do. */
+export function permissionText(action: string, destination: string) {
+  const what =
+    { create: "Create items", update: "Update items" }[action] ?? action;
+  return `${what} in ${trackerName(destination)}`;
+}
+
+/** The current standing permissions for one group, for Firstmate to read. */
+export function standingPermissionLines(
+  snapshot: Snapshot,
+  groupId: string | null,
+) {
+  return snapshot.permissions
+    .filter((item) => !item.revokedAt && item.groupId === groupId)
+    .map((item) => permissionText(item.action, item.destination));
 }
 
 /** Open blockers on the work the owner can see, oldest first. */
@@ -529,7 +547,13 @@ export function areaTurnContext(
   blockers: string[] = [],
   /** Remembered facts as "key: value", so Firstmate can name one back. */
   facts: string[] = [],
+  /** Standing permissions for this group, as "Create items in Notion". */
+  permissions?: string[],
 ) {
+  const allowed =
+    permissions === undefined
+      ? ""
+      : ` Standing permissions the owner has set for this group (read-only: only the owner changes them, in Settings): ${permissions.length ? permissions.join("; ") : "none"}.`;
   const remembered = facts.length
     ? ` Remembered facts the owner can have corrected or forgotten: ${facts.join("; ")}.`
     : "";
@@ -540,7 +564,7 @@ export function areaTurnContext(
     area.type === "project"
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {

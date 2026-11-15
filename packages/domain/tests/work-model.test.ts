@@ -18,6 +18,7 @@ import {
   authority,
   changeSinceApproval,
   gateFor,
+  permissionChanges,
   planFingerprint,
   ruleCandidate,
   writeSummary,
@@ -685,5 +686,39 @@ describe("rfpDetails", () => {
     ["owner is Sara", { accountOwner: "Sara" }],
   ])("reads owners from %s", (text, expected) => {
     expect(rfpDetails(text, now)).toEqual({ ...none, ...expected });
+  });
+});
+
+describe("permissionChanges", () => {
+  const row = (id: string, createdAt: string, revokedAt: string | null) => ({
+    id,
+    groupId: "g",
+    destination: "notion",
+    action: "create",
+    createdAt,
+    revokedAt,
+  });
+  it("lists every grant and revoke, newest first", () => {
+    const changes = permissionChanges([
+      row("a", "2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z"),
+      row("b", "2026-11-02T10:00:00Z", null),
+    ]);
+    expect(changes.map((c) => `${c.id}:${c.kind}`)).toEqual([
+      "a:revoked",
+      "b:allowed",
+      "a:allowed",
+    ]);
+  });
+  it("puts a revoke after its grant when both share a moment, and keeps 20", () => {
+    const same = "2026-11-01T10:00:00Z";
+    expect(
+      permissionChanges([row("a", same, same)]).map((c) => c.kind),
+    ).toEqual(["revoked", "allowed"]);
+    const many = Array.from({ length: 30 }, (_, i) =>
+      row(`p${i}`, `2026-11-${String(i + 1).padStart(2, "0")}T00:00:00Z`, null),
+    );
+    const kept = permissionChanges(many);
+    expect(kept).toHaveLength(20);
+    expect(kept[0]!.id).toBe("p29");
   });
 });

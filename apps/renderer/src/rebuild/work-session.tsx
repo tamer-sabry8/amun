@@ -80,6 +80,7 @@ import {
   factsFor,
   amunProtocol,
   areaTurnContext,
+  standingPermissionLines,
   areaOf,
   parseAmunActions,
   typeLabels,
@@ -1258,6 +1259,7 @@ export function WorkSession({
       factsFor(snapshot, context.area.groupId ?? null)
         .slice(0, 30)
         .map(factLine),
+      standingPermissionLines(snapshot, context.area.groupId ?? null),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`

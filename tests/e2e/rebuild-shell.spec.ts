@@ -394,6 +394,17 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await expect(
       page.getByText("Using information across groups", { exact: true }),
     ).toBeVisible();
+    await page.getByLabel("Group", { exact: true }).selectOption({ index: 1 });
+    await page.getByLabel("Where").selectOption("notion");
+    await page.getByRole("button", { name: "Allow" }).click();
+    const recent = page.getByRole("region", { name: "Recent changes" });
+    await expect(
+      recent.getByText("You allowed Create items in Notion"),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Revoke" }).click();
+    await expect(
+      recent.getByText("You took away Create items in Notion"),
+    ).toBeVisible();
     await shot(page, "18-permissions");
     await scan(page, "permissions");
     await page
