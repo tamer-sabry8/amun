@@ -542,6 +542,7 @@ function PlanItem({
                     version: 1,
                     kind: "plan-publish",
                     planId: plan.id,
+                    ...(result.state === "failed" ? { retry: true } : {}),
                   })
                 }
               >
@@ -1713,11 +1714,33 @@ export function WorkSession({
             {context.failure.options[0] && (
               <button
                 className="btn"
-                onClick={() =>
-                  send(
-                    `${context.failure!.options[0]}: check what already exists first, then continue.`,
-                  )
-                }
+                onClick={() => {
+                  const planId = context.failure!.ref?.startsWith("failure:")
+                    ? context.failure!.ref.slice(8)
+                    : null;
+                  const plan = snapshot.plans.find(
+                    (item) => item.id === planId,
+                  );
+                  if (!planId || !plan) {
+                    // Not tied to a plan Amun can continue: ask Firstmate.
+                    void send(
+                      `${context.failure!.options[0]}: check what already exists first, then continue.`,
+                    );
+                  } else if (
+                    !["approved", "partial", "failed"].includes(plan.state)
+                  ) {
+                    // Changed since approval: the owner reviews it again.
+                    onPane({ kind: "plan", id: planId });
+                  } else
+                    bridge.send({
+                      version: 1,
+                      kind: "plan-publish",
+                      planId,
+                      ...(context.failure!.options[0]!.startsWith("Retry")
+                        ? { retry: true }
+                        : {}),
+                    });
+                }}
               >
                 {context.failure.options[0]}
               </button>

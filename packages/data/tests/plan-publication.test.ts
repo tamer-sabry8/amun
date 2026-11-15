@@ -168,6 +168,88 @@ describe("publishing an approved plan", () => {
     expect(notion.writes).toHaveLength(1);
   });
 
+  it("retries only the failed items of the approved plan, with a fresh budget", async () => {
+    const id = approved();
+    ado.script = ["reject", "reject"];
+    await publisher.publish(id);
+    expect(plan(id).state).toBe("partial");
+    const marker = publisher.writes(id)[0]!;
+    await publisher.publish(id, { retryFailed: true });
+    expect(ado.writes).toEqual([
+      "Sample story",
+      "Sample story",
+      "Sample story",
+    ]);
+    expect(notion.writes).toEqual(["Sample page"]);
+    expect(ado.finds).toContain("Sample story");
+    expect(plan(id).state).toBe("published");
+    expect(publisher.writes(id)[0]).toMatchObject({
+      id: marker.id,
+      state: "created",
+    });
+    expect(
+      store.snapshot().attention.find((item) => item.ref === "failure:" + id),
+    ).toMatchObject({ state: "done" });
+  });
+
+  it("links an item that was created in the meantime instead of creating it again", async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["reject", "reject"];
+    await publisher.publish(id);
+    const row = db
+      .prepare("SELECT marker FROM plan_writes WHERE plan_id=?")
+      .get(id) as { marker: string };
+    ado.held.set(row.marker, "777");
+    await publisher.publish(id, { retryFailed: true });
+    expect(ado.writes).toHaveLength(2);
+    expect(plan(id).state).toBe("published");
+    expect(plan(id).results[0]).toMatchObject({
+      state: "created",
+      externalId: "777",
+    });
+  });
+
+  it("does not touch an item still being checked when retrying failures", async () => {
+    const id = approved();
+    ado.script = ["reject", "reject"];
+    notion.script = ["lost"];
+    notion.blind = true;
+    await publisher.publish(id);
+    expect(plan(id).results.map((result) => result.state)).toEqual([
+      "failed",
+      "unknown",
+    ]);
+    notion.blind = false;
+    await publisher.publish(id, { retryFailed: true });
+    expect(notion.finds).toHaveLength(1);
+    expect(notion.writes).toHaveLength(1);
+    expect(plan(id).results.map((result) => result.state)).toEqual([
+      "created",
+      "unknown",
+    ]);
+  });
+
+  it("sends nothing and asks for a new review when the plan changed after approval", async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["reject", "reject"];
+    await publisher.publish(id);
+    expect(publisher.needsReview(id)).toBe(false);
+    send("update-plan", {
+      planId: id,
+      items: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          summary: "Sample story",
+          fields: { title: "Changed" },
+        },
+      ],
+    });
+    expect(publisher.needsReview(id)).toBe(true);
+    await publisher.publish(id, { retryFailed: true });
+    expect(ado.writes).toHaveLength(2);
+    expect(plan(id).state).toBe("proposed");
+  });
+
   it("asks instead of resending while the outcome cannot be established", async () => {
     const id = approved([{ summary: "Sample story", fields: {} }]);
     ado.script = ["lost"];

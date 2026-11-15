@@ -493,12 +493,21 @@ export function agentNews(
   const refused = after
     .filter((message) => kind(message) === "plan-refused")
     .map((message) => message.text.slice(0, 2000));
+  const retried = after
+    .filter((message) => kind(message) === "plan-retry")
+    .map((message) => message.text.slice(0, 500));
+  const retries = retried.length
+    ? "[Amun retried failed items of an approved plan at the owner's request. Outcome: " +
+      retried.join(" ") +
+      " Do not redo it; say nothing was duplicated if asked.]\n\n"
+    : "";
   const refusals = refused.length
     ? "[Amun refused the plan you just proposed, so no plan exists and nothing is waiting for approval. The owner has been told: " +
       refused.join(" ") +
       " Correct anything you said about that plan.]\n\n"
     : "";
   return (
+    retries +
     refusals +
     (fresh.length
       ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +

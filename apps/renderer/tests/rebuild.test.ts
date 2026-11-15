@@ -1142,6 +1142,16 @@ describe("what Firstmate is told about its agents' work", () => {
       { role: "firstmate", text: "The plan below updates it.", card: null },
       refused,
     ]);
+    expect(
+      agentNews([
+        { role: "you", text: "Retry" },
+        {
+          role: "firstmate",
+          text: "Retried the 1 item that was not published: 1 created.",
+          card: { kind: "plan-retry" },
+        },
+      ]),
+    ).toContain("1 created");
     expect(news).toContain("refused the plan");
     expect(news).toContain("I can't update that page.");
     expect(

@@ -927,6 +927,8 @@ export const planPublish = z.strictObject({
   version: z.literal(1),
   kind: z.literal("plan-publish"),
   planId: id,
+  /** Re-run only the items that were not created, within the same approval. */
+  retry: z.boolean().optional(),
 });
 /** Open a created item in the browser. Only links Amun recorded are opened. */
 export const planOpen = z.strictObject({

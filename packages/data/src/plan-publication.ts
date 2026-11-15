@@ -110,14 +110,36 @@ export class PlanPublisher {
    * `reconcileOnly`, nothing new is sent: uncertain writes are looked up and
    * linked if found.
    */
-  publish(planId: string, options: { reconcileOnly?: boolean } = {}) {
+  publish(
+    planId: string,
+    options: { reconcileOnly?: boolean; retryFailed?: boolean } = {},
+  ) {
     const active = this.running.get(planId);
     if (active) return active;
-    const run = this.run(planId, options.reconcileOnly === true).finally(() =>
-      this.running.delete(planId),
-    );
+    const run = this.run(
+      planId,
+      options.reconcileOnly === true,
+      options.retryFailed === true,
+    ).finally(() => this.running.delete(planId));
     this.running.set(planId, run);
     return run;
+  }
+
+  /**
+   * True when the plan is no longer an approval that can be continued, for
+   * example because its items were edited after approval. Retrying it then
+   * means a new review, never a quiet resend.
+   */
+  needsReview(planId: string) {
+    const plan = this.db
+      .prepare("SELECT state,approved_json FROM work_plans WHERE id=?")
+      .get(planId) as
+      { state: string; approved_json: string | null } | undefined;
+    return (
+      !plan ||
+      !plan.approved_json ||
+      !["approved", "partial", "failed"].includes(plan.state)
+    );
   }
 
   private rows(planId: string) {
@@ -149,10 +171,14 @@ export class PlanPublisher {
       );
   }
 
-  private async run(planId: string, reconcileOnly: boolean) {
+  private async run(
+    planId: string,
+    reconcileOnly: boolean,
+    retryFailed: boolean,
+  ) {
     const plan = this.db
       .prepare(
-        "SELECT group_id,work_area_id,destination,approved_json,state FROM work_plans WHERE id=?",
+        "SELECT group_id,work_area_id,destination,approved_json,results_json,state FROM work_plans WHERE id=?",
       )
       .get(planId) as
       | {
@@ -160,6 +186,7 @@ export class PlanPublisher {
           work_area_id: string | null;
           destination: string;
           approved_json: string | null;
+          results_json: string | null;
           state: string;
         }
       | undefined;
@@ -190,6 +217,31 @@ export class PlanPublisher {
         }
       })
       .immediate();
+    // A retry covers only the items reported as not created. Their send
+    // budget starts again, and an item that may have landed since is looked
+    // up by its marker first, so it is linked rather than created twice.
+    let only: Set<string> | null = null;
+    if (retryFailed) {
+      const failed = new Set(
+        (
+          JSON.parse(plan.results_json ?? "[]") as {
+            id: string;
+            state: string;
+          }[]
+        )
+          .filter((result) => result.state === "failed")
+          .map((result) => result.id),
+      );
+      only = failed;
+      const reset = this.db.prepare(
+        "UPDATE plan_writes SET attempts=0,note=NULL WHERE plan_id=? AND item_id=? AND state IN ('pending','missing')",
+      );
+      this.db
+        .transaction(() => {
+          for (const id of failed) reset.run(planId, id);
+        })
+        .immediate();
+    }
     const scope: PlanScope = {
       planId,
       groupId: plan.group_id,
@@ -224,6 +276,7 @@ export class PlanPublisher {
     for (const row of this.rows(planId)) {
       const source = items.find((item) => item.id === row.item_id);
       if (!source || row.state === "created") continue;
+      if (only && !only.has(row.item_id)) continue;
       // Reconciling never starts a write that was not already sent.
       if (reconcileOnly && row.state === "pending") continue;
       const item: PlanWriteItem = {
@@ -251,8 +304,11 @@ export class PlanPublisher {
       let state: WriteState = row.state;
       let attempts = row.attempts;
       let settled = false;
+      // A retried item may have landed since it was reported missing.
+      let lookFirst = only !== null && state === "missing";
       while (!settled) {
-        if (state === "sent" || state === "unknown") {
+        if (state === "sent" || state === "unknown" || lookFirst) {
+          lookFirst = false;
           // Look before sending anything again.
           let found: PlanReceipt | undefined;
           try {

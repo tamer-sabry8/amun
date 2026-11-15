@@ -267,6 +267,23 @@ export function failureDetail(
   return parts.join(" ");
 }
 
+/** One line for Firstmate after the owner retried a failed publication. */
+export function retryOutcome(
+  items: { summary: string; state: "created" | "failed" | "unknown" }[],
+  reason: string | null,
+) {
+  if (!items.length) return "Nothing was left to retry.";
+  const done = items.filter((item) => item.state === "created").length;
+  const left = items.filter((item) => item.state === "failed").length;
+  const checking = items.length - done - left;
+  const parts = [
+    `Retried ${items.length === 1 ? "the 1 item" : `the ${items.length} items`} that was not published: ${done} created`,
+  ];
+  if (left) parts.push(`${left} still not created`);
+  if (checking) parts.push(`${checking} being checked`);
+  return parts.join(", ") + "." + (reason && left === 1 ? " " + reason : "");
+}
+
 export interface RuleCase {
   /** Stable key for the situation, e.g. "sheet-vs-project:allocation". */
   situation: string;

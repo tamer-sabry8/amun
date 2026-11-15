@@ -21,6 +21,7 @@ import {
   permissionChanges,
   planFingerprint,
   ruleCandidate,
+  retryOutcome,
   writeSummary,
   type LearnedRule,
   type Plan,
@@ -430,6 +431,19 @@ describe("approve plans, not clicks", () => {
     expect(approveLabel(6)).toBe("Approve and publish 6 stories");
     expect(approveLabel(1)).toBe("Approve and publish 1 story");
     expect(approveLabel(2, "edit")).toBe("Approve and publish 2 edits");
+  });
+});
+
+describe("retryOutcome", () => {
+  it("says in one line what the retry did", () => {
+    expect(retryOutcome([{ summary: "A", state: "created" }], null)).toBe(
+      "Retried the 1 item that was not published: 1 created.",
+    );
+    expect(
+      retryOutcome([{ summary: "A", state: "failed" }], "No such type."),
+    ).toBe(
+      "Retried the 1 item that was not published: 0 created, 1 still not created. No such type.",
+    );
   });
 });
 

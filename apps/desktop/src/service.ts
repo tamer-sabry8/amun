@@ -138,6 +138,7 @@ import { readAttachment } from "../../../packages/data/src/attachment-reader.ts"
 import { ToolRegistry } from "../../../packages/data/src/tool-registry.ts";
 import { probeTools } from "./tool-probe.ts";
 import { trackerName } from "../../../packages/domain/src/work/flows.ts";
+import { retryOutcome } from "../../../packages/domain/src/work/permissions.ts";
 import {
   AuthBroker,
   connectionId,
@@ -407,6 +408,51 @@ function requireWorkerOn(harness: unknown) {
 }
 class WorkerTurnedOff extends Error {}
 class CopilotOnly extends Error {}
+
+/**
+ * Re-runs only the items of an approved plan that were not created, under the
+ * same approval, and tells Firstmate the outcome in one line. A plan edited
+ * since approval is not sent; the owner is asked to review it again.
+ */
+async function retryFailedItems(planId: string) {
+  if (planPublisher.needsReview(planId)) return [];
+  const plan = () => workStore.snapshot().plans.find((p) => p.id === planId);
+  const before = plan();
+  const failed = new Set(
+    (before?.results ?? [])
+      .filter((result) => result.state === "failed")
+      .map((result) => result.id),
+  );
+  const events = await planPublisher.publish(planId, { retryFailed: true });
+  const after = plan();
+  if (after && failed.size) {
+    const items = after.items
+      .filter((item) => failed.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        summary: item.summary,
+        state:
+          after.results.find((result) => result.id === item.id)?.state ??
+          ("failed" as const),
+      }));
+    const note = planPublisher
+      .writes(planId)
+      .find((write) =>
+        items.some((item) => item.id === write.id && item.state === "failed"),
+      )?.note;
+    if (after.workAreaId)
+      workStore.handle({
+        version: 1,
+        kind: "work",
+        action: "message",
+        workAreaId: after.workAreaId,
+        role: "firstmate",
+        text: retryOutcome(items, note ?? null),
+        card: { kind: "plan-retry" },
+      } as never);
+  }
+  return events;
+}
 
 // After a restart, a write that was sent and never confirmed is looked up
 // once the connections are ready. Nothing new is sent from here.
@@ -1733,6 +1779,12 @@ process.parentPort?.on("message", (event) => {
               )
               ?.ref?.slice(8)
           : undefined;
+      const retryOption =
+        message.data.action === "resolve-attention" &&
+        workStore
+          .snapshot()
+          .attention.find((item) => item.id === message.data.attentionId)
+          ?.options.some((option) => option.startsWith("Retry the"));
       // The owner allowing a worker to use its own folder.
       const allowed =
         message.data.action === "resolve-attention" &&
@@ -1777,10 +1829,13 @@ process.parentPort?.on("message", (event) => {
             ? retried
             : null;
       if (planId)
-        void planPublisher
-          .publish(planId)
+        void (
+          retryOption ? retryFailedItems(planId) : planPublisher.publish(planId)
+        )
           .then((published) => {
-            if (!closed) for (const event of published) port.postMessage(event);
+            if (closed) return;
+            for (const event of published) port.postMessage(event);
+            if (retryOption) port.postMessage(workStore.snapshot());
           })
           .catch((error: unknown) =>
             logger.error("plan.publish.failed", {
@@ -1828,8 +1883,11 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       // Continues an approval already given: looks up, then retries within
       // the budget. A plan that was never approved is left alone.
-      void planPublisher
-        .publish(parsed.data.planId)
+      void (
+        parsed.data.retry
+          ? retryFailedItems(parsed.data.planId)
+          : planPublisher.publish(parsed.data.planId)
+      )
         .then((published) => {
           if (closed) return;
           for (const event of published) port.postMessage(event);
