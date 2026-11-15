@@ -285,11 +285,28 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
     quoted
       ? value
       : (identifier.exec(value)?.[1] ?? value.split(afterName)[0]) || value;
-  const stripped = (named ? only(named[1]!) : line)
-    .replace(
-      /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i,
-      "",
-    )
+  const lead =
+    /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i;
+  const afterLead = lead.test(line) ? line.replace(lead, "") : null;
+  const leadingQuote =
+    afterLead === null ? null : /^["“]([^"”]+)["”]/.exec(afterLead);
+  // Without a stated name, the first sentence stands in, never the whole message.
+  const firstSentence = (value: string) =>
+    value.split(/[.!?](?:\s|$)/)[0]?.trim() ?? "";
+  const shortened = (value: string) => {
+    if (value.length <= 60) return value;
+    const cut = value.slice(0, 60);
+    const space = cut.lastIndexOf(" ");
+    return space > 20 ? cut.slice(0, space).trimEnd() : value;
+  };
+  const candidate = named
+    ? only(named[1]!)
+    : leadingQuote
+      ? leadingQuote[1]!
+      : afterLead !== null
+        ? only(firstSentence(afterLead) || afterLead)
+        : shortened(firstSentence(line) || line);
+  const stripped = candidate
     .replace(/^(?:i have an idea|idea|problem)\s*[:\-–]\s*/i, "")
     .replace(/[.!?]+$/, "")
     .trim();

@@ -508,6 +508,38 @@ describe("nameFromRequest", () => {
   ])("takes only the name: %s", (text, expected) => {
     expect(nameFromRequest(text)).toBe(expected);
   });
+  it.each([
+    [
+      "Create a product named QA-20261114-MoCA for testing the MoCA E-Cabinet AI BRD. Use only Azure DevOps TahalufCollection/POCs. Do not publish anything yet.",
+      "QA-20261114-MoCA",
+    ],
+    [
+      "Create a project named Atlas Rollout for the Gulf team. Use only Azure DevOps.",
+      "Atlas Rollout",
+    ],
+    [
+      'Create a product called "MoCA Cabinet" for testing. Do not publish.',
+      "MoCA Cabinet",
+    ],
+    ['Create a project "Gulf Pilot" for the Gulf team.', "Gulf Pilot"],
+    [
+      "Create a product QA-20261114-MoCA for testing the BRD. Do not publish.",
+      "QA-20261114-MoCA",
+    ],
+    ["Create a product MoCA Cabinet. Use only Azure DevOps.", "MoCA Cabinet"],
+  ])("takes the stated name: %s", (text, expected) => {
+    expect(nameFromRequest(text)).toBe(expected);
+  });
+  it("falls back to a short title when no name is stated", () => {
+    const text =
+      "Build something to help clinics track appointments with patients across the region quickly. Do not publish anything yet.";
+    const name = nameFromRequest(text);
+    expect(name.length).toBeLessThanOrEqual(60);
+    expect(text.startsWith(name)).toBe(true);
+    expect(nameFromRequest("Plan the launch. Use only Azure DevOps.")).toBe(
+      "Plan the launch",
+    );
+  });
   it("keeps names short", () => {
     expect(nameFromRequest("x".repeat(200))).toHaveLength(78);
   });
