@@ -109,6 +109,41 @@ export class WorkStore {
   private clean(value: string) {
     return this.redactor.text(value);
   }
+  /** How many versions the snapshot carries; older ones stay in the database. */
+  private static readonly versionsShown = 30;
+  private versionsOf(outputId: string, approved: unknown) {
+    const rows = this.all(
+      "SELECT version,body,author,created_at FROM library_output_versions WHERE output_id=? ORDER BY version DESC LIMIT ?",
+      outputId,
+      WorkStore.versionsShown,
+    );
+    const latest = rows.length ? Number(rows[0]!.version) : 1;
+    return {
+      version: latest,
+      approvedVersion: approved === null ? null : Number(approved),
+      versions: rows.map((row) => ({
+        version: Number(row.version),
+        author: row.author as "owner" | "firstmate" | "agent",
+        createdAt: String(row.created_at),
+        body: String(row.body),
+      })),
+    };
+  }
+  private addVersion(
+    outputId: string,
+    body: string,
+    author: string,
+    now: string,
+  ) {
+    this.run(
+      "INSERT INTO library_output_versions(output_id,version,body,author,created_at) VALUES (?,COALESCE((SELECT MAX(version) FROM library_output_versions WHERE output_id=?),0)+1,?,?,?)",
+      outputId,
+      outputId,
+      body,
+      author,
+      now,
+    );
+  }
 
   setup(): SetupState {
     const row = this.get(
@@ -404,6 +439,7 @@ export class WorkStore {
             needsLinking: false,
             body: String(row.body),
             updatedAt: String(row.updated_at),
+            ...this.versionsOf(String(row.id), row.approved_version),
           })),
           ...records.map((record) => ({
             id: record.id,
@@ -423,6 +459,9 @@ export class WorkStore {
               record.linkage === "unresolved",
             body: record.body,
             updatedAt: record.updatedAt,
+            version: 1,
+            approvedVersion: null,
+            versions: [],
           })),
         ],
         decisions: this.all(
@@ -1498,17 +1537,24 @@ export class WorkStore {
               { reason: "cross_group" },
             );
         const id = command.outputId ?? randomUUID();
+        const body = this.clean(command.body);
+        const before = this.get(
+          "SELECT body FROM library_outputs WHERE id=?",
+          id,
+        );
         this.run(
           "INSERT INTO library_outputs(id,group_id,type,title,body,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,body=excluded.body,status=excluded.status,type=excluded.type,updated_at=excluded.updated_at",
           id,
           command.groupId,
           command.type,
           this.clean(command.title),
-          this.clean(command.body),
+          body,
           command.status,
           now,
           now,
         );
+        if (!before || String(before.body) !== body)
+          this.addVersion(id, body, command.author, now);
         this.run("DELETE FROM library_output_links WHERE output_id=?", id);
         for (const areaId of command.workAreaIds)
           this.run(
@@ -1517,6 +1563,42 @@ export class WorkStore {
             areaId,
           );
         return { ref: id };
+      }
+      case "restore-output-version": {
+        const row = this.get(
+          "SELECT v.body FROM library_output_versions v JOIN library_outputs o ON o.id=v.output_id WHERE v.output_id=? AND v.version=?",
+          command.outputId,
+          command.versionNumber,
+        );
+        if (!row)
+          throw new WorkError("That version is no longer there.", {
+            reason: "missing_version",
+          });
+        this.run(
+          "UPDATE library_outputs SET body=?,updated_at=? WHERE id=?",
+          String(row.body),
+          now,
+          command.outputId,
+        );
+        this.addVersion(command.outputId, String(row.body), "owner", now);
+        return { ref: command.outputId };
+      }
+      case "approve-output": {
+        const row = this.get(
+          "SELECT MAX(version) AS latest FROM library_output_versions WHERE output_id=?",
+          command.outputId,
+        );
+        if (!row || row.latest === null)
+          throw new WorkError("That document is no longer there.", {
+            reason: "missing_output",
+          });
+        this.run(
+          "UPDATE library_outputs SET approved_version=?,approved_at=? WHERE id=?",
+          command.approved ? Number(row.latest) : null,
+          command.approved ? now : null,
+          command.outputId,
+        );
+        return { ref: command.outputId };
       }
       case "record-decision":
         return { ref: this.decide(command) };
@@ -1675,15 +1757,19 @@ export class WorkStore {
           // Report → Library; actionable recommendation → Decisions for
           // review. A verdict never changes roadmap, backlog or tickets.
           const output = randomUUID();
+          const report = command.recommendation
+            ? this.clean(command.recommendation)
+            : "";
           this.run(
             "INSERT INTO library_outputs(id,group_id,type,title,body,status,created_at,updated_at) VALUES (?,?,'council_report',?,?,'Advisory',?,?)",
             output,
             groupId,
             this.clean(`Council · ${command.decision}`),
-            command.recommendation ? this.clean(command.recommendation) : "",
+            report,
             now,
             now,
           );
+          this.addVersion(output, report, "firstmate", now);
           if (command.workAreaId)
             this.run(
               "INSERT INTO library_output_links(output_id,work_area_id) VALUES (?,?)",

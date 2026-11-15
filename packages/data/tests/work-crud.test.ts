@@ -347,3 +347,48 @@ describe("blockers", () => {
     expect(blockers()[0]!.title).not.toContain("ghp_abcdef");
   });
 });
+
+describe("document versions and approval", () => {
+  const doc = (extra: Record<string, unknown>) =>
+    send("save-output", { groupId: null, type: "doc", title: "BRD", ...extra });
+  const item = (id: string) => snap().library.find((entry) => entry.id === id)!;
+
+  it("keeps a version per content change, with its author", () => {
+    const id = doc({ body: "one", author: "firstmate" }).ref!;
+    doc({ outputId: id, body: "one" });
+    doc({ outputId: id, body: "one", title: "BRD renamed" });
+    doc({ outputId: id, body: "two" });
+    const saved = item(id);
+    expect(saved.version).toBe(2);
+    expect(saved.versions.map((v) => [v.version, v.author, v.body])).toEqual([
+      [2, "owner", "two"],
+      [1, "firstmate", "one"],
+    ]);
+  });
+
+  it("restores an old version as a new one", () => {
+    const id = doc({ body: "one" }).ref!;
+    doc({ outputId: id, body: "two" });
+    expect(
+      send("restore-output-version", { outputId: id, versionNumber: 1 }).ok,
+    ).toBe(true);
+    expect(item(id)).toMatchObject({ body: "one", version: 3 });
+    expect(
+      send("restore-output-version", { outputId: id, versionNumber: 9 }).ok,
+    ).toBe(false);
+  });
+
+  it("records the approved version and never carries it to later changes", () => {
+    const id = doc({ body: "one" }).ref!;
+    doc({ outputId: id, body: "two" });
+    send("approve-output", { outputId: id, approved: true });
+    expect(item(id)).toMatchObject({ version: 2, approvedVersion: 2 });
+    doc({ outputId: id, body: "three" });
+    expect(item(id)).toMatchObject({ version: 3, approvedVersion: 2 });
+    send("approve-output", { outputId: id, approved: false });
+    expect(item(id).approvedVersion).toBeNull();
+    expect(
+      send("approve-output", { outputId: "nope", approved: true }).ok,
+    ).toBe(false);
+  });
+});

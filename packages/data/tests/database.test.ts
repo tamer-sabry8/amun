@@ -186,3 +186,29 @@ it("closes Drafting rows that accepting an offer once left running", () => {
   expect(rows[0]!.text).toContain("never started");
   expect(rows[1]).toMatchObject({ state: "running", text: "Reviewing" });
 });
+it("gives documents saved before versions existed a first version", () => {
+  const db = new Database(":memory:");
+  migrate(db, schemaVersion - 1);
+  db.prepare(
+    "INSERT INTO library_outputs(id,type,title,body,created_at,updated_at) VALUES ('o','doc','Old','text','2026-11-01T00:00:00Z','2026-11-02T00:00:00Z')",
+  ).run();
+  migrate(db);
+  expect(
+    db
+      .prepare(
+        "SELECT version,body,author,created_at FROM library_output_versions",
+      )
+      .all(),
+  ).toEqual([
+    {
+      version: 1,
+      body: "text",
+      author: "owner",
+      created_at: "2026-11-02T00:00:00Z",
+    },
+  ]);
+  expect(
+    db.prepare("SELECT approved_version FROM library_outputs").get(),
+  ).toEqual({ approved_version: null });
+  db.close();
+});

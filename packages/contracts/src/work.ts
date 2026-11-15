@@ -100,6 +100,7 @@ export const setupPatch = z.strictObject({
   libraryGroupBy: z.enum(["work", "type", "none"]).optional(),
 });
 
+export const documentAuthor = z.enum(["owner", "firstmate", "agent"]);
 export const workSnapshot = z.strictObject({
   version: z.literal(1),
   kind: z.literal("work-snapshot"),
@@ -333,6 +334,21 @@ export const workSnapshot = z.strictObject({
       needsLinking: z.boolean(),
       body: z.string(),
       updatedAt: stamp,
+      /** The latest version number; records have no history. */
+      version: z.number().int().min(1).default(1),
+      /** The version the owner approved, if any. */
+      approvedVersion: z.number().int().min(1).nullable().default(null),
+      /** The newest versions first, each with the text as it was then. */
+      versions: z
+        .array(
+          z.strictObject({
+            version: z.number().int().min(1),
+            author: documentAuthor,
+            createdAt: stamp,
+            body: z.string(),
+          }),
+        )
+        .default([]),
     }),
   ),
   decisions: z.array(
@@ -664,7 +680,14 @@ export const workCommand = z.discriminatedUnion("action", [
     body: longText.default(""),
     status: z.string().max(64).default("Draft"),
     workAreaIds: z.array(id).max(32).default([]),
+    author: documentAuthor.default("owner"),
   }),
+  act("restore-output-version", {
+    outputId: id,
+    versionNumber: z.number().int().min(1),
+  }),
+  // Only the owner's title menu sends this; nothing else approves a document.
+  act("approve-output", { outputId: id, approved: z.boolean() }),
   act("record-decision", {
     decisionId: id.optional(),
     groupId: id.nullable(),

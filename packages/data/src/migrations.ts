@@ -1029,4 +1029,18 @@ CREATE TABLE work_messages (
   resolved_at TEXT
 );
 CREATE INDEX work_blockers_area ON work_blockers(work_area_id);`,
+  // 35 · Document versions and approval: each content change keeps a version
+  // (who made it and when); the owner's approval records the version approved.
+  `CREATE TABLE library_output_versions (
+  output_id TEXT NOT NULL REFERENCES library_outputs(id),
+  version INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  author TEXT NOT NULL CHECK (author IN ('owner','firstmate','agent')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (output_id, version)
+);
+INSERT INTO library_output_versions(output_id,version,body,author,created_at)
+  SELECT id,1,body,'owner',updated_at FROM library_outputs;
+ALTER TABLE library_outputs ADD COLUMN approved_version INTEGER;
+ALTER TABLE library_outputs ADD COLUMN approved_at TEXT;`,
 ] as const;

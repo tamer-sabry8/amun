@@ -387,6 +387,7 @@ export class Delegations {
         title: `${job.title} (${job.agent})`.slice(0, 250),
         body: text.slice(0, 90_000),
         workAreaIds: [job.workAreaId],
+        author: "agent",
       }).ok;
     } catch {
       ok = false;

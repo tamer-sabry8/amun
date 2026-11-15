@@ -553,6 +553,9 @@ describe("rail panels", () => {
       needsLinking: false,
       body: "",
       updatedAt: "2026-11-10",
+      version: 1,
+      approvedVersion: null,
+      versions: [],
     },
     {
       id: "r1",
@@ -565,6 +568,9 @@ describe("rail panels", () => {
       needsLinking: true,
       body: "",
       updatedAt: "2026-11-11",
+      version: 1,
+      approvedVersion: null,
+      versions: [],
     },
     {
       id: "x1",
@@ -577,6 +583,9 @@ describe("rail panels", () => {
       needsLinking: false,
       body: "",
       updatedAt: "2026-11-11",
+      version: 1,
+      approvedVersion: null,
+      versions: [],
     },
   ];
   it("opens the Library scoped to the active work, inside the group", () => {

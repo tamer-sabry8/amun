@@ -185,3 +185,22 @@ it("gives a delegated worker the linked same-group documents as labelled referen
   expect(text).not.toContain("foreign linked");
   expect(text.length).toBeLessThanOrEqual(5000);
 });
+
+it("tells Firstmate what the owner approved and whether it changed since", () => {
+  const ask = (over: Record<string, unknown>) =>
+    documentContext({
+      snapshot: snapshot([doc("d1", "BRD", "text", over)]),
+      areaId: "a1",
+      request: "BRD",
+      used: 0,
+    });
+  expect(ask({ version: 1, approvedVersion: null })).toContain(
+    "not approved by the owner",
+  );
+  expect(ask({ version: 2, approvedVersion: 2 })).toContain(
+    "approved by the owner at version 2 (current)",
+  );
+  const changed = ask({ version: 4, approvedVersion: 2 });
+  expect(changed).toContain("approved by the owner at version 2, CHANGED");
+  expect(changed).toContain("never mark one approved");
+});

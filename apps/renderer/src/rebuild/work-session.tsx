@@ -31,6 +31,8 @@ import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
 import { MarkdownDoc, MarkdownMessage } from "./markdown-doc.tsx";
+import { approvalLabel, approvalOf } from "./document-approval.ts";
+import { VersionHistory } from "./document-versions.tsx";
 import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
@@ -686,6 +688,7 @@ export function OutputDoc({
   if (!item)
     return <p className="muted">That item is no longer in the Library.</p>;
   const record = item.section === "record";
+  const approval = approvalOf(item);
   const save = (next: string) => {
     if (record || next === item.body) return;
     work("save-output", {
@@ -719,6 +722,13 @@ export function OutputDoc({
           <span className={"tag" + (item.needsLinking ? " warn" : "")}>
             {item.status}
           </span>
+          {approval.state !== "none" && (
+            <span
+              className={"tag" + (approval.state === "changed" ? " warn" : "")}
+            >
+              {approvalLabel(approval)}
+            </span>
+          )}
           {!item.workAreaIds.includes(areaId) && (
             <span className="tag">From the Library</span>
           )}
@@ -845,11 +855,14 @@ export function WorkSession({
   );
   const [editing, setEditing] = useState(true);
   const [renaming, setRenaming] = useState(false);
+  /** Version history of the open document: the list ("list") or one version. */
+  const [history, setHistory] = useState<"list" | number | null>(null);
   const titleRoot = useRef<HTMLElement>(null);
   useDismiss(menu === "title", titleRoot, () => setMenu(null));
   const openDocument = pane?.kind === "output" ? pane.id : null;
   useEffect(() => {
     setMenu((current) => (current === "title" ? null : current));
+    setHistory(null);
   }, [openDocument]);
   const [dragging, setDragging] = useState(false);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
@@ -880,6 +893,7 @@ export function WorkSession({
         title: proposed.title,
         body: proposed.body,
         workAreaIds: [areaId],
+        author: "firstmate",
       });
     else if (proposed.do === "plan")
       void (async () => {
@@ -2225,6 +2239,29 @@ export function WorkSession({
                     role="menuitem"
                     onClick={() => {
                       setMenu(null);
+                      setHistory("list");
+                    }}
+                  >
+                    Version history
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(null);
+                      work("approve-output", {
+                        outputId: output.id,
+                        approved: approvalOf(output).state !== "approved",
+                      });
+                    }}
+                  >
+                    {approvalOf(output).state === "approved"
+                      ? "Remove approval"
+                      : "Mark as approved"}
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(null);
                       work("save-output", {
                         outputId: output.id,
                         groupId: output.groupId,
@@ -2315,7 +2352,15 @@ export function WorkSession({
                   hidden={menu !== null || dragging}
                 />
               )}
-              {pane.kind === "output" && (
+              {pane.kind === "output" && output && history !== null && (
+                <VersionHistory
+                  item={output}
+                  version={history === "list" ? null : history}
+                  onOpen={(version) => setHistory(version ?? "list")}
+                  onClose={() => setHistory(null)}
+                />
+              )}
+              {pane.kind === "output" && history === null && (
                 <OutputDoc
                   snapshot={snapshot}
                   areaId={areaId}
