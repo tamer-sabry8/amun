@@ -23,7 +23,7 @@ const TOKEN =
   /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^\s)]+)\)|\*(?=\S)([^*]+?)\*|(?<![\w])_(?=\S)([^_]+?)_(?![\w])/g;
 
 /** Only web addresses can become links; anything else stays as its label. */
-const safeUrl = (value: string): string | null => {
+export const safeUrl = (value: string): string | null => {
   try {
     const url = new URL(value);
     return url.protocol === "https:" || url.protocol === "http:"

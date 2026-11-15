@@ -30,7 +30,13 @@ import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
-import { MarkdownDoc, MarkdownMessage } from "./markdown-doc.tsx";
+import {
+  MarkdownDoc,
+  MarkdownMessage,
+  type Citations,
+} from "./markdown-doc.tsx";
+import { citationContext, type Cite } from "./citations.ts";
+import { browserStore, readSource } from "../backlog-selection.ts";
 import { approvalLabel, approvalOf } from "./document-approval.ts";
 import { VersionHistory } from "./document-versions.tsx";
 import { tableSnippet, toggleTask } from "./markdown-view.ts";
@@ -669,12 +675,14 @@ export function OutputDoc({
   outputId,
   editing,
   onAsk,
+  citations,
 }: {
   snapshot: Snapshot;
   areaId: string;
   outputId: string;
   editing: boolean;
   onAsk(text: string): void;
+  citations?: Citations;
 }) {
   const item = snapshot.library.find((entry) => entry.id === outputId);
   const [body, setBody] = useState(item?.body ?? "");
@@ -737,6 +745,7 @@ export function OutputDoc({
           <MarkdownDoc
             body={body}
             disabled={record}
+            {...(citations ? { citations } : {})}
             onToggle={(line) => {
               const next = toggleTask(body, line);
               setBody(next);
@@ -882,6 +891,34 @@ export function WorkSession({
   const sentFirst = useRef<string | null>(null);
   /** The owner's latest words, so a brief can carry the length they asked for. */
   const lastRequest = useRef("");
+
+  /** Cited sources open in the panes Amun already has; nothing is written. */
+  const productId = context?.area.productId ?? null;
+  const productSources =
+    productId && workspace?.productContext?.productId === productId
+      ? workspace.productContext.sources
+      : [];
+  const citations: Citations = {
+    context: citationContext({
+      items: snapshot.library,
+      sources: productSources,
+      preferredSourceId: productId
+        ? readSource(
+            browserStore(),
+            productId,
+            productSources.filter((s) => s.kind === "ado").map((s) => s.id),
+          )
+        : "",
+    }),
+    onOpen: (cite: Cite) =>
+      onPane(
+        cite.kind === "output"
+          ? { kind: "output", id: cite.id }
+          : cite.kind === "web"
+            ? { kind: "browser", url: cite.url }
+            : { kind: "prd" },
+      ),
+  };
 
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction) => {
@@ -1772,6 +1809,7 @@ export function WorkSession({
                       <MarkdownMessage
                         text={message.text}
                         onLink={(url) => onPane({ kind: "browser", url })}
+                        citations={citations}
                       />
                     ) : (
                       message.text
@@ -2367,6 +2405,7 @@ export function WorkSession({
                   outputId={pane.id}
                   editing={editing}
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
+                  citations={citations}
                 />
               )}
               {(pane.kind === "prd" || pane.kind === "backlog") &&
