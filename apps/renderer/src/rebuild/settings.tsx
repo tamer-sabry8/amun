@@ -2,7 +2,7 @@
 // permissions, Council, skills, themes, data, advanced. Runtime vocabulary
 // lives only under Advanced.
 import { useState } from "react";
-import type { UiPreferences, WorkspaceSnapshot } from "@amun/contracts";
+import type { WorkspaceSnapshot } from "@amun/contracts";
 import {
   gateLabels,
   type Gate,
@@ -12,12 +12,13 @@ import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
-import { BackupControls, Settings as LegacySettings } from "../shell.tsx";
+import { BackupControls } from "../shell.tsx";
 import { NativePiPanel } from "../native-pi-panel.tsx";
 import { AgentsPanel } from "../agents-panel.tsx";
 import { SkillsLibrary } from "../skills-library.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
+import { ConnectionCards } from "./connection-cards.tsx";
 import { council, work } from "./store.ts";
 import { groupName, shortDate, type Snapshot } from "./view-model.ts";
 
@@ -94,12 +95,6 @@ export function Settings({
     ...tools.map(([id]) => id).filter((id) => id !== "obsidian"),
     "amun",
   ];
-  const preferences: UiPreferences = workspace?.preferences ?? {
-    theme: "tamer-sabry-default",
-    productId: null,
-    islandSize: "card",
-    pinnedTabs: [],
-  };
   return (
     <div className="rb-scroll">
       <div className="rb-page">
@@ -142,13 +137,7 @@ export function Settings({
                 Connect the tools your team uses. Connecting a tool never lets
                 Amun publish to it without the approvals under Permissions.
               </p>
-              <div className="legacy-surface">
-                <LegacySettings
-                  section="connections"
-                  preferences={preferences}
-                  onPreferences={() => undefined}
-                />
-              </div>
+              <ConnectionCards />
             </section>
           )}
           {section === "groups" && (
