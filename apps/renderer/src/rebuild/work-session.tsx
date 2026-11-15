@@ -29,7 +29,7 @@ import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
 import { Composer } from "./composer.tsx";
 import { documentContext, draftBodies } from "./document-context.ts";
-import { MarkdownDoc } from "./markdown-doc.tsx";
+import { MarkdownDoc, MarkdownMessage } from "./markdown-doc.tsx";
 import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
@@ -1622,7 +1622,14 @@ export function WorkSession({
                           Firstmate
                         </span>
                       )}
-                    {message.text}
+                    {message.role === "firstmate" ? (
+                      <MarkdownMessage
+                        text={message.text}
+                        onLink={(url) => onPane({ kind: "browser", url })}
+                      />
+                    ) : (
+                      message.text
+                    )}
                   </div>
                 ),
               )}

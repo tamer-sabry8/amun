@@ -7,6 +7,7 @@ import {
   tableSnippet,
   toggleTask,
 } from "../src/rebuild/markdown-view.ts";
+import { MarkdownMessage } from "../src/rebuild/markdown-doc.tsx";
 import { OutputDoc } from "../src/rebuild/work-session.tsx";
 
 const PRD = `# PRD v1 (R1 only): Self-service team invitations, QA-20261115-Invites
@@ -195,5 +196,47 @@ describe("document pane", () => {
     const editing = render(true);
     expect(editing).toContain("<textarea");
     expect(editing).not.toContain("<table>");
+  });
+});
+
+describe("Firstmate reply markdown", () => {
+  const render = (text: string, onLink?: (url: string) => void) =>
+    renderToStaticMarkup(
+      createElement(MarkdownMessage, onLink ? { text, onLink } : { text }),
+    );
+
+  it("renders formatting but escapes raw HTML", () => {
+    const html = render(
+      "- **Client:** QA *Test* Client\n\n<script>alert(1)</script> <img src=x onerror=y>",
+    );
+    expect(html).toContain("<strong>Client:</strong>");
+    expect(html).toContain("<em>Test</em>");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("only links web addresses, through the supplied handler", () => {
+    expect(parseInline("[x](javascript:alert)")).toEqual([
+      { kind: "text", text: "x" },
+    ]);
+    expect(parseInline("[x](file:///etc/passwd)")).toEqual([
+      { kind: "text", text: "x" },
+    ]);
+    expect(parseInline("[x](https://example.com/a)")).toMatchObject([
+      { kind: "link", url: "https://example.com/a" },
+    ]);
+    const open = () => undefined;
+    expect(render("[docs](https://example.com)", open)).toContain("<button");
+    const plain = render("[docs](https://example.com)");
+    expect(plain).not.toContain("<button");
+    expect(plain).not.toContain("<a ");
+    expect(plain).toContain("docs");
+  });
+
+  it("shows checklists as static marks and fenced code as text", () => {
+    const html = render("- [x] done\n- [ ] todo\n\n```\n<b>x</b>\n```");
+    expect(html).not.toContain("<input");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });

@@ -1844,6 +1844,84 @@
 .rb-msg.firstmate {
   justify-self: start;
 }
+/* Markdown inside a reply keeps the chat's own size and spacing. */
+.rb-msg .rb-doc-view.chat {
+  white-space: normal;
+  font-size: inherit;
+  line-height: inherit;
+}
+.rb-doc-view.chat > :last-child {
+  margin-bottom: 0;
+}
+.rb-doc-view.chat :where(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  letter-spacing: 0;
+  margin: 10px 0 4px;
+}
+.rb-doc-view.chat > :first-child {
+  margin-top: 0;
+}
+.rb-doc-view.chat :where(p, ul, ol) {
+  font-size: inherit;
+  line-height: inherit;
+  margin: 0 0 6px;
+}
+.rb-doc-view.chat code {
+  font-size: 0.92em;
+}
+.rb-doc-view.chat pre {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rb-doc-view.chat pre code {
+  color: inherit;
+}
+.rb-doc-view.chat .scroll-x {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rb-doc-view.chat table {
+  width: max-content;
+  min-width: 100%;
+  font-size: inherit;
+  margin: 2px 0 8px;
+}
+.rb-doc-view.chat td:first-child {
+  white-space: normal;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+.rb-doc-view.chat .task {
+  display: flex;
+  gap: 8px;
+  margin-left: -20px;
+}
+.rb-doc-view.chat .task .box {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
+  border: 1.5px solid var(--control);
+  border-radius: 4px;
+}
+.rb-doc-view.chat .task .box.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rb-doc-view.chat .link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
 .rb-msg .who {
   display: block;
   margin-bottom: 4px;

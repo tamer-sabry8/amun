@@ -1,7 +1,9 @@
 export type Inline =
   | { kind: "text"; text: string }
   | { kind: "code"; text: string }
-  | { kind: "bold"; children: Inline[] };
+  | { kind: "bold"; children: Inline[] }
+  | { kind: "italic"; children: Inline[] }
+  | { kind: "link"; url: string; children: Inline[] };
 
 export type ListItem = {
   content: Inline[];
@@ -10,13 +12,27 @@ export type ListItem = {
 };
 
 export type Block =
-  | { kind: "heading"; level: 1 | 2 | 3; content: Inline[] }
+  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; content: Inline[] }
   | { kind: "rule" }
+  | { kind: "code"; text: string }
   | { kind: "table"; header: Inline[][]; rows: Inline[][][] }
   | { kind: "list"; ordered: boolean; items: ListItem[] }
   | { kind: "paragraph"; lines: Inline[][] };
 
-const TOKEN = /\*\*(.+?)\*\*|`([^`]+)`/g;
+const TOKEN =
+  /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^\s)]+)\)|\*(?=\S)([^*]+?)\*|(?<![\w])_(?=\S)([^_]+?)_(?![\w])/g;
+
+/** Only web addresses can become links; anything else stays as its label. */
+const safeUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 export function parseInline(source: string): Inline[] {
   const out: Inline[] = [];
@@ -26,7 +42,17 @@ export function parseInline(source: string): Inline[] {
     if (at > last) out.push({ kind: "text", text: source.slice(last, at) });
     if (match[1] !== undefined)
       out.push({ kind: "bold", children: parseInline(match[1]) });
-    else out.push({ kind: "code", text: match[2] ?? "" });
+    else if (match[2] !== undefined) out.push({ kind: "code", text: match[2] });
+    else if (match[3] !== undefined) {
+      const url = safeUrl(match[4] ?? "");
+      const children = parseInline(match[3]);
+      if (url) out.push({ kind: "link", url, children });
+      else out.push(...children);
+    } else
+      out.push({
+        kind: "italic",
+        children: parseInline(match[5] ?? match[6] ?? ""),
+      });
     last = at + match[0].length;
   }
   if (last < source.length)
@@ -34,7 +60,8 @@ export function parseInline(source: string): Inline[] {
   return out;
 }
 
-const HEADING = /^(#{1,3})\s+(.*)$/;
+const HEADING = /^(#{1,6})\s+(.*)$/;
+const FENCE = /^\s*```/;
 const BULLET = /^\s*-\s/;
 const NUMBERED = /^\s*\d+\.\s/;
 const TASK = /^\[( |x)\]\s(.*)$/i;
@@ -48,7 +75,8 @@ const cells = (row: string) =>
     .split("|")
     .map((cell) => parseInline(cell.trim()));
 const startsBlock = (line: string) =>
-  /^#{1,3}\s/.test(line) ||
+  /^#{1,6}\s/.test(line) ||
+  FENCE.test(line) ||
   isTableLine(line) ||
   BULLET.test(line) ||
   NUMBERED.test(line) ||
@@ -64,11 +92,22 @@ export function parseMarkdown(body: string): Block[] {
       i++;
       continue;
     }
+    if (FENCE.test(line)) {
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !FENCE.test(lines[i] ?? "")) {
+        code.push(lines[i] ?? "");
+        i++;
+      }
+      i++;
+      blocks.push({ kind: "code", text: code.join("\n") });
+      continue;
+    }
     const heading = HEADING.exec(line);
     if (heading) {
       blocks.push({
         kind: "heading",
-        level: (heading[1] ?? "#").length as 1 | 2 | 3,
+        level: (heading[1] ?? "#").length as 1 | 2 | 3 | 4 | 5 | 6,
         content: parseInline(heading[2] ?? ""),
       });
       i++;

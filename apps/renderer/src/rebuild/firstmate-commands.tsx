@@ -7,6 +7,7 @@ import { nativePiEvent, type NativePiEvent } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 import { firstmateCommand } from "../composer-command.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
+import { MarkdownMessage } from "./markdown-doc.tsx";
 
 type Result = NativePiEvent["result"];
 
@@ -114,9 +115,9 @@ export function FirstmateCommandReply({
       </>
     );
   else if (result?.kind === "message" || result?.kind === "copy")
-    body = <p style={{ whiteSpace: "pre-wrap" }}>{result.text}</p>;
+    body = <MarkdownMessage text={result.text} />;
   else if (result?.kind === "conversation")
-    body = <p style={{ whiteSpace: "pre-wrap" }}>{result.text}</p>;
+    body = <MarkdownMessage text={result.text} />;
   else if (result) body = <p>Done.</p>;
   return (
     <div aria-live="polite" data-testid="firstmate-command-reply">
