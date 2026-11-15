@@ -12,6 +12,7 @@ test("service PTY is read-only until control, echoes and resizes with a minimal 
       HOME: process.env.HOME!,
       PATH: "/usr/bin:/bin",
       TMPDIR: process.env.TMPDIR!,
+      AMUN_E2E_USER_DATA: process.env.AMUN_E2E_USER_DATA!,
     },
     chromiumSandbox: true,
   });

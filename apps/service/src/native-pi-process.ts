@@ -90,6 +90,9 @@ export class NativePiProcess {
           ...(this.config.mcpModules
             ? { AMUN_MCP_MODULES: this.config.mcpModules }
             : {}),
+          ...(process.env.AMUN_E2E_TEST_PROVIDERS
+            ? { AMUN_E2E_TEST_PROVIDERS: process.env.AMUN_E2E_TEST_PROVIDERS }
+            : {}),
           AMUN_AUTH_ROOT: root,
           AMUN_AUTH_SDK: join(dirname(dirname(entry)), "index.js"),
         },

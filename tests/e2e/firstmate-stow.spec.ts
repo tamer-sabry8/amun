@@ -52,10 +52,10 @@ test("stow measures a new real Firstmate home and records the empty sweep", asyn
     expect(await readFile(join(data, "stow-receipt.md"), "utf8")).not.toContain(
       marker,
     );
-    const worker = join(root, "workspace", owner, "git/codex-worker");
+    const worker = join(root, "workspace", owner, "git/pi-worker");
     await mkdir(join(worker, "data"), { recursive: true });
     await mkdir(join(worker, "config"), { recursive: true });
-    await writeFile(join(worker, ".fm-secondmate-home"), "amun-codex\n");
+    await writeFile(join(worker, ".fm-secondmate-home"), "amun-pi\n");
     await writeFile(join(worker, "config/startup-memory-budget"), "7500\n");
     await writeFile(
       join(worker, "data/learnings.md"),
@@ -67,7 +67,7 @@ test("stow measures a new real Firstmate home and records the empty sweep", asyn
     );
     await writeFile(
       join(data, "secondmates.md"),
-      "- amun-codex - local worker (home: " +
+      "- amun-pi - local worker (home: " +
         worker +
         "; scope: tests; projects: none; added 2026-11-08)\n",
     );

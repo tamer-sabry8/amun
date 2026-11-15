@@ -29,6 +29,15 @@ import {
   type GraphicsState,
   readGraphicsPreference,
 } from "./graphics-mode.ts";
+import { e2eUserData } from "./e2e-user-data.ts";
+
+// Keep e2e runs off the real profile; must precede any userData read and the instance lock.
+const e2eProfile = e2eUserData({
+  isPackaged: app.isPackaged,
+  env: process.env,
+  hasUserDataSwitch: app.commandLine.hasSwitch("user-data-dir"),
+});
+if (e2eProfile) app.setPath("userData", e2eProfile);
 
 const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;
@@ -64,6 +73,10 @@ function startService(): void {
       execArgv: ["--js-flags=--max-opt=1"],
       env: {
         ...process.env,
+        // Test fixtures can be declared only by the e2e launcher on unpackaged runs.
+        AMUN_E2E_TEST_PROVIDERS: app.isPackaged
+          ? ""
+          : (process.env.AMUN_E2E_TEST_PROVIDERS ?? ""),
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
         AMUN_MCP_MODULES: mcpModules(),

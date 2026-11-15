@@ -140,7 +140,13 @@ for (const theme of ["tamer-sabry-default", "navy-gold", "navy-cyan"]) {
         await scan("Conversations");
       } finally {
         await app.close();
-        await rm(root, { recursive: true, force: true });
+        // The service may still be seeding its home as the app closes.
+        await rm(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 200,
+        });
       }
     },
   );

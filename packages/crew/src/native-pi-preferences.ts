@@ -1,4 +1,4 @@
-import { copilotProvider } from "./copilot-routing.ts";
+import { allowedProviders } from "./copilot-routing.ts";
 import type { NativePiResult } from "./native-pi.ts";
 interface Model {
   provider: string;
@@ -28,7 +28,7 @@ export class NativePiPreferences {
     await this.run("scoped-models", "");
     const models = this.session.modelRuntime
       .getAvailableSnapshot()
-      .filter((m) => m.provider === copilotProvider);
+      .filter((m) => allowedProviders().includes(m.provider));
     const ids = this.session.settingsManager.getEnabledModels();
     // An empty scope would let the SDK cycle through every provider.
     this.session.setScopedModels(
@@ -56,7 +56,9 @@ export class NativePiPreferences {
     if (s.isStreaming) throw Error("Wait for the current turn");
     const catalog = s.modelRuntime.getAvailableSnapshot();
     if (catalog.length > 2048) throw Error("Model catalog too large");
-    const models = catalog.filter((m) => m.provider === copilotProvider);
+    const models = catalog.filter((m) =>
+      allowedProviders().includes(m.provider),
+    );
     if (models.length > 2048) throw Error("Model catalog too large");
     const ids = models.map((m) => m.provider + "/" + m.id);
     if (ids.some((id) => id.length > 512) || new Set(ids).size !== ids.length)

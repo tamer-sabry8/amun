@@ -87,6 +87,7 @@ import {
 import {
   CopilotUnavailable,
   selectCopilotModel,
+  testProviders,
 } from "../../../packages/crew/src/copilot-routing.ts";
 import { preparePiAuth } from "../../../packages/auth/src/pi-auth.ts";
 import { JsonLineDecoder } from "../../../packages/crew/src/jsonl.ts";
@@ -112,7 +113,10 @@ type Runtime = NativeSessionRuntime & {
     PreferenceSession &
     ExportSession &
     SettingsSession & {
-      modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
+      modelRuntime: {
+        listCredentials(): Promise<{ providerId: string }[]>;
+        hasConfiguredAuth(providerId: string): boolean;
+      };
       sessionManager: { getBranch(): unknown[] };
       sessionId: string;
       getActiveToolNames(): string[];
@@ -250,10 +254,11 @@ async function initialize() {
       const model = await selectCopilotModel(
         modelRuntime,
         services.settingsManager,
+        testProviders(process.env),
       );
       const created = await sdk.createAgentSessionFromServices({
         services,
-        model,
+        ...(model ? { model } : {}),
         sessionManager: options.sessionManager,
         sessionStartEvent: options.sessionStartEvent,
         noTools: "all",
@@ -293,6 +298,19 @@ async function initialize() {
     sdk.SessionManager.list(cwd, sessions),
   );
 }
+/**
+ * The SDK may start a session on a default model it has no credentials for (only
+ * when test providers leave Copilot unselected); that is no model at all. Used
+ * only when e2e test providers are declared: the snapshot-only auth check must
+ * not block production sends, where the SDK re-checks auth asynchronously.
+ */
+const authenticatedModel = () => {
+  const session = runtime?.session;
+  const model = session?.model;
+  return model && session.modelRuntime.hasConfiguredAuth(model.provider)
+    ? model
+    : undefined;
+};
 const decoder = new JsonLineDecoder(4194304);
 const send = (id: string, result: unknown) =>
   process.stdout.write(
@@ -583,6 +601,10 @@ process.stdin.on("data", (chunk: string) => {
           await reviewed!.refresh();
         }
         if (command.command === "conversation-send") {
+          if (testProviders(process.env).length > 0 && !authenticatedModel())
+            throw new CopilotUnavailable(
+              "No model is available. Sign in to GitHub Copilot under Settings › Accounts and models.",
+            );
           if (runtime!.session.getActiveToolNames().length)
             throw Error("Native model turn has unexpected tools");
           queueRequests.clear();
@@ -743,8 +765,12 @@ process.stdin.on("data", (chunk: string) => {
             session.sessionName ?? "Unnamed conversation",
             session.sessionManager.getBranch(),
             redactor,
-            session.model
-              ? session.model.provider + "/" + session.model.id
+            (
+              testProviders(process.env).length > 0
+                ? authenticatedModel()
+                : session.model
+            )
+              ? session.model!.provider + "/" + session.model!.id
               : null,
           );
           if (command.command === "debug") {

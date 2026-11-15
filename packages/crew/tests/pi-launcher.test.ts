@@ -108,7 +108,7 @@ describe("native session start", () => {
       },
     );
     expect(getAvailable.mock.calls.length).toBe(1);
-    expect(model.id).toBe("gpt-x");
+    expect(model?.id).toBe("gpt-x");
     await expect(
       selectCopilotModel(
         { getAvailable: async () => [] },

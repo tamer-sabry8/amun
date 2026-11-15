@@ -1,4 +1,4 @@
-import { copilotProvider } from "./copilot-routing.ts";
+import { allowedProviders } from "./copilot-routing.ts";
 interface Model {
   provider: string;
   id: string;
@@ -47,8 +47,13 @@ export class NativePiActions {
     if (command === "model") {
       const catalog = s.modelRuntime.getAvailableSnapshot();
       if (catalog.length > 2048) throw Error("Model catalog too large");
-      const models = catalog.filter((m) => m.provider === copilotProvider);
-      if (argument && !argument.startsWith(copilotProvider + "/"))
+      const models = catalog.filter((m) =>
+        allowedProviders().includes(m.provider),
+      );
+      if (
+        argument &&
+        !allowedProviders().some((id) => argument.startsWith(id + "/"))
+      )
         throw Error("Amun uses GitHub Copilot models only.");
       const choices = models.map((m) => ({
         id: bounded(m.provider, 128) + "/" + bounded(m.id, 256),
