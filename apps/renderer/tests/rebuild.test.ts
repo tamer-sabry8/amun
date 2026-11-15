@@ -98,6 +98,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     ruleCandidate: null,
     attention: [],
     plans: [],
+    blockers: [],
     rfps: [],
     roadmap: [],
     sprints: [],
@@ -963,6 +964,41 @@ describe("a project's client from the chat", () => {
         null,
       ),
     ).not.toContain("Acme");
+  });
+});
+
+describe("blockers from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("are raised, re-owned and cleared by Firstmate straight away", () => {
+    expect(
+      parseAmunActions(
+        block({ do: "blocker", title: " API key ", owner: " Priya " }),
+      ).actions,
+    ).toEqual([{ do: "blocker", title: "API key", owner: "Priya" }]);
+    expect(
+      parseAmunActions(block({ do: "blocker", title: "Legal review" })).actions,
+    ).toEqual([{ do: "blocker", title: "Legal review", owner: null }]);
+    expect(
+      parseAmunActions(
+        block({ do: "blocker-owner", blocker: "legal", owner: "Sam\nLee" }),
+      ).actions,
+    ).toEqual([{ do: "blocker-owner", blocker: "legal", owner: "Sam Lee" }]);
+    expect(
+      parseAmunActions(block({ do: "unblock", blocker: "legal" })).actions,
+    ).toEqual([{ do: "unblock", blocker: "legal" }]);
+    expect(parseAmunActions(block({ do: "unblock" })).actions).toEqual([]);
+    expect(amunProtocol).toContain('{"do":"blocker-owner"');
+  });
+  it("travel in the turn with their owner and age", () => {
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null, undefined, [
+        "API key (Priya · raised 3 days ago)",
+      ]),
+    ).toContain("Open blockers: API key (Priya · raised 3 days ago).");
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("blockers");
   });
 });
 

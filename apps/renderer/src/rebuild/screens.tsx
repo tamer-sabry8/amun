@@ -6,6 +6,10 @@ import {
   rfpDetails,
   rfpFromRequest,
 } from "../../../../packages/domain/src/work/model.ts";
+import {
+  blockerLine,
+  openBlockers,
+} from "../../../../packages/domain/src/work/blockers.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
 import { useState, type DragEvent, type ReactNode } from "react";
 import {
@@ -1564,6 +1568,11 @@ export function Portfolio({
                   ].join(" · ")}
                 </span>
                 {area.purpose && <span className="meta">{area.purpose}</span>}
+                {openBlockers(snapshot.blockers, area.id).map((item) => (
+                  <span className="meta" key={item.id}>
+                    Blocked: {item.title} · {blockerLine(item, Date.now())}
+                  </span>
+                ))}
               </button>
             );
           })}

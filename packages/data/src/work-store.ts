@@ -341,6 +341,16 @@ export class WorkStore {
           createdAt: String(row.created_at),
         })),
         plans: this.plans(),
+        blockers: this.all(
+          "SELECT b.* FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
+        ).map((row) => ({
+          id: String(row.id),
+          workAreaId: String(row.work_area_id),
+          title: String(row.title),
+          owner: (row.owner as string | null) ?? null,
+          raisedAt: String(row.raised_at),
+          resolvedAt: (row.resolved_at as string | null) ?? null,
+        })),
         rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map(
           (row) => ({
             id: String(row.work_area_id),
@@ -1232,6 +1242,38 @@ export class WorkStore {
         // "running" row here that no turn stands behind.
         return { ref: command.attentionId };
       }
+      case "raise-blocker": {
+        this.groupOf(command.areaId);
+        const id = randomUUID();
+        const owner = command.owner?.trim();
+        this.run(
+          "INSERT INTO work_blockers(id,work_area_id,title,owner,raised_at) VALUES (?,?,?,?,?)",
+          id,
+          command.areaId,
+          this.clean(command.title),
+          owner ? this.clean(owner) : null,
+          now,
+        );
+        return { ref: id };
+      }
+      case "set-blocker-owner": {
+        const owner = command.owner?.trim();
+        const changed = this.run(
+          "UPDATE work_blockers SET owner=? WHERE id=? AND resolved_at IS NULL",
+          owner ? this.clean(owner) : null,
+          command.blockerId,
+        ).changes;
+        if (!changed) throw new WorkError("That blocker is already cleared.");
+        return { ref: command.blockerId };
+      }
+      case "resolve-blocker":
+        // Clearing twice changes nothing.
+        this.run(
+          "UPDATE work_blockers SET resolved_at=? WHERE id=? AND resolved_at IS NULL",
+          now,
+          command.blockerId,
+        );
+        return { ref: command.blockerId };
       case "save-rfp": {
         let areaId = command.areaId;
         if (!areaId) {

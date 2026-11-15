@@ -14,6 +14,7 @@ import {
   gateLabels,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
+import { blockerLine } from "../../../../packages/domain/src/work/blockers.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Composer } from "./composer.tsx";
@@ -22,6 +23,8 @@ import {
   formatDate,
   groupName,
   homeModel,
+  areaOf,
+  scopedBlockers,
   shortDate,
   trayFor,
   typeLabels,
@@ -552,6 +555,8 @@ export function Home({
     const item = snapshot.attention.find((entry) => entry.id === row.id);
     return item ? kinds.includes(item.kind) : false;
   });
+  // Blockers wait here with the rest, each with its owner and age.
+  const blocked = filter === "open" ? scopedBlockers(snapshot) : [];
   const openRow = (id: string) => {
     const item = snapshot.attention.find((entry) => entry.id === id);
     onOpen(item?.workAreaId ?? null);
@@ -675,7 +680,7 @@ export function Home({
         <section className="rb-panel" aria-labelledby="rb-att-h">
           <header>
             <h2 id="rb-att-h">Needs your attention</h2>
-            <span className="count">{view.rows.length}</span>
+            <span className="count">{view.rows.length + blocked.length}</span>
             <span className="grow" />
             {kinds && (
               <button className="btn quiet" onClick={() => setKinds(null)}>
@@ -697,6 +702,40 @@ export function Home({
               </button>
             </div>
           </header>
+          {blocked.map((item) => (
+            <div
+              className="rb-att"
+              key={item.id}
+              onClick={() => onOpen(item.workAreaId)}
+            >
+              <div>
+                <div className="label">
+                  Blocked · {areaOf(snapshot, item.workAreaId)?.name}
+                </div>
+                <button
+                  className="title"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpen(item.workAreaId);
+                  }}
+                >
+                  {item.title}
+                </button>
+                <div className="detail">{blockerLine(item, now)}</div>
+              </div>
+              <div className="row" onClick={(event) => event.stopPropagation()}>
+                <button
+                  className="btn"
+                  aria-label={`Mark “${item.title}” as unblocked`}
+                  onClick={() =>
+                    work("resolve-blocker", { blockerId: item.id })
+                  }
+                >
+                  It’s unblocked
+                </button>
+              </div>
+            </div>
+          ))}
           {rows.length ? (
             rows.map((row) => (
               <Row
@@ -715,7 +754,7 @@ export function Home({
                 onAccepted={onNote}
               />
             ))
-          ) : (
+          ) : blocked.length ? null : (
             <p className="rb-empty">
               {filter === "open"
                 ? "Nothing needs you right now."

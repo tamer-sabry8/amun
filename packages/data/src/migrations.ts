@@ -1018,4 +1018,15 @@ CREATE TABLE work_messages (
   // 33 · The model that wrote each Firstmate reply, shown beside its name.
   // Older messages keep it empty.
   `ALTER TABLE work_messages ADD COLUMN model TEXT;`,
+  // 34 · Blockers: what is stuck on a work area, who owns unblocking it (free
+  // text, may be empty) and when it was raised.
+  `CREATE TABLE work_blockers (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  title TEXT NOT NULL,
+  owner TEXT,
+  raised_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE INDEX work_blockers_area ON work_blockers(work_area_id);`,
 ] as const;

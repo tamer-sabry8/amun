@@ -261,6 +261,16 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  blockers: z.array(
+    z.strictObject({
+      id,
+      workAreaId: id,
+      title: z.string(),
+      owner: z.string().nullable(),
+      raisedAt: stamp,
+      resolvedAt: stamp.nullable(),
+    }),
+  ),
   rfps: z.array(
     z.strictObject({
       id,
@@ -582,6 +592,13 @@ export const workCommand = z.discriminatedUnion("action", [
     resolution: z.enum(["done", "snooze", "answer", "accept"]),
     answer: z.string().max(16384).optional(),
   }),
+  act("raise-blocker", {
+    areaId: id,
+    title: name,
+    owner: text.nullable().default(null),
+  }),
+  act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
+  act("resolve-blocker", { blockerId: id }),
   act("save-rfp", {
     areaId: id.optional(),
     groupId: id.nullable(),

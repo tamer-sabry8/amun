@@ -13,6 +13,7 @@ import {
   agentCatalog,
   agentProfile,
 } from "../../../../packages/domain/src/work/agents.ts";
+import { openBlockers } from "../../../../packages/domain/src/work/blockers.ts";
 import { needsLinking } from "../../../../packages/domain/src/work/model.ts";
 import {
   conversionSuggestion,
@@ -43,6 +44,20 @@ const inScope = (snapshot: Snapshot, groupId: string | null) => {
   const groups = visibleGroups(snapshot);
   return groups === null || groupId === null || groups.includes(groupId);
 };
+
+/** Open blockers on the work the owner can see, oldest first. */
+export function scopedBlockers(snapshot: Snapshot) {
+  const visible = new Set(
+    snapshot.areas
+      .filter(
+        (area) => inScope(snapshot, area.groupId) && area.status !== "archived",
+      )
+      .map((area) => area.id),
+  );
+  return openBlockers(snapshot.blockers).filter((item) =>
+    visible.has(item.workAreaId),
+  );
+}
 
 export function attentionItems(snapshot: Snapshot): Attention[] {
   return snapshot.attention
@@ -259,6 +274,9 @@ export type AmunAction =
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
   | { do: "client"; name: string | null }
+  | { do: "blocker"; title: string; owner: string | null }
+  | { do: "blocker-owner"; blocker: string; owner: string | null }
+  | { do: "unblock"; blocker: string }
   | { do: "delete" }
   | { do: "convert" }
   | { do: "delegate"; agent: string; title: string; task: string };
@@ -355,6 +373,23 @@ function action(raw: unknown): AmunAction | null {
           ? input.name.replace(/\s+/g, " ").trim().slice(0, 200)
           : null;
       return name === null ? null : { do: "client", name: name || null };
+    }
+    case "blocker": {
+      const owner = text(input.owner, 120);
+      return title ? { do: "blocker", title, owner } : null;
+    }
+    case "blocker-owner": {
+      // An empty owner clears it, like an empty client.
+      const blocker = text(input.blocker, 200);
+      const owner =
+        typeof input.owner === "string"
+          ? input.owner.replace(/\s+/g, " ").trim().slice(0, 120) || null
+          : null;
+      return blocker ? { do: "blocker-owner", blocker, owner } : null;
+    }
+    case "unblock": {
+      const blocker = text(input.blocker, 200);
+      return blocker ? { do: "unblock", blocker } : null;
     }
     case "delegate": {
       // Only an agent from the catalogue: a name the model made up is dropped.
@@ -472,12 +507,17 @@ export function areaTurnContext(
   typeLabel: string,
   group: string | null | undefined,
   record?: Parameters<typeof workTypeGuard>[1],
+  /** Open blockers as "title (Owner · raised N days ago)". */
+  blockers: string[] = [],
 ) {
+  const stuck = blockers.length
+    ? ` Open blockers: ${blockers.join("; ")}.`
+    : "";
   const client =
     area.type === "project"
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {
@@ -500,6 +540,7 @@ export const amunProtocol = [
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
+  '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
@@ -508,7 +549,7 @@ export const amunProtocol = [
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',
-  '{"do":"update","message":"50–90 words"} gives a stakeholder update to copy; never send it.',
+  '{"do":"update","message":"50–90 words"} gives a stakeholder update to copy; never send it. Do not list blockers in it: Amun adds each open blocker with its owner and how long ago it was raised.',
   '{"do":"rule-case","situation":"short-key","resolution":"what the owner decided"} records a repeated decision.',
   "Where you run: Amun routes you and all of your agents through GitHub Copilot (the Pi worker, provider github-copilot) and nothing else. If asked which provider or engine you use, say so. This is how Amun is set up, so do not claim you cannot confirm it. It does not prove any particular piece of work ran: never call work done until an agent's result has actually arrived.",
   "The work this conversation is about already exists in Amun when you are first spoken to, even if the owner's first message asks to create it: Amun created it before this conversation started. Do not say you cannot create it or that nothing was created; continue from it, and say only what you actually know about it.",

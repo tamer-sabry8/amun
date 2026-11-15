@@ -57,6 +57,12 @@ import {
 } from "./accept-offer.ts";
 import { pendingOffers } from "./offer-turns.ts";
 import {
+  blockerLine,
+  blockerUpdateLines,
+  findBlocker,
+  openBlockers,
+} from "../../../../packages/domain/src/work/blockers.ts";
+import {
   agentNews,
   delegationTask,
   amunProtocol,
@@ -335,7 +341,8 @@ function InlineCard({
   }
   if (card.kind === "update") {
     const text = String(card.message ?? "");
-    const check = updateMessage(text);
+    // The blocker lines Amun adds are not part of the 50–90 words.
+    const check = updateMessage(text.split(/\n\n(?=Blocked: )/)[0] ?? text);
     const copy = async (what: string, value: string) => {
       if (await copyText(value)) setCopied(what);
     };
@@ -920,6 +927,35 @@ export function WorkSession({
       // Inside Amun and undone by setting it again; only projects have one.
       if (context?.area.type === "project")
         work("update-area", { areaId, patch: { client: proposed.name } });
+    } else if (
+      proposed.do === "blocker" ||
+      proposed.do === "blocker-owner" ||
+      proposed.do === "unblock"
+    ) {
+      // Inside Amun, like a rename: recorded at once and changed by saying so.
+      const open = openBlockers(latest.current.snapshot.blockers, areaId);
+      if (proposed.do === "blocker")
+        work("raise-blocker", {
+          areaId,
+          title: proposed.title,
+          owner: proposed.owner,
+        });
+      else {
+        const found = findBlocker(open, proposed.blocker);
+        if (!found)
+          work("message", {
+            workAreaId: areaId,
+            role: "firstmate",
+            text: `I could not tell which blocker you meant by “${proposed.blocker}”. Say a few words from its title.`,
+          });
+        else if (proposed.do === "unblock")
+          work("resolve-blocker", { blockerId: found.id });
+        else
+          work("set-blocker-owner", {
+            blockerId: found.id,
+            owner: proposed.owner,
+          });
+      }
     } else if (proposed.do === "convert")
       void (async () => {
         const name = context?.area.name ?? "This";
@@ -956,14 +992,22 @@ export function WorkSession({
         text: "Delete this work?",
         card: { kind: "delete-work" },
       });
-    else if (proposed.do === "update")
+    else if (proposed.do === "update") {
+      // Every open blocker goes in with its owner and age, as of now.
+      const stuck = blockerUpdateLines(
+        openBlockers(latest.current.snapshot.blockers, areaId),
+        Date.now(),
+      );
+      const message = stuck.length
+        ? `${proposed.message}\n\n${stuck.join("\n")}`
+        : proposed.message;
       work("message", {
         workAreaId: areaId,
         role: "card",
-        text: proposed.message,
-        card: { kind: "update", message: proposed.message },
+        text: message,
+        card: { kind: "update", message },
       });
-    else if (groupId)
+    } else if (groupId)
       work("rule-case", {
         groupId,
         situation: proposed.situation,
@@ -1020,6 +1064,7 @@ export function WorkSession({
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
       const client = parsed.actions.find((item) => item.do === "client");
+      const blocked = parsed.actions.find((item) => item.do === "blocker");
       // A rename always gets a plain confirmation, even from a silent reply.
       const handed = parsed.actions.flatMap((item) =>
         item.do === "delegate" ? [`${item.agent} is on “${item.title}”.`] : [],
@@ -1032,8 +1077,10 @@ export function WorkSession({
             ? client.name
               ? `Done. The client is now ${client.name}.`
               : "Done. The client is cleared."
-            : // Handing work over is always said, even from a silent reply.
-              handed.join(" "));
+            : blocked?.do === "blocker"
+              ? `Noted. “${blocked.title}” is blocked${blocked.owner ? `, and ${blocked.owner} owns unblocking it` : ", and nobody owns unblocking it yet"}.`
+              : // Handing work over is always said, even from a silent reply.
+                handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,
@@ -1123,6 +1170,9 @@ export function WorkSession({
       typeLabels[context.area.type],
       context.group,
       record,
+      openBlockers(snapshot.blockers, areaId).map(
+        (item) => `${item.title} (${blockerLine(item, now)})`,
+      ),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`
@@ -1581,6 +1631,27 @@ export function WorkSession({
                       : `Tell Firstmate what you want done for ${area.name}.`)}
                 </p>
               )}
+              {openBlockers(snapshot.blockers, areaId).map((item) => (
+                <div className="rb-inline amber" key={item.id} role="group">
+                  <div className="row">
+                    <div className="grow">
+                      <strong>Blocked: {item.title}</strong>
+                      <div className="muted small">
+                        {blockerLine(item, now)}
+                      </div>
+                    </div>
+                    <button
+                      className="btn quiet"
+                      aria-label={`Mark “${item.title}” as unblocked`}
+                      onClick={() =>
+                        work("resolve-blocker", { blockerId: item.id })
+                      }
+                    >
+                      It’s unblocked
+                    </button>
+                  </div>
+                </div>
+              ))}
               {context.objective && (
                 <div className="rb-inline" aria-label="Objective">
                   <div className="row">

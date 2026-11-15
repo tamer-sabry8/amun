@@ -292,3 +292,58 @@ describe("what an agent is doing", () => {
     });
   });
 });
+
+describe("blockers", () => {
+  const blockers = () => snap().blockers;
+  it("record who owns them and when they were raised, and can be re-owned and cleared", () => {
+    const area = add("project", "Portal");
+    const id = send("raise-blocker", {
+      areaId: area,
+      title: "API key",
+      owner: " Priya ",
+    }).ref!;
+    expect(blockers()).toEqual([
+      expect.objectContaining({
+        id,
+        workAreaId: area,
+        title: "API key",
+        owner: "Priya",
+        resolvedAt: null,
+      }),
+    ]);
+    expect(blockers()[0]!.raisedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
+    expect(send("set-blocker-owner", { blockerId: id, owner: "Sam" }).ok).toBe(
+      true,
+    );
+    expect(blockers()[0]!.owner).toBe("Sam");
+    expect(send("set-blocker-owner", { blockerId: id, owner: "" }).ok).toBe(
+      true,
+    );
+    expect(blockers()[0]!.owner).toBeNull();
+    expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
+    expect(blockers()[0]!.resolvedAt).not.toBeNull();
+    // A cleared blocker cannot be re-owned, and clearing twice is harmless.
+    expect(send("set-blocker-owner", { blockerId: id, owner: "Lee" }).ok).toBe(
+      false,
+    );
+    expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
+  });
+  it("need a work area, and go with it when it is deleted", () => {
+    expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
+      false,
+    );
+    const area = add("task", "Job");
+    send("raise-blocker", { areaId: area, title: "Waiting on legal" });
+    expect(blockers()).toHaveLength(1);
+    send("delete-area", { areaId: area });
+    expect(blockers()).toEqual([]);
+  });
+  it("hide secrets in the title and owner", () => {
+    const area = add("task", "Job");
+    send("raise-blocker", {
+      areaId: area,
+      title: "Need token ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+    });
+    expect(blockers()[0]!.title).not.toContain("ghp_abcdef");
+  });
+});
