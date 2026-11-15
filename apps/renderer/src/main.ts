@@ -1,6 +1,7 @@
+import { chooseShell } from "./shell-selection.ts";
 async function start() {
-  const mode = new URLSearchParams(location.search);
-  if (mode.get("proof") === "1") {
+  const shell = chooseShell(location.search);
+  if (shell === "proof") {
     const [{ startProof }, { proofMarkup }] = await Promise.all([
       import("./proof.ts"),
       import("./proof-markup.ts"),
@@ -8,13 +9,12 @@ async function start() {
     document.body.classList.add("proof-mode");
     document.body.innerHTML = proofMarkup;
     startProof();
-  } else if (mode.get("gallery") === "1") {
+  } else if (shell === "gallery") {
     const { startGallery } = await import("./gallery.tsx");
     startGallery();
-  } else if (mode.get("legacy") === "1") {
-    // UX rebuild: the earlier shell is kept whole and reachable with ?legacy=1.
-    // To make it the default again, swap this branch with the one below.
-    // See docs/UX-REBUILD.md § "Switched off, and how to restore".
+  } else if (shell === "legacy") {
+    // Test-only: the earlier shell still drives the unmigrated e2e specs. It
+    // is unreachable in packaged builds (see shell-selection.ts) and must not ship.
     const { startShell } = await import("./shell.tsx");
     startShell();
   } else {

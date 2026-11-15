@@ -11,5 +11,7 @@ process.env.AMUN_E2E_USER_DATA ||= mkdtempSync(
 process.env.AMUN_LEGACY_SHELL ??= "1";
 // Explicit test-only declaration of the fixture model providers the specs register;
 // without it the app refuses unless GitHub Copilot is connected.
+// Test windows open hidden so they never appear on the owner's screen.
+process.env.AMUN_E2E_HIDE_WINDOWS ??= "1";
 process.env.AMUN_E2E_TEST_PROVIDERS ??= "amun-queue,amun-local";
 export default defineConfig({ testDir: "./tests/e2e", workers: 1, retries: 0 });

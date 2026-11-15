@@ -647,10 +647,6 @@ export function Settings({
               <FirstmateRuntime />
               <ConversationTools />
               <DiagnosticsTools />
-              <p className="muted small">
-                The earlier workspace remains available for comparison at Amun’s
-                address with ?legacy=1.
-              </p>
             </section>
           )}
         </div>

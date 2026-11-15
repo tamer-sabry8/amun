@@ -29,6 +29,7 @@ import {
   type GraphicsState,
   readGraphicsPreference,
 } from "./graphics-mode.ts";
+import { hideWindowsForTests, shellQuery } from "./shell-selection.ts";
 import { e2eUserData } from "./e2e-user-data.ts";
 
 // Keep e2e runs off the real profile; must precede any userData read and the instance lock.
@@ -214,23 +215,29 @@ function startService(): void {
   });
 }
 function openWindow(): void {
-  const shellQuery: Record<string, string> = {};
-  if (app.commandLine.hasSwitch("amun-proof")) shellQuery.proof = "1";
-  else if (!app.isPackaged && app.commandLine.hasSwitch("amun-gallery"))
-    shellQuery.gallery = "1";
-  else if (
-    app.commandLine.hasSwitch("amun-legacy-shell") ||
-    process.env.AMUN_LEGACY_SHELL === "1"
-  )
-    shellQuery.legacy = "1";
-  const rebuiltShell = Object.keys(shellQuery).length === 0;
+  const query = shellQuery({
+    isPackaged: app.isPackaged,
+    hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+    hasGallerySwitch: app.commandLine.hasSwitch("amun-gallery"),
+    hasLegacySwitch: app.commandLine.hasSwitch("amun-legacy-shell"),
+    env: process.env,
+  });
+  // Test-only: Playwright runs must not put windows on the owner's screen.
+  const hidden = hideWindowsForTests({
+    isPackaged: app.isPackaged,
+    env: process.env,
+  });
+  const rebuiltShell =
+    query.proof === undefined &&
+    query.legacy === undefined &&
+    query.gallery === undefined;
   const window = new BrowserWindow({
     title: "Amun",
     width: 1200,
     height: 800,
     // Match the initial canvas and paint directly into a visible window. A
     // hidden first paint followed by show() had higher measured peak working sets.
-    show: rebuiltShell,
+    show: rebuiltShell && !hidden,
     ...(rebuiltShell && { backgroundColor: "#0b0e14" }),
     webPreferences: {
       ...windowPreferences,
@@ -269,11 +276,12 @@ function openWindow(): void {
     attach(window);
   });
   window.once("closed", () => loadedWindows.delete(window));
-  if (!rebuiltShell) window.once("ready-to-show", () => window.show());
+  if (!rebuiltShell && !hidden)
+    window.once("ready-to-show", () => window.show());
   void window.loadFile(join(app.getAppPath(), "renderer/index.html"), {
     query: {
       styleNonce,
-      ...shellQuery,
+      ...query,
     },
   });
 }
@@ -319,6 +327,8 @@ if (!app.requestSingleInstanceLock()) {
       if (app.isReady()) openWindow();
       return;
     }
+    if (hideWindowsForTests({ isPackaged: app.isPackaged, env: process.env }))
+      return;
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();

@@ -68,6 +68,8 @@ Acceptance harnesses must retain a temporary real-provider entry throughout the 
 
 The owner's workflow handoff is `Amun-Claude-Code-workflow-handoff.md` in the owner's Amun folder; it takes precedence over older documents that describe a broader rebuild. The work is wiring existing capabilities into the current interface. The current state and the next assignment are in `docs/HANDOFF-NEXT-AGENT.md`; start new work on a new branch from `main`.
 
+The legacy shell (`apps/renderer/src/shell.tsx`, `?legacy=1`, `AMUN_LEGACY_SHELL`) is test-only and must not ship: packaged builds always render the rebuilt shell (`apps/renderer/src/rebuild/app.tsx`) and no visible text may point to the legacy shell. Playwright runs hide their windows (`AMUN_E2E_HIDE_WINDOWS=1`).
+
 Pull request 10 ("R1 beta bug fixes") was closed by the owner's decision on 13 November 2026. Do not reopen it, merge it, or raise it.
 
 Every UI change needs the owner's approval before implementation. Show the actual current screen beside the proposed change in an annotatable preview, say which workflow it enables, and wait. Run every UI change through the `/impeccable` skill. Approval of a workflow does not approve its visual design.
