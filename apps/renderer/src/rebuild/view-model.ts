@@ -45,6 +45,13 @@ const inScope = (snapshot: Snapshot, groupId: string | null) => {
   return groups === null || groupId === null || groups.includes(groupId);
 };
 
+/** Remembered facts that apply to a group's work, plus those kept for everyone. */
+export function factsFor(snapshot: Snapshot, groupId: string | null) {
+  return snapshot.memory.facts.filter(
+    (fact) => fact.groupId === null || fact.groupId === groupId,
+  );
+}
+
 /** Open blockers on the work the owner can see, oldest first. */
 export function scopedBlockers(snapshot: Snapshot) {
   const visible = new Set(
@@ -277,6 +284,8 @@ export type AmunAction =
   | { do: "blocker"; title: string; owner: string | null }
   | { do: "blocker-owner"; blocker: string; owner: string | null }
   | { do: "unblock"; blocker: string }
+  | { do: "fact-correct"; fact: string; value: string }
+  | { do: "fact-forget"; fact: string }
   | { do: "delete" }
   | { do: "convert" }
   | { do: "delegate"; agent: string; title: string; task: string };
@@ -390,6 +399,15 @@ function action(raw: unknown): AmunAction | null {
     case "unblock": {
       const blocker = text(input.blocker, 200);
       return blocker ? { do: "unblock", blocker } : null;
+    }
+    case "fact-correct": {
+      const fact = text(input.fact, 200);
+      const value = text(input.value, 1000);
+      return fact && value ? { do: "fact-correct", fact, value } : null;
+    }
+    case "fact-forget": {
+      const fact = text(input.fact, 200);
+      return fact ? { do: "fact-forget", fact } : null;
     }
     case "delegate": {
       // Only an agent from the catalogue: a name the model made up is dropped.
@@ -509,7 +527,12 @@ export function areaTurnContext(
   record?: Parameters<typeof workTypeGuard>[1],
   /** Open blockers as "title (Owner · raised N days ago)". */
   blockers: string[] = [],
+  /** Remembered facts as "key: value", so Firstmate can name one back. */
+  facts: string[] = [],
 ) {
+  const remembered = facts.length
+    ? ` Remembered facts the owner can have corrected or forgotten: ${facts.join("; ")}.`
+    : "";
   const stuck = blockers.length
     ? ` Open blockers: ${blockers.join("; ")}.`
     : "";
@@ -517,7 +540,7 @@ export function areaTurnContext(
     area.type === "project"
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {
@@ -541,6 +564,7 @@ export const amunProtocol = [
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
   '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
+  '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
   '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',

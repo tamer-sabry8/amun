@@ -498,6 +498,13 @@ export class WorkStore {
         ),
         findings: this.findings(),
         memory: {
+          facts: this.all(
+            "SELECT id,group_id AS groupId,key,value,source,observed_at AS observedAt,confirmed,synced FROM memory_claims WHERE state='current' ORDER BY observed_at DESC,id",
+          ).map((row) => ({
+            ...row,
+            confirmed: bool(row.confirmed),
+            synced: bool(row.synced),
+          })),
           unsynced: Number(
             this.get(
               "SELECT count(*) AS n FROM memory_claims WHERE synced=0 AND state='current'",
@@ -1978,6 +1985,46 @@ export class WorkStore {
             current.id,
           );
         return { ref: id, step: { step: "record" } };
+      }
+      case "correct-claim": {
+        const fact = this.get(
+          "SELECT id FROM memory_claims WHERE id=? AND state='current'",
+          command.claimId,
+        );
+        if (!fact) throw new WorkError("That fact is no longer remembered.");
+        // Replaced in place: the old wording is not kept. It is sent on again.
+        this.run(
+          "UPDATE memory_claims SET value=?,source='Corrected by you',observed_at=?,confirmed=1,synced=0 WHERE id=?",
+          this.clean(command.value),
+          now,
+          command.claimId,
+        );
+        return { ref: command.claimId };
+      }
+      case "forget-claim": {
+        const fact = this.get(
+          "SELECT group_id,key FROM memory_claims WHERE id=? AND state='current'",
+          command.claimId,
+        );
+        if (!fact) throw new WorkError("That fact is no longer remembered.");
+        // The earlier versions and any open question about it go too.
+        const same = this.all(
+          "SELECT id FROM memory_claims WHERE ifnull(group_id,'')=ifnull(?,'') AND key=?",
+          fact.group_id,
+          fact.key,
+        ).map((row) => String(row.id));
+        for (const id of same)
+          this.run(
+            "UPDATE work_attention SET state='done',answer='Forgotten',resolved_at=? WHERE ref=? AND state!='done'",
+            now,
+            "claim:" + id,
+          );
+        this.run(
+          "DELETE FROM memory_claims WHERE ifnull(group_id,'')=ifnull(?,'') AND key=?",
+          fact.group_id,
+          fact.key,
+        );
+        return {};
       }
       case "resolve-claim": {
         const item = this.get(

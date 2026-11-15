@@ -1305,7 +1305,7 @@ describe("memory updates (F10)", () => {
       { value: "Omar", state: "current", confirmed: 1 },
     ]);
     // Never claimed as saved to the memory home until it actually is.
-    expect(snap().memory).toEqual({ unsynced: 1, disputed: 0 });
+    expect(snap().memory).toMatchObject({ unsynced: 1, disputed: 0 });
   });
   it("asks, citing the source, when evidence contradicts what the user confirmed", () => {
     const { employer } = setup();
@@ -1361,6 +1361,60 @@ describe("memory updates (F10)", () => {
     expect(
       send("record-claim", claim(side, "Someone else", false)).step,
     ).toEqual({ step: "record" });
+  });
+});
+
+describe("correcting and forgetting remembered facts (UC09)", () => {
+  const claim = (groupId: string, value: string, source = "Email") => ({
+    groupId,
+    key: "reports-to",
+    value,
+    source,
+    observedAt: "2026-11-10",
+    confirmed: true,
+  });
+  it("lists current facts and corrects one in place, to be sent on again", () => {
+    const { employer } = setup();
+    const id = send("record-claim", claim(employer, "Layla")).ref!;
+    db.prepare("UPDATE memory_claims SET synced=1 WHERE id=?").run(id);
+    expect(snap().memory.facts).toMatchObject([
+      { id, key: "reports-to", value: "Layla", source: "Email", synced: true },
+    ]);
+    expect(send("correct-claim", { claimId: id, value: "Omar" }).ok).toBe(true);
+    expect(snap().memory.facts).toMatchObject([
+      {
+        id,
+        value: "Omar",
+        source: "Corrected by you",
+        confirmed: true,
+        synced: false,
+      },
+    ]);
+    expect(snap().memory.unsynced).toBe(1);
+  });
+  it("forgets a fact with its earlier versions and any open question", () => {
+    const { employer } = setup();
+    send("record-claim", claim(employer, "Layla"));
+    send("record-claim", claim(employer, "Omar"));
+    const current = snap().memory.facts[0]!;
+    send("record-claim", { ...claim(employer, "Zed"), confirmed: false });
+    expect(snap().attention.at(-1)!.state).not.toBe("done");
+    expect(send("forget-claim", { claimId: current.id }).ok).toBe(true);
+    expect(snap().memory.facts).toEqual([]);
+    expect(snap().memory.disputed).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM memory_claims").get()).toEqual(
+      {
+        n: 0,
+      },
+    );
+    expect(snap().attention.at(-1)).toMatchObject({
+      state: "done",
+      answer: "Forgotten",
+    });
+    expect(send("forget-claim", { claimId: current.id }).ok).toBe(false);
+    expect(send("correct-claim", { claimId: current.id, value: "x" }).ok).toBe(
+      false,
+    );
   });
 });
 

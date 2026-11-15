@@ -71,8 +71,13 @@ import {
   openBlockers,
 } from "../../../../packages/domain/src/work/blockers.ts";
 import {
+  factLine,
+  findFact,
+} from "../../../../packages/domain/src/work/facts.ts";
+import {
   agentNews,
   delegationTask,
+  factsFor,
   amunProtocol,
   areaTurnContext,
   areaOf,
@@ -1007,6 +1012,25 @@ export function WorkSession({
             owner: proposed.owner,
           });
       }
+    } else if (
+      proposed.do === "fact-correct" ||
+      proposed.do === "fact-forget"
+    ) {
+      // Inside Amun, like a rename: changed at once and undone by saying so.
+      const snap = latest.current.snapshot;
+      const found = findFact(
+        factsFor(snap, context?.area.groupId ?? null),
+        proposed.fact,
+      );
+      if (!found)
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: `I could not tell which remembered fact you meant by “${proposed.fact}”. Say a few words from it.`,
+        });
+      else if (proposed.do === "fact-forget")
+        work("forget-claim", { claimId: found.id });
+      else work("correct-claim", { claimId: found.id, value: proposed.value });
     } else if (proposed.do === "convert")
       void (async () => {
         const name = context?.area.name ?? "This";
@@ -1116,6 +1140,9 @@ export function WorkSession({
       const renamed = parsed.actions.find((item) => item.do === "rename");
       const client = parsed.actions.find((item) => item.do === "client");
       const blocked = parsed.actions.find((item) => item.do === "blocker");
+      const remembered = parsed.actions.find(
+        (item) => item.do === "fact-correct" || item.do === "fact-forget",
+      );
       // A rename always gets a plain confirmation, even from a silent reply.
       const handed = parsed.actions.flatMap((item) =>
         item.do === "delegate" ? [`${item.agent} is on “${item.title}”.`] : [],
@@ -1130,8 +1157,12 @@ export function WorkSession({
               : "Done. The client is cleared."
             : blocked?.do === "blocker"
               ? `Noted. “${blocked.title}” is blocked${blocked.owner ? `, and ${blocked.owner} owns unblocking it` : ", and nobody owns unblocking it yet"}.`
-              : // Handing work over is always said, even from a silent reply.
-                handed.join(" "));
+              : remembered
+                ? remembered.do === "fact-forget"
+                  ? "Done. I have forgotten that."
+                  : "Done. I have corrected that."
+                : // Handing work over is always said, even from a silent reply.
+                  handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,
@@ -1224,6 +1255,9 @@ export function WorkSession({
       openBlockers(snapshot.blockers, areaId).map(
         (item) => `${item.title} (${blockerLine(item, now)})`,
       ),
+      factsFor(snapshot, context.area.groupId ?? null)
+        .slice(0, 30)
+        .map(factLine),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`

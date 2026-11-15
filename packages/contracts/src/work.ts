@@ -426,6 +426,19 @@ export const workSnapshot = z.strictObject({
     /** Facts saved on this Mac that are not yet in the memory home. */
     unsynced: z.int(),
     disputed: z.int(),
+    /** What Amun currently remembers, newest first: the owner can correct or forget each. */
+    facts: z.array(
+      z.strictObject({
+        id,
+        groupId: id.nullable(),
+        key: z.string(),
+        value: z.string(),
+        source: z.string(),
+        observedAt: stamp,
+        confirmed: z.boolean(),
+        synced: z.boolean(),
+      }),
+    ),
   }),
   messages: z.array(
     z.strictObject({
@@ -764,6 +777,8 @@ export const workCommand = z.discriminatedUnion("action", [
     observedAt: stamp,
     confirmed: z.boolean(),
   }),
+  act("correct-claim", { claimId: id, value: text.min(1) }),
+  act("forget-claim", { claimId: id }),
   act("resolve-claim", {
     attentionId: id,
     keep: z.enum(["current", "incoming"]),

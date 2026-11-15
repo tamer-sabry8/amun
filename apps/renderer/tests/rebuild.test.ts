@@ -109,7 +109,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     activity: [],
     council: [],
     findings: [],
-    memory: { unsynced: 0, disputed: 0 },
+    memory: { unsynced: 0, disputed: 0, facts: [] },
     messages: [],
     ...extra,
   };
@@ -997,6 +997,17 @@ describe("blockers from the chat", () => {
       parseAmunActions(block({ do: "unblock", blocker: "legal" })).actions,
     ).toEqual([{ do: "unblock", blocker: "legal" }]);
     expect(parseAmunActions(block({ do: "unblock" })).actions).toEqual([]);
+    expect(
+      parseAmunActions(
+        block({ do: "fact-correct", fact: "reports to", value: "Omar" }),
+      ).actions,
+    ).toEqual([{ do: "fact-correct", fact: "reports to", value: "Omar" }]);
+    expect(
+      parseAmunActions(block({ do: "fact-forget", fact: "office" })).actions,
+    ).toEqual([{ do: "fact-forget", fact: "office" }]);
+    expect(
+      parseAmunActions(block({ do: "fact-correct", fact: "office" })).actions,
+    ).toEqual([]);
     expect(amunProtocol).toContain('{"do":"blocker-owner"');
   });
   it("travel in the turn with their owner and age", () => {
