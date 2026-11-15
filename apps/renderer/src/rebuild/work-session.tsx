@@ -21,6 +21,7 @@ import {
 } from "../../../../packages/domain/src/work/shell.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
+import { scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Backlog } from "./lazy.tsx";
@@ -845,6 +846,8 @@ export function WorkSession({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  const latestReply = useRef<HTMLDivElement>(null);
+  const shown = useRef<{ areaId: string; count: number } | null>(null);
   const sentFirst = useRef<string | null>(null);
   /** The owner's latest words, so a brief can carry the length they asked for. */
   const lastRequest = useRef("");
@@ -1143,8 +1146,18 @@ export function WorkSession({
     }
   }, [first, areaId, !!context]);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [context?.messages.length, busy]);
+    if (!context) return;
+    const seen = shown.current;
+    shown.current = { areaId, count: context.messages.length };
+    const target = scrollTarget(
+      seen?.areaId === areaId ? seen.count : null,
+      context.messages,
+      busy,
+    );
+    if (target === "latest-reply")
+      latestReply.current?.scrollIntoView({ block: "start" });
+    else if (target === "end") end.current?.scrollIntoView({ block: "end" });
+  }, [areaId, !!context, context?.messages.length, busy]);
   useEffect(() => {
     work("touch-area", { areaId });
   }, [areaId]);
@@ -1155,6 +1168,9 @@ export function WorkSession({
       </div>
     );
   const { area } = context;
+  const lastReplyId = context.messages.findLast(
+    (message) => message.role === "firstmate",
+  )?.id;
   const open = pane !== null;
   const questions = snapshot.attention.filter(
     (item) =>
@@ -1518,7 +1534,11 @@ export function WorkSession({
                     }
                   />
                 ) : (
-                  <div key={message.id} className={"rb-msg " + message.role}>
+                  <div
+                    key={message.id}
+                    ref={message.id === lastReplyId ? latestReply : undefined}
+                    className={"rb-msg " + message.role}
+                  >
                     {/* Firstmate is named where its turn begins, on the left;
                         the owner's own messages sit on the right. */}
                     {message.role === "firstmate" &&
