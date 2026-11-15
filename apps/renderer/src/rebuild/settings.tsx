@@ -12,10 +12,9 @@ import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
-import { BackupControls } from "../shell.tsx";
 import { NativePiPanel } from "../native-pi-panel.tsx";
 import { AgentsPanel } from "../agents-panel.tsx";
-import { SkillsLibrary } from "../skills-library.tsx";
+import { BackupPanel, SkillsPanel } from "./settings-panels.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
 import { ConnectionCards } from "./connection-cards.tsx";
@@ -532,12 +531,10 @@ export function Settings({
                 reviewed before it is used.
               </p>
               {workspace?.productContext ? (
-                <div className="legacy-surface">
-                  <SkillsLibrary
-                    key={workspace.productContext.productId}
-                    context={workspace.productContext}
-                  />
-                </div>
+                <SkillsPanel
+                  key={workspace.productContext.productId}
+                  context={workspace.productContext}
+                />
               ) : (
                 <p className="muted">
                   Open a product to add or review its skills.
@@ -600,9 +597,7 @@ export function Settings({
                 {snapshot.memory.disputed > 0 &&
                   ` ${snapshot.memory.disputed} ${snapshot.memory.disputed === 1 ? "is" : "are"} waiting for your answer.`}
               </p>
-              <div className="legacy-surface">
-                <BackupControls />
-              </div>
+              <BackupPanel />
             </section>
           )}
           {section === "advanced" && (
