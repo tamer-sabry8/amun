@@ -52,6 +52,10 @@ export function connectionId(connection: Connection): string {
       .slice(0, 32)
   );
 }
+/** A credential read that never blocks the caller. */
+export interface SecretReader {
+  get(account: string): Promise<string | undefined>;
+}
 export class AuthBroker {
   private readonly workspace: string;
   private readonly keyring: Keyring;
@@ -61,6 +65,9 @@ export class AuthBroker {
     secret: string,
   ) => Promise<boolean>;
   private readonly states = new Map<string, ConnectionStatus>();
+  /** What an unblocked read last found; never read at listing time. */
+  private readonly stored = new Map<string, ConnectionStatus>();
+  private readonly reader: SecretReader | undefined;
   private readonly generations = new Map<string, number>();
   private next(connection: Connection): number {
     const id = connectionId(connection);
@@ -73,7 +80,9 @@ export class AuthBroker {
     keyring: Keyring,
     redactor: Redactor,
     probe: (connection: Connection, secret: string) => Promise<boolean>,
+    reader?: SecretReader,
   ) {
+    this.reader = reader;
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(workspace))
       throw Error("Invalid workspace identity");
     this.workspace = workspace;
@@ -92,11 +101,13 @@ export class AuthBroker {
     this.keyring.set(account, secret);
     this.next(connection);
     this.states.set(connectionId(connection), "configured");
+    this.stored.set(connectionId(connection), "configured");
   }
   status(connection: Connection): ConnectionStatus {
     const id = connectionId(connection);
     const current = this.states.get(id);
     if (current) return current;
+    if (this.reader) return this.stored.get(id) ?? "checking";
     try {
       const secret = this.keyring.get(this.account(connection));
       if (secret) this.redactor.register(secret);
@@ -111,7 +122,9 @@ export class AuthBroker {
     this.states.set(id, "checking");
     let state: ConnectionStatus;
     try {
-      const secret = this.keyring.get(this.account(connection));
+      const secret = this.reader
+        ? await this.read(connection)
+        : this.keyring.get(this.account(connection));
       if (!secret) state = "missing";
       else {
         this.redactor.register(secret);
@@ -135,7 +148,7 @@ export class AuthBroker {
     if (this.status(connection) !== "ready")
       throw Error("Connect and test Notion in Amun first");
     try {
-      const secret = this.keyring.get(this.account(connection));
+      const secret = await this.read(connection);
       if (!secret) throw Error("Missing credential");
       this.redactor.register(secret);
       return await operation(secret);
@@ -147,6 +160,27 @@ export class AuthBroker {
     this.keyring.delete(this.account(connection));
     this.next(connection);
     this.states.set(connectionId(connection), "missing");
+    this.stored.set(connectionId(connection), "missing");
+  }
+  private async read(connection: Connection) {
+    const account = this.account(connection);
+    return this.reader ? this.reader.get(account) : this.keyring.get(account);
+  }
+  /** Learns which saved connections hold a credential, without blocking. */
+  async refresh(connections: readonly Connection[]): Promise<void> {
+    if (!this.reader) return;
+    await Promise.all(
+      connections.map(async (connection) => {
+        const id = connectionId(connection);
+        try {
+          const secret = await this.reader!.get(this.account(connection));
+          if (secret) this.redactor.register(secret);
+          this.stored.set(id, secret ? "configured" : "missing");
+        } catch {
+          this.stored.set(id, "error");
+        }
+      }),
+    );
   }
   describe(connections: readonly Connection[]) {
     return connections.map((connection) => ({

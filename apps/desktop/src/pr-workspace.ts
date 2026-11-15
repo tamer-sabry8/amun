@@ -13,7 +13,7 @@ export async function readPullWorkspace(
   db: Database.Database,
   sources: Source[],
   current: () => string | null,
-  credential: (provider: "ado" | "github", origin: string) => string,
+  credential: (provider: "ado" | "github", origin: string) => Promise<string>,
 ) {
   const cmd = prCommand.parse(input),
     meta = { kind: "pr-result", id: cmd.id, product: cmd.product };
@@ -33,13 +33,13 @@ export async function readPullWorkspace(
             t.origin,
             t.owner,
             t.repo,
-            credential("github", t.origin),
+            await credential("github", t.origin),
           )
         : azurePulls(
             t.collection,
             t.project,
             t.repo,
-            credential("ado", t.collection),
+            await credential("ado", t.collection),
           );
     return { t, adapter };
   };

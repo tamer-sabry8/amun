@@ -115,6 +115,10 @@ function startService(): void {
         AMUN_E2E_TEST_PROVIDERS: e2eRoute
           ? (process.env.AMUN_E2E_TEST_PROVIDERS ?? "")
           : "",
+        // Test-only: Keychain reads that never answer; same gate.
+        AMUN_E2E_KEYCHAIN_HANG: e2eRoute
+          ? (process.env.AMUN_E2E_KEYCHAIN_HANG ?? "")
+          : "",
         // Test-only delay for native turns; same gate.
         AMUN_E2E_SLOW_NATIVE_MS: e2eRoute
           ? (process.env.AMUN_E2E_SLOW_NATIVE_MS ?? "")

@@ -163,6 +163,13 @@ import {
   macKeyring,
   type EntryLike,
 } from "../../../packages/auth/src/keyring.ts";
+import {
+  KeychainReader,
+  hangingKeychain,
+  keychainWaitingNote,
+  keychainWorker,
+  type KeychainTransport,
+} from "../../../packages/auth/src/keychain-reader.ts";
 import { probeConnection } from "../../../packages/auth/src/probe.ts";
 import { AuthSession } from "../../../packages/auth/src/session.ts";
 import { connectionSchema } from "../../../packages/contracts/src/auth.ts";
@@ -250,7 +257,7 @@ function handleWork(message: unknown) {
   }
 }
 /** The Azure DevOps project a work area publishes to, with its connection. */
-function adoConnection(workAreaId: string | null) {
+async function adoConnection(workAreaId: string | null) {
   const mapped = workAreaId
     ? (workspace
         .prepare(
@@ -278,7 +285,7 @@ function adoConnection(workAreaId: string | null) {
       "Connect the Azure DevOps collection in Settings, then retry.",
     );
   }
-  const secret = authKeyring().get(
+  const secret = await credentials.get(
     workspaceIdentity(workspace) + "/" + connectionId(source.connection),
   );
   if (!secret)
@@ -337,9 +344,15 @@ function adoConnection(workAreaId: string | null) {
  * learned before, or nothing.
  */
 async function adoTypeInfo(workAreaId: string | null) {
-  let connection: ReturnType<typeof adoConnection>;
+  let connection: Awaited<ReturnType<typeof adoConnection>>;
   try {
-    connection = adoConnection(workAreaId);
+    // A credential read waiting on a macOS prompt must not hold this up.
+    connection = await Promise.race([
+      adoConnection(workAreaId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Error("credential_wait")), 4000).unref(),
+      ),
+    ]);
   } catch {
     return null;
   }
@@ -371,7 +384,7 @@ const planPublisher: PlanPublisher = new PlanPublisher(
   workStore,
   async (destination, scope) => {
     if (destination === "ado") {
-      const connection = adoConnection(scope.workAreaId);
+      const connection = await adoConnection(scope.workAreaId);
       return adoPlanTarget(
         connection.source.collection,
         connection.source.project,
@@ -585,6 +598,31 @@ const authKeyring = () => {
   };
   return macKeyring(native.Entry);
 };
+/** Idle and read paths use this; the native Keychain call runs off this thread. */
+const credentials = new KeychainReader(
+  process.env.AMUN_E2E_KEYCHAIN_HANG === "1"
+    ? hangingKeychain
+    : (() => {
+        // The thread starts at the first read, never at startup.
+        let transport: KeychainTransport | undefined;
+        let listener: Parameters<KeychainTransport["onReply"]>[0] | undefined;
+        return {
+          post: (request) => {
+            if (!transport) {
+              transport = keychainWorker(
+                process.env.AMUN_AUTH_MODULE ?? "",
+                join(process.cwd(), "amun-native.cjs"),
+              );
+              if (listener) transport.onReply(listener);
+            }
+            transport.post(request);
+          },
+          onReply: (next) => {
+            listener = next;
+          },
+        } satisfies KeychainTransport;
+      })(),
+);
 const authBroker = new AuthBroker(
   workspaceIdentity(workspace),
   {
@@ -594,6 +632,7 @@ const authBroker = new AuthBroker(
   },
   redactor,
   probeConnection,
+  credentials,
 );
 let cloudflareBusy = false;
 const notionConnection = new NotionConnection({
@@ -970,7 +1009,7 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
-  const repositoryCredential = (kind: "ado" | "github", url: string) => {
+  const repositoryCredential = async (kind: "ado" | "github", url: string) => {
     const conn = authMetadata
       .list()
       .find(
@@ -980,7 +1019,7 @@ process.parentPort?.on("message", (event) => {
             new URL(url).href.replace(/\/$/, ""),
       );
     if (conn) {
-      const secret = authKeyring().get(
+      const secret = await credentials.get(
         workspaceIdentity(workspace) + "/" + connectionId(conn),
       );
       if (secret) {
@@ -989,7 +1028,9 @@ process.parentPort?.on("message", (event) => {
       }
     }
     if (kind === "github" && url === "https://github.com") {
-      const stored = JSON.parse(authKeyring().get(githubAccount) ?? "null");
+      const stored = JSON.parse(
+        (await credentials.get(githubAccount)) ?? "null",
+      );
       const grant = githubGrant.parse(stored?.grant);
       if (
         grant.expires_in &&
@@ -1390,7 +1431,7 @@ process.parentPort?.on("message", (event) => {
           source.reference,
           authMetadata.list(),
         );
-        const secret = authKeyring().get(
+        const secret = await credentials.get(
           workspaceIdentity(workspace) + "/" + connectionId(connection),
         );
         if (!secret)
@@ -1507,7 +1548,9 @@ process.parentPort?.on("message", (event) => {
                 ? "Azure sign-in expired. Check the connection in Settings."
                 : raw === "unknown_team"
                   ? "I couldn’t find that team in this project."
-                  : raw === "Connect the mapped Azure collection in Settings."
+                  : raw ===
+                        "Connect the mapped Azure collection in Settings." ||
+                      raw === keychainWaitingNote
                     ? raw
                     : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
           return { ...meta, view: "error", message };
@@ -1679,7 +1722,7 @@ process.parentPort?.on("message", (event) => {
           product: parsed.data.product,
           message:
             e instanceof Error &&
-            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file)/.test(
+            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file|Waiting for permission)/.test(
               e.message,
             )
               ? redactor.text(e.message).slice(0, 512)
@@ -2153,7 +2196,7 @@ process.parentPort?.on("message", (event) => {
                 change: null,
               };
             try {
-              const connection = adoConnection(plan.workAreaId);
+              const connection = await adoConnection(plan.workAreaId);
               const planned = info?.schema
                 ? adoUpdate(
                     { ...item, marker: "", destination },
