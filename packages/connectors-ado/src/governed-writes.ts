@@ -161,4 +161,28 @@ export class AdoWriteClient {
     if (result?.workItems?.length !== 1) return undefined;
     return this.verify(result.workItems[0]!.id, step, parent);
   }
+  /**
+   * Read-only: the lowest-numbered item in this project with this exact title
+   * and type that Amun created (it carries an Amun marker tag).
+   */
+  async existing(title: string, type: string) {
+    const quote = (value: string) => value.replaceAll("'", "''");
+    const result = (await this.call("POST", "wiql", {
+      query:
+        "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Title] = '" +
+        quote(title) +
+        "' AND [System.WorkItemType] = '" +
+        quote(type) +
+        "' ORDER BY [System.Id]",
+    })) as { workItems?: { id: number }[] };
+    // A tag query cannot match by prefix, so the marker is checked on each.
+    for (const { id } of (result?.workItems ?? []).slice(0, 20)) {
+      const item = await this.item(id);
+      const tags = String(item.fields["System.Tags"] ?? "")
+        .split(";")
+        .map((t) => t.trim());
+      if (tags.some((t) => t.startsWith("Amun-"))) return { id: item.id };
+    }
+    return undefined;
+  }
 }

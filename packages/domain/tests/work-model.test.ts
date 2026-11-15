@@ -458,6 +458,15 @@ describe("writeSummary (partial writes)", () => {
     expect(summary.button).toBe("Retry the 2");
     expect(summary.retry).toEqual(["5", "6"]);
   });
+  it("says a linked item already existed instead of counting it as created", () => {
+    const summary = writeSummary([
+      { id: "1", state: "created" },
+      { id: "2", state: "created", linked: true },
+    ]);
+    expect(summary.text).toBe(
+      "1 created, 0 not created, 1 already existed (linked, not created), nothing duplicated",
+    );
+  });
   it("reconciles uncertain writes before any retry", () => {
     const summary = writeSummary([
       { id: "1", state: "unknown" },

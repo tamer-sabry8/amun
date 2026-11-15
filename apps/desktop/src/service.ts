@@ -1963,9 +1963,30 @@ process.parentPort?.on("message", (event) => {
           return null;
         }
       };
-      const post = (info: Awaited<ReturnType<typeof adoTypeInfo>>) => {
-        if (closed) return;
+      const post = async (info: Awaited<ReturnType<typeof adoTypeInfo>>) => {
         const written = planPublisher.writes(plan.id);
+        // Only an unpublished item can still turn out to be a duplicate.
+        const existing = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            if (
+              plan.state !== "proposed" ||
+              written.some((entry) => entry.id === item.id)
+            )
+              return null;
+            const found = await planPublisher.alreadyThere(
+              plan.id,
+              item,
+              destination,
+            );
+            return found ? { id: found.externalId } : null;
+          }),
+        );
+        if (closed) return;
         port.postMessage({
           version: 1,
           kind: "plan-places-result",
@@ -2003,6 +2024,7 @@ process.parentPort?.on("message", (event) => {
               id: item.id,
               destination,
               kind,
+              existing: existing[plan.items.indexOf(item)] ?? null,
               note: note?.startsWith("“") ? note : null,
               place:
                 place && destination === "ado" && typeof area === "string"
@@ -2032,7 +2054,7 @@ process.parentPort?.on("message", (event) => {
         })
       )
         void adoTypeInfo(plan.workAreaId).then(post, () => post(null));
-      else post(null);
+      else void post(null);
     } else if (message.data?.kind === "tracker-types") {
       const parsed = trackerTypes.safeParse(message.data);
       if (!parsed.success) return;

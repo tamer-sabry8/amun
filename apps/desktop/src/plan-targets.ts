@@ -253,6 +253,7 @@ export function adoPlanTarget(
   client: {
     write(step: AdoStep, parent: null): Promise<{ id: number }>;
     find(step: AdoStep, parent: null): Promise<{ id: number } | undefined>;
+    existing?(title: string, type: string): Promise<{ id: number } | undefined>;
   },
   types: AdoTypeSource = {},
 ): PlanTarget {
@@ -325,6 +326,15 @@ export function adoPlanTarget(
     },
     async find(item) {
       const found = await client.find(await step(item), null);
+      return found ? receipt(found.id) : undefined;
+    },
+    async existing(item) {
+      if (!client.existing) return undefined;
+      const prepared = await step(item);
+      const found = await client.existing(
+        String(prepared.fields["System.Title"]),
+        prepared.type,
+      );
       return found ? receipt(found.id) : undefined;
     },
   };

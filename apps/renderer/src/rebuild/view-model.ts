@@ -544,6 +544,34 @@ export function workTypeGuard(
   return `[This is an RFP Amun only tracks: client, owner, deadline, status and notes. ${record ? "This RFP already exists in Amun's RFPs board" : "An RFP work area already exists in Amun; its board record is unverified"}; do not say you cannot create it. Record or update those when asked, and keep the owner's wording; do not invent values that were not given.${known}${authority} Writing or implementing the response belongs to a separate product, so do not write it, start it or offer a proposal or bid draft here.]\n`;
 }
 /**
+ * What Amun has already published from this work area, newest last, for
+ * Firstmate: destination, item, external id, when, and the approved plan.
+ */
+export function publicationLines(
+  snapshot: Snapshot,
+  areaId: string,
+  limit = 20,
+) {
+  const lines: string[] = [];
+  for (const plan of snapshot.plans) {
+    if (plan.workAreaId !== areaId) continue;
+    for (const result of plan.results) {
+      if (result.state !== "created") continue;
+      const item = plan.items.find((entry) => entry.id === result.id);
+      if (!item) continue;
+      const own = item.fields.destination;
+      const destination =
+        typeof own === "string" && own.trim()
+          ? own.trim().toLowerCase()
+          : plan.destination;
+      lines.push(
+        `${trackerName(destination)}: “${item.summary}” ${result.linked ? "already existed as" : "created as"} ${result.externalId ? (/^\d+$/.test(result.externalId) ? "#" : "") + result.externalId : "(no id)"} on ${plan.createdAt.slice(0, 10)}, from the approved plan “${plan.summary || "Proposed changes"}”`,
+      );
+    }
+  }
+  return lines.slice(-limit);
+}
+/**
  * The header for every turn: Firstmate's conversation is shared by all work
  * areas, so each turn names the one it is about, with its own record.
  */
@@ -560,7 +588,12 @@ export function areaTurnContext(
   permissions?: string[],
   /** Which Azure DevOps work item types this project uses. */
   tracker = "",
+  /** What was already published from this area (`publicationLines`). */
+  published: string[] = [],
 ) {
+  const publications = !published.length
+    ? ""
+    : ` Already published from this work area, by Amun, with the owner's approval (most recent last): ${published.join("; ")}. Never say nothing was published when this list has entries. If the owner asks to publish something that is already listed, say it already exists with its number and do not raise a plan to create it again; offer an update instead, but updating an existing Azure DevOps item is not available yet, so say that plainly.`;
   const allowed =
     permissions === undefined
       ? ""
@@ -576,7 +609,7 @@ export function areaTurnContext(
       ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
   const types = tracker ? ` ${tracker}` : "";
-  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}${types}]\n${workTypeGuard(area.type, record)}`;
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${remembered}${allowed}${publications}${types}]\n${workTypeGuard(area.type, record)}`;
 }
 /** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
 export function requestedLength(request: string) {

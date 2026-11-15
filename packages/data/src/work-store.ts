@@ -2385,6 +2385,7 @@ export class WorkStore {
       state: "created" | "failed" | "unknown";
       externalId?: string | undefined;
       url?: string | undefined;
+      linked?: boolean | undefined;
     }[],
   ) {
     const row = this.get("SELECT * FROM work_plans WHERE id=?", planId);
@@ -2448,11 +2449,13 @@ export class WorkStore {
         groupId,
         workAreaId,
         text:
-          result.state === "created"
-            ? `Created ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
-            : result.state === "failed"
-              ? `Not created: ${item.summary}`
-              : `Checking whether this was created: ${item.summary}`,
+          result.state === "created" && result.linked
+            ? `Already exists: ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
+            : result.state === "created"
+              ? `Created ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
+              : result.state === "failed"
+                ? `Not created: ${item.summary}`
+                : `Checking whether this was created: ${item.summary}`,
         state: result.state === "created" ? "finished" : "failed",
         ref: "plan:" + planId,
       });

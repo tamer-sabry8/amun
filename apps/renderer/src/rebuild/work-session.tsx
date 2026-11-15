@@ -86,6 +86,7 @@ import {
   factsFor,
   amunProtocol,
   areaTurnContext,
+  publicationLines,
   standingPermissionLines,
   areaOf,
   parseAmunActions,
@@ -400,6 +401,7 @@ interface Place {
   problem: string | null;
   kind?: string | null | undefined;
   note?: string | null | undefined;
+  existing?: { id: string } | null | undefined;
 }
 /** Where each item of a plan would go, asked from the service. */
 function usePlaces(planId: string, fingerprint: string) {
@@ -489,17 +491,26 @@ function PlanItem({
               </span>
             )}
           </span>
+          {place?.existing && (
+            <span className="small" role="status">
+              <span className="tag warn">Already there</span>{" "}
+              {`Already in ${trackerName(destination)} as ${/^\d+$/.test(place.existing.id) ? "#" : ""}${place.existing.id} — approving will link, not create.`}
+            </span>
+          )}
           <span className="muted small">{fields || "No field changes"}</span>
         </>
       )}
       {result?.state === "created" && (
         <span className="row wrap small">
           <span className="tag good">
-            Created
+            {result.linked ? "Already exists" : "Created"}
             {result.externalId && /^\d+$/.test(result.externalId)
               ? " #" + result.externalId
               : ""}
           </span>
+          {result.linked && (
+            <span className="muted">Linked, not created again.</span>
+          )}
           {place?.note && <span className="muted">{place.note}</span>}
           {result.url && (
             <button
@@ -1327,6 +1338,7 @@ export function WorkSession({
         .map(factLine),
       standingPermissionLines(snapshot, context.area.groupId ?? null),
       trackerLine(tracker),
+      publicationLines(snapshot, areaId),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`

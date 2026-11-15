@@ -218,6 +218,8 @@ export interface WriteResult {
   state: "created" | "failed" | "unknown";
   externalId?: string | undefined;
   url?: string | undefined;
+  /** Already existed in the destination: linked, not created. */
+  linked?: boolean | undefined;
 }
 /** Partial writes are reported per item; an uncertain write is never replayed blind (UC21). */
 export function writeSummary(results: WriteResult[]) {
@@ -225,6 +227,7 @@ export function writeSummary(results: WriteResult[]) {
   const failed = results.filter((result) => result.state === "failed");
   const unknown = results.filter((result) => result.state === "unknown");
   const retry = failed.map((result) => result.id);
+  const linked = created.filter((result) => result.linked).length;
   return {
     created: created.length,
     failed: failed.length,
@@ -232,7 +235,8 @@ export function writeSummary(results: WriteResult[]) {
     retry,
     reconcileFirst: unknown.map((result) => result.id),
     text:
-      `${created.length} created, ${failed.length} not created` +
+      `${created.length - linked} created, ${failed.length} not created` +
+      (linked ? `, ${linked} already existed (linked, not created)` : "") +
       (unknown.length ? `, ${unknown.length} being checked` : "") +
       ", nothing duplicated",
     button: unknown.length

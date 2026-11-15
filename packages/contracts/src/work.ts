@@ -65,6 +65,8 @@ const writeResult = z.strictObject({
   externalId: z.string().max(256).optional(),
   /** Where the created item can be opened. */
   url: z.string().max(2048).optional(),
+  /** The item already existed in the destination, so it was linked, not created. */
+  linked: z.boolean().optional(),
 });
 const planStory = z.strictObject({
   id,
@@ -905,6 +907,11 @@ export const planPlacesResult = z.strictObject({
       kind: z.string().max(128).nullable().optional(),
       /** Said when an item was created as a different type than planned. */
       note: z.string().max(400).nullable().optional(),
+      /** An item with this title already exists in the destination. */
+      existing: z
+        .strictObject({ id: z.string().max(256) })
+        .nullable()
+        .optional(),
     }),
   ),
 });

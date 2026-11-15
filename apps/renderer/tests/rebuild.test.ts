@@ -18,6 +18,7 @@ import {
   parseAmunActions,
   workTypeGuard,
   areaTurnContext,
+  publicationLines,
   replyFromTranscript,
   trayFor,
   visibleGroups,
@@ -973,6 +974,76 @@ describe("a project's client from the chat", () => {
         null,
       ),
     ).not.toContain("Acme");
+  });
+});
+
+describe("what was already published, for Firstmate", () => {
+  const plan = (id: string, linked: boolean, state = "published") =>
+    ({
+      id,
+      groupId: null,
+      workAreaId: "area",
+      kind: "stories",
+      destination: "ado",
+      summary: "One user story",
+      items: [
+        { id: "i" + id, summary: "Admin picks the invitee role", fields: {} },
+      ],
+      fingerprint: "f",
+      state,
+      results: [
+        {
+          id: "i" + id,
+          state: "created",
+          externalId: "1091018",
+          ...(linked ? { linked } : {}),
+        },
+      ],
+      splitFrom: null,
+      createdAt: "2026-11-15T09:00:00Z",
+    }) as unknown as WorkSnapshot["plans"][number];
+  it("lists receipts for this area only, and is bounded", () => {
+    const lines = publicationLines(
+      snapshot({
+        plans: [
+          plan("1", false),
+          plan("2", true),
+          { ...plan("3", false), workAreaId: "other" },
+        ],
+      }),
+      "area",
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("Azure DevOps");
+    expect(lines[0]).toContain(
+      "“Admin picks the invitee role” created as #1091018 on 2026-11-15",
+    );
+    expect(lines[1]).toContain("already existed as #1091018");
+    const many = Array.from({ length: 30 }, (_, i) => plan(String(i), false));
+    expect(publicationLines(snapshot({ plans: many }), "area")).toHaveLength(
+      20,
+    );
+  });
+  it("tells Firstmate never to claim nothing was published", () => {
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      null,
+      undefined,
+      [],
+      [],
+      undefined,
+      "",
+      ["Azure DevOps: “A” created as #1"],
+    );
+    expect(text).toContain("created as #1");
+    expect(text).toContain("Never say nothing was published");
+    expect(text).toContain(
+      "updating an existing Azure DevOps item is not available yet",
+    );
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("Already published");
   });
 });
 

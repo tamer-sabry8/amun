@@ -21,6 +21,8 @@ export interface PlanReceipt {
   url?: string | undefined;
   /** Said when the item was created differently from the plan. */
   note?: string | undefined;
+  /** The item already existed, so it was linked and nothing was created. */
+  linked?: boolean | undefined;
 }
 export interface PlanTarget {
   /** Creates the item. Throws when the outcome is a failure or uncertain. */
@@ -30,6 +32,12 @@ export interface PlanTarget {
    * confirmed it is absent; a throw means that could not be established.
    */
   find(item: PlanWriteItem): Promise<PlanReceipt | undefined>;
+  /**
+   * Read-only: an item Amun created earlier with the same title and type in
+   * this destination, under any plan. A throw means that could not be
+   * established.
+   */
+  existing?(item: PlanWriteItem): Promise<PlanReceipt | undefined>;
 }
 export interface PlanScope {
   planId: string;
@@ -65,7 +73,24 @@ type Result = {
   state: "created" | "failed" | "unknown";
   externalId?: string;
   url?: string;
+  linked?: boolean;
 };
+const same = (value: unknown) =>
+  typeof value === "string"
+    ? value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase()
+    : "";
+/** The title and type a planned item would be created with, normalised. */
+export function planItemKey(item: {
+  summary: string;
+  fields: Record<string, string | number | null>;
+}) {
+  const own = item.fields.title;
+  const type = item.fields.type ?? item.fields["Work item type"];
+  return {
+    title: same(typeof own === "string" && own.trim() ? own : item.summary),
+    type: same(type),
+  };
+}
 /** One first attempt and one retry of an item confirmed missing. */
 export const planWriteBudget = 2;
 
@@ -140,6 +165,92 @@ export class PlanPublisher {
       !plan.approved_json ||
       !["approved", "partial", "failed"].includes(plan.state)
     );
+  }
+
+  /**
+   * An item with the same title and type that Amun already created in this
+   * destination: Amun's own receipts first, then a read-only look at the
+   * destination. A blank type matches any, since both mean the project's own
+   * story type.
+   */
+  async duplicate(
+    planId: string,
+    item: Omit<PlanWriteItem, "marker" | "destination">,
+    destination: string,
+    scope: PlanScope,
+    target?: PlanTarget,
+  ): Promise<PlanReceipt | undefined> {
+    const key = planItemKey(item);
+    const rows = this.db
+      .prepare(
+        `SELECT w.item_id,w.external_id,w.url,p.approved_json FROM plan_writes w JOIN work_plans p ON p.id=w.plan_id
+         WHERE w.plan_id<>? AND w.destination=? AND w.state='created' AND w.external_id IS NOT NULL
+         AND p.work_area_id IS ? ORDER BY p.created_at,w.rowid`,
+      )
+      .all(planId, destination, scope.workAreaId) as {
+      item_id: string;
+      external_id: string;
+      url: string | null;
+      approved_json: string | null;
+    }[];
+    for (const row of rows) {
+      const before = (
+        JSON.parse(row.approved_json ?? "[]") as (Parameters<
+          typeof planItemKey
+        >[0] & { id: string })[]
+      ).find((entry) => entry.id === row.item_id);
+      if (!before) continue;
+      const other = planItemKey(before);
+      if (
+        other.title === key.title &&
+        (!other.type || !key.type || other.type === key.type)
+      )
+        return {
+          externalId: row.external_id,
+          ...(row.url ? { url: row.url } : {}),
+          linked: true,
+        };
+    }
+    if (!target?.existing) return undefined;
+    const found = await target.existing({
+      ...item,
+      marker: "",
+      destination,
+    });
+    return found ? { ...found, linked: true } : undefined;
+  }
+
+  /**
+   * Before approval: the item this one would only link to, if any. Never
+   * writes; a destination that cannot be read means only Amun's own receipts
+   * are consulted.
+   */
+  async alreadyThere(
+    planId: string,
+    item: Omit<PlanWriteItem, "marker" | "destination">,
+    destination: string,
+  ) {
+    const plan = this.db
+      .prepare("SELECT group_id,work_area_id FROM work_plans WHERE id=?")
+      .get(planId) as
+      { group_id: string | null; work_area_id: string | null } | undefined;
+    if (!plan || destination !== "ado") return undefined;
+    const scope: PlanScope = {
+      planId,
+      groupId: plan.group_id,
+      workAreaId: plan.work_area_id,
+    };
+    let target: PlanTarget | undefined;
+    try {
+      target = await this.resolve(destination, scope);
+    } catch {
+      target = undefined;
+    }
+    try {
+      return await this.duplicate(planId, item, destination, scope, target);
+    } catch {
+      return undefined;
+    }
   }
 
   private rows(planId: string) {
@@ -271,6 +382,7 @@ export class PlanPublisher {
         state: "created",
         externalId: receipt.externalId,
         ...(receipt.url ? { url: receipt.url } : {}),
+        ...(receipt.linked ? { linked: true } : {}),
       });
     };
     for (const row of this.rows(planId)) {
@@ -300,6 +412,36 @@ export class PlanPublisher {
         });
         results.push({ id: row.item_id, state: sent ? "unknown" : "failed" });
         continue;
+      }
+      // An item that already exists is linked, never created a second time.
+      if (
+        row.destination === "ado" &&
+        row.state === "pending" &&
+        row.attempts === 0 &&
+        !reconcileOnly
+      ) {
+        try {
+          const existing = await this.duplicate(
+            planId,
+            source,
+            row.destination,
+            scope,
+            api,
+          );
+          if (existing) {
+            done(row, {
+              ...existing,
+              note: `Already exists as #${existing.externalId}; linked, not created.`,
+            });
+            continue;
+          }
+        } catch {
+          this.set(planId, row.item_id, {
+            note: "Could not check whether this already exists, so nothing was created.",
+          });
+          results.push({ id: row.item_id, state: "failed" });
+          continue;
+        }
       }
       let state: WriteState = row.state;
       let attempts = row.attempts;

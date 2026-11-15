@@ -19,6 +19,9 @@ class Remote implements PlanTarget {
   /** Per call: "ok", "lost" (written, reply lost), "reject" (not written). */
   script: ("ok" | "lost" | "reject")[] = [];
   blind = false;
+  existing?: (
+    item: PlanWriteItem,
+  ) => Promise<{ externalId: string } | undefined>;
   private next = 100;
   constructor(private readonly prefix: string) {}
   async write(item: PlanWriteItem) {
@@ -65,7 +68,7 @@ beforeEach(() => {
 });
 
 function approved(
-  items = [
+  items: { summary: string; fields: Record<string, string> }[] = [
     { summary: "Sample story", fields: {} },
     { summary: "Sample page", fields: { destination: "notion" } },
   ],
@@ -397,5 +400,77 @@ describe("approving only some items", () => {
     });
     expect(result.ok).toBe(false);
     expect(plan(proposed.ref!).state).toBe("proposed");
+  });
+});
+
+describe("a second plan for something already published", () => {
+  const story = [{ summary: "Admin picks the invitee role", fields: {} }];
+  const again = [
+    {
+      summary: "  admin picks the  INVITEE role ",
+      fields: { type: "User Story" },
+    },
+  ];
+
+  it("links to the item Amun's own receipt names and creates nothing", async () => {
+    await publisher.publish(approved(story));
+    const second = approved(again);
+    await publisher.publish(second);
+    expect(ado.writes).toEqual(["Admin picks the invitee role"]);
+    expect(plan(second).state).toBe("published");
+    expect(plan(second).results).toEqual([
+      expect.objectContaining({
+        state: "created",
+        externalId: "100",
+        linked: true,
+      }),
+    ]);
+    expect(
+      store
+        .snapshot()
+        .activity.some((row) => row.text.startsWith("Already exists: #100")),
+    ).toBe(true);
+  });
+
+  it("asks the destination when no receipt is held, and still creates nothing", async () => {
+    ado.existing = async () => ({ externalId: "1091018" });
+    const id = approved(story);
+    await publisher.publish(id);
+    expect(ado.writes).toEqual([]);
+    expect(plan(id).results).toEqual([
+      expect.objectContaining({ externalId: "1091018", linked: true }),
+    ]);
+  });
+
+  it("creates nothing when the check itself fails", async () => {
+    ado.existing = async () => {
+      throw Error("offline");
+    };
+    const id = approved(story);
+    await publisher.publish(id);
+    expect(ado.writes).toEqual([]);
+    expect(plan(id).results).toEqual([
+      expect.objectContaining({ state: "failed" }),
+    ]);
+  });
+
+  it("still creates a different title, and says before approval what exists", async () => {
+    await publisher.publish(approved(story));
+    const other = approved([
+      { summary: "Admin removes an invitee", fields: {} },
+    ]);
+    await publisher.publish(other);
+    expect(ado.writes).toHaveLength(2);
+    const item = { ...story[0]!, id: "x" };
+    expect(await publisher.alreadyThere(other, item, "ado")).toEqual(
+      expect.objectContaining({ externalId: "100", linked: true }),
+    );
+    expect(
+      await publisher.alreadyThere(
+        other,
+        { ...item, summary: "Something new" },
+        "ado",
+      ),
+    ).toBeUndefined();
   });
 });
