@@ -2053,6 +2053,13 @@ export class WorkStore {
           })),
         },
       };
+    if (step.step === "reminder_unavailable")
+      return {
+        ok: false,
+        message:
+          "Reminders aren't available in Amun yet, so nothing was created. Add it to your calendar for now.",
+        step,
+      };
     if (step.step === "unreadable")
       return {
         ok: false,

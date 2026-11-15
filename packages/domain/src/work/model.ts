@@ -195,6 +195,7 @@ export function linkRecord(
 export type IntakeStep =
   | { step: "ask_group" }
   | { step: "unreadable" }
+  | { step: "reminder_unavailable" }
   | { step: "save_record"; type: RecordType; ask: "link" }
   | { step: "define_objective" }
   | { step: "route_execution" }
@@ -224,6 +225,17 @@ export function groupMentioned(
   return named.length === 1 ? named[0]!.id : null;
 }
 
+const POLITE = String.raw`(?:(?:please|pls|can you|could you|would you|will you|kindly|hey|hi|ok(?:ay)?|and|then)[\s,]+)*`;
+const REMINDER_REQUEST = new RegExp(
+  String.raw`^\s*${POLITE}(?:(?:remind\s+me\b)|(?:set\s+(?:up\s+)?(?:an?\s+|another\s+)?(?:\w+\s+)?reminder\b)|(?:(?:create|add|make|schedule)\s+(?:me\s+)?(?:an?\s+)?reminder\b)|(?:reminder\s*:))`,
+  "i",
+);
+
+/** A request to be reminded later, which Amun cannot do yet. */
+export function isReminderRequest(text: string): boolean {
+  return REMINDER_REQUEST.test(text);
+}
+
 /** F1 intake: group first, then kind, then link. Never creates a duplicate silently. */
 export function intake(input: {
   text: string;
@@ -235,6 +247,8 @@ export function intake(input: {
 }): IntakeStep {
   const kind = classifyMaterial(input);
   if (kind.kind === "unreadable") return { step: "unreadable" };
+  if (!input.fileNames?.length && isReminderRequest(input.text))
+    return { step: "reminder_unavailable" };
   if (input.groupId === null && input.groups.length !== 1)
     return { step: "ask_group" };
   const groupId = input.groupId ?? input.groups[0]!.id;

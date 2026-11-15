@@ -150,6 +150,30 @@ describe("intake (F1)", () => {
       options: [],
     });
   });
+  it("declines reminders before asking the group or creating anything", () => {
+    for (const text of [
+      "Remind me in 2 minutes to review the QA PRD.",
+      "please remind me to call Sam tomorrow",
+      "Could you remind me at 5pm to send the deck?",
+      "Set a reminder for Monday",
+      "set up a reminder to review the PRD",
+      "Reminder: review the QA PRD",
+      "remind me on Friday",
+    ]) {
+      expect(intake({ ...base, groupId: null, text })).toEqual({
+        step: "reminder_unavailable",
+      });
+      expect(intake({ ...base, text }).step).toBe("reminder_unavailable");
+    }
+  });
+  it("still files an ordinary review task as work", () => {
+    expect(intake({ ...base, text: "review the QA PRD" }).step).not.toBe(
+      "reminder_unavailable",
+    );
+    expect(
+      intake({ ...base, text: "I need a reminder system product" }).step,
+    ).not.toBe("reminder_unavailable");
+  });
   it("keeps the source and explains when unreadable", () => {
     expect(intake({ ...base, text: "", readable: false })).toEqual({
       step: "unreadable",

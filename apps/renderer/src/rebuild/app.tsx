@@ -256,9 +256,14 @@ export function App() {
     };
     if (step.step === "file_work" && step.areaId)
       return openWork(step.areaId, text);
-    if (!result.ok && step.step !== "unreadable")
+    if (
+      !result.ok &&
+      step.step !== "unreadable" &&
+      step.step !== "reminder_unavailable"
+    )
       return setNote(result.message);
-    if (step.step === "unreadable") return setNote(result.message);
+    if (step.step === "unreadable" || step.step === "reminder_unavailable")
+      return setNote(result.message);
     setPending({ ...step, step: step.step ?? "", text, files });
   };
   const view = homeModel(
