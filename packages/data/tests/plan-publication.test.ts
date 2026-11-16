@@ -400,6 +400,26 @@ describe("an item left being checked after a definite refusal", () => {
     await publisher.publish(id, { reconcileOnly: true });
     expect(plan(id).results[0]!.state).toBe("created");
   });
+  it("becomes not created when the destination would refuse the item, without sending", async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["lost"];
+    ado.blind = true;
+    await publisher.publish(id);
+    const reason = "“Remaining Work” is required before this can be sent.";
+    const rejecting = new PlanPublisher(db, store, async () => ({
+      async write() {
+        throw Error("write must not run");
+      },
+      async find() {
+        throw new PlanNotSent(reason);
+      },
+    }));
+    await rejecting.publish(id, { reconcileOnly: true });
+    expect(plan(id).results[0]!.state).toBe("failed");
+    expect(rejecting.uncertain()).toEqual([]);
+    expect(rejecting.writes(id)[0]!.note).toBe(reason);
+    expect(ado.writes).toHaveLength(1);
+  });
   it("keeps an item uncertain when the stored error is not a definite refusal", async () => {
     const id = approved([{ summary: "Sample story", fields: {} }]);
     ado.script = ["lost"];

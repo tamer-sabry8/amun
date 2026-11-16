@@ -1175,6 +1175,26 @@ describe("Azure DevOps existing work item updates", () => {
       ).write(update({ iteration: "POCs\\Sprint 1" })),
     ).rejects.not.toBeInstanceOf(PlanNotSent);
   });
+  it("lets a failed project read through find as a plain error", async () => {
+    const failure = await adoPlanTarget(
+      "https://devops.example/Collection/",
+      "POCs",
+      {
+        processSchema: async () => {
+          throw Error("network down");
+        },
+      },
+      {
+        write: async () => ({ id: 1 }),
+        find: async () => undefined,
+        item: async () => now(),
+      },
+    )
+      .find(update({ iteration: "POCs\\Sprint 1" }))
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(PlanNotSent);
+  });
   it("finds an update only when the values are already there", async () => {
     const t = (fields: Record<string, unknown>) =>
       target(

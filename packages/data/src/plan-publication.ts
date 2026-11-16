@@ -635,10 +635,17 @@ export class PlanPublisher {
           // Look before sending anything again.
           let found: PlanReceipt | undefined;
           let lookupFailed = false;
+          let notSent: string | null = null;
           try {
             found = await api.find(item);
-          } catch {
-            lookupFailed = true;
+          } catch (error) {
+            // The destination would refuse this item as approved, so it
+            // cannot exist there.
+            if (error instanceof PlanNotSent) {
+              notSent = error.message.slice(0, 300);
+            } else {
+              lookupFailed = true;
+            }
           }
           // A recorded definite refusal means nothing was created: a failed
           // lookup does not keep the item uncertain, and its reason is kept.
@@ -665,7 +672,7 @@ export class PlanPublisher {
           state = "missing";
           this.set(planId, row.item_id, {
             state,
-            note: refused ? stored : null,
+            note: notSent ?? (refused ? stored : null),
           });
         }
         if (reconcileOnly || attempts >= planWriteBudget) {

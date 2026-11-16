@@ -717,7 +717,9 @@ export function adoPlanTarget(
     },
     async find(item) {
       if (adoWorkItemOf(item.fields).named) {
-        const planned = await change(item);
+        // A failed read stays a plain Error; only an item that does not fit
+        // the project is a PlanNotSent.
+        const planned = adoUpdate(item, await read(), project, collection);
         if (!client.item) throw Error("Azure DevOps could not be read.");
         const now = await client.item(planned.id);
         return alreadySet(now, planned.fields)
