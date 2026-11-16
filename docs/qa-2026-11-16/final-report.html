@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amun QA — final report, 16 Nov 2026</title>
+<style>
+  :root { --ink:#1d1b18; --muted:#6b655c; --line:#e4ded3; --bg:#faf8f4; --card:#fff; --ok:#1f7a4d; --warn:#a15c00; --bad:#b3261e; --accent:#c98a1b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 15px/1.55 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 30px; line-height:1.2; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub { color:var(--muted); margin:0 0 32px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .facts { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:12px; }
+  .fact { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .fact b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:4px; font-weight:600; }
+  .fact span { font-size:15px; }
+  table { width:100%; border-collapse: collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); vertical-align: top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); background:#f3efe7; }
+  tr:last-child td { border-bottom:none; }
+  .pill { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; white-space:nowrap; }
+  .pass { background:#e3f2ea; color:var(--ok); }
+  .wait { background:#fdf0dc; color:var(--warn); }
+  .owner { background:#fbe4e2; color:var(--bad); }
+  ol.todo li { margin: 0 0 10px; }
+  figure { margin:0; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  figure img { width:100%; display:block; }
+  figcaption { padding:10px 14px; font-size:13px; color:var(--muted); }
+  .shots { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:16px; }
+  code { font: 13px ui-monospace, "SF Mono", Menlo, monospace; background:#f0ebe1; padding:1px 5px; border-radius:4px; }
+  a { color:#8a5a00; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Amun QA: final report</h1>
+  <p class="sub">16 November 2026, 05:30 Dubai. Beta 0.9 on Apple-chip Macs, ad-hoc signed for trusted testers. Add a note on any line or picture to send feedback.</p>
+
+  <div class="facts">
+    <div class="fact"><b>Pull request</b><span><a href="https://github.com/tamer-sabry8/amun/pull/30">tamer-sabry8/amun#30</a>, merged to main (c0130a4)</span></div>
+    <div class="fact"><b>Installed build</b><span>36ac9d2 · DMG sha256 bc9b8d96…6fee · verified, codesign OK</span></div>
+    <div class="fact"><b>Tests on final head</b><span>1502 unit tests · coverage OK · e2e 61 passed, 23 skipped · CI green</span></div>
+    <div class="fact"><b>Rollback</b><span>Every earlier install is kept in <code>releases/installed-rollback/</code>; the latest is Amun-a868c4e.app</span></div>
+  </div>
+
+  <h2>What was tested in the installed app</h2>
+  <table>
+    <tr><th>Journey</th><th>Result</th><th>Evidence</th></tr>
+    <tr><td>UC22: publish the same story twice to Azure DevOps</td><td><span class="pill pass">Pass</span></td><td>Firstmate refuses and lists the existing items. Nothing new is written.</td></tr>
+    <tr><td>UC35: update a Notion page Amun created</td><td><span class="pill pass">Pass</span></td><td>The card showed the exact change. After approval the line was added, and this was checked in Notion.</td></tr>
+    <tr><td>UC28: crewmate code change → pull request</td><td><span class="pill pass">Pass</span></td><td>PR #1 opened in amun-qa-sandbox on its own branch: one line, open, not merged.</td></tr>
+    <tr><td>Agents screen redesign (your reference)</td><td><span class="pill pass">Pass</span></td><td>Checked in dark and light. Product Manager is selected first, there are 20 specialists, and Add/Remove work.</td></tr>
+    <tr><td>Sprints, Skills install, Portfolio, diagnostics export, delegation and relay, Keychain startup</td><td><span class="pill pass">Pass</span></td><td>Earlier rounds on Beta 0.9 builds.</td></tr>
+    <tr><td>UC23: QA sub-task under #1091018</td><td><span class="pill wait">Fixed, retest open</span></td><td>Amun now knows Azure needs Remaining Work and Activity for a Task. The stuck "being checked" item is fixed in 36ac9d2. The retest stopped because the screen locked.</td></tr>
+    <tr><td>UC45: losing the network</td><td><span class="pill owner">Needs you</span></td><td>Turning Wi-Fi off is yours to do.</td></tr>
+  </table>
+
+  <h2>What needs you</h2>
+  <ol class="todo">
+    <li><b>UC23 Task.</b> In the Invites conversation, give Firstmate a value for Remaining Work (hours) and pick an Activity. Then approve the new card if it looks right. Press "Check what was created" on the old red banner first: on 36ac9d2 it should settle as "not created".</li>
+    <li><b>Delete duplicates</b> #1091019 and #1091025 in POCs.</li>
+    <li><b>UC45:</b> turn Wi-Fi off while Amun is working, then back on.</li>
+    <li><b>Old cards:</b> two older Code change cards in Invites and one old standalone Task card on Home. Approve or dismiss them as you prefer; I did not touch them.</li>
+    <li><b>Standing permission test:</b> left for you, because the safety checks would not let me add a standing permission myself.</li>
+  </ol>
+
+  <h2>Known small issues</h2>
+  <ul>
+    <li>The e2e test <code>firstmate-stow</code> timed out once under load and passed on rerun. It is a test-only issue.</li>
+    <li>23 legacy-shell e2e specs are still skipped in packaged runs.</li>
+    <li>On each new ad-hoc build, the Keychain may ask once.</li>
+  </ul>
+
+  <h2>Screens</h2>
+  <div class="shots">
+    <figure><img src="P10_UC28_pr_open.jpg" alt="Pull request open in the sandbox repository"><figcaption>UC28: pull request opened, not merged</figcaption></figure>
+    <figure><img src="P10_UC28_code_cards.jpg" alt="Code change card"><figcaption>UC28: Code change card awaiting approval</figcaption></figure>
+    <figure><img src="P8_agents_dark_pm.jpg" alt="Agents screen, dark"><figcaption>Agents: Product Manager selected (dark)</figcaption></figure>
+    <figure><img src="P9_agents_20_fits.jpg" alt="Agents screen with 20 specialists"><figcaption>Agents: all 20 specialists</figcaption></figure>
+    <figure><img src="P7_UC35_update_card_diff.jpg" alt="Notion update card"><figcaption>UC35: exact change before approval</figcaption></figure>
+    <figure><img src="P6_UC22_firstmate_refuses_duplicate.jpg" alt="Firstmate refuses a duplicate"><figcaption>UC22: duplicate refused</figcaption></figure>
+    <figure><img src="P11_UC23_still_checking_a868c4e.jpg" alt="UC23 still being checked"><figcaption>UC23 on a868c4e: the loop fixed in 36ac9d2</figcaption></figure>
+  </div>
+
+  <p class="sub" style="margin-top:32px">Full journey report: <code>Amun-QA-Journeys.html</code> (45 journeys, 61 issues, 147 screenshots).</p>
+</main>
+</body>
+</html>
