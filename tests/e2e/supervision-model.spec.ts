@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("pinned Firstmate model selector sets the branch model and reasoning effort", async () => {
   test.setTimeout(120000);
   const root = await realpath(
@@ -28,6 +29,7 @@ test("pinned Firstmate model selector sets the branch model and reasoning effort
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

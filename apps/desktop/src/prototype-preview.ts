@@ -119,3 +119,49 @@ export async function openPrototypePreview(
     },
   };
 }
+/**
+ * Serves one finished HTML page from a private random address. The page can
+ * run its own inline script and style, but cannot request anything outside
+ * itself, submit forms or be framed.
+ */
+export async function openHtmlPreview(html: string, active: () => boolean) {
+  const path = "/" + randomBytes(32).toString("hex");
+  let origin = "";
+  const server = createServer((req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (
+      !active() ||
+      req.url !== path ||
+      "http://" + req.headers.host !== origin
+    ) {
+      res.writeHead(404).end();
+      return;
+    }
+    if (req.method !== "GET") {
+      res.writeHead(405).end();
+      return;
+    }
+    res
+      .writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+      .end(html);
+  });
+  server.requestTimeout = 10000;
+  await new Promise<void>((ok, fail) => {
+    server.once("error", fail);
+    server.listen(0, "127.0.0.1", ok);
+  });
+  origin = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
+  return {
+    url: origin + path,
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((done) => server.close(() => done()));
+    },
+  };
+}

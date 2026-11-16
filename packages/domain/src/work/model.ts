@@ -1,6 +1,7 @@
 // UX rebuild conceptual model (Amun_UX_Rebuild_Handoff §3, reconciled §3).
 // Groups scope everything; work areas, supporting records, objectives and
 // execution records stay distinct. Pure logic only: no storage, no I/O.
+import { reminderIntent, type ReminderIntent } from "./reminders.ts";
 
 export const workTypes = ["product", "project", "task", "rfp"] as const;
 export type WorkType = (typeof workTypes)[number];
@@ -195,6 +196,7 @@ export function linkRecord(
 export type IntakeStep =
   | { step: "ask_group" }
   | { step: "unreadable" }
+  | { step: "reminder"; intent: ReminderIntent }
   | { step: "save_record"; type: RecordType; ask: "link" }
   | { step: "define_objective" }
   | { step: "route_execution" }
@@ -224,6 +226,11 @@ export function groupMentioned(
   return named.length === 1 ? named[0]!.id : null;
 }
 
+/** A request to add, list or cancel reminders; none of them is work. */
+export function isReminderRequest(text: string): boolean {
+  return reminderIntent(text) !== null;
+}
+
 /** F1 intake: group first, then kind, then link. Never creates a duplicate silently. */
 export function intake(input: {
   text: string;
@@ -235,6 +242,8 @@ export function intake(input: {
 }): IntakeStep {
   const kind = classifyMaterial(input);
   if (kind.kind === "unreadable") return { step: "unreadable" };
+  const reminder = input.fileNames?.length ? null : reminderIntent(input.text);
+  if (reminder) return { step: "reminder", intent: reminder };
   if (input.groupId === null && input.groups.length !== 1)
     return { step: "ask_group" };
   const groupId = input.groupId ?? input.groups[0]!.id;
@@ -277,17 +286,179 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
   // Only the name: what follows it ("it is for work and has a deadline…")
   // describes the work and is not part of what it is called.
   const afterName =
-    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a|testing|tests?|qa|demo)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+  // An identifier-like name ("QA-20261114-RFP for testing") ends at its token.
+  const identifier =
+    /^([^\s"“”]*[-_\d][^\s"“”]*?)[,;:.!?]?\s+(?:for|in|to|as|on|so|because|that|which|with|and|where|when|it|the)\b/i;
   const only = (value: string) =>
-    quoted ? value : (value.split(afterName)[0] ?? value);
-  const stripped = (named ? only(named[1]!) : line)
-    .replace(
-      /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i,
-      "",
-    )
+    quoted
+      ? value
+      : (identifier.exec(value)?.[1] ?? value.split(afterName)[0]) || value;
+  const lead =
+    /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i;
+  const afterLead = lead.test(line) ? line.replace(lead, "") : null;
+  const leadingQuote =
+    afterLead === null ? null : /^["“]([^"”]+)["”]/.exec(afterLead);
+  // Without a stated name, the first sentence stands in, never the whole message.
+  const firstSentence = (value: string) =>
+    value.split(/[.!?](?:\s|$)/)[0]?.trim() ?? "";
+  const shortened = (value: string) => {
+    if (value.length <= 60) return value;
+    const cut = value.slice(0, 60);
+    const space = cut.lastIndexOf(" ");
+    return space > 20 ? cut.slice(0, space).trimEnd() : value;
+  };
+  const candidate = named
+    ? only(named[1]!)
+    : leadingQuote
+      ? leadingQuote[1]!
+      : afterLead !== null
+        ? only(firstSentence(afterLead) || afterLead)
+        : shortened(firstSentence(line) || line);
+  const stripped = candidate
     .replace(/^(?:i have an idea|idea|problem)\s*[:\-–]\s*/i, "")
     .replace(/[.!?]+$/, "")
     .trim();
   const name = stripped || line || fallback;
   return name.length > 80 ? name.slice(0, 77).trimEnd() + "…" : name;
+}
+
+const unknownValue =
+  /^(?:not\s+(?:yet\s+)?(?:known|assigned|set|decided)|unknown|unassigned|tbd|none|n\/a)\b/i;
+
+/**
+ * What an RFP request states, and nothing more. The name is the quoted or
+ * "named/called" name; the client, deadline and group are filled only when the
+ * text gives them outright ("The client is …", "due …", "in <known group>").
+ * "not yet known" and "unknown" stay empty, and nothing is guessed.
+ */
+export function rfpFromRequest(
+  text: string,
+  groups: readonly { id: string; name: string }[] = [],
+) {
+  const body = text.replace(/^\s*(?:please\s+)?track an rfp:?\s*/i, "").trim();
+  const first = body.split("\n")[0] ?? body;
+  const sentenceName = /\b(?:called|named)\b/i.test(first);
+  const stated = first.replace(/,?\s*\bdue\s+.+$/i, "").trim() || first;
+  const name = nameFromRequest("Track an RFP " + stated, "");
+  const fact = (label: RegExp) => {
+    const value = label.exec(body)?.[1]?.trim();
+    return value && !unknownValue.test(value) ? value : null;
+  };
+  const client = sentenceName
+    ? fact(/\bclient\s+(?:is|:)\s+([^.;\n]+)/i)
+    : (/^(?:for|from)\s+(.+)$/i.exec(stated)?.[1]?.trim() ?? null);
+  const due = fact(/\bdue\s+(?:on\s+)?([^.;\n]+)/i);
+  const place =
+    /\bin\s+(?:the\s+)?([^.,;\n]+?)(?:\s+group)?\s*(?:[.,;]|\n|$)/gi;
+  let groupId: string | null = null;
+  for (const match of body.matchAll(place)) {
+    const found = groups.filter(
+      (group) => group.name.toLowerCase() === match[1]!.trim().toLowerCase(),
+    );
+    if (found.length === 1) groupId = found[0]!.id;
+  }
+  return { name, client, due, groupId };
+}
+
+const monthNames = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
+
+// A real calendar day at 00:00Z, or null for something like 31 February.
+function utcDay(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month &&
+    date.getUTCDate() === day
+    ? date
+    : null;
+}
+
+function deadlineFrom(text: string, now: Date) {
+  const lead = String.raw`\b(?:deadline|due)(?:\s+date)?\s*(?:is|:|on|by)?\s*`;
+  const after = (pattern: string) => new RegExp(lead + pattern, "i").exec(text);
+  const today = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const month = (name: string) =>
+    monthNames.indexOf(name.slice(0, 3).toLowerCase());
+  const monthWord = String.raw`(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
+  const named = (
+    dayText: string,
+    monthText: string,
+    yearText: string | undefined,
+  ) => {
+    const m = month(monthText);
+    const d = Number(dayText);
+    if (yearText) return utcDay(Number(yearText), m, d);
+    const thisYear = utcDay(now.getUTCFullYear(), m, d);
+    if (thisYear && thisYear.getTime() >= today) return thisYear;
+    return utcDay(now.getUTCFullYear() + 1, m, d);
+  };
+  const iso = after(String.raw`(\d{4})-(\d{2})-(\d{2})\b`);
+  if (iso) return utcDay(+iso[1]!, +iso[2]! - 1, +iso[3]!);
+  const dayFirst = after(
+    String.raw`(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?` +
+      monthWord +
+      String.raw`\b(?:,?\s+(\d{4})\b)?`,
+  );
+  if (dayFirst) return named(dayFirst[1]!, dayFirst[2]!, dayFirst[3]);
+  const monthFirst = after(
+    monthWord +
+      String.raw`\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4})\b)?`,
+  );
+  if (monthFirst) return named(monthFirst[2]!, monthFirst[1]!, monthFirst[3]);
+  const slash = after(String.raw`(\d{1,2})/(\d{1,2})/(\d{4})\b`);
+  if (slash) return utcDay(+slash[3]!, +slash[2]! - 1, +slash[1]!);
+  const within = after(String.raw`in\s+(\d{1,3})\s+days?\b`);
+  if (within) return new Date(today + Number(within[1]) * 86_400_000);
+  return null;
+}
+
+/**
+ * The facts an RFP request states outright, read without guessing: the client
+ * ("for client X", "client: X", a quoted name), the deadline (ISO, "25 November
+ * 2026", "November 25, 2026", "25/11/2026" day-first, "due 17 November" as its
+ * next occurrence, "due in 10 days"), and who owns what. The response owner is
+ * set only by "response owner"; "RFP / account / sales owner" and a bare
+ * "owner" are the account owner; "pre-sales X" is the pre-sales contact.
+ * Anything missing, or said to be unknown, stays null.
+ */
+export function rfpDetails(text: string, now: Date = new Date()) {
+  const known = (value: string | undefined) => {
+    const clean = value?.trim();
+    return clean && !unknownValue.test(clean) ? clean : null;
+  };
+  const end = String.raw`(?=\s*(?:[,.;\n]|$)|\s+(?:and|due|deadline)\b)`;
+  const value = String.raw`\s*(?:is|:)?\s*["“]?([^",.;\n]+?)["”]?` + end;
+  const client = known(
+    /\bclient\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
+      new RegExp(
+        String.raw`\bclient\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline)\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
+        "i",
+      ).exec(text)?.[1],
+  );
+  const find = (pattern: string) =>
+    known(new RegExp(pattern + value, "i").exec(text)?.[1]);
+  const deadline = deadlineFrom(text, now)?.toISOString() ?? null;
+  const responseOwner = find(String.raw`\bresponse\s+owner`);
+  const accountOwner =
+    find(String.raw`\b(?:rfp|account|sales)\s+owner`) ??
+    find(String.raw`(?<!\b(?:response|rfp|account|sales)\s)\bowner`);
+  const presales = find(String.raw`\bpre-?sales(?:\s+contact)?`);
+  return { client, deadline, responseOwner, accountOwner, presales };
 }

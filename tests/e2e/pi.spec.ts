@@ -3,11 +3,13 @@ import { promisify } from "node:util";
 import { writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { test, expect, _electron as electron } from "@playwright/test";
+import { packagedProofProfile } from "../support/packaged-launch.ts";
 test("Pi extension dialogs cross the service boundary with explicit answers", async () => {
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--amun-proof",
+      ...packagedProofProfile(),
     ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
@@ -43,6 +45,7 @@ test("service loss clears Pi dialogs and terminal control instead of replaying t
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--amun-proof",
+      ...packagedProofProfile(),
     ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }

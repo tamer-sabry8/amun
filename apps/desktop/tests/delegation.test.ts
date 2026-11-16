@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -32,7 +39,12 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const area = { name: "Arabic Voice", type: "Product", purpose: "Voice notes" };
+const area = {
+  name: "Arabic Voice",
+  type: "Product",
+  purpose: "Voice notes",
+  groupId: null as string | null,
+};
 function make(extra: Partial<DelegationDeps> = {}) {
   const delegations = new Delegations({
     root,
@@ -102,6 +114,14 @@ it("gives the agent a brief built from its catalogue entry", () => {
   expect(brief).toContain('create an empty file named "done"');
 });
 
+it("puts the supplied source documents in the brief, and none when there are none", () => {
+  const input = { agent: "QA", title: "T", task: "x", area, result: "/r" };
+  expect(
+    agentBrief({ ...input, sources: "[Document · source id: d1]" }),
+  ).toMatch(/## Source documents\n\[Document · source id: d1\]/);
+  expect(agentBrief(input)).not.toContain("Source documents");
+});
+
 it("starts a worker, shows who is working, and brings the result back to the chat", async () => {
   const delegations = make();
   const id = (await delegations.start(job))!;
@@ -162,6 +182,20 @@ it("starts a worker, shows who is working, and brings the result back to the cha
   ]);
 });
 
+it("files an acceptance checklist with unknown evidence shown as unknown, never passed", async () => {
+  const delegations = make();
+  const id = (await delegations.start({ ...job, acceptance: true }))!;
+  expect(await readFile(join(root, id, "brief.md"), "utf8")).toContain(
+    "acceptance checklist",
+  );
+  await work(id, "- [x] Booking works\n- [x] Pay works — Evidence: test run 9");
+  await until(() => of("save-output").length === 1);
+  expect(of("save-output")[0]).toMatchObject({
+    type: "acceptance",
+    body: "- [ ] Booking works — Evidence: unknown\n- [x] Pay works — Evidence: test run 9",
+  });
+});
+
 it("uses Codex when that is the tool that is on, and says so when none is", async () => {
   await make({ harness: () => "codex" }).start(job);
   expect(delivered[0]!.harness).toBe("codex");
@@ -171,7 +205,7 @@ it("uses Codex when that is the tool that is on, and says so when none is", asyn
   expect(await make({ harness: () => null }).start(job)).toBeNull();
   expect(delivered).toEqual([]);
   expect(String(of("message")[0]!.text)).toContain(
-    "Claude Code and Codex are both turned off",
+    "no enabled Copilot worker is available",
   );
   expect(of("agent-status")).toEqual([]);
 });
@@ -303,4 +337,54 @@ it("a waiting job is not sent by a restart, only by the owner's answer", async (
   await second.resume();
   await new Promise((resolve) => setTimeout(resolve, 60));
   expect(delivered).toEqual([]);
+});
+
+it("fails a sent job whose worker is proven gone, once, without resending", async () => {
+  let gone = false;
+  const delegations = make({ workerGone: async () => gone });
+  await delegations.start(job);
+  expect(delivered).toHaveLength(1);
+  gone = true;
+  await until(() => of("message").length > 0);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(of("message")).toHaveLength(1);
+  expect(String(of("message")[0]!.text)).toContain("no longer running");
+  expect(of("activity").filter((c) => c.state === "failed")).toHaveLength(1);
+  expect(delivered).toHaveLength(1);
+});
+
+it("keeps waiting for a worker that is not proven gone", async () => {
+  const delegations = make({ workerGone: async () => false });
+  const id = (await delegations.start(job))!;
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(of("message")).toHaveLength(0);
+  await work(id, "Result");
+  await until(() => of("message").length > 0);
+  expect(String(of("message")[0]!.text)).toContain("finished");
+});
+
+it("only tracks an RFP: response writing is refused before any job exists", async () => {
+  const rfp = { ...area, type: "rfp" };
+  const delegations = make({ area: (id) => (id === "area-1" ? rfp : null) });
+  expect(
+    await delegations.start({
+      ...job,
+      agent: "Proposal & Bid",
+      title: "Write the response",
+    }),
+  ).toBeNull();
+  expect(of("message").map((command) => command.text)).toEqual([
+    "Amun only tracks this RFP: its client, owners, deadline and status. Writing the response or a proposal happens outside Amun, so I have not handed this to Proposal & Bid. I can still record or update the RFP's details.",
+  ]);
+  expect(commands).toHaveLength(1);
+  expect(delivered).toEqual([]);
+  expect(await readdir(root)).toEqual([]);
+
+  const tracking = await delegations.start({
+    ...job,
+    title: "Deadline",
+    task: "Summarise the RFP deadline and owners.",
+  });
+  expect(tracking).not.toBeNull();
+  expect(delivered).toHaveLength(1);
 });

@@ -1,5 +1,8 @@
 import { expect, it } from "vitest";
-import { openPrototypePreview } from "../src/prototype-preview.ts";
+import {
+  openHtmlPreview,
+  openPrototypePreview,
+} from "../src/prototype-preview.ts";
 it("serves only the scoped prototype, escapes designer content and refuses feedback on unknown elements", async () => {
   let active = true;
   const page = await openPrototypePreview(
@@ -61,6 +64,25 @@ it("serves only the scoped prototype, escapes designer content and refuses feedb
     expect(page.pins()).toEqual([
       { element: "confirm", feedback: "Show confirmation" },
     ]);
+    active = false;
+    expect((await fetch(page.url)).status).toBe(404);
+  } finally {
+    await page.close();
+  }
+});
+it("serves a finished page with no way to reach outside it", async () => {
+  let active = true;
+  const page = await openHtmlPreview("<p>Hello</p>", () => active);
+  try {
+    const response = await fetch(page.url);
+    expect(await response.text()).toBe("<p>Hello</p>");
+    const policy = response.headers.get("Content-Security-Policy") ?? "";
+    expect(policy).toContain("default-src 'none'");
+    expect(policy).not.toMatch(/connect-src|https?:/);
+    expect((await fetch(page.url, { method: "POST", body: "x" })).status).toBe(
+      405,
+    );
+    expect((await fetch(new URL(page.url).origin + "/")).status).toBe(404);
     active = false;
     expect((await fetch(page.url)).status).toBe(404);
   } finally {

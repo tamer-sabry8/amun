@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { modelDisplay } from "../../../../packages/domain/src/work/shell.ts";
 import { Icon } from "../icons.tsx";
+import { useDismiss } from "./use-dismiss.ts";
 import { chooseModel, currentModel, listModels } from "./firstmate.ts";
 
 export function ModelPicker({ label }: { label: string }) {
@@ -18,21 +19,8 @@ export function ModelPicker({ label }: { label: string }) {
     setQuery("");
     setProblem("");
     void listModels().then(setModels);
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      if (
-        (event instanceof KeyboardEvent && event.key === "Escape") ||
-        (event instanceof MouseEvent &&
-          !root.current?.contains(event.target as Node))
-      )
-        setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", close);
-    };
   }, [open]);
+  useDismiss(open, root, () => setOpen(false));
   const current = currentModel();
   const wanted = query.trim().toLowerCase();
   const shown = (models ?? [])

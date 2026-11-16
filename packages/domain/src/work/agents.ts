@@ -7,6 +7,8 @@ export interface AgentProfile {
   name: string;
   /** One line for a card. */
   summary: string;
+  /** Two to four short framework labels for a card. */
+  tags?: readonly string[];
   /** What it owns. */
   scope: string;
   /** Key workflows and outputs. */
@@ -22,6 +24,7 @@ export interface AgentProfile {
 export const agentCatalog: readonly AgentProfile[] = [
   {
     name: "Research & Insights",
+    tags: ["JTBD", "Five Forces", "TAM/SAM"],
     summary: "Market, customer and competitor research with sources",
     scope:
       "Market, customer, competitor, industry, technology, and regulatory research; client intelligence; source-backed synthesis",
@@ -50,6 +53,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Product Manager",
+    tags: ["PR/FAQ", "OST", "RICE", "PRD"],
     summary: "Strategy, discovery, requirements, roadmap and backlog",
     scope:
       "End-to-end product management: strategy, discovery, requirements, roadmap, backlog, prioritization, business case",
@@ -81,6 +85,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "UX",
+    tags: ["Double Diamond", "Flows", "WCAG"],
     summary: "Journeys, personas, wireframes, prototypes and brand",
     scope:
       "Senior Product Designer scope: branding, colors, UI, UX, journey maps, service blueprints, pain-point analysis, personas, experience audits, CX opportunities, wireframes, visual prototypes",
@@ -115,6 +120,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Content",
+    tags: ["StoryBrand", "4 Cs UX Writing"],
     summary: "Social posts, scripts, website copy and content strategy",
     scope:
       "All content creation and content strategy: social, product marketing content, hooks, scripts, website content, IA, UX content research",
@@ -139,6 +145,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Product Marketing",
+    tags: ["April Dunford", "Battlecards"],
     summary: "Positioning, messaging, battlecards and sales enablement",
     scope:
       "GTM, sales enablement, competitive positioning, customer voice, pricing/revenue narrative, P&L input, market demand",
@@ -173,6 +180,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Solution & AI Architecture",
+    tags: ["C4 Model", "TOGAF", "NIST AI"],
     summary: "Solution design, integrations, data and AI architecture",
     scope:
       "Technical solution design, integrations, data, AI/agent architecture, security, nonfunctional requirements",
@@ -196,6 +204,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Proposal & Bid",
+    tags: ["Shipley", "Compliance Matrix"],
     summary: "RFP intake through submission and orals",
     scope:
       "Formal pursuit lifecycle: RFP/RFI intake through submission and orals",
@@ -215,6 +224,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Presales & Solutioning",
+    tags: ["MEDDPICC", "Demo & PoC Plans"],
     summary: "Demos, proofs of concept and technical answers",
     scope: "Solution shaping, demos, PoCs, technical Q&A, objection handling",
     outputs:
@@ -233,6 +243,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Sales Intelligence",
+    tags: ["MEDDIC", "Account Signals"],
     summary: "Pipeline, accounts, meetings and next-best actions",
     scope:
       "Pipeline, accounts, leads, meetings, CRM hygiene, next-best actions",
@@ -254,6 +265,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Engagement Delivery & PMO",
+    tags: ["Scrum", "Kanban", "BLUF Updates"],
     summary: "Plans, status reports, risks and executive updates",
     scope:
       "Delivery execution, governance, reporting, risk, dependencies, executive updates",
@@ -276,6 +288,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Client Success",
+    tags: ["Health Score", "NPS", "AARRR"],
     summary: "Adoption, health, renewals and churn prevention",
     scope: "Adoption, activation, health, renewal, expansion, churn prevention",
     outputs:
@@ -292,6 +305,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Knowledge & Reuse",
+    tags: ["RAG Citations", "Past Lessons"],
     summary: "Finds and reuses past proposals, decks and lessons",
     scope:
       "Firm-wide knowledge retrieval, reuse, lessons learned, template governance",
@@ -313,6 +327,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "QA",
+    tags: ["Test Pyramid", "ISTQB", "Gates"],
     summary: "Test plans, test cases, defect triage and release gates",
     scope: "Quality assurance, testing, defect management, release gates",
     outputs:
@@ -340,6 +355,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Commercial & Legal Operations",
+    tags: ["Rule of 40", "CLM", "Margins"],
     summary: "Contracts, margins, obligations and renewals",
     scope: "Commercial economics, contracts, legal risk, renewals, obligations",
     outputs:
@@ -355,6 +371,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Finance & Performance",
+    tags: ["Driver Budgeting", "Scenarios"],
     summary: "Budgets, forecasts, variance and management reports",
     scope: "Financial planning, analysis, forecasting, reporting",
     outputs:
@@ -372,6 +389,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "HR",
+    tags: ["Performance Reviews", "Onboarding"],
     summary: "Hiring, onboarding, performance, learning and policy",
     scope:
       "Employee lifecycle: talent acquisition, onboarding, performance, learning, policy",
@@ -391,6 +409,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Procurement & Vendor",
+    tags: ["TCO", "Vendor Scorecards"],
     summary: "Vendor research, RFQs, comparisons and approvals",
     scope: "External spend, suppliers, contracts, approvals",
     outputs:
@@ -408,6 +427,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Risk & Compliance",
+    tags: ["ISO 31000", "SOC 2", "Privacy"],
     summary: "Risk registers, controls, audits and remediation",
     scope: "Operational, regulatory, security, and audit risk",
     outputs:
@@ -424,6 +444,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Desktop Support",
+    tags: ["Triage", "Runbooks"],
     summary: "IT help, access requests and ticket triage for staff",
     scope: "Internal employee IT support across HR, IT, finance, facilities",
     outputs:
@@ -439,6 +460,7 @@ export const agentCatalog: readonly AgentProfile[] = [
   },
   {
     name: "Product Analytics & Experimentation",
+    tags: ["North Star", "HEART", "A/B Tests"],
     summary: "Funnels, cohorts, A/B tests and the North Star metric",
     scope:
       "Product analytics, experimentation, instrumentation, funnel/retention analysis",

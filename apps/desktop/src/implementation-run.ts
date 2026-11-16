@@ -316,7 +316,7 @@ export async function implementationRun(
         throw e;
     }
     db.prepare(
-      "INSERT INTO runs(id,product_id,story_id,agent_role,harness,worktree,branch,state,started_at) VALUES(?,?,?,'Engineer','codex',?,?,'queued',?) ON CONFLICT(id) DO NOTHING",
+      "INSERT INTO runs(id,product_id,story_id,agent_role,harness,worktree,branch,state,started_at) VALUES(?,?,?,'Engineer','pi',?,?,'queued',?) ON CONFLICT(id) DO NOTHING",
     ).run(
       cmd.run,
       cmd.product,

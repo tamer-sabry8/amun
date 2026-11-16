@@ -10,6 +10,7 @@ import {
   realpath,
   writeFile,
   rm,
+  rename,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { constants } from "node:fs";
@@ -26,7 +27,9 @@ import {
   saveEndpointReceipt,
 } from "./endpoint-receipt.ts";
 import { parseFirstmateRecord, queryTmuxEndpoint } from "./tmux-observer.ts";
-import { observeOwnedTmux } from "./observe-owned-tmux.ts";
+import { endpointPresence, observeOwnedTmux } from "./observe-owned-tmux.ts";
+import { copilotModelSelector } from "./copilot-routing.ts";
+import { writePiLauncher, type PiLauncherSource } from "./pi-launcher.ts";
 
 const run = promisify(execFile);
 async function privateDir(path: string) {
@@ -39,6 +42,31 @@ async function privateDir(path: string) {
     (stat.mode & 0o077) !== 0
   )
     throw Error("Unsafe crew directory");
+}
+/** Sets a dead worker's identity aside under distinct names; nothing is replaced or deleted. */
+export async function retireEndpoint(
+  owner: string,
+  id: string,
+  files: Record<string, string>,
+): Promise<string> {
+  const parent = join(owner, "retired");
+  await privateDir(parent);
+  for (let attempt = 0; ; attempt++) {
+    const dir = join(parent, `${id}-${Date.now()}-${attempt}`);
+    try {
+      await mkdir(dir, { mode: 0o700 });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "EEXIST" && attempt < 50)
+        continue;
+      throw e;
+    }
+    await privateDir(dir);
+    for (const [name, from] of Object.entries(files))
+      await rename(from, join(dir, name)).catch((e) => {
+        if (!unavailable(e)) throw e;
+      });
+    return dir;
+  }
 }
 async function privateSetting(path: string, value: string) {
   try {
@@ -92,7 +120,7 @@ async function crewServer(owner: string, path: string, tmux: TmuxCommand) {
   } catch (e) {
     if (!unavailable(e)) throw e;
     // Loss of an established server never authorizes a replacement dispatch.
-    for (const harness of ["codex", "claude"]) {
+    for (const harness of ["codex", "claude", "pi"]) {
       try {
         await lstat(join(owner, "amun-" + harness + ".launch"));
       } catch (err) {
@@ -144,7 +172,7 @@ async function captureEndpoint(
     token,
   }: {
     id: string;
-    harness: "codex" | "claude";
+    harness: "codex" | "claude" | "pi";
     home: string;
     worker: string;
     receipts: string;
@@ -206,6 +234,7 @@ export async function dispatchFirstmate(
   receipts: string,
   binary: string,
   input: unknown,
+  pi?: PiLauncherSource,
 ) {
   const { harness, charter } = dispatchRequest.parse(input);
   const { home, revision } = await releases.crewHome();
@@ -214,14 +243,20 @@ export async function dispatchFirstmate(
     id = "amun-" + harness;
   await ownedWorktreeBranch(home, worker);
   await privateDir(receipts);
+  let respawn = false;
   try {
     const existing = await loadEndpointReceipt(receipts, id);
     if (existing.home !== home || existing.identity.worktree !== worker)
       throw Error("Receipt belongs to a different crew");
     const status = await observeOwnedTmux(receipts, id, binary);
-    return status.endpoint === "verified"
-      ? "Firstmate already has this " + harness + " worker."
-      : "The saved worker endpoint is unavailable. Its launch was not repeated.";
+    if (status.endpoint === "verified")
+      return "Firstmate already has this " + harness + " worker.";
+    // Only a worker proven gone (its own tmux server stopped, or no longer
+    // holding that pane) is started again, through Firstmate's own respawn.
+    // Anything unclear is left alone: it may still be alive.
+    if ((await endpointPresence(receipts, id, binary)) !== "gone")
+      return "The saved worker endpoint is unavailable. Its launch was not repeated.";
+    respawn = true;
   } catch (e) {
     if (!unavailable(e)) throw e;
   }
@@ -231,18 +266,33 @@ export async function dispatchFirstmate(
     () => "/opt/homebrew/bin/node",
     () => "/usr/local/bin/node",
   );
-  const launcher = join(homedir(), ".local/bin", harness);
   const binDir = join(owner, "launchers");
   await privateDir(binDir);
-  const link = join(binDir, harness);
-  try {
-    await symlink(launcher, link);
-  } catch (e) {
-    if (
-      (e as NodeJS.ErrnoException).code !== "EEXIST" ||
-      (await readlink(link)) !== launcher
-    )
-      throw Error("Unexpected crew launcher");
+  let launcher: string;
+  if (harness === "pi") {
+    const source = pi ?? {
+      binary: process.env.AMUN_PI_BINARY ?? "",
+      entry: process.env.AMUN_PI_ENTRY ?? "",
+      authRoot: process.env.AMUN_AUTH_ROOT ?? "",
+    };
+    // Pi runs from Amun's bundled runtime and credentials, never a personal install.
+    launcher = await writePiLauncher(binDir, source);
+    await Promise.all([
+      access(source.binary, constants.X_OK),
+      access(source.entry),
+    ]);
+  } else {
+    launcher = join(homedir(), ".local/bin", harness);
+    const link = join(binDir, harness);
+    try {
+      await symlink(launcher, link);
+    } catch (e) {
+      if (
+        (e as NodeJS.ErrnoException).code !== "EEXIST" ||
+        (await readlink(link)) !== launcher
+      )
+        throw Error("Unexpected crew launcher");
+    }
   }
   await Promise.all([
     access(node, constants.X_OK),
@@ -266,6 +316,13 @@ export async function dispatchFirstmate(
   const witnessed = join(owner, "endpoint-observations");
   await privateDir(witnessed);
   let fresh = false;
+  if (respawn) {
+    await retireEndpoint(owner, id, {
+      "receipt.json": join(receipts, id + ".json"),
+      "witness.json": join(witnessed, id + ".json"),
+      "launch.json": marker,
+    });
+  }
   try {
     const intent = JSON.parse(await readBoundedPrivateFile(marker, 1024));
     if (
@@ -285,6 +342,13 @@ export async function dispatchFirstmate(
       "codex-permission-mode": "restricted",
       "claude-permission-mode": "auto",
       "launch-env-allowlist": "CODEX_HOME\nCLAUDE_CONFIG_DIR\nUSER\nLOGNAME",
+      ...(harness === "pi"
+        ? {
+            "crew-harness": "pi",
+            "secondmate-harness": "pi " + copilotModelSelector,
+            "supervision-branch-model": copilotModelSelector,
+          }
+        : {}),
     }))
       await privateSetting(join(home, "config", key), val + "\n");
     const launchEnv = {
@@ -333,23 +397,31 @@ export async function dispatchFirstmate(
           ...(val ? [key, val] : ["-u", key]),
         ]);
       }
-      try {
-        await invoke("fm-home-seed.sh", [id, worker, "--no-projects"]);
-      } catch {
-        await rm(marker);
-        throw Error("Firstmate could not seed this worker");
-      }
+      // A task Firstmate already has is brought back by its own respawn.
+      if (!respawn)
+        try {
+          await invoke("fm-home-seed.sh", [id, worker, "--no-projects"]);
+        } catch {
+          await rm(marker);
+          throw Error("Firstmate could not seed this worker");
+        }
       // Commit the launch intent before invoking spawn. Recovery only republishes a witnessed identity.
       try {
-        await invoke("fm-spawn.sh", [
-          id,
-          worker,
-          "--harness",
-          harness,
-          "--backend",
-          "tmux",
-          "--secondmate",
-        ]);
+        await invoke(
+          "fm-spawn.sh",
+          respawn
+            ? [id, "--secondmate", "--backend", "tmux"]
+            : [
+                id,
+                worker,
+                "--harness",
+                harness,
+                ...(harness === "pi" ? ["--model", copilotModelSelector] : []),
+                "--backend",
+                "tmux",
+                "--secondmate",
+              ],
+        );
       } catch {
         /* An upstream process may have launched despite a lost reply. */
       }
@@ -383,9 +455,11 @@ export async function dispatchFirstmate(
     )
       throw Error("Original endpoint unavailable");
     await saveEndpointReceipt(receipts, observation);
-    return fresh
-      ? "Firstmate dispatched " + harness + " and saved its endpoint."
-      : "Firstmate recovered the original " + harness + " endpoint.";
+    return respawn
+      ? "Firstmate started the " + harness + " worker again."
+      : fresh
+        ? "Firstmate dispatched " + harness + " and saved its endpoint."
+        : "Firstmate recovered the original " + harness + " endpoint.";
   } catch {
     return "Firstmate launch outcome is unknown. Check this crew again to recover its endpoint.";
   }

@@ -8,14 +8,22 @@ import {
   rankWork,
   type Attention,
 } from "../../../../packages/domain/src/work/home.ts";
-import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import {
+  approveLabel,
+  planNoun,
+} from "../../../../packages/domain/src/work/permissions.ts";
+import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import {
   agentCatalog,
   agentProfile,
 } from "../../../../packages/domain/src/work/agents.ts";
+import { openBlockers } from "../../../../packages/domain/src/work/blockers.ts";
 import { needsLinking } from "../../../../packages/domain/src/work/model.ts";
 import {
   conversionSuggestion,
+  knownDate,
+  knownNumber,
+  objectiveLine,
   objectiveProgress,
   rfpCard,
 } from "../../../../packages/domain/src/work/flows.ts";
@@ -43,6 +51,44 @@ const inScope = (snapshot: Snapshot, groupId: string | null) => {
   const groups = visibleGroups(snapshot);
   return groups === null || groupId === null || groups.includes(groupId);
 };
+
+/** Remembered facts that apply to a group's work, plus those kept for everyone. */
+export function factsFor(snapshot: Snapshot, groupId: string | null) {
+  return snapshot.memory.facts.filter(
+    (fact) => fact.groupId === null || fact.groupId === groupId,
+  );
+}
+
+/** "Create items in Notion": what a standing permission lets Firstmate do. */
+export function permissionText(action: string, destination: string) {
+  const what =
+    { create: "Create items", update: "Update items" }[action] ?? action;
+  return `${what} in ${trackerName(destination)}`;
+}
+
+/** The current standing permissions for one group, for Firstmate to read. */
+export function standingPermissionLines(
+  snapshot: Snapshot,
+  groupId: string | null,
+) {
+  return snapshot.permissions
+    .filter((item) => !item.revokedAt && item.groupId === groupId)
+    .map((item) => permissionText(item.action, item.destination));
+}
+
+/** Open blockers on the work the owner can see, oldest first. */
+export function scopedBlockers(snapshot: Snapshot) {
+  const visible = new Set(
+    snapshot.areas
+      .filter(
+        (area) => inScope(snapshot, area.groupId) && area.status !== "archived",
+      )
+      .map((area) => area.id),
+  );
+  return openBlockers(snapshot.blockers).filter((item) =>
+    visible.has(item.workAreaId),
+  );
+}
 
 export function attentionItems(snapshot: Snapshot): Attention[] {
   return snapshot.attention
@@ -137,7 +183,7 @@ export function trayFor(snapshot: Snapshot, attentionId: string) {
     plan,
     approve: approveLabel(
       plan.items.length,
-      plan.kind === "stories" ? "story" : "change",
+      planNoun(plan.items) ?? (plan.kind === "stories" ? "story" : "change"),
     ),
     showAll: `Show all ${plan.items.length} items`,
   };
@@ -146,16 +192,18 @@ export function trayFor(snapshot: Snapshot, attentionId: string) {
 export function workContext(snapshot: Snapshot, areaId: string, now: number) {
   const area = areaOf(snapshot, areaId);
   if (!area) return null;
-  const objective = snapshot.objectives.find((item) =>
-    item.links.includes(areaId),
-  );
+  const objectives = snapshot.objectives
+    .filter((item) => item.links.includes(areaId))
+    .map((item) => ({
+      ...item,
+      progress: objectiveProgress(item),
+      line: objectiveLine(item),
+    }));
   const rfp = snapshot.rfps.find((item) => item.id === areaId);
   return {
     area,
     group: groupName(snapshot, area.groupId),
-    objective: objective
-      ? { ...objective, progress: objectiveProgress(objective) }
-      : null,
+    objectives,
     conversion:
       area.type === "task"
         ? conversionSuggestion({
@@ -258,11 +306,42 @@ export type AmunAction =
   | { do: "update"; message: string }
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
+  | { do: "client"; name: string | null }
+  | { do: "repo"; url: string }
+  | {
+      do: "objective";
+      title: string;
+      baseline: number | null;
+      target: number | null;
+      due: string | null;
+      areas: string[];
+    }
+  | { do: "objective-link"; objective: string; areas: string[] }
+  | { do: "blocker"; title: string; owner: string | null }
+  | { do: "blocker-owner"; blocker: string; owner: string | null }
+  | { do: "unblock"; blocker: string }
+  | { do: "fact-correct"; fact: string; value: string }
+  | { do: "fact-forget"; fact: string }
   | { do: "delete" }
-  | { do: "delegate"; agent: string; title: string; task: string };
+  | { do: "convert" }
+  | {
+      do: "delegate";
+      agent: string;
+      title: string;
+      task: string;
+      acceptance?: boolean;
+      repo?: string;
+    };
 
 const text = (value: unknown, max = 4000) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+const areaNames = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((name) => {
+        const clean = text(name, 200);
+        return clean ? [clean] : [];
+      })
+    : [];
 function action(raw: unknown): AmunAction | null {
   if (!raw || typeof raw !== "object") return null;
   const input = raw as Record<string, unknown>;
@@ -346,19 +425,100 @@ function action(raw: unknown): AmunAction | null {
       );
       return name ? { do: "rename", name } : null;
     }
+    case "client": {
+      // The client's name, or empty to clear it: one line, like a rename.
+      const name =
+        typeof input.name === "string"
+          ? input.name.replace(/\s+/g, " ").trim().slice(0, 200)
+          : null;
+      return name === null ? null : { do: "client", name: name || null };
+    }
+    case "repo": {
+      // Only a plain https address: no sign-in details, query or fragment.
+      try {
+        const url = new URL(typeof input.url === "string" ? input.url : "");
+        if (
+          url.protocol !== "https:" ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash
+        )
+          return null;
+        return { do: "repo", url: url.href.replace(/\/$/, "").slice(0, 2000) };
+      } catch {
+        return null;
+      }
+    }
+    case "objective": {
+      // Only what the owner stated: a missing or unreadable value stays unknown.
+      return title
+        ? {
+            do: "objective",
+            title,
+            baseline: knownNumber(input.baseline),
+            target: knownNumber(input.target),
+            due: knownDate(input.due),
+            areas: areaNames(input.areas),
+          }
+        : null;
+    }
+    case "objective-link": {
+      const objective = text(input.objective, 200);
+      const areas = areaNames(input.areas);
+      return objective && areas.length
+        ? { do: "objective-link", objective, areas }
+        : null;
+    }
+    case "blocker": {
+      const owner = text(input.owner, 120);
+      return title ? { do: "blocker", title, owner } : null;
+    }
+    case "blocker-owner": {
+      // An empty owner clears it, like an empty client.
+      const blocker = text(input.blocker, 200);
+      const owner =
+        typeof input.owner === "string"
+          ? input.owner.replace(/\s+/g, " ").trim().slice(0, 120) || null
+          : null;
+      return blocker ? { do: "blocker-owner", blocker, owner } : null;
+    }
+    case "unblock": {
+      const blocker = text(input.blocker, 200);
+      return blocker ? { do: "unblock", blocker } : null;
+    }
+    case "fact-correct": {
+      const fact = text(input.fact, 200);
+      const value = text(input.value, 1000);
+      return fact && value ? { do: "fact-correct", fact, value } : null;
+    }
+    case "fact-forget": {
+      const fact = text(input.fact, 200);
+      return fact ? { do: "fact-forget", fact } : null;
+    }
     case "delegate": {
       // Only an agent from the catalogue: a name the model made up is dropped.
       const agent = agentProfile(text(input.agent, 80) ?? "")?.name;
       const task = text(input.task, 8000);
+      const repo = /^https:\/\/[^\s"']{1,500}$/.test(
+        text(input.repo, 512) ?? "",
+      )
+        ? text(input.repo, 512)!
+        : null;
       return agent && task
         ? {
             do: "delegate",
             agent,
             title: text(input.title, 120) ?? task.slice(0, 80),
             task,
+            ...(input.acceptance === true ? { acceptance: true } : {}),
+            ...(repo ? { repo } : {}),
           }
         : null;
     }
+    case "convert":
+      // No id from the model: it always means the work this chat is in.
+      return { do: "convert" };
     case "delete":
       // Only ever a request: the owner confirms it in the chat.
       return { do: "delete" };
@@ -400,19 +560,244 @@ export function agentNews(
   messages: { role: string; text: string; card?: unknown }[],
 ) {
   const last = messages.findLastIndex((message) => message.role === "you");
-  const fresh = messages
-    .slice(last + 1)
-    .filter(
-      (message) =>
-        (message.card as { kind?: unknown } | null | undefined)?.kind ===
-        "agent-result",
-    )
+  const after = messages.slice(last + 1);
+  const kind = (message: { card?: unknown }) =>
+    (message.card as { kind?: unknown } | null | undefined)?.kind;
+  const fresh = after
+    .filter((message) => kind(message) === "agent-result")
     .map((message) => message.text.slice(0, 12000));
-  return fresh.length
-    ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
+  const refused = after
+    .filter((message) => kind(message) === "plan-refused")
+    .map((message) => message.text.slice(0, 2000));
+  const retried = after
+    .filter((message) => kind(message) === "plan-retry")
+    .map((message) => message.text.slice(0, 500));
+  const retries = retried.length
+    ? "[Amun retried failed items of an approved plan at the owner's request. Outcome: " +
+      retried.join(" ") +
+      " Do not redo it; say nothing was duplicated if asked.]\n\n"
+    : "";
+  const refusals = refused.length
+    ? "[Amun refused the plan you just proposed, so no plan exists and nothing is waiting for approval. The owner has been told: " +
+      refused.join(" ") +
+      " Correct anything you said about that plan.]\n\n"
+    : "";
+  return (
+    retries +
+    refusals +
+    (fresh.length
+      ? "[Finished by your agents since your last reply. The owner has already been shown this. Use it as it is; do not redo it.]\n" +
         fresh.join("\n\n---\n\n") +
         "\n[End of what your agents finished.]\n\n"
+      : "")
+  );
+}
+/**
+ * What this kind of work is for. An RFP in Amun is tracked (client, owner,
+ * deadline, status); writing the response is separate product work, so
+ * Firstmate must not draft it, offer to, or turn a tracking update away.
+ */
+export function workTypeGuard(
+  type: string,
+  record?: {
+    client: string;
+    deadline: string | null;
+    responseOwner: string | null;
+    accountOwner?: string | null;
+    presales?: string | null;
+    stage: string;
+    proposalSigned?: boolean;
+    brdApproved?: boolean;
+  } | null,
+) {
+  if (type !== "rfp") return "";
+  const known = record
+    ? ` The record Amun holds right now: client ${record.client || "not set"}, deadline ${record.deadline ? record.deadline.slice(0, 10) : "not set"}, response owner ${record.responseOwner || "not set"}, Sales or account owner ${record.accountOwner || "not set"}, Pre-sales contact ${record.presales || "not set"}, stage ${record.stage}, Proposal signed ${record.proposalSigned ? "yes" : "no"}, BRD approved ${record.brdApproved ? "yes" : "no"}.`
     : "";
+  const authority = record
+    ? " This record is authoritative for this work area only: never use or offer client, deadline, owner or stage values from another work area or an earlier conversation; if they differ from the record, the record wins."
+    : "";
+  return `[This is an RFP Amun only tracks: client, owner, deadline, status and notes. ${record ? "This RFP already exists in Amun's RFPs board" : "An RFP work area already exists in Amun; its board record is unverified"}; do not say you cannot create it. Record or update those when asked, and keep the owner's wording; do not invent values that were not given.${known}${authority} Writing or implementing the response belongs to a separate product, so do not write it, start it or offer a proposal or bid draft here.]\n`;
+}
+/**
+ * What Amun has already published from this work area, newest last, for
+ * Firstmate: destination, item, external id, when, and the approved plan.
+ */
+export function publicationLines(
+  snapshot: Snapshot,
+  areaId: string,
+  limit = 20,
+) {
+  const lines: string[] = [];
+  for (const plan of snapshot.plans) {
+    if (plan.workAreaId !== areaId) continue;
+    for (const result of plan.results) {
+      if (result.state !== "created") continue;
+      const item = plan.items.find((entry) => entry.id === result.id);
+      if (!item) continue;
+      const own = item.fields.destination;
+      const destination =
+        typeof own === "string" && own.trim()
+          ? own.trim().toLowerCase()
+          : plan.destination;
+      lines.push(
+        `${trackerName(destination)}: “${item.summary}” ${result.linked ? "already existed as" : "created as"} ${result.externalId ? (/^\d+$/.test(result.externalId) ? "#" : "") + result.externalId : "(no id)"} on ${plan.createdAt.slice(0, 10)}, from the approved plan “${plan.summary || "Proposed changes"}”`,
+      );
+    }
+  }
+  return lines.slice(-limit);
+}
+/**
+ * Publication items that were not created or are still being checked, with
+ * the destination's own stored reason, so Firstmate can ask the owner for the
+ * exact values that are missing. `reasons` is keyed "planId:itemId".
+ */
+export function failedPublicationLines(
+  snapshot: Snapshot,
+  areaId: string,
+  reasons: Record<string, string>,
+  limit = 10,
+) {
+  const lines: string[] = [];
+  for (const plan of snapshot.plans) {
+    if (plan.workAreaId !== areaId) continue;
+    for (const result of plan.results) {
+      if (result.state === "created") continue;
+      const item = plan.items.find((entry) => entry.id === result.id);
+      if (!item) continue;
+      const own = item.fields.destination;
+      const destination =
+        typeof own === "string" && own.trim()
+          ? own.trim().toLowerCase()
+          : plan.destination;
+      const reason = reasons[`${plan.id}:${item.id}`];
+      lines.push(
+        `${trackerName(destination)}: “${item.summary}” ${result.state === "failed" ? "was not created" : "is still being checked"}, from the plan “${plan.summary || "Proposed changes"}” of ${plan.createdAt.slice(0, 10)}. Reason: ${reason || "none recorded"}`,
+      );
+    }
+  }
+  return lines.slice(-limit);
+}
+/**
+ * The Notion pages Amun created from this work area, one line each, so
+ * Firstmate can name the right one when asked to change it: title, page id,
+ * link, when created and when last updated by Amun.
+ */
+export function notionPageLines(
+  snapshot: Snapshot,
+  areaId: string,
+  limit = 20,
+) {
+  const pages = new Map<
+    string,
+    { title: string; url: string; created: string; updated: string }
+  >();
+  const plans = snapshot.plans
+    .filter((plan) => plan.workAreaId === areaId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (const plan of plans)
+    for (const result of plan.results) {
+      if (result.state !== "created" || !result.externalId) continue;
+      const item = plan.items.find((entry) => entry.id === result.id);
+      if (!item) continue;
+      const own = item.fields.destination;
+      const destination =
+        typeof own === "string" && own.trim()
+          ? own.trim().toLowerCase()
+          : plan.destination;
+      if (destination !== "notion") continue;
+      const day = plan.createdAt.slice(0, 10);
+      const known = pages.get(result.externalId);
+      const title =
+        typeof item.fields.title === "string" && item.fields.title.trim()
+          ? item.fields.title.trim()
+          : (known?.title ?? item.summary);
+      pages.set(result.externalId, {
+        title,
+        url: result.url ?? known?.url ?? "",
+        created: known?.created ?? day,
+        updated: day,
+      });
+    }
+  return [...pages.entries()]
+    .slice(-limit)
+    .map(
+      ([id, page]) =>
+        `“${page.title}” page id ${id}${page.url ? ", " + page.url : ""}, created ${page.created}, last updated by Amun ${page.updated}`,
+    );
+}
+/**
+ * The header for every turn: Firstmate's conversation is shared by all work
+ * areas, so each turn names the one it is about, with its own record.
+ */
+export function areaTurnContext(
+  area: { type: string; name: string; client?: string | null },
+  typeLabel: string,
+  group: string | null | undefined,
+  record?: Parameters<typeof workTypeGuard>[1],
+  /** Open blockers as "title (Owner · raised N days ago)". */
+  blockers: string[] = [],
+  /** Remembered facts as "key: value", so Firstmate can name one back. */
+  facts: string[] = [],
+  /** Standing permissions for this group, as "Create items in Notion". */
+  permissions?: string[],
+  /** Which Azure DevOps work item types this project uses. */
+  tracker = "",
+  /** What was already published from this area (`publicationLines`). */
+  published: string[] = [],
+  /** Objectives already linked here, and the other areas that could be linked. */
+  objectives: string[] = [],
+  areaNamesInGroup: string[] = [],
+  /** Notion pages Amun created here (`notionPageLines`). */
+  notionPages: string[] = [],
+  /** Items not created, with their reasons (`failedPublicationLines`). */
+  failedItems: string[] = [],
+) {
+  const failedList = failedItems.length
+    ? ` Failed publications from this work area, with the destination's own reason (use it to tell the owner exactly what is missing; never guess a value): ${failedItems.join("; ")}.`
+    : "";
+  const pageList = notionPages.length
+    ? ` Notion pages Amun created in this work area (the only ones Amun can update; use the exact page id as the item's "page" field): ${notionPages.join("; ")}.`
+    : "";
+  const tracked = objectives.length
+    ? ` Objectives linked to this work area: ${objectives.join("; ")}.`
+    : "";
+  const others = areaNamesInGroup.length
+    ? ` Other work areas in this group, for linking an objective: ${areaNamesInGroup.join("; ")}.`
+    : "";
+  const publications = !published.length
+    ? ""
+    : ` Already published from this work area, by Amun, with the owner's approval (most recent last): ${published.join("; ")}. Never say nothing was published when this list has entries. If the owner asks to publish something that is already listed, say it already exists with its number and do not raise a plan to create it again; offer an update instead: for an existing Azure DevOps item Amun can only change its iteration (sprint) and who it is assigned to, so say plainly that nothing else about it can be changed yet.`;
+  const allowed =
+    permissions === undefined
+      ? ""
+      : ` Standing permissions the owner has set for this group (read-only: only the owner changes them, in Settings): ${permissions.length ? permissions.join("; ") : "none"}.`;
+  const remembered = facts.length
+    ? ` Remembered facts the owner can have corrected or forgotten: ${facts.join("; ")}.`
+    : "";
+  const stuck = blockers.length
+    ? ` Open blockers: ${blockers.join("; ")}.`
+    : "";
+  const client =
+    area.type === "project"
+      ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
+      : "";
+  const types = tracker ? ` ${tracker}` : "";
+  return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${failedList}${pageList}${types}]\n${workTypeGuard(area.type, record)}`;
+}
+/** The length the owner asked for ("1-2 pages", "under 90 words"), if any. */
+export function requestedLength(request: string) {
+  const match =
+    /\b(?:(?:under|below|over|at most|at least|maximum of|max|no more than|up to|within|about|around)\s+)?\d+(?:\s*(?:-|–|to)\s*\d+)?[\s-]*(?:pages?|words?|paragraphs?|sentences?|lines?|bullets?|slides?)\b|\bone[- ]pager\b/i.exec(
+      request,
+    );
+  return match ? match[0].trim() : null;
+}
+/** A delegation brief that always states the length the owner asked for. */
+export function delegationTask(task: string, ownerRequest: string) {
+  const length = requestedLength(ownerRequest);
+  if (!length || task.toLowerCase().includes(length.toLowerCase())) return task;
+  return `${task}\n\nLength the owner asked for: ${length}. Keep to it.`;
 }
 /** Tells Firstmate, once per work area, how to raise things in Amun. */
 export const amunProtocol = [
@@ -420,13 +805,27 @@ export const amunProtocol = [
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
-  `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
+  '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
+  '{"do":"repo","url":"https://github.com/owner/name"} connects the repository this project\'s code lives in, straight away, when the owner tells you which repository to use. It lets Amun read its pull requests. Your agents can also change code in it, but only in Amun\'s own copy: the owner reads the exact change, and only after they approve does Amun open a pull request. Nothing is ever merged by an agent, and merging always needs the owner\'s approval. Say in one short line that it is connected.',
+  '{"do":"objective","title":"what we are measuring or aiming for","baseline":number,"target":number,"due":"YYYY-MM-DD","areas":["names of other work areas in this group to link"]} saves an objective on this Mac straight away when the owner writes "Objective: …", and links it to this work area plus any areas they name. Leave baseline, target and due out unless the owner gave them: never guess a baseline or a date; a missing baseline shows as unknown. {"do":"objective-link","objective":"words from its title","areas":["work area names"]} links an existing objective to more work areas in this group when the owner asks. Neither needs approval or is a plan, and neither changes anything outside Amun. Say in one short line what you saved or linked.',
+  '{"do":"blocker","title":"what is stuck","owner":"who unblocks it, if known"} records a blocker on this work straight away; leave owner out when the owner has not said. {"do":"blocker-owner","blocker":"words from its title","owner":"…"} sets or changes who owns unblocking it (empty clears it). {"do":"unblock","blocker":"words from its title"} clears it when the owner says it is resolved. None needs approval or is a plan. Say in one short line what you recorded.',
+  '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',
+  `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} (add "repo":"https://github.com/owner/name", the connected repository, when the owner asks for a change to code in it: pick an agent whose profile fits code and README edits, normally Solution & AI Architecture, never Product Manager; it works in Amun\'s own copy, you never edit code yourself, and the owner reviews the exact change before any pull request is opened; add "acceptance":true when the owner asks for an acceptance checklist for a story or deliverable: give it to QA, and the checklist comes back for the owner to accept or not) hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
+  "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
+  '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
-  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Nothing is published until the owner approves exactly that list.',
+  '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Amun raises the plan and may refuse it; never say a review card or plan is ready, shown or waiting, only that you have asked Amun to raise it for approval. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps, new item: type, description, acceptance (one criterion per line), area, iteration, parent (the number of an existing work item in this same project to create it under, for example a Task under #123: set type to the task type and parent to "123"), and the required fields of the work item type listed above for this project, plus "Original Estimate", "Remaining Work" and "Completed Work" (numbers, in hours) and "Activity" when the project has them. Where a field lists allowed values, only one of those is accepted. Never pick a required value yourself: ask the owner for exactly the values the type needs, listing the allowed values for a choice, then put them in the fields of the item under those names. Amun can set that parent link: it checks the parent exists, shows "Under #123" on the review card for the owner to approve, and verifies the link after creating. Never say Amun cannot set a parent or that the item will be standalone. Azure DevOps, existing item (moving it to a sprint or changing who it is assigned to): workitem (its number) plus iteration and/or assignedto (a name or email), and nothing else. Notion, new page: title (the page title), body; it goes under the Notion destination chosen in Settings, which the review card shows. Notion, update of a page Amun created (listed above in this work area): page (its exact page id or link from that list), plus title (optional; kept when left out) and either body (the whole new text) or append (only the lines to add at the end of the existing text), never both; the review card shows the exact result for the owner to approve. Amun cannot update any page it did not create, so say so plainly and do not raise a plan for one. Leave out any other field, because it will be refused, and never name a different project. If an item was not created, its reason is listed under the failed publications above: use it, tell the owner what is needed, and raise a corrected plan; never guess. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',
-  '{"do":"update","message":"50–90 words"} gives a stakeholder update to copy; never send it.',
+  '{"do":"update","message":"50–90 words"} gives a stakeholder update to copy; never send it. Do not list blockers in it: Amun adds each open blocker with its owner and how long ago it was raised.',
   '{"do":"rule-case","situation":"short-key","resolution":"what the owner decided"} records a repeated decision.',
+  "Where you run: Amun routes you and all of your agents through GitHub Copilot (the Pi worker, provider github-copilot) and nothing else. If asked which provider or engine you use, say so. This is how Amun is set up, so do not claim you cannot confirm it. It does not prove any particular piece of work ran: never call work done until an agent's result has actually arrived.",
+  "The work this conversation is about already exists in Amun when you are first spoken to, even if the owner's first message asks to create it: Amun created it before this conversation started. Do not say you cannot create it or that nothing was created; continue from it, and say only what you actually know about it.",
+  "Each message names the work area it is about and may carry that area's record. Use only that area's record. Never use or offer values (client, deadline, owner, stage, names) from other work areas or earlier conversations for it; if they differ from the current record, the current record wins.",
   "Never write to Azure DevOps, a backlog or a committed roadmap yourself, and never use another group's information without asking.",
+  "When the owner asks you to use another group's product or work, always offer to ask for their approval to bring that group's material across, and never use it until they approve.",
+  "When the owner says an article or link is general reading to leave unlinked and not to ask again, save it as an unlinked reading note (a document of type doc) with exactly the title they gave, do not ask what to link it to or remind them later, and confirm in one line that it is saved.",
+  "A stakeholder update names the record each claim comes from, with its title in square brackets, whenever a record exists.",
+  "An RFP that is won is handed on only from the RFP card's Hand to delivery step, once Proposal signed and BRD approved are both ticked. Do not convert it or create a delivery project yourself: name the prerequisites still missing and point the owner to Hand to delivery on the RFP card.",
 ].join("\n");

@@ -3,6 +3,13 @@ import { azurePathSegment } from "./path.ts";
 import type { Transport } from "./client.ts";
 
 type BoardSummary = { id: string; name: string };
+type SprintItem = {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+  assignee: string | null;
+};
 
 type BoardColumn = BoardSummary & {
   isSplit: boolean;
@@ -27,6 +34,10 @@ export class BoardDiscovery {
   private readonly cache = new Map<
     string,
     { expires: number; values: unknown[] }
+  >();
+  private readonly types = new Map<
+    string,
+    { expires: number; value: { story?: string; task?: string } }
   >();
   private readonly project: string;
   private readonly transport: Transport;
@@ -192,6 +203,104 @@ export class BoardDiscovery {
       return x.path;
     });
   }
+  /** Read-only: the team's current and upcoming sprints, soonest first. */
+  async sprints(team: string, limit = 12) {
+    const found: {
+      id: string;
+      name: string;
+      path: string;
+      start: string;
+      finish: string;
+    }[] = [];
+    const values = await this.list(
+      this.project +
+        "/" +
+        azurePathSegment(team) +
+        "/_apis/work/teamsettings/iterations",
+      true,
+    );
+    for (const x of values) {
+      if (
+        !record(x) ||
+        typeof x.id !== "string" ||
+        typeof x.name !== "string" ||
+        typeof x.path !== "string"
+      )
+        throw Error("Invalid team iteration");
+      const a = record(x.attributes) ? x.attributes : {};
+      if (
+        a.timeFrame === "past" ||
+        typeof a.startDate !== "string" ||
+        typeof a.finishDate !== "string"
+      )
+        continue;
+      found.push({
+        id: x.id,
+        name: x.name,
+        path: x.path,
+        start: a.startDate,
+        finish: a.finishDate,
+      });
+    }
+    return found.sort((a, b) => a.start.localeCompare(b.start)).slice(0, limit);
+  }
+  /**
+   * The project's own types for stories and for their tasks, from the team's
+   * read-only backlog configuration. Cached per team.
+   */
+  async backlogTypes(team?: string) {
+    const key = team ?? "";
+    const hit = this.types.get(key);
+    if (hit && hit.expires > Date.now()) return hit.value;
+    let name = team;
+    if (!name) {
+      const project = await this.get(
+        new URL(
+          "_apis/projects/" + this.project + "?includeCapabilities=true",
+          this.base,
+        ),
+      );
+      name =
+        record(project) &&
+        record(project.defaultTeam) &&
+        typeof project.defaultTeam.name === "string"
+          ? project.defaultTeam.name
+          : undefined;
+    }
+    if (!name) return {};
+    const data = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(name) +
+          "/_apis/work/backlogconfiguration",
+        this.base,
+      ),
+    );
+    const first = (level: unknown) => {
+      if (!record(level)) return undefined;
+      const fallback = record(level.defaultWorkItemType)
+        ? level.defaultWorkItemType.name
+        : undefined;
+      if (typeof fallback === "string") return fallback;
+      const names = Array.isArray(level.workItemTypes)
+        ? level.workItemTypes
+        : [];
+      const one = names.find(
+        (type) => record(type) && typeof type.name === "string",
+      );
+      return record(one) ? (one.name as string) : undefined;
+    };
+    const value: { story?: string; task?: string } = {};
+    if (record(data)) {
+      const story = first(data.requirementBacklog);
+      const task = first(data.taskBacklog);
+      if (story) value.story = story;
+      if (task) value.task = task;
+    }
+    this.types.set(key, { expires: Date.now() + 600000, value });
+    return value;
+  }
   async levels(team: string, refresh = false) {
     return (
       await this.list(
@@ -221,6 +330,79 @@ export class BoardDiscovery {
     return {
       columnField: data.fields.columnField.referenceName,
       canEdit: data.canEdit === true,
+    };
+  }
+
+  /**
+   * Read-only: the work items in one of the team's sprints, as Azure lists
+   * them, with title, type, state and who they are assigned to.
+   */
+  async iterationItems(team: string, iteration: string, limit = 200) {
+    const data = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(team) +
+          "/_apis/work/teamsettings/iterations/" +
+          azurePathSegment(iteration) +
+          "/workitems",
+        this.base,
+      ),
+    );
+    if (!record(data) || !Array.isArray(data.workItemRelations))
+      throw new Error("Invalid Azure sprint");
+    const ids: number[] = [];
+    for (const relation of data.workItemRelations) {
+      const id = relation?.target?.id;
+      if (!Number.isSafeInteger(id) || id < 1)
+        throw new Error("Invalid Azure item reference");
+      if (!ids.includes(id)) ids.push(id);
+    }
+    const wanted = ids.slice(0, limit);
+    const byId = new Map<number, SprintItem>();
+    for (let offset = 0; offset < wanted.length; offset += 200) {
+      const url = new URL(this.project + "/_apis/wit/workitems", this.base);
+      url.searchParams.set("ids", wanted.slice(offset, offset + 200).join(","));
+      url.searchParams.set(
+        "fields",
+        [
+          "System.Title",
+          "System.State",
+          "System.WorkItemType",
+          "System.AssignedTo",
+        ].join(","),
+      );
+      const batch = await this.get(url);
+      if (!record(batch) || !Array.isArray(batch.value))
+        throw new Error("Invalid Azure items");
+      for (const item of batch.value) {
+        const f = item?.fields;
+        if (
+          !f ||
+          !wanted.includes(item.id) ||
+          typeof f["System.Title"] !== "string" ||
+          typeof f["System.State"] !== "string" ||
+          typeof f["System.WorkItemType"] !== "string"
+        )
+          throw new Error("Invalid Azure item");
+        const who = f["System.AssignedTo"];
+        byId.set(item.id, {
+          id: item.id,
+          title: f["System.Title"],
+          type: f["System.WorkItemType"],
+          state: f["System.State"],
+          assignee:
+            typeof who === "string"
+              ? who
+              : record(who) && typeof who.displayName === "string"
+                ? who.displayName
+                : null,
+        });
+      }
+    }
+    return {
+      items: wanted.flatMap((id) => byId.get(id) ?? []),
+      more: ids.length > wanted.length,
     };
   }
 

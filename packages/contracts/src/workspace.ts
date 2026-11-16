@@ -122,6 +122,13 @@ export const pendingProposal = z.strictObject({
   baseVersion: docVersion,
 });
 
+export const skillFetch = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("skill-fetch"),
+  productId: id,
+  url: z.string().trim().min(1).max(512),
+});
+
 export const documentImport = z.strictObject({
   version: z.literal(1),
   kind: z.literal("document-import"),
@@ -179,6 +186,12 @@ export const workspaceCommand = z.discriminatedUnion("action", [
     review: id,
     digest: z.hash("sha256"),
     approve: z.boolean(),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal("remove-skill"),
+    productId: id,
+    name: id,
   }),
   z.strictObject({
     ...base,
@@ -292,6 +305,8 @@ export const workspaceCommand = z.discriminatedUnion("action", [
     ...base,
     action: z.literal("map-source"),
     productId: id,
+    /** Present when an already mapped source of this product is being changed. */
+    sourceId: id.optional(),
     title: z.string().trim().min(1).max(512),
     reference: z.string().trim().min(1).max(2048),
     sourceKind: z.enum(["document", "repo", "ado", "notion"]),

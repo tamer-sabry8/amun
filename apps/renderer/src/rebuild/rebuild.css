@@ -145,6 +145,13 @@
   font-weight: 500;
   border-radius: 4px;
 }
+.rb summary.link {
+  list-style: none;
+  cursor: pointer;
+}
+.rb summary.link::-webkit-details-marker {
+  display: none;
+}
 .rb .link:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1415,47 +1422,279 @@
   height: 22px;
   background: var(--control);
 }
-.rb-agent {
+/* Agents: pick a specialist on the left, read its brief on the right. */
+.rb-agents {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 0 12px;
+}
+.rb-scroll.fixed {
+  overflow: hidden;
+}
+.rb-scroll.fixed .rb-page {
+  height: 100%;
+  min-height: 0;
+}
+.rb-agents .list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding-right: 16px;
+}
+.rb-agents .list > * {
+  flex: none;
+}
+.rb-agents .list > .grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 0 4px 4px 0;
+}
+.rb-agents .rb-avatar {
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.rb-lead-card {
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   justify-content: stretch !important;
-  gap: 2px 10px !important;
-  width: 200px;
+  gap: 14px !important;
+  width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 16px !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   background: var(--card);
 }
-.rb-agent:hover,
-.rb-agent[aria-pressed="true"] {
+.rb-lead-card:hover,
+.rb-lead-card[aria-pressed="true"] {
   border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
 }
-.rb-agent.fading {
-  opacity: 0.5;
-}
-.rb-agent .glyph {
-  grid-row: span 2;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--press);
+.rb-lead-card .text {
   display: grid;
-  place-items: center;
-  color: var(--accent);
+  gap: 2px;
+  min-width: 0;
 }
-.rb-agent .role {
+.rb-lead-card strong {
+  font-size: 17px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-.rb-agent .doing {
-  font-size: 12.5px;
-  color: var(--muted);
+.rb-lead-card .text > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-lead-card .pill {
+  font-family: var(--amun-font-code);
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--amun-status-connected);
+  background: color-mix(in srgb, var(--amun-status-connected) 14%, transparent);
+  white-space: nowrap;
+}
+.rb-agents .count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rb-agents .grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  gap: 12px;
+}
+.rb-spec {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch !important;
+  gap: 12px !important;
+  text-align: left;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: 14px !important;
+  min-width: 0;
+  min-height: 70px;
+  overflow: hidden;
+  background: var(--card);
+}
+.rb-spec:hover {
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+}
+.rb-spec.off {
+  opacity: 0.7;
+}
+.rb .rb-spec[aria-pressed="true"],
+.rb .rb-spec[aria-pressed="true"]:hover {
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+  opacity: 1;
+}
+.rb-spec .text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+}
+.rb-spec strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.rb-spec strong > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-spec .text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.rb-spec-panel {
+  overflow-y: auto;
+  min-height: 0;
+  align-content: start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 4px 20px 16px;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+}
+.rb-spec-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.rb-spec-panel > header > div {
+  min-width: 0;
+}
+.rb-spec-panel > *,
+.rb-spec-panel > header > *,
+.rb-spec-panel .block,
+.rb-spec-panel .block > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rb-spec-panel > header {
+  flex-wrap: wrap;
+}
+.rb-spec-panel .kicker {
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.rb-spec-panel h2 {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.rb-spec-panel .summary {
+  margin: 6px 0 0;
+  font-size: 18px;
+  color: var(--muted);
+  text-wrap: balance;
+}
+.rb-spec-panel .block {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.rb-spec-panel h3 {
+  margin: 0 0 8px;
+  font-family: var(--amun-font-code);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.rb-spec-panel .block p {
+  margin: 0;
+}
+.rb-spec-panel .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rb-spec-panel .chips :is(a, span) {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 10px;
+  font-family: var(--amun-font-code);
+  font-size: 12.5px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.rb-spec-panel .chips a:hover {
+  border-color: var(--accent);
+}
+.rb-spec-panel .controls {
+  display: grid;
+  gap: 12px;
+}
+.rb-spec-panel .controls p {
+  margin: 0;
+}
+@media (max-width: 899px) {
+  .rb-agents {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rb-scroll.fixed {
+    overflow: auto;
+  }
+  .rb-agents .list {
+    padding-right: 0;
+  }
+  .rb-agents .list > .grid {
+    overflow: visible;
+  }
+  .rb-spec-panel {
+    overflow: visible;
+    padding: 20px 0 0;
+    border-left: 0;
+  }
 }
 .rb-live {
   width: 7px;
@@ -1565,6 +1804,43 @@
   position: sticky;
   top: 16px;
 }
+.rb-snav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 13.5px/1.3 var(--amun-font-ui);
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  transition:
+    background-color 120ms var(--ease),
+    color 120ms var(--ease);
+}
+.rb-snav:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rb-snav[aria-current="page"] {
+  background: var(--selected);
+  color: var(--ink);
+  font-weight: 600;
+}
+.rb-snav:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-snav {
+    transition: none;
+  }
+}
 .rb-settings section {
   display: grid;
   gap: 16px;
@@ -1671,6 +1947,10 @@
     position: static;
     grid-auto-flow: column;
     overflow-x: auto;
+  }
+  .rb-snav {
+    width: auto;
+    white-space: nowrap;
   }
   .rb-rowitem {
     grid-template-columns: minmax(0, 1fr);
@@ -1802,6 +2082,84 @@
 /* A chat: the owner on the right, Firstmate named on the left. */
 .rb-msg.firstmate {
   justify-self: start;
+}
+/* Markdown inside a reply keeps the chat's own size and spacing. */
+.rb-msg .rb-doc-view.chat {
+  white-space: normal;
+  font-size: inherit;
+  line-height: inherit;
+}
+.rb-doc-view.chat > :last-child {
+  margin-bottom: 0;
+}
+.rb-doc-view.chat :where(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  letter-spacing: 0;
+  margin: 10px 0 4px;
+}
+.rb-doc-view.chat > :first-child {
+  margin-top: 0;
+}
+.rb-doc-view.chat :where(p, ul, ol) {
+  font-size: inherit;
+  line-height: inherit;
+  margin: 0 0 6px;
+}
+.rb-doc-view.chat code {
+  font-size: 0.92em;
+}
+.rb-doc-view.chat pre {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rb-doc-view.chat pre code {
+  color: inherit;
+}
+.rb-doc-view.chat .scroll-x {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rb-doc-view.chat table {
+  width: max-content;
+  min-width: 100%;
+  font-size: inherit;
+  margin: 2px 0 8px;
+}
+.rb-doc-view.chat td:first-child {
+  white-space: normal;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+.rb-doc-view.chat .task {
+  display: flex;
+  gap: 8px;
+  margin-left: -20px;
+}
+.rb-doc-view.chat .task .box {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
+  border: 1.5px solid var(--control);
+  border-radius: 4px;
+}
+.rb-doc-view.chat .task .box.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rb-doc-view.chat .link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-align: left;
 }
 .rb-msg .who {
   display: block;
@@ -2196,4 +2554,140 @@
 }
 .rb-island .steps .dot {
   flex: none;
+}
+.rb-artifact .doc .rb-doc-view {
+  max-width: 66ch;
+  padding-bottom: 24px;
+}
+.rb-doc-view h1 {
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  margin: 0 0 12px;
+  font-weight: 650;
+  text-wrap: balance;
+}
+.rb-doc-view h2 {
+  font-size: 14.5px;
+  font-weight: 650;
+  margin: 26px 0 8px;
+  letter-spacing: -0.005em;
+}
+.rb-doc-view h3 {
+  font-size: 13.5px;
+  font-weight: 650;
+  margin: 18px 0 6px;
+}
+.rb-doc-view p {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+.rb-doc-view :where(ul, ol) {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+.rb-doc-view li {
+  margin: 3px 0;
+}
+.rb-doc-view li::marker {
+  color: var(--muted);
+}
+.rb-doc-view strong {
+  font-weight: 620;
+  color: var(--ink);
+}
+.rb-doc-view code {
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+  color: var(--amun-color-accent-soft);
+}
+.rb-doc-view hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 22px 0;
+}
+.rb-doc-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 6px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.rb-doc-view th {
+  background: var(--card);
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+.rb-doc-view :where(th, td) {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  vertical-align: top;
+}
+.rb-doc-view td:first-child {
+  white-space: nowrap;
+  color: var(--amun-color-accent-soft);
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+}
+.rb-doc-view .task {
+  list-style: none;
+  margin-left: -20px;
+}
+.rb-doc-view .task label {
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.rb-doc-view .task input {
+  appearance: none;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 3px 0 0;
+  padding: 0;
+  border: 1.5px solid var(--control);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.rb-doc-view .task input:disabled {
+  cursor: default;
+}
+.rb-doc-view .task input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rb-doc-view .task input:checked::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid var(--canvas);
+  border-bottom: 2px solid var(--canvas);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.rb-doc-view .task input:checked + span {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--control);
+}
+.rb-live-session {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

@@ -199,3 +199,115 @@ it("pages the project team directory with Azure's top/skip API", async () => {
   expect((await d.teams()).at(-1)).toEqual({ id: "100", name: "Team 100" });
   expect(get).toHaveBeenCalledTimes(2);
 });
+it("reads a team's current and upcoming sprints, read-only and bounded", async () => {
+  const get = vi.fn(async (method: string, url: string) => {
+    expect(method).toBe("GET");
+    expect(new URL(url).pathname).toBe(
+      "/Collection/Library/West%20Team/_apis/work/teamsettings/iterations",
+    );
+    const item = (n: number, timeFrame: string, startDate?: string) => ({
+      id: "i" + n,
+      name: "Sprint " + n,
+      path: "Library\\Sprint " + n,
+      attributes: { timeFrame, startDate, finishDate: startDate },
+    });
+    return {
+      status: 200,
+      data: {
+        value: [
+          item(3, "future", "2026-12-01T00:00:00Z"),
+          item(1, "past", "2026-10-01T00:00:00Z"),
+          item(2, "current", "2026-11-10T00:00:00Z"),
+          item(4, "future"),
+        ],
+      },
+    };
+  });
+  const d = new BoardDiscovery(base, "Library", get);
+  expect((await d.sprints("West Team")).map((s) => s.name)).toEqual([
+    "Sprint 2",
+    "Sprint 3",
+  ]);
+  expect(await d.sprints("West Team", 1)).toHaveLength(1);
+});
+it("reads the story and task types from the default team's backlog configuration once", async () => {
+  const get = vi.fn(async (_method: string, url: string) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/_apis/projects/POCs"))
+      return { status: 200, data: { defaultTeam: { name: "POCs Team" } } };
+    expect(path).toBe(
+      "/Collection/POCs/POCs%20Team/_apis/work/backlogconfiguration",
+    );
+    return {
+      status: 200,
+      data: {
+        requirementBacklog: {
+          defaultWorkItemType: { name: "Product Backlog Item" },
+          workItemTypes: [{ name: "Product Backlog Item" }, { name: "Bug" }],
+        },
+        taskBacklog: { workItemTypes: [{ name: "Task" }] },
+      },
+    };
+  });
+  const d = new BoardDiscovery(base, "POCs", get);
+  expect(await d.backlogTypes()).toEqual({
+    story: "Product Backlog Item",
+    task: "Task",
+  });
+  await d.backlogTypes();
+  expect(get).toHaveBeenCalledTimes(2);
+});
+
+it("reads a sprint's work items with title, type, state and assignee", async () => {
+  const get = vi.fn(async (_method: string, url: string) => {
+    const u = new URL(url);
+    return u.pathname.endsWith("/workitems") &&
+      u.pathname.includes("teamsettings")
+      ? {
+          status: 200,
+          data: {
+            workItemRelations: [{ target: { id: 2 } }, { target: { id: 1 } }],
+          },
+        }
+      : {
+          status: 200,
+          data: {
+            value: [
+              {
+                id: 1,
+                fields: {
+                  "System.Title": "Login",
+                  "System.State": "Active",
+                  "System.WorkItemType": "User Story",
+                  "System.AssignedTo": { displayName: "Sam" },
+                },
+              },
+              {
+                id: 2,
+                fields: {
+                  "System.Title": "Logout",
+                  "System.State": "New",
+                  "System.WorkItemType": "Bug",
+                },
+              },
+            ],
+          },
+        };
+  });
+  const result = await new BoardDiscovery(base, "Library", get).iterationItems(
+    "West",
+    "guid-1",
+  );
+  expect(result.more).toBe(false);
+  expect(result.items).toEqual([
+    { id: 2, title: "Logout", type: "Bug", state: "New", assignee: null },
+    {
+      id: 1,
+      title: "Login",
+      type: "User Story",
+      state: "Active",
+      assignee: "Sam",
+    },
+  ]);
+  expect(get.mock.calls.every(([method]) => method === "GET")).toBe(true);
+});

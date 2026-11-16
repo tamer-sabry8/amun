@@ -174,6 +174,83 @@ export function sprintRow(sprint: Sprint, now: number) {
     ],
   };
 }
+export type SprintCommand =
+  | { kind: "plan" }
+  | { kind: "refresh" }
+  | { kind: "default" }
+  | { kind: "team"; name: string };
+export function sprintCommand(text: string): SprintCommand | null {
+  const m = /^\/sprint\s+(plan|refresh|default|team)\b\s*(.*)$/is.exec(
+    text.trim(),
+  );
+  if (!m) return null;
+  const kind = m[1]!.toLowerCase();
+  if (kind === "team") return { kind, name: m[2]!.trim() };
+  return { kind } as SprintCommand;
+}
+export interface AdoSprint {
+  id: string;
+  name: string;
+  start: string;
+  finish: string;
+}
+/** Read-only rows for the Overview. A finish date runs to the end of that day. */
+export function adoSprints(
+  items: AdoSprint[],
+  team: string,
+  workAreaId: string,
+  workAreaName: string,
+): Sprint[] {
+  return items.flatMap((item) => {
+    const start = Date.parse(item.start);
+    const finish = Date.parse(item.finish);
+    if (!Number.isFinite(start) || !Number.isFinite(finish)) return [];
+    return [
+      {
+        id: `ado:${item.id}`,
+        workAreaId,
+        workAreaName,
+        name: item.name,
+        team,
+        start: new Date(start).toISOString(),
+        end: new Date(finish + dayMs - 1).toISOString(),
+        goal: "",
+        draft: false,
+        done: 0,
+        total: 0,
+        blocked: 0,
+        changedInAdo: false,
+      },
+    ];
+  });
+}
+const endedOn = (ms: number) =>
+  new Date(ms).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+/** The Azure sprint that ended most recently, when none is current or upcoming. */
+export function latestEndedSprint(sprints: Sprint[], now: number) {
+  return (
+    sprints
+      .filter((sprint) => !sprint.draft && Date.parse(sprint.end) < now)
+      .sort((a, b) => b.end.localeCompare(a.end))[0] ?? null
+  );
+}
+/** One plain line about the sprints Azure DevOps returned for a team. */
+export function adoSprintsLine(items: AdoSprint[], team: string, now: number) {
+  const sprints = adoSprints(items, team, "", "");
+  if (sprints.some((sprint) => Date.parse(sprint.end) >= now) || !items.length)
+    return items.length
+      ? `Showing ${items.length} sprint${items.length === 1 ? "" : "s"} for ${team}.`
+      : `${team} has no current or upcoming sprints.`;
+  const latest = latestEndedSprint(sprints, now);
+  return latest
+    ? `${team} has no current or upcoming sprints. Its latest was ${latest.name} (ended ${endedOn(Date.parse(latest.end))}).`
+    : `Showing ${items.length} sprint${items.length === 1 ? "" : "s"} for ${team}.`;
+}
 export function sprintOverview(
   sprints: Sprint[],
   now: number,

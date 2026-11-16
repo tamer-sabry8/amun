@@ -1,12 +1,26 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { acceptOffer } from "../src/rebuild/accept-offer.ts";
+import { offerTurns } from "../src/rebuild/offer-turns.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
+import { agentCatalog } from "../../../packages/domain/src/work/agents.ts";
 import { leaksRuntimeVocabulary } from "../../../packages/domain/src/work/shell.ts";
+import { CodeChangeCards } from "../src/rebuild/code-change-cards.tsx";
 import { Island, Sidebar } from "../src/rebuild/chrome.tsx";
+import { BlockerRow } from "../src/rebuild/blocker-row.tsx";
+import { VersionHistory } from "../src/rebuild/document-versions.tsx";
 import { Home, IntakeCard } from "../src/rebuild/home.tsx";
 import { DecisionsPanel, LibraryPanel, Rail } from "../src/rebuild/rail.tsx";
-import { Portfolio, Rfps, Roadmap, Sprints } from "../src/rebuild/screens.tsx";
+import {
+  AgentOutput,
+  Agents,
+  Portfolio,
+  Rfps,
+  Roadmap,
+  Sprints,
+  SprintTimeline,
+} from "../src/rebuild/screens.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
   agentNews,
@@ -14,6 +28,10 @@ import {
   attentionItems,
   homeModel,
   parseAmunActions,
+  workTypeGuard,
+  areaTurnContext,
+  publicationLines,
+  failedPublicationLines,
   replyFromTranscript,
   trayFor,
   visibleGroups,
@@ -94,6 +112,8 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     ruleCandidate: null,
     attention: [],
     plans: [],
+    blockers: [],
+    reminders: [],
     rfps: [],
     roadmap: [],
     sprints: [],
@@ -104,7 +124,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     activity: [],
     council: [],
     findings: [],
-    memory: { unsynced: 0, disputed: 0 },
+    memory: { unsynced: 0, disputed: 0, facts: [] },
     messages: [],
     ...extra,
   };
@@ -210,6 +230,7 @@ describe("view model", () => {
           current: 75,
           evidenceDate: null,
           reviewDate: null,
+          dueDate: "2027-06-30",
           conflict: false,
           links: ["task"],
         },
@@ -238,7 +259,8 @@ describe("view model", () => {
       ],
     });
     const task = workContext(state, "task", now)!;
-    expect(task.objective?.progress).toMatchObject({ state: "tracking" });
+    expect(task.objectives[0]?.progress).toMatchObject({ state: "tracking" });
+    expect(task.objectives[0]?.line).toContain("due 2027-06-30");
     expect(task.conversion?.text).toBe(
       "3 milestones and 4 people. Make it a project?",
     );
@@ -548,6 +570,10 @@ describe("rail panels", () => {
       needsLinking: false,
       body: "",
       updatedAt: "2026-11-10",
+      version: 1,
+      approvedVersion: null,
+      acceptance: null,
+      versions: [],
     },
     {
       id: "r1",
@@ -560,6 +586,10 @@ describe("rail panels", () => {
       needsLinking: true,
       body: "",
       updatedAt: "2026-11-11",
+      version: 1,
+      approvedVersion: null,
+      acceptance: null,
+      versions: [],
     },
     {
       id: "x1",
@@ -572,6 +602,10 @@ describe("rail panels", () => {
       needsLinking: false,
       body: "",
       updatedAt: "2026-11-11",
+      version: 1,
+      approvedVersion: null,
+      acceptance: null,
+      versions: [],
     },
   ];
   it("opens the Library scoped to the active work, inside the group", () => {
@@ -657,6 +691,85 @@ describe("destinations", () => {
     expect(html).toContain("TICAO");
     expect(html).not.toContain("Supplier research");
   });
+  it("Portfolio cards never print a raw true or false", () => {
+    const state = snapshot({
+      areas: [
+        area("p", { type: "product", name: "Invites" }),
+        area("r", { type: "rfp", name: "Smart Inspection" }),
+        area("c", { type: "project", name: "Portal", client: "DMT" }),
+      ],
+    });
+    const html = text(
+      renderToStaticMarkup(
+        createElement(Portfolio, { snapshot: state, onWork: noop }),
+      ),
+    );
+    expect(html).not.toMatch(/\b(false|true|null|undefined)\b/);
+    expect(html).toContain("DMT");
+  });
+  it("an agent's output is formatted, with links only when they can be opened", () => {
+    const output =
+      "## Findings\n\n1. **Fast** result\n\nSee [the site](https://example.com/a).";
+    const html = renderToStaticMarkup(createElement(AgentOutput, { output }));
+    expect(html).toContain("<h2");
+    expect(html).toContain("<strong>Fast</strong>");
+    expect(html).not.toContain("**");
+    expect(html).not.toContain("<button");
+    expect(
+      renderToStaticMarkup(
+        createElement(AgentOutput, { output, onLink: noop }),
+      ),
+    ).toContain("<button");
+    expect(
+      text(renderToStaticMarkup(createElement(AgentOutput, { output: "" }))),
+    ).toContain("No output yet");
+  });
+  it("Agents opens on the Product Manager with its brief, chips and counts", () => {
+    const agent = (
+      id: string,
+      role: string,
+      kind: "lead" | "always_on",
+      enabled = true,
+    ): WorkSnapshot["agents"][number] => ({
+      id,
+      role,
+      kind,
+      launcherId: null,
+      state: "idle",
+      nowDoing: null,
+      output: "",
+      enabled,
+    });
+    const state = snapshot({
+      agents: [
+        agent("fm", "Firstmate", "lead"),
+        agent("r", "Research & Insights", "always_on", false),
+        agent("pm", "Product Manager", "always_on"),
+        agent("q", "QA", "always_on"),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      createElement(Agents, { snapshot: state, model: null, onLink: noop }),
+    );
+    const plain = text(html);
+    expect(plain).toContain("Lead Agent");
+    const total = agentCatalog.length;
+    const position =
+      agentCatalog.findIndex((item) => item.name === "Product Manager") + 1;
+    expect(plain).toContain(`${total} day-one specialists`);
+    expect(plain).toContain(`2 of ${total} selected`);
+    expect(plain).toContain(
+      `Specialist ${String(position).padStart(2, "0")} of ${total} · Dispatched by Firstmate`,
+    );
+    // Specialists missing from this profile still appear, dimmed.
+    expect(html.match(/class="rb-spec off"/g)).toHaveLength(total - 2);
+    expect(plain).toContain("PR/FAQ · OST · RICE · PRD");
+    expect(html).toMatch(/aria-label="Product Manager"/);
+    expect(plain).toContain("Amazon Working Backwards PR/FAQ");
+    expect(plain).toContain("Remove from team");
+    expect(html).toMatch(/aria-pressed="true"[^>]*><span class="rb-avatar"/);
+    expect(plain).not.toMatch(/terminal/i);
+  });
   it("RFPs is a tracking pipeline with the proposed stages", () => {
     const state = snapshot({
       areas: [area("rfp", { type: "rfp", name: "Smart Inspection" })],
@@ -741,6 +854,39 @@ describe("destinations", () => {
     expect(html).toContain("1 blocked");
     expect(html).toContain("Changed in ADO");
     expect(html).toContain("Preview only · No Azure DevOps changes");
+  });
+  it("Timeline keeps a draft bar inside its own row", () => {
+    const state = snapshot({ areas: [area("ticao", { name: "TICAO" })] });
+    const draft = {
+      id: "d",
+      workAreaId: "ticao",
+      name: "Sprint 1",
+      team: "Team",
+      start: "2026-11-09T00:00:00Z",
+      end: "2026-11-22T00:00:00Z",
+      goal: "",
+      draft: true,
+      done: 0,
+      total: 0,
+      blocked: 0,
+      changedInAdo: false,
+      capacity: null,
+      stories: [],
+      out: [],
+    };
+    const html = renderToStaticMarkup(
+      createElement(SprintTimeline, {
+        snapshot: state,
+        sprints: [draft],
+        range: { start: "2026-11-02", end: "2026-11-30" },
+        weeks: ["W1"],
+        onOpen: noop,
+      } as never),
+    );
+    expect(html).toMatch(
+      /<div class="rb-timeline">.*<div class="track"><button[^>]*class="bar draft"[^>]*>Sprint 1 draft<\/button><\/div><\/div>$/,
+    );
+    expect(html).not.toContain("display:contents");
   });
   it("Roadmap shows Now / Next / Later with RICE badges and commitment", () => {
     const item = {
@@ -929,6 +1075,232 @@ describe("Firstmate proposals", () => {
   });
 });
 
+describe("a project's client from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("is set or cleared straight away, one line", () => {
+    expect(
+      parseAmunActions(block({ do: "client", name: " Acme\n Corp " })).actions,
+    ).toEqual([{ do: "client", name: "Acme Corp" }]);
+    expect(
+      parseAmunActions(block({ do: "client", name: " " })).actions,
+    ).toEqual([{ do: "client", name: null }]);
+    expect(parseAmunActions(block({ do: "client" })).actions).toEqual([]);
+    expect(amunProtocol).toContain('{"do":"client","name":"…"}');
+  });
+  it("is in each project turn, and only there", () => {
+    const project = areaTurnContext(
+      { type: "project", name: "Portal", client: "Acme" },
+      "Project",
+      null,
+    );
+    expect(project).toContain("client of this project is Acme");
+    expect(
+      areaTurnContext({ type: "project", name: "Portal" }, "Project", null),
+    ).toContain("client of this project is not set");
+    expect(
+      areaTurnContext(
+        { type: "product", name: "App", client: "Acme" },
+        "Product",
+        null,
+      ),
+    ).not.toContain("Acme");
+  });
+});
+
+describe("what was already published, for Firstmate", () => {
+  const plan = (id: string, linked: boolean, state = "published") =>
+    ({
+      id,
+      groupId: null,
+      workAreaId: "area",
+      kind: "stories",
+      destination: "ado",
+      summary: "One user story",
+      items: [
+        { id: "i" + id, summary: "Admin picks the invitee role", fields: {} },
+      ],
+      fingerprint: "f",
+      state,
+      results: [
+        {
+          id: "i" + id,
+          state: "created",
+          externalId: "1091018",
+          ...(linked ? { linked } : {}),
+        },
+      ],
+      splitFrom: null,
+      createdAt: "2026-11-15T09:00:00Z",
+    }) as unknown as WorkSnapshot["plans"][number];
+  it("lists receipts for this area only, and is bounded", () => {
+    const lines = publicationLines(
+      snapshot({
+        plans: [
+          plan("1", false),
+          plan("2", true),
+          { ...plan("3", false), workAreaId: "other" },
+        ],
+      }),
+      "area",
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("Azure DevOps");
+    expect(lines[0]).toContain(
+      "“Admin picks the invitee role” created as #1091018 on 2026-11-15",
+    );
+    expect(lines[1]).toContain("already existed as #1091018");
+    const many = Array.from({ length: 30 }, (_, i) => plan(String(i), false));
+    expect(publicationLines(snapshot({ plans: many }), "area")).toHaveLength(
+      20,
+    );
+  });
+  it("gives Firstmate each failed item's stored reason, and no guessing", () => {
+    const failed = {
+      ...plan("9", false, "partial"),
+      results: [{ id: "i9", state: "failed" }],
+    } as unknown as WorkSnapshot["plans"][number];
+    const checking = {
+      ...plan("8", false, "partial"),
+      results: [{ id: "i8", state: "unknown" }],
+    } as unknown as WorkSnapshot["plans"][number];
+    const lines = failedPublicationLines(
+      snapshot({ plans: [plan("1", false), failed, checking] }),
+      "area",
+      {
+        "9:i9":
+          "Azure DevOps refused it: TF401320: Rule Error for field Remaining Work",
+      },
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("was not created");
+    expect(lines[0]).toContain("Reason: Azure DevOps refused it: TF401320");
+    expect(lines[1]).toContain("still being checked");
+    expect(lines[1]).toContain("Reason: none recorded");
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      null,
+      undefined,
+      [],
+      [],
+      undefined,
+      "",
+      [],
+      [],
+      [],
+      [],
+      lines,
+    );
+    expect(text).toContain("Failed publications");
+    expect(text).toContain("TF401320");
+  });
+  it("lets Firstmate ask for estimates instead of claiming they are refused", () => {
+    expect(amunProtocol).not.toMatch(/such as an estimate/);
+    expect(amunProtocol).toContain('"Remaining Work"');
+    expect(amunProtocol).toContain("Never pick a required value yourself");
+  });
+  it("tells Firstmate never to claim nothing was published", () => {
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      null,
+      undefined,
+      [],
+      [],
+      undefined,
+      "",
+      ["Azure DevOps: “A” created as #1"],
+    );
+    expect(text).toContain("created as #1");
+    expect(text).toContain("Never say nothing was published");
+    expect(text).toContain(
+      "Amun can only change its iteration (sprint) and who it is assigned to",
+    );
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("Already published");
+  });
+});
+
+describe("blockers from the chat", () => {
+  const block = (value: unknown) =>
+    "```amun\n" + JSON.stringify(value) + "\n```";
+  it("are raised, re-owned and cleared by Firstmate straight away", () => {
+    expect(
+      parseAmunActions(
+        block({ do: "blocker", title: " API key ", owner: " Priya " }),
+      ).actions,
+    ).toEqual([{ do: "blocker", title: "API key", owner: "Priya" }]);
+    expect(
+      parseAmunActions(block({ do: "blocker", title: "Legal review" })).actions,
+    ).toEqual([{ do: "blocker", title: "Legal review", owner: null }]);
+    expect(
+      parseAmunActions(
+        block({ do: "blocker-owner", blocker: "legal", owner: "Sam\nLee" }),
+      ).actions,
+    ).toEqual([{ do: "blocker-owner", blocker: "legal", owner: "Sam Lee" }]);
+    expect(
+      parseAmunActions(block({ do: "unblock", blocker: "legal" })).actions,
+    ).toEqual([{ do: "unblock", blocker: "legal" }]);
+    expect(parseAmunActions(block({ do: "unblock" })).actions).toEqual([]);
+    expect(
+      parseAmunActions(
+        block({ do: "fact-correct", fact: "reports to", value: "Omar" }),
+      ).actions,
+    ).toEqual([{ do: "fact-correct", fact: "reports to", value: "Omar" }]);
+    expect(
+      parseAmunActions(block({ do: "fact-forget", fact: "office" })).actions,
+    ).toEqual([{ do: "fact-forget", fact: "office" }]);
+    expect(
+      parseAmunActions(block({ do: "fact-correct", fact: "office" })).actions,
+    ).toEqual([]);
+    expect(amunProtocol).toContain('{"do":"blocker-owner"');
+  });
+  it("travel in the turn with their owner and age", () => {
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null, undefined, [
+        "API key (Priya · raised 3 days ago)",
+      ]),
+    ).toContain("Open blockers: API key (Priya · raised 3 days ago).");
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("blockers");
+  });
+});
+
+describe("standing permissions in the turn", () => {
+  it("are told to Firstmate read-only, and only when a group is known", () => {
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      "Work",
+      undefined,
+      [],
+      [],
+      ["Create items in Notion"],
+    );
+    expect(text).toContain("Create items in Notion");
+    expect(text).toContain("only the owner changes them");
+    expect(
+      areaTurnContext(
+        { type: "task", name: "T" },
+        "Task",
+        "Work",
+        undefined,
+        [],
+        [],
+        [],
+      ),
+    ).toContain(
+      "set for this group (read-only: only the owner changes them, in Settings): none.",
+    );
+    expect(
+      areaTurnContext({ type: "task", name: "T" }, "Task", null),
+    ).not.toContain("Standing permissions");
+  });
+});
+
 describe("renaming from the chat", () => {
   const block = (value: unknown) =>
     "```amun\n" + JSON.stringify(value) + "\n```";
@@ -1005,6 +1377,37 @@ describe("what Firstmate is told about its agents' work", () => {
     role: "firstmate",
     text,
     card: { kind: "agent-result", agent: "QA", title: "Check the flow" },
+  });
+  it("is told when Amun refused its plan, once", () => {
+    const refused = {
+      role: "firstmate",
+      text: "I can't update that page.",
+      card: { kind: "plan-refused" },
+    };
+    const news = agentNews([
+      { role: "you", text: "Update the page" },
+      { role: "firstmate", text: "The plan below updates it.", card: null },
+      refused,
+    ]);
+    expect(
+      agentNews([
+        { role: "you", text: "Retry" },
+        {
+          role: "firstmate",
+          text: "Retried the 1 item that was not published: 1 created.",
+          card: { kind: "plan-retry" },
+        },
+      ]),
+    ).toContain("1 created");
+    expect(news).toContain("refused the plan");
+    expect(news).toContain("I can't update that page.");
+    expect(
+      agentNews([
+        { role: "you", text: "Update the page" },
+        refused,
+        { role: "you", text: "Ok" },
+      ]),
+    ).toBe("");
   });
   it("gets results finished since the owner last wrote, once", () => {
     const news = agentNews([
@@ -1087,5 +1490,228 @@ describe("Firstmate's card beside an open chat", () => {
     expect(html).toContain("Something failed");
     expect(html).toContain("Change product name");
     expect(html).toContain("was not created");
+  });
+});
+
+describe("converting a task from the chat", () => {
+  it("is only ever about the work the chat is in, never an id from the model", () => {
+    const parsed = parseAmunActions(
+      'Asking now.\n\n```amun\n{"do":"convert","areaId":"someone-elses","to":"product"}\n```',
+    );
+    expect(parsed.actions).toEqual([{ do: "convert" }]);
+    expect(parsed.text).toBe("Asking now.");
+  });
+  it("is in the protocol with its limits, and the model must not claim it happened", () => {
+    expect(amunProtocol).toContain('{"do":"convert"}');
+    expect(amunProtocol).toContain("nothing outside Amun is created or moved");
+    expect(amunProtocol).toContain("never say it is converted yourself");
+  });
+});
+
+describe("what Firstmate is told about where it runs and what an RFP is", () => {
+  it("states the Copilot route without turning it into proof of work done", () => {
+    expect(amunProtocol).toContain("GitHub Copilot");
+    expect(amunProtocol).toContain("do not claim you cannot confirm it");
+    expect(amunProtocol).toContain(
+      "never call work done until an agent's result",
+    );
+  });
+  it("describes the RFP record only where one is provided", () => {
+    expect(workTypeGuard("rfp")).not.toContain("The record Amun holds");
+    expect(workTypeGuard("rfp")).toContain("board record is unverified");
+    expect(workTypeGuard("rfp")).not.toContain("already exists in Amun's RFPs");
+    const guard = workTypeGuard("rfp", {
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: null,
+      accountOwner: "Sara",
+      presales: "",
+      stage: "received",
+    });
+    expect(guard).toContain("client QA Sandbox, deadline 2026-12-01");
+    expect(guard).toContain("response owner not set");
+    expect(guard).toContain("Sales or account owner Sara");
+    expect(guard).toContain("Pre-sales contact not set");
+  });
+  it("gives each turn only its own area's record", () => {
+    const rec = (client: string, deadline: string, stage: string) => ({
+      client,
+      deadline,
+      responseOwner: null,
+      stage,
+    });
+    const a = areaTurnContext(
+      { type: "rfp", name: "RFP-A" },
+      "RFP",
+      null,
+      rec("", "", "lost"),
+    );
+    const b = areaTurnContext(
+      { type: "rfp", name: "RFP-B" },
+      "RFP",
+      "Work",
+      rec("QA Test Client", "2026-11-25T00:00:00.000Z", "received"),
+    );
+    expect(a).toContain("RFP-A");
+    expect(a).toContain("stage lost");
+    for (const leaked of ["QA Test Client", "2026-11-25", "RFP-B", "Work"])
+      expect(a).not.toContain(leaked);
+    expect(b).toContain("client QA Test Client");
+    expect(a).toContain("the record wins");
+    expect(amunProtocol).toContain("current record wins");
+  });
+  it("tells Firstmate the work already exists when asked to create it", () => {
+    expect(amunProtocol).toContain("already exists in Amun");
+    expect(amunProtocol).toContain("Do not say you cannot create it");
+  });
+  it("keeps an RFP to tracking and leaves other work alone", () => {
+    const guard = workTypeGuard("rfp");
+    expect(guard).toContain("only tracks");
+    expect(guard).toContain("do not invent values");
+    expect(guard).toContain("do not write it, start it or offer a proposal");
+    expect(guard).toContain("already exists");
+    expect(workTypeGuard("product")).toBe("");
+    expect(workTypeGuard("task")).toBe("");
+  });
+});
+
+describe("accepting an offer", () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+    };
+  };
+  const turn = { id: "o1", areaId: "w1", text: "Yes, please draft this." };
+  it("sends the request once, however often it is accepted", () => {
+    const queue = offerTurns(memory());
+    expect(queue.queue(turn)).toBe(true);
+    expect(queue.queue(turn)).toBe(false);
+    expect(queue.claim("other").send).toEqual([]);
+    expect(queue.claim("w1").send).toHaveLength(1);
+    expect(queue.claim("w1").send).toEqual([]);
+    queue.done("o1");
+    expect(queue.pending("w1")).toEqual([]);
+  });
+  it("reports a request a restart cut short instead of sending it again", () => {
+    const storage = memory();
+    const before = offerTurns(storage);
+    before.queue(turn);
+    before.claim("w1");
+    const after = offerTurns(storage);
+    const claimed = after.claim("w1");
+    expect(claimed.send).toEqual([]);
+    expect(claimed.interrupted).toHaveLength(1);
+    expect(after.queue(turn)).toBe(true);
+  });
+  it("tells a subscriber when an offer is queued, so an open work area sends it at once", () => {
+    const queue = offerTurns(memory());
+    const sent: string[] = [];
+    const stop = queue.subscribe(() =>
+      sent.push(...queue.claim("w1").send.map((t) => t.id)),
+    );
+    queue.queue(turn);
+    queue.queue(turn);
+    expect(sent).toEqual(["o1"]);
+    stop();
+    queue.queue({ ...turn, id: "o3" });
+    expect(sent).toEqual(["o1"]);
+  });
+  it("does nothing for an offer that is already closed", () => {
+    const queue = offerTurns(memory());
+    const result = acceptOffer(
+      { id: "o2", state: "done", workAreaId: "w1", title: "T", detail: "" },
+      queue,
+    );
+    expect(result.areaId).toBeNull();
+    expect(queue.pending("w1")).toEqual([]);
+  });
+});
+
+describe("shared blocker row and version authors", () => {
+  it("shows an open blocker with its action inside a project", () => {
+    const html = renderToStaticMarkup(
+      createElement(BlockerRow, {
+        blocker: {
+          id: "b1",
+          workAreaId: "a1",
+          title: "API key",
+          owner: "Priya",
+          raisedAt: "2026-11-12T01:00:00Z",
+          resolvedAt: null,
+        },
+        projectName: "Atlas",
+        now,
+      }),
+    );
+    expect(html).toContain("Blocked · Atlas");
+    expect(html).toContain("Priya · raised today");
+    expect(html).toContain("It’s unblocked");
+  });
+  it("names the recorded author and none for legacy versions", () => {
+    const entry = (version: number, author: "owner" | "firstmate" | null) => ({
+      version,
+      author,
+      createdAt: "2026-11-12T01:00:00Z",
+      body: "x",
+    });
+    const html = renderToStaticMarkup(
+      createElement(VersionHistory, {
+        item: {
+          id: "o1",
+          version: 3,
+          approvedVersion: null,
+          versions: [entry(3, "firstmate"), entry(2, "owner"), entry(1, null)],
+        } as never,
+        version: null,
+        onOpen: () => undefined,
+        onClose: () => undefined,
+      }),
+    );
+    expect(html).toContain("Firstmate");
+    expect(html).toContain("You");
+    expect(html.match(/ · You/g)).toHaveLength(1);
+    expect(html.match(/ · Firstmate/g)).toHaveLength(1);
+    expect(html).not.toMatch(/Version 1[^<]*<\/span><span[^>]*>[^<]*· /);
+  });
+});
+
+describe("code changes with no connected repository", () => {
+  it("shows a pending change and offers one plain connect button", () => {
+    const card = {
+      id: "c1",
+      product: "p1",
+      repo: {
+        owner: "tamer-sabry8",
+        name: "amun-qa-sandbox",
+        url: "https://github.com/tamer-sabry8/amun-qa-sandbox",
+      },
+      base: "main",
+      branch: "amun/readme",
+      message: "Update README",
+      files: [
+        { path: "README.md", status: "modified", additions: 1, deletions: 0 },
+      ],
+      diff: "+ hello",
+      diffHash: "h",
+      binding: "b",
+      state: "waiting",
+    } as never;
+    const html = renderToStaticMarkup(
+      createElement(CodeChangeCards, {
+        product: "p1",
+        onOpened: () => undefined,
+        connected: [],
+        onConnect: () => undefined,
+        initial: [card],
+      }),
+    );
+    expect(html).toContain("Code changes");
+    expect(html).toContain("Code change for tamer-sabry8/amun-qa-sandbox");
+    expect(html).toContain(
+      "Connect tamer-sabry8/amun-qa-sandbox to this project",
+    );
+    expect(html).toContain("Approve and open pull request");
   });
 });

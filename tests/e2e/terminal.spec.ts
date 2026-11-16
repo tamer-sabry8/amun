@@ -1,9 +1,11 @@
 import { test, expect, _electron as electron } from "@playwright/test";
+import { packagedProofProfile } from "../support/packaged-launch.ts";
 test("service PTY is read-only until control, echoes and resizes with a minimal environment", async () => {
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--amun-proof",
+      ...packagedProofProfile(),
     ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }
@@ -12,6 +14,7 @@ test("service PTY is read-only until control, echoes and resizes with a minimal 
       HOME: process.env.HOME!,
       PATH: "/usr/bin:/bin",
       TMPDIR: process.env.TMPDIR!,
+      AMUN_E2E_USER_DATA: process.env.AMUN_E2E_USER_DATA!,
     },
     chromiumSandbox: true,
   });

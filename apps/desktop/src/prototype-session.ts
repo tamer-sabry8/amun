@@ -19,7 +19,7 @@ export class PrototypeSession {
   constructor(
     private db: Database.Database,
     private root: string,
-    private selected: () => string | null,
+    private selected: (product: string) => string | null,
     private deliver: (id: string, message: string) => Promise<unknown>,
   ) {}
   async close() {
@@ -41,7 +41,7 @@ export class PrototypeSession {
     const objective = current(),
       prd = objective?.prd;
     const active = () =>
-      this.selected() === cmd.product &&
+      this.selected(cmd.product) === cmd.product &&
       docs.prd(cmd.product, cmd.objective)?.version === cmd.revision;
     if (!active() || !prd?.approved || !objective?.understanding?.approved)
       throw Error("Review the current approved PRD first.");
@@ -65,7 +65,7 @@ export class PrototypeSession {
           .transaction(() => {
             this.db
               .prepare(
-                "INSERT INTO runs(id,product_id,agent_role,harness,state,started_at,firstmate_task_id) VALUES(?,?,'Designer','claude','queued',?,'amun-claude')",
+                "INSERT INTO runs(id,product_id,agent_role,harness,state,started_at,firstmate_task_id) VALUES(?,?,'Designer','pi','queued',?,'amun-pi')",
               )
               .run(id, cmd.product, new Date().toISOString());
             this.db

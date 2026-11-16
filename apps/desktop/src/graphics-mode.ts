@@ -35,6 +35,7 @@ export function planGraphics(
   previous: unknown,
   version: string,
   forceSeparate = false,
+  preference?: GraphicsMode,
 ): GraphicsState {
   const last = parse(previous);
   const sameVersion = last?.version === version;
@@ -42,7 +43,10 @@ export function planGraphics(
     sameVersion && last.running === true && last.mode === "in-process";
   const failures = (sameVersion ? last.failures : 0) + (crashed ? 1 : 0);
   const mode: GraphicsMode =
-    forceSeparate || crashed || failures >= stickyAfter
+    forceSeparate ||
+    preference === "separate" ||
+    crashed ||
+    failures >= stickyAfter
       ? "separate"
       : "in-process";
   return { version, mode, running: true, failures };
@@ -70,4 +74,21 @@ export function writeGraphicsState(file: string, state: GraphicsState): void {
   const draft = `${file}.${process.pid}.tmp`;
   writeFileSync(draft, JSON.stringify(state));
   renameSync(draft, file);
+}
+
+/**
+ * An install's own choice, kept in graphics-preference.json as
+ * {"mode":"separate"|"in-process"}. It is read-only to the app, never touched by
+ * crash bookkeeping. "separate" pins the separate process; "in-process" is the
+ * default and still yields to the crash fallback. Anything else is ignored.
+ */
+export function readGraphicsPreference(file: string): GraphicsMode | undefined {
+  try {
+    const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!value || typeof value !== "object") return undefined;
+    const { mode } = value as Record<string, unknown>;
+    return mode === "separate" || mode === "in-process" ? mode : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -11,6 +11,7 @@ import { WorkspaceService } from "../../packages/data/src/workspace-service.ts";
 import { loadEndpointReceipt } from "../../packages/crew/src/endpoint-receipt.ts";
 import { observeOwnedTmux } from "../../packages/crew/src/observe-owned-tmux.ts";
 import { verifyDisposableWorker } from "./crew-acceptance-worker.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("Designer prototype pinned feedback becomes an approved PRD change", async () => {
   test.skip(
     process.env.AMUN_LIVE_CREW_DISPATCH !== "1",
@@ -52,6 +53,7 @@ test("Designer prototype pinned feedback becomes an approved PRD change", async 
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

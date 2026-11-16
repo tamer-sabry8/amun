@@ -136,6 +136,27 @@ describe("rules that hold for every kind", () => {
     expect(find(id)?.name).toBe("Named");
   });
 
+  it("keeps an optional client on a project only, and clears it when emptied", () => {
+    const id = send("create-area", {
+      groupId: null,
+      type: "project",
+      name: "Portal",
+      client: "Acme",
+    }).ref!;
+    expect(find(id)?.client).toBe("Acme");
+    send("update-area", { areaId: id, patch: { client: "  Globex  " } });
+    expect(find(id)?.client).toBe("Globex");
+    send("update-area", { areaId: id, patch: { client: "" } });
+    expect(find(id)?.client).toBeNull();
+    for (const type of ["product", "task"] as const) {
+      const other = add(type, "Not a project");
+      expect(
+        send("update-area", { areaId: other, patch: { client: "Acme" } }).ok,
+      ).toBe(false);
+      expect(find(other)?.client).toBeNull();
+    }
+  });
+
   it("cannot be deleted by setting its status", () => {
     const id = add("task", "Careful");
     expect(
@@ -269,5 +290,176 @@ describe("what an agent is doing", () => {
       nowDoing: null,
       output: "Double booking is possible.",
     });
+  });
+});
+
+describe("an agent that starts a new task", () => {
+  it("does not keep showing the last task's output", () => {
+    const role = (name: string) =>
+      snap().agents.find((item) => item.role === name);
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "Competitive analysis",
+    });
+    send("agent-status", {
+      role: "Analyst",
+      state: "done",
+      nowDoing: null,
+      output: "# Competitive analysis",
+    });
+    // The finished output stays visible while the agent is idle.
+    expect(role("Analyst")!.output).toBe("# Competitive analysis");
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "A new note",
+    });
+    expect(role("Analyst")).toMatchObject({
+      nowDoing: "A new note",
+      output: "",
+    });
+    send("agent-status", {
+      role: "Analyst",
+      state: "working",
+      nowDoing: "A new note",
+      output: "Draft so far",
+    });
+    expect(role("Analyst")!.output).toBe("Draft so far");
+  });
+});
+
+describe("blockers", () => {
+  const blockers = () => snap().blockers;
+  it("record who owns them and when they were raised, and can be re-owned and cleared", () => {
+    const area = add("project", "Portal");
+    const id = send("raise-blocker", {
+      areaId: area,
+      title: "API key",
+      owner: " Priya ",
+    }).ref!;
+    expect(blockers()).toEqual([
+      expect.objectContaining({
+        id,
+        workAreaId: area,
+        title: "API key",
+        owner: "Priya",
+        resolvedAt: null,
+      }),
+    ]);
+    expect(blockers()[0]!.raisedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
+    expect(send("set-blocker-owner", { blockerId: id, owner: "Sam" }).ok).toBe(
+      true,
+    );
+    expect(blockers()[0]!.owner).toBe("Sam");
+    expect(send("set-blocker-owner", { blockerId: id, owner: "" }).ok).toBe(
+      true,
+    );
+    expect(blockers()[0]!.owner).toBeNull();
+    expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
+    expect(blockers()[0]!.resolvedAt).not.toBeNull();
+    // A cleared blocker cannot be re-owned, and clearing twice is harmless.
+    expect(send("set-blocker-owner", { blockerId: id, owner: "Lee" }).ok).toBe(
+      false,
+    );
+    expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
+  });
+  it("need a work area, and go with it when it is deleted", () => {
+    expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
+      false,
+    );
+    const area = add("task", "Job");
+    send("raise-blocker", { areaId: area, title: "Waiting on legal" });
+    expect(blockers()).toHaveLength(1);
+    send("delete-area", { areaId: area });
+    expect(blockers()).toEqual([]);
+  });
+  it("hide secrets in the title and owner", () => {
+    const area = add("task", "Job");
+    send("raise-blocker", {
+      areaId: area,
+      title: "Need token ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+    });
+    expect(blockers()[0]!.title).not.toContain("ghp_abcdef");
+  });
+});
+
+describe("document versions and approval", () => {
+  const doc = (extra: Record<string, unknown>) =>
+    send("save-output", { groupId: null, type: "doc", title: "BRD", ...extra });
+  const item = (id: string) => snap().library.find((entry) => entry.id === id)!;
+
+  it("keeps a version per content change, with its author", () => {
+    const id = doc({ body: "one", author: "firstmate" }).ref!;
+    doc({ outputId: id, body: "one" });
+    doc({ outputId: id, body: "one", title: "BRD renamed" });
+    doc({ outputId: id, body: "two" });
+    const saved = item(id);
+    expect(saved.version).toBe(2);
+    expect(saved.versions.map((v) => [v.version, v.author, v.body])).toEqual([
+      [2, "owner", "two"],
+      [1, "firstmate", "one"],
+    ]);
+  });
+
+  it("restores an old version as a new one", () => {
+    const id = doc({ body: "one" }).ref!;
+    doc({ outputId: id, body: "two" });
+    expect(
+      send("restore-output-version", { outputId: id, versionNumber: 1 }).ok,
+    ).toBe(true);
+    expect(item(id)).toMatchObject({ body: "one", version: 3 });
+    expect(
+      send("restore-output-version", { outputId: id, versionNumber: 9 }).ok,
+    ).toBe(false);
+  });
+
+  it("records the approved version and never carries it to later changes", () => {
+    const id = doc({ body: "one" }).ref!;
+    doc({ outputId: id, body: "two" });
+    send("approve-output", { outputId: id, approved: true });
+    expect(item(id)).toMatchObject({ version: 2, approvedVersion: 2 });
+    doc({ outputId: id, body: "three" });
+    expect(item(id)).toMatchObject({ version: 3, approvedVersion: 2 });
+    send("approve-output", { outputId: id, approved: false });
+    expect(item(id).approvedVersion).toBeNull();
+    expect(
+      send("approve-output", { outputId: "nope", approved: true }).ok,
+    ).toBe(false);
+  });
+
+  it("records the owner's acceptance of a checklist on the version decided, apart from approval", () => {
+    const id = doc({
+      type: "acceptance",
+      body: "- [ ] A — Evidence: PR 1",
+    }).ref!;
+    doc({ outputId: id, type: "acceptance", body: "- [ ] A — Evidence: PR 2" });
+    const decide = (decision: string | null, reason = "") =>
+      send("record-acceptance", { outputId: id, decision, reason });
+    expect(decide("accepted").ok).toBe(false);
+    expect(decide("not_yet", "Billing has no evidence yet").ok).toBe(true);
+    expect(item(id).acceptance).toMatchObject({
+      decision: "not_yet",
+      version: 2,
+      reason: "Billing has no evidence yet",
+    });
+    expect(item(id).approvedVersion).toBeNull();
+    doc({ outputId: id, type: "acceptance", body: "changed" });
+    expect(item(id).acceptance?.version).toBe(2);
+    expect(decide("accepted", "All cited").ok).toBe(true);
+    expect(item(id).acceptance).toMatchObject({
+      decision: "accepted",
+      version: 3,
+    });
+    expect(decide(null).ok).toBe(true);
+    expect(item(id).acceptance).toBeNull();
+    const plain = doc({ body: "x" }).ref!;
+    expect(
+      send("record-acceptance", {
+        outputId: plain,
+        decision: "accepted",
+        reason: "ok",
+      }).ok,
+    ).toBe(false);
   });
 });

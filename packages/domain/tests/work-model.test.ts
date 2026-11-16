@@ -5,19 +5,25 @@ import {
   intake,
   linkRecord,
   nameFromRequest,
+  rfpDetails,
+  rfpFromRequest,
   needsLinking,
   type SupportingRecord,
   type WorkArea,
 } from "../src/work/model.ts";
+import { adoSprintsLine } from "../src/work/planning.ts";
 import {
   appliedRule,
   approvalSurface,
   approveLabel,
+  planNoun,
   authority,
   changeSinceApproval,
   gateFor,
+  permissionChanges,
   planFingerprint,
   ruleCandidate,
+  retryOutcome,
   writeSummary,
   type LearnedRule,
   type Plan,
@@ -147,6 +153,31 @@ describe("intake (F1)", () => {
       type: "product",
       options: [],
     });
+  });
+  it("routes reminders before asking the group or creating anything", () => {
+    for (const text of [
+      "Remind me in 2 minutes to review the QA PRD.",
+      "please remind me to call Sam tomorrow",
+      "Could you remind me at 5pm to send the deck?",
+      "Set a reminder for Monday",
+      "set up a reminder to review the PRD",
+      "Reminder: review the QA PRD",
+      "remind me on Friday",
+    ]) {
+      expect(intake({ ...base, groupId: null, text })).toEqual({
+        step: "reminder",
+        intent: "add",
+      });
+      expect(intake({ ...base, text }).step).toBe("reminder");
+    }
+  });
+  it("still files an ordinary review task as work", () => {
+    expect(intake({ ...base, text: "review the QA PRD" }).step).not.toBe(
+      "reminder",
+    );
+    expect(
+      intake({ ...base, text: "I need a reminder system product" }).step,
+    ).not.toBe("reminder");
   });
   it("keeps the source and explains when unreadable", () => {
     expect(intake({ ...base, text: "", readable: false })).toEqual({
@@ -404,6 +435,56 @@ describe("approve plans, not clicks", () => {
     expect(approveLabel(1)).toBe("Approve and publish 1 story");
     expect(approveLabel(2, "edit")).toBe("Approve and publish 2 edits");
   });
+  it("names a Task a task, a mix items, and an unknown type nothing", () => {
+    const fields = (type?: string) => (type ? { type } : {});
+    expect(planNoun([{ kind: "Task", fields: {} }])).toBe("task");
+    expect(planNoun([{ fields: fields("Product Backlog Item") }])).toBe(
+      "product backlog item",
+    );
+    expect(
+      planNoun([
+        { kind: "Task", fields: {} },
+        { kind: "Bug", fields: {} },
+      ]),
+    ).toBe("item");
+    expect(planNoun([{ fields: {} }])).toBeNull();
+    expect(approveLabel(2, "item")).toBe("Approve and publish 2 items");
+  });
+  it("says when a team's only sprints are over", () => {
+    const sprint = {
+      id: "1",
+      name: "Sprint 5",
+      start: "2021-03-01",
+      finish: "2021-03-14",
+    };
+    const now = Date.parse("2026-11-15");
+    expect(adoSprintsLine([sprint], "POCs Team", now)).toBe(
+      "POCs Team has no current or upcoming sprints. Its latest was Sprint 5 (ended 14 Mar 2021).",
+    );
+    expect(
+      adoSprintsLine(
+        [
+          sprint,
+          { ...sprint, id: "2", name: "Sprint 6", finish: "2026-12-01" },
+        ],
+        "POCs Team",
+        now,
+      ),
+    ).toBe("Showing 2 sprints for POCs Team.");
+  });
+});
+
+describe("retryOutcome", () => {
+  it("says in one line what the retry did", () => {
+    expect(retryOutcome([{ summary: "A", state: "created" }], null)).toBe(
+      "Retried the 1 item that was not published: 1 created.",
+    );
+    expect(
+      retryOutcome([{ summary: "A", state: "failed" }], "No such type."),
+    ).toBe(
+      "Retried the 1 item that was not published: 0 created, 1 still not created. No such type.",
+    );
+  });
 });
 
 describe("writeSummary (partial writes)", () => {
@@ -416,6 +497,15 @@ describe("writeSummary (partial writes)", () => {
     expect(summary.text).toBe("4 created, 2 not created, nothing duplicated");
     expect(summary.button).toBe("Retry the 2");
     expect(summary.retry).toEqual(["5", "6"]);
+  });
+  it("says a linked item already existed instead of counting it as created", () => {
+    const summary = writeSummary([
+      { id: "1", state: "created" },
+      { id: "2", state: "created", linked: true },
+    ]);
+    expect(summary.text).toBe(
+      "1 created, 0 not created, 1 already existed (linked, not created), nothing duplicated",
+    );
   });
   it("reconciles uncertain writes before any retry", () => {
     const summary = writeSummary([
@@ -493,7 +583,205 @@ describe("nameFromRequest", () => {
   ])("%s → %s", (text, expected) => {
     expect(nameFromRequest(text)).toBe(expected);
   });
+  it.each([
+    [
+      'Track an RFP named "QA-20261114-RFP" in Work. The client is not yet known, the owner is not assigned, and the deadline is unknown. Do not invent these values or start delivery.',
+      "QA-20261114-RFP",
+    ],
+    [
+      "Create product named QA-20261114-PRODUCT for testing the intake. Do not start delivery.",
+      "QA-20261114-PRODUCT",
+    ],
+    ["Create a product called Atlas for testing. Nothing else.", "Atlas"],
+  ])("takes only the name: %s", (text, expected) => {
+    expect(nameFromRequest(text)).toBe(expected);
+  });
+  it.each([
+    [
+      "Create a product named QA-20261114-MoCA for testing the MoCA E-Cabinet AI BRD. Use only Azure DevOps TahalufCollection/POCs. Do not publish anything yet.",
+      "QA-20261114-MoCA",
+    ],
+    [
+      "Create a project named Atlas Rollout for the Gulf team. Use only Azure DevOps.",
+      "Atlas Rollout",
+    ],
+    [
+      'Create a product called "MoCA Cabinet" for testing. Do not publish.',
+      "MoCA Cabinet",
+    ],
+    ['Create a project "Gulf Pilot" for the Gulf team.', "Gulf Pilot"],
+    [
+      "Create a product QA-20261114-MoCA for testing the BRD. Do not publish.",
+      "QA-20261114-MoCA",
+    ],
+    ["Create a product MoCA Cabinet. Use only Azure DevOps.", "MoCA Cabinet"],
+  ])("takes the stated name: %s", (text, expected) => {
+    expect(nameFromRequest(text)).toBe(expected);
+  });
+  it("falls back to a short title when no name is stated", () => {
+    const text =
+      "Build something to help clinics track appointments with patients across the region quickly. Do not publish anything yet.";
+    const name = nameFromRequest(text);
+    expect(name.length).toBeLessThanOrEqual(60);
+    expect(text.startsWith(name)).toBe(true);
+    expect(nameFromRequest("Plan the launch. Use only Azure DevOps.")).toBe(
+      "Plan the launch",
+    );
+  });
   it("keeps names short", () => {
     expect(nameFromRequest("x".repeat(200))).toHaveLength(78);
+  });
+});
+
+describe("rfpFromRequest", () => {
+  const groups = [{ id: "employer", name: "Employer" }];
+  it("leaves unknown client, deadline and group empty", () => {
+    expect(
+      rfpFromRequest(
+        'Track an RFP named "QA-20261114-RFP" in Work. The client is not yet known, the owner is not assigned, and the deadline is unknown. Do not invent these values or start delivery.',
+        groups,
+      ),
+    ).toEqual({
+      name: "QA-20261114-RFP",
+      client: null,
+      due: null,
+      groupId: null,
+    });
+  });
+  it("reads only what is stated", () => {
+    expect(
+      rfpFromRequest(
+        'Track an RFP named "Metro" in Employer. The client is DMT. Due 5 March.',
+        groups,
+      ),
+    ).toEqual({
+      name: "Metro",
+      client: "DMT",
+      due: "5 March",
+      groupId: "employer",
+    });
+    expect(
+      rfpFromRequest("Track an RFP from DMT, due 5 March", groups),
+    ).toEqual({
+      name: "DMT",
+      client: "DMT",
+      due: "5 March",
+      groupId: null,
+    });
+  });
+});
+
+describe("rfpDetails", () => {
+  const now = new Date("2026-11-14T10:00:00Z");
+  const none = {
+    client: null,
+    deadline: null,
+    responseOwner: null,
+    accountOwner: null,
+    presales: null,
+  };
+  it("reads the labelled facts of the Home request and nothing else", () => {
+    expect(
+      rfpDetails(
+        'Create an RFP named "QA-20261114-RFP-Retest" in Work. Track only: client "QA Sandbox", deadline 2026-12-01, owner Tamer, status Received.',
+        now,
+      ),
+    ).toEqual({
+      ...none,
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      accountOwner: "Tamer",
+    });
+  });
+  it("reads the client of a project request", () => {
+    expect(
+      rfpDetails("Create a project for client Acme Corp, due 2026-12-01", now)
+        .client,
+    ).toBe("Acme Corp");
+    expect(rfpDetails("Create a project called Portal", now).client).toBeNull();
+  });
+  it("keeps unknown values empty", () => {
+    expect(
+      rfpDetails(
+        "Track an RFP. The client is not yet known, the owner is not assigned, and the deadline is unknown.",
+        now,
+      ),
+    ).toEqual(none);
+  });
+  it("reads the incident sentence without moving the owner", () => {
+    expect(
+      rfpDetails(
+        "Track a new RFP called QA-20261114-RFP-Smart-Inspection for client QA Test Client, due 25 November 2026. RFP owner is Sara; the response owner is not known yet. This is synthetic QA data.",
+        now,
+      ),
+    ).toEqual({
+      ...none,
+      client: "QA Test Client",
+      deadline: "2026-11-25T00:00:00.000Z",
+      accountOwner: "Sara",
+    });
+  });
+  it.each([
+    ["for client Acme Ltd due 5 Dec 2026", "Acme Ltd", "2026-12-05"],
+    ["client Acme, deadline: November 25, 2026", "Acme", "2026-11-25"],
+    ["client: Acme; due 25/11/2026", "Acme", "2026-11-25"],
+    ['client is "Acme, Inc" due 25th Nov 2026', "Acme, Inc", "2026-11-25"],
+    ["client Acme due 17 November", "Acme", "2026-11-17"],
+    ["client Acme due 10 November", "Acme", "2027-11-10"],
+    ["client Acme due in 10 days", "Acme", "2026-11-24"],
+    ["client Acme due 31 February 2026", "Acme", null],
+  ])("reads client and deadline from %s", (text, client, day) => {
+    expect(rfpDetails(text, now)).toMatchObject({
+      client,
+      deadline: day ? day + "T00:00:00.000Z" : null,
+    });
+  });
+  it.each([
+    [
+      "Response owner is Dana. Sales owner: Omar, pre-sales Lena",
+      { responseOwner: "Dana", accountOwner: "Omar", presales: "Lena" },
+    ],
+    [
+      "sales or account owner Omar and pre-sales contact is Lena.",
+      { accountOwner: "Omar", presales: "Lena" },
+    ],
+    ["response owner not known yet, presales TBD", {}],
+    ["owner is Sara", { accountOwner: "Sara" }],
+  ])("reads owners from %s", (text, expected) => {
+    expect(rfpDetails(text, now)).toEqual({ ...none, ...expected });
+  });
+});
+
+describe("permissionChanges", () => {
+  const row = (id: string, createdAt: string, revokedAt: string | null) => ({
+    id,
+    groupId: "g",
+    destination: "notion",
+    action: "create",
+    createdAt,
+    revokedAt,
+  });
+  it("lists every grant and revoke, newest first", () => {
+    const changes = permissionChanges([
+      row("a", "2026-11-01T10:00:00Z", "2026-11-03T10:00:00Z"),
+      row("b", "2026-11-02T10:00:00Z", null),
+    ]);
+    expect(changes.map((c) => `${c.id}:${c.kind}`)).toEqual([
+      "a:revoked",
+      "b:allowed",
+      "a:allowed",
+    ]);
+  });
+  it("puts a revoke after its grant when both share a moment, and keeps 20", () => {
+    const same = "2026-11-01T10:00:00Z";
+    expect(
+      permissionChanges([row("a", same, same)]).map((c) => c.kind),
+    ).toEqual(["revoked", "allowed"]);
+    const many = Array.from({ length: 30 }, (_, i) =>
+      row(`p${i}`, `2026-11-${String(i + 1).padStart(2, "0")}T00:00:00Z`, null),
+    );
+    const kept = permissionChanges(many);
+    expect(kept).toHaveLength(20);
+    expect(kept[0]!.id).toBe("p29");
   });
 });

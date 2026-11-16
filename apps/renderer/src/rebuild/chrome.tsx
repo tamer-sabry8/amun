@@ -10,6 +10,11 @@ import {
 import type { Attention } from "../../../../packages/domain/src/work/home.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
+import { bridge } from "../bridge.ts";
+import {
+  contentSearchResult,
+  type ContentSearchHit,
+} from "../../../../packages/contracts/src/work.ts";
 import type { Snapshot } from "./view-model.ts";
 
 const islandAction: Record<Attention["kind"], string | null> = {
@@ -414,6 +419,8 @@ export function Sidebar({
   );
 }
 
+export type ContentHit = ContentSearchHit;
+
 export function Palette({
   open,
   snapshot,
@@ -421,6 +428,7 @@ export function Palette({
   onRoute,
   onWork,
   onBrowser,
+  onHit,
 }: {
   open: boolean;
   snapshot: Snapshot;
@@ -429,6 +437,7 @@ export function Palette({
   onWork(areaId: string): void;
   /** Null outside a work session, where there is nowhere to show it. */
   onBrowser: (() => void) | null;
+  onHit(hit: ContentHit): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
@@ -439,6 +448,30 @@ export function Palette({
     } else if (!open && dialog.current?.open) dialog.current.close();
   }, [open]);
   const q = query.trim().toLowerCase();
+  const [found, setFound] = useState<{ q: string; hits: ContentHit[] }>({
+    q: "",
+    hits: [],
+  });
+  // Searches the words inside documents, records and conversations. The
+  // service limits it to the group being worked in.
+  useEffect(() => {
+    if (!open || q.length < 2) return;
+    const requestId = crypto.randomUUID();
+    const stop = bridge.onEvent((raw) => {
+      const event = contentSearchResult.safeParse(raw);
+      if (event.success && event.data.requestId === requestId)
+        setFound({ q, hits: event.data.hits });
+    });
+    const timer = setTimeout(
+      () =>
+        bridge.send({ version: 1, kind: "content-search", requestId, query }),
+      150,
+    );
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [open, q, query]);
   const hit = (text: string) => !q || text.toLowerCase().includes(q);
   const places: [Exclude<Route, "work" | "setup">, string][] = [
     ["home", "Home"],
@@ -457,6 +490,12 @@ export function Palette({
           hit(item.title),
       )
     : [];
+  const shown = new Set([
+    ...records.slice(0, 6).map((item) => item.id),
+    ...areas.slice(0, 8).map((area) => area.id),
+  ]);
+  const inside = found.q === q && q.length >= 2 ? found.hits : [];
+  const contentHits = inside.filter((item) => !shown.has(item.id)).slice(0, 6);
   return (
     <dialog
       className="rb-palette"
@@ -497,6 +536,27 @@ export function Palette({
             {item.title}
           </button>
         ))}
+        {contentHits.map((item) => (
+          <button key={item.kind + item.id} onClick={() => onHit(item)}>
+            <Icon
+              name={item.kind === "message" ? "decisions" : "library"}
+              width={16}
+              height={16}
+            />
+            <span style={{ minWidth: 0, textAlign: "left" }}>
+              <span style={{ display: "block" }}>{item.title}</span>
+              <span className="muted small" style={{ display: "block" }}>
+                {item.snippet.map((part, index) =>
+                  part.match ? (
+                    <strong key={index}>{part.text}</strong>
+                  ) : (
+                    part.text
+                  ),
+                )}
+              </span>
+            </span>
+          </button>
+        ))}
         {places
           .filter(([, label]) => hit(label))
           .map(([id, label]) => (
@@ -511,7 +571,7 @@ export function Palette({
             Open browser
           </button>
         )}
-        {!areas.length && !records.length && q && (
+        {!areas.length && !records.length && !contentHits.length && q && (
           <p className="muted" style={{ padding: "10px 12px" }}>
             Nothing matches “{query}” in this group.
           </p>

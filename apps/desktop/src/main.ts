@@ -1,3 +1,4 @@
+import { piBinary } from "./pi-runtime.ts";
 import { installFolderPicker } from "./folder-picker.ts";
 import { installScreenshot } from "./screenshot.ts";
 import { installWorkerLogin } from "./worker-login.ts";
@@ -15,6 +16,7 @@ import {
   session,
   utilityProcess,
   MessageChannelMain,
+  Notification,
   type UtilityProcess,
 } from "electron";
 import { join } from "node:path";
@@ -26,7 +28,25 @@ import {
   readGraphicsState,
   writeGraphicsState,
   type GraphicsState,
+  readGraphicsPreference,
 } from "./graphics-mode.ts";
+import { hideWindowsForTests, shellQuery } from "./shell-selection.ts";
+import { e2eRouteOpen, e2eUserData } from "./e2e-user-data.ts";
+
+// Keep e2e runs off the real profile; must precede any userData read and the instance lock.
+const e2eProfile = e2eUserData({
+  isPackaged: app.isPackaged,
+  env: process.env,
+  hasUserDataSwitch: app.commandLine.hasSwitch("user-data-dir"),
+  hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+  hasTestProvidersSwitch: app.commandLine.hasSwitch("amun-e2e-test-providers"),
+});
+const e2eRoute = e2eRouteOpen({
+  isPackaged: app.isPackaged,
+  hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+  hasTestProvidersSwitch: app.commandLine.hasSwitch("amun-e2e-test-providers"),
+});
+if (e2eProfile) app.setPath("userData", e2eProfile);
 
 const styleNonce = randomBytes(24).toString("base64url");
 let service: UtilityProcess | undefined;
@@ -51,6 +71,35 @@ function mcpModules() {
     ? join(process.resourcesPath, "mcp/node_modules")
     : join(app.getAppPath(), "../../runtime/mcp/node_modules");
 }
+function showReminders(list: unknown[]): void {
+  if (!Notification.isSupported()) return;
+  for (const item of list.slice(0, 5)) {
+    if (!item || typeof item !== "object") continue;
+    const { text, dueAt, missed } = item as Record<string, unknown>;
+    if (typeof text !== "string") continue;
+    const time =
+      typeof dueAt === "string"
+        ? new Date(dueAt).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "";
+    const note = new Notification({
+      title: missed ? `Reminder · missed at ${time}` : "Reminder",
+      body: text.slice(0, 200),
+    });
+    note.on("click", () => {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (!window) return;
+      if (window.isMinimized()) window.restore();
+      if (hideWindowsForTests({ isPackaged: app.isPackaged, env: process.env }))
+        return;
+      window.show();
+      window.focus();
+    });
+    note.show();
+  }
+}
 function startService(): void {
   if (quitting) return;
   const child = utilityProcess.fork(
@@ -62,6 +111,19 @@ function startService(): void {
       execArgv: ["--js-flags=--max-opt=1"],
       env: {
         ...process.env,
+        // Test fixtures only on unpackaged runs or a packaged run with both explicit proof switches.
+        AMUN_E2E_TEST_PROVIDERS: e2eRoute
+          ? (process.env.AMUN_E2E_TEST_PROVIDERS ?? "")
+          : "",
+        // Test-only: Keychain reads that never answer; same gate.
+        AMUN_E2E_KEYCHAIN_HANG: e2eRoute
+          ? (process.env.AMUN_E2E_KEYCHAIN_HANG ?? "")
+          : "",
+        // Test-only delay for native turns; same gate.
+        AMUN_E2E_SLOW_NATIVE_MS: e2eRoute
+          ? (process.env.AMUN_E2E_SLOW_NATIVE_MS ?? "")
+          : "",
+        AMUN_APP_VERSION: app.getVersion(),
         AMUN_AUTH_ROOT: join(app.getPath("userData"), "pi-agent"),
         AMUN_AUTH_WORKER: join(app.getAppPath(), "dist/auth-worker.cjs"),
         AMUN_MCP_MODULES: mcpModules(),
@@ -101,7 +163,12 @@ function startService(): void {
           process.platform === "darwin"
             ? "/opt/homebrew/bin/tmux"
             : "/usr/bin/tmux",
-        AMUN_PI_BINARY: process.execPath,
+        // The packaged helper, so a Pi worker is never taken for the app.
+        AMUN_PI_BINARY: piBinary({
+          packaged: app.isPackaged,
+          platform: process.platform,
+          execPath: process.execPath,
+        }),
         AMUN_PI_ENTRY: app.isPackaged
           ? join(
               process.resourcesPath,
@@ -122,6 +189,17 @@ function startService(): void {
   );
   service = child;
   child.on("message", (message: unknown) => {
+    if (
+      message &&
+      typeof message === "object" &&
+      "kind" in message &&
+      message.kind === "reminders-due" &&
+      "reminders" in message &&
+      Array.isArray(message.reminders)
+    ) {
+      showReminders(message.reminders);
+      return;
+    }
     if (
       message &&
       typeof message === "object" &&
@@ -189,23 +267,33 @@ function startService(): void {
   });
 }
 function openWindow(): void {
-  const shellQuery: Record<string, string> = {};
-  if (app.commandLine.hasSwitch("amun-proof")) shellQuery.proof = "1";
-  else if (!app.isPackaged && app.commandLine.hasSwitch("amun-gallery"))
-    shellQuery.gallery = "1";
-  else if (
-    app.commandLine.hasSwitch("amun-legacy-shell") ||
-    process.env.AMUN_LEGACY_SHELL === "1"
-  )
-    shellQuery.legacy = "1";
-  const rebuiltShell = Object.keys(shellQuery).length === 0;
+  const query = shellQuery({
+    isPackaged: app.isPackaged,
+    hasProofSwitch: app.commandLine.hasSwitch("amun-proof"),
+    hasGallerySwitch: app.commandLine.hasSwitch("amun-gallery"),
+    hasLegacySwitch: app.commandLine.hasSwitch("amun-legacy-shell"),
+    hasTestProvidersSwitch: app.commandLine.hasSwitch(
+      "amun-e2e-test-providers",
+    ),
+    env: process.env,
+  });
+  // Test-only: Playwright runs must not put windows on the owner's screen.
+  const hidden = hideWindowsForTests({
+    isPackaged: app.isPackaged,
+    testRouteOpen: e2eRoute,
+    env: process.env,
+  });
+  const rebuiltShell =
+    query.proof === undefined &&
+    query.legacy === undefined &&
+    query.gallery === undefined;
   const window = new BrowserWindow({
     title: "Amun",
     width: 1200,
     height: 800,
     // Match the initial canvas and paint directly into a visible window. A
     // hidden first paint followed by show() had higher measured peak working sets.
-    show: rebuiltShell,
+    show: rebuiltShell && !hidden,
     ...(rebuiltShell && { backgroundColor: "#0b0e14" }),
     webPreferences: {
       ...windowPreferences,
@@ -244,11 +332,12 @@ function openWindow(): void {
     attach(window);
   });
   window.once("closed", () => loadedWindows.delete(window));
-  if (!rebuiltShell) window.once("ready-to-show", () => window.show());
+  if (!rebuiltShell && !hidden)
+    window.once("ready-to-show", () => window.show());
   void window.loadFile(join(app.getAppPath(), "renderer/index.html"), {
     query: {
       styleNonce,
-      ...shellQuery,
+      ...query,
     },
   });
 }
@@ -261,9 +350,16 @@ function chooseGraphics(): void {
     app.getVersion(),
     app.commandLine.hasSwitch("amun-separate-graphics") ||
       process.env.AMUN_SEPARATE_GRAPHICS === "1",
+    readGraphicsPreference(
+      join(app.getPath("userData"), "graphics-preference.json"),
+    ),
   );
-  if (graphics.mode === "in-process")
+  if (graphics.mode === "in-process") {
     app.commandLine.appendSwitch("in-process-gpu");
+    // Same trade and same fallback as graphics: the network service shares the
+    // main process instead of holding its own copy of the framework (~45 MiB).
+    app.commandLine.appendSwitch("enable-features", "NetworkServiceInProcess2");
+  }
   try {
     writeGraphicsState(file, graphics);
   } catch {
@@ -288,6 +384,8 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     if (window.isMinimized()) window.restore();
+    if (hideWindowsForTests({ isPackaged: app.isPackaged, env: process.env }))
+      return;
     window.show();
     window.focus();
   });

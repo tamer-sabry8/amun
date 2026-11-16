@@ -6,6 +6,7 @@ export const actionKinds = [
   "merge",
   "notion_publish",
   "github_issue",
+  "code_change",
   "file_destructive",
   "skill_install",
   "model_outside_allowlist",

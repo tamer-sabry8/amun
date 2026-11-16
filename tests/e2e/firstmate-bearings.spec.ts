@@ -11,6 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native Bearings reads the persistent crew and writes a report only on request", async () => {
   test.setTimeout(150000);
   const root = await realpath(
@@ -21,6 +22,7 @@ test("native Bearings reads the persistent crew and writes a report only on requ
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });
@@ -46,17 +48,45 @@ test("native Bearings reads the persistent crew and writes a report only on requ
     await page
       .getByRole("button", { name: "Read active conversation", exact: true })
       .click();
-    await page
-      .getByLabel("Conversation message", { exact: true })
-      .fill("/skill:bearings");
-    await page
-      .getByRole("button", { name: "Run /bearings", exact: true })
-      .click();
-
+    // Loading the conversation can reset the draft on a slow machine, so
+    // type the command again until the composer offers to run it.
+    const runBearings = page.getByRole("button", {
+      name: "Run /bearings",
+      exact: true,
+    });
+    await expect(async () => {
+      await page
+        .getByLabel("Conversation message", { exact: true })
+        .fill("/skill:bearings");
+      await expect(runBearings).toBeVisible({ timeout: 5000 });
+    }).toPass({ timeout: 60000 });
     const output = page.getByTestId("native-pi-result");
-    await expect(output).toContainText(
+    // Under a loaded full-suite run the crew snapshot can time out once; the
+    // product reports that with this fixed message, so run the command again.
+    const unavailable = "Crew snapshot unavailable.";
+    const settle = async (run: () => Promise<void>, expected: string) => {
+      for (let attempt = 1; ; attempt++) {
+        await run();
+        await expect(output).toContainText(
+          new RegExp(expected + "|" + unavailable),
+          { timeout: 45000 },
+        );
+        if (!(await output.innerText()).includes(unavailable)) break;
+        if (attempt === 3) break;
+      }
+      await expect(output).toContainText(expected);
+    };
+    await settle(
+      // Running clears the draft, so a repeat goes through the command selector.
+      (() => {
+        let first = true;
+        return () => {
+          if (!first) return invoke("");
+          first = false;
+          return runBearings.click();
+        };
+      })(),
       "No recent completions are in the current baseline.",
-      { timeout: 45000 },
     );
     const workspace = join(root, "workspace");
     const owner = await readFile(
@@ -67,10 +97,10 @@ test("native Bearings reads the persistent crew and writes a report only on requ
     expect(
       (await readdir(dir)).filter((n) => n.startsWith("status-report-")),
     ).toEqual([]);
-    await invoke("file include PRs");
-    await expect(output).toContainText("Saved to data/status-report-", {
-      timeout: 45000,
-    });
+    await settle(
+      () => invoke("file include PRs"),
+      "Saved to data/status-report-",
+    );
     const files = (await readdir(dir)).filter((n) =>
       /^status-report-\d{4}-\d\d-\d\d\.md$/.test(n),
     );

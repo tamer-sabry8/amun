@@ -6,10 +6,16 @@ it("accepts reviewed bounded text and format but never renderer-supplied paths o
     format: "jsonl",
     text: "{}\n",
   });
+  expect(exportRequest({ id: "x", format: "txt", text: "log" })).toEqual({
+    id: "x",
+    format: "txt",
+    text: "log",
+  });
   for (const value of [
     null,
     { id: "x", format: "html", text: "a", path: "/personal" },
     { id: "x", format: "exe", text: "a" },
+    { id: "x", format: "txt", text: "a".repeat(524289) },
     { id: "x", format: "html", text: "a".repeat(524289) },
     { id: "x", format: "html", text: "\0" },
   ])

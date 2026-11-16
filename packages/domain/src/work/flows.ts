@@ -243,6 +243,55 @@ export interface Rfp {
   deliveryProjectId: string | null;
   lossReason: string | null;
 }
+/** Owners an RFP can be filtered by, each listed once. */
+export function rfpOwners(rfps: readonly Rfp[]): string[] {
+  const names = new Set<string>();
+  for (const rfp of rfps)
+    for (const owner of [rfp.responseOwner, rfp.accountOwner, rfp.presales])
+      if (owner?.trim()) names.add(owner.trim());
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+/** Search text, owner and stage narrow a board; empty values match everything. */
+export function filterRfps<T extends Rfp>(
+  rfps: readonly T[],
+  filter: {
+    text?: string;
+    owner?: string;
+    stage?: RfpStage | "";
+    name(id: string): string;
+  },
+): T[] {
+  const text = (filter.text ?? "").trim().toLowerCase();
+  return rfps.filter((rfp) => {
+    if (filter.stage && rfp.stage !== filter.stage) return false;
+    if (
+      filter.owner &&
+      ![rfp.responseOwner, rfp.accountOwner, rfp.presales].some(
+        (owner) => owner?.trim() === filter.owner,
+      )
+    )
+      return false;
+    if (!text) return true;
+    return [
+      filter.name(rfp.id),
+      rfp.client,
+      rfp.responseOwner,
+      rfp.accountOwner,
+      rfp.presales,
+    ].some((value) => value?.toLowerCase().includes(text));
+  });
+}
+/**
+ * What dropping a card on a column does. It is the same action as the Stage
+ * control; Handed to delivery is only reached through Hand to delivery.
+ */
+export function rfpDrop(
+  from: RfpStage,
+  to: RfpStage,
+): "none" | "move" | "use_handoff" {
+  if (from === to) return "none";
+  return to === "handed_to_delivery" ? "use_handoff" : "move";
+}
 const day = 86_400_000;
 export function rfpCard(rfp: Rfp, now: number) {
   const open = ![
@@ -367,7 +416,53 @@ export interface Objective {
   current: number | null;
   evidenceDate: string | null;
   reviewDate: string | null;
+  dueDate?: string | null;
   conflict: boolean;
+}
+
+/** The one thing named by a few words: exact first, then a single near match. */
+export function findNamed<T>(
+  items: T[],
+  name: string,
+  nameOf: (item: T) => string,
+) {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+  const exact = items.filter((item) => nameOf(item).toLowerCase() === wanted);
+  if (exact.length === 1) return exact[0]!;
+  const near = items.filter((item) => {
+    const have = nameOf(item).toLowerCase();
+    return have.includes(wanted) || wanted.includes(have);
+  });
+  return near.length === 1 ? near[0]! : null;
+}
+
+/** A number only when one was given; anything else stays unknown. */
+export function knownNumber(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value.trim().replace(/%$/, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** A date only when it is a real calendar day (YYYY-MM-DD). */
+export function knownDate(value: unknown) {
+  if (typeof value !== "string") return null;
+  const day = value.trim().slice(0, 10);
+  const parsed = new Date(`${day}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === day
+    ? day
+    : null;
+}
+
+/** The short line under an objective: where it stands and when it is due. */
+export function objectiveLine(objective: Objective) {
+  const progress = objectiveProgress(objective);
+  return objective.dueDate
+    ? `${progress.label} · due ${objective.dueDate}`
+    : progress.label;
 }
 export function objectiveProgress(objective: Objective) {
   if (objective.conflict)

@@ -1,33 +1,55 @@
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
-import { agentProfile } from "../../../../packages/domain/src/work/agents.ts";
+import {
+  agentCatalog,
+  agentProfile,
+} from "../../../../packages/domain/src/work/agents.ts";
+import {
+  rfpDetails,
+  rfpFromRequest,
+} from "../../../../packages/domain/src/work/model.ts";
+import {
+  blockerLine,
+  openBlockers,
+} from "../../../../packages/domain/src/work/blockers.ts";
 import { AgentAvatar } from "./agent-avatar.tsx";
-import { useState, type DragEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import {
   horizonBoard,
-  orgChart,
-  teamUnder,
   planSummary,
   calendarNote,
   releaseGroups,
   riceBadge,
   roadmapViews,
+  adoSprints,
+  latestEndedSprint,
+  sprintCommand,
   sprintOverview,
   sprintRow,
   sprintTabs,
   sprintViews,
   timelineBar,
-  type AgentNode,
+  type Sprint,
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
 import {
+  filterRfps,
   rfpCard,
   rfpClosed,
+  rfpDrop,
   rfpHandoff,
+  rfpOwners,
   rfpStageLabels,
   rfpStages,
   rfpAuthoringBoundary,
+  objectiveLine,
   trackerName,
   type RfpStage,
 } from "../../../../packages/domain/src/work/flows.ts";
@@ -39,9 +61,12 @@ import {
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
-import { AgentsPanel } from "./lazy.tsx";
+import { AgentWatch } from "./agent-watch.tsx";
 import { Composer } from "./composer.tsx";
+import { sprintReplies, useAzureSprints } from "./sprint-azure.ts";
+import { holdSprintContext, sprintContextText } from "./sprint-context.ts";
 import { BrowserPane } from "./work-session.tsx";
+import { MarkdownMessage } from "./markdown-doc.tsx";
 import { council as councilCommand, work, workAsync } from "./store.ts";
 import {
   areaOf,
@@ -61,6 +86,7 @@ function Page({
   actions,
   children,
   footer,
+  fixed,
 }: {
   title: string;
   context?: string;
@@ -68,9 +94,11 @@ function Page({
   actions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Keeps the page still so panes inside it scroll on their own. */
+  fixed?: boolean;
 }) {
   return (
-    <div className="rb-scroll">
+    <div className={fixed ? "rb-scroll fixed" : "rb-scroll"}>
       <div className="rb-page">
         <header className="rb-head">
           {context && <span className="context">{context}</span>}
@@ -148,121 +176,205 @@ function Segmented<T extends string>({
 }
 
 // ── Agents ───────────────────────────────────────────────────────────────────
-/** One agent: a full card for the lead and for anyone working, a compact
-    row for the rest. Choosing either opens the same panel underneath. */
-function AgentButton({
-  node,
-  row = false,
+type AgentRow = Snapshot["agents"][number];
+const catalogId = "catalog:";
+const absent = (agent: AgentRow) => agent.id.startsWith(catalogId);
+const live = (agent: AgentRow) =>
+  agent.state === "working" || agent.state === "waiting";
+function SpecialistCard({
+  agent,
   selected,
   onSelect,
-  busy = false,
 }: {
-  node: AgentNode;
-  row?: boolean;
-  selected: string | null;
+  agent: AgentRow;
+  selected: boolean;
   onSelect(id: string): void;
-  /** For the lead: whether anyone on the team is working. */
-  busy?: boolean;
 }) {
-  const quiet =
-    node.kind === "lead"
-      ? "Your lead agent"
-      : node.kind === "temporary"
-        ? "Temporary"
-        : row
-          ? "Ready"
-          : "Always on";
+  const profile = agentProfile(agent.role);
+  const line = profile?.tags?.length
+    ? profile.tags.join(" · ")
+    : (profile?.summary ?? agent.nowDoing ?? "");
   return (
     <button
-      className={
-        "rb-agent" + (row ? " row" : "") + (node.fading ? " fading" : "")
-      }
-      aria-pressed={selected === node.id}
-      onClick={() => onSelect(node.id)}
+      className={"rb-spec" + (agent.enabled ? "" : " off")}
+      aria-pressed={selected}
+      onClick={() => onSelect(agent.id)}
     >
-      {node.kind === "lead" ? (
-        <span style={{ gridRow: "span 2" }}>
-          <FirstmateMark size={30} mood={busy ? "working" : "resting"} />
-        </span>
-      ) : agentProfile(node.role) ? (
-        <span style={{ gridRow: row ? undefined : "span 2" }}>
-          <AgentAvatar role={node.role} size={row ? 26 : 30} />
-        </span>
-      ) : (
-        <span className="glyph" aria-hidden="true">
-          <Icon name={node.icon} width={16} height={16} />
-        </span>
-      )}
-      <span className="role">
-        {node.role}
-        {!row && (
-          <span className={"rb-live " + node.state} title={node.status} />
-        )}
+      <AgentAvatar role={agent.role} size={44} />
+      <span className="text">
+        <strong title={agent.role}>
+          <span>{agent.role}</span>
+          {live(agent) && <span className="rb-live working" title="Working" />}
+        </strong>
+        {line && <span title={line}>{line}</span>}
       </span>
-      <span className="doing">{node.nowDoing ?? quiet}</span>
-      {row && <span className={"rb-live " + node.state} title={node.status} />}
     </button>
   );
 }
-function Team({
-  chart,
-  selected,
-  onSelect,
+function SpecialistPanel({
+  agent,
+  position,
+  total,
+  onLink,
+  onAdded,
 }: {
-  chart: AgentNode;
-  selected: string | null;
-  onSelect(id: string): void;
+  agent: AgentRow;
+  position: number;
+  total: number;
+  onLink?(url: string): void;
+  onAdded?(id: string): void;
 }) {
-  const team = teamUnder(chart);
-  const working = team.filter(
-    (agent) => agent.state === "working" || agent.state === "waiting",
-  );
-  const ready = team.filter((agent) => !working.includes(agent));
+  const [watch, setWatch] = useState(false);
+  const profile = agentProfile(agent.role);
+  const pad = (value: number) => String(value).padStart(2, "0");
   return (
-    <div className="rb-team">
-      <div className="lead">
-        <AgentButton
-          node={chart}
-          selected={selected}
-          onSelect={onSelect}
-          busy={working.length > 0}
-        />
-      </div>
-      {working.length > 0 && (
-        <section aria-labelledby="rb-team-working">
-          <h2 id="rb-team-working">
-            Working now <span className="count">{working.length}</span>
-          </h2>
-          <div className="working">
-            {working.map((agent) => (
-              <AgentButton
-                key={agent.id}
-                node={agent}
-                selected={selected}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </section>
+    <section className="rb-spec-panel" aria-label={agent.role}>
+      <header>
+        <AgentAvatar role={agent.role} size={80} />
+        <div>
+          <p
+            className="kicker"
+            title={`Specialist ${pad(position)} of ${pad(total)} · Dispatched by Firstmate`}
+          >
+            Specialist {pad(position)} of {pad(total)} · Dispatched by Firstmate
+          </p>
+          <h2>{agent.role}</h2>
+          <p className="summary">
+            {profile
+              ? profile.summary
+              : agent.kind === "temporary"
+                ? "Temporary helper"
+                : "Added by you"}
+          </p>
+        </div>
+      </header>
+      {profile && (
+        <>
+          <section className="block">
+            <h3>What this specialist owns for you</h3>
+            <p>{profile.scope}</p>
+          </section>
+          <section className="block">
+            <h3>Deliverables it brings back to your chat</h3>
+            <p>{profile.outputs}</p>
+          </section>
+          <section className="block">
+            <h3>Built-in industry frameworks &amp; templates</h3>
+            <ul className="chips">
+              {profile.frameworks.map(([name, link]) => (
+                <li key={name}>
+                  {onLink ? (
+                    <a
+                      href={link}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        onLink(link);
+                      }}
+                    >
+                      {name}
+                    </a>
+                  ) : (
+                    <span>{name}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       )}
-      {ready.length > 0 && (
-        <section aria-labelledby="rb-team-ready">
-          <h2 id="rb-team-ready">
-            Ready when Firstmate needs them{" "}
-            <span className="count">{ready.length}</span>
-          </h2>
-          <div className="roster">
-            {ready.map((agent) => (
-              <AgentButton
-                key={agent.id}
-                node={agent}
-                row
-                selected={selected}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </section>
+      <AgentControls
+        agent={agent}
+        watch={watch}
+        onWatch={setWatch}
+        onLink={onLink}
+        onAdded={onAdded}
+      />
+    </section>
+  );
+}
+function AgentControls({
+  agent,
+  watch,
+  onWatch,
+  onLink,
+  onAdded,
+}: {
+  agent: AgentRow;
+  watch: boolean;
+  onWatch(value: boolean): void;
+  onLink?: ((url: string) => void) | undefined;
+  onAdded?: ((id: string) => void) | undefined;
+}) {
+  const member = agent.kind !== "lead";
+  const notCreated = absent(agent);
+  return (
+    <div className="controls">
+      <div className="row wrap">
+        <p>
+          <span className="muted">Now doing · </span>
+          {agent.nowDoing ?? "Nothing right now"}
+        </p>
+        <span className="grow" />
+        {member && !agent.enabled && (
+          <span className="muted small">Not on your team</span>
+        )}
+        {!notCreated && (
+          <button
+            className="btn"
+            aria-pressed={watch}
+            onClick={() => onWatch(!watch)}
+          >
+            Watch
+          </button>
+        )}
+        {member && (
+          <button
+            className={agent.enabled ? "btn quiet" : "btn"}
+            onClick={() => {
+              if (notCreated) {
+                void workAsync("add-agent", { description: agent.role }).then(
+                  (result) => {
+                    if (result.ok && result.ref) onAdded?.(result.ref);
+                  },
+                );
+                return;
+              }
+              work("toggle-agent", {
+                agentId: agent.id,
+                enabled: !agent.enabled,
+              });
+            }}
+          >
+            {agent.enabled ? "Remove from team" : "Add to team"}
+          </button>
+        )}
+      </div>
+      <AgentOutput output={agent.output} {...(onLink && { onLink })} />
+      {watch && (
+        <AgentWatch
+          agentId={agent.id}
+          launcherId={agent.launcherId}
+          name={agent.role}
+        />
+      )}
+    </div>
+  );
+}
+/** What an agent has produced for its current task, formatted like the chat. */
+export function AgentOutput({
+  output,
+  onLink,
+}: {
+  output: string;
+  onLink?(url: string): void;
+}) {
+  return (
+    <div>
+      <span className="muted">Output so far</span>
+      {output ? (
+        <MarkdownMessage text={output} {...(onLink && { onLink })} />
+      ) : (
+        <p>No output yet</p>
       )}
     </div>
   );
@@ -270,19 +382,53 @@ function Team({
 export function Agents({
   snapshot,
   model,
+  onLink,
 }: {
   snapshot: Snapshot;
   model: string | null;
+  /** Opens a link from an agent's output; without it links stay plain text. */
+  onLink?(url: string): void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [watch, setWatch] = useState(false);
   const [problem, setProblem] = useState("");
-  const chart = orgChart(snapshot.agents.filter((agent) => agent.enabled));
-  const agent = snapshot.agents.find((item) => item.id === selected);
+  const lead = snapshot.agents.find((item) => item.kind === "lead");
+  const members = snapshot.agents.filter((item) => item.kind !== "lead");
+  // Every catalog specialist in catalog order (a placeholder when it is not in
+  // the workspace yet), then the agents the owner added themselves.
+  const specialists: AgentRow[] = [
+    ...agentCatalog.map(
+      (profile): AgentRow =>
+        members.find(
+          (item) => item.role.toLowerCase() === profile.name.toLowerCase(),
+        ) ?? {
+          id: catalogId + profile.name,
+          role: profile.name,
+          kind: "always_on",
+          launcherId: null,
+          state: "idle",
+          nowDoing: null,
+          output: "",
+          enabled: false,
+        },
+    ),
+    ...members.filter(
+      (item) =>
+        !agentCatalog.some(
+          (profile) => profile.name.toLowerCase() === item.role.toLowerCase(),
+        ),
+    ),
+  ];
+  const chosen =
+    (selected && specialists.find((item) => item.id === selected)) ||
+    (selected && snapshot.agents.find((item) => item.id === selected)) ||
+    specialists.find((item) => item.role === "Product Manager") ||
+    specialists[0] ||
+    lead;
+  const onTeam = specialists.filter((item) => item.enabled).length;
   return (
     <Page
       title="Agents"
-      line="Firstmate leads. Agents do the work you delegate."
+      fixed
       footer={
         <>
           {problem && (
@@ -305,78 +451,104 @@ export function Agents({
         </>
       }
     >
-      {chart ? (
-        <Team
-          chart={chart}
-          selected={selected}
-          onSelect={(id) => {
-            setSelected(id);
-            setWatch(false);
-          }}
-        />
+      {lead ? (
+        <div className="rb-agents">
+          <div className="list">
+            <button
+              className="rb-lead-card"
+              aria-pressed={chosen?.id === lead.id}
+              onClick={() => setSelected(lead.id)}
+            >
+              <FirstmateMark
+                size={44}
+                mood={specialists.some(live) ? "working" : "resting"}
+              />
+              <span className="text">
+                <strong>Firstmate</strong>
+                <span>
+                  Your AI product team leader · You talk only to Firstmate
+                </span>
+              </span>
+              <span className="pill">Lead Agent</span>
+            </button>
+            <div className="count-row">
+              <span>
+                {specialists.length} day-one specialists (click any agent to
+                inspect)
+              </span>
+              <span>
+                {onTeam} of {specialists.length} selected
+              </span>
+            </div>
+            <div className="grid">
+              {specialists.map((item) => (
+                <SpecialistCard
+                  key={item.id}
+                  agent={item}
+                  selected={chosen?.id === item.id}
+                  onSelect={setSelected}
+                />
+              ))}
+            </div>
+          </div>
+          {chosen &&
+            (chosen.kind === "lead" ? (
+              <section
+                key={chosen.id}
+                className="rb-spec-panel"
+                aria-label="Firstmate"
+              >
+                <header>
+                  <FirstmateMark
+                    size={88}
+                    mood={specialists.some(live) ? "working" : "resting"}
+                  />
+                  <div>
+                    <p className="kicker">Lead agent</p>
+                    <h2>Firstmate</h2>
+                    <p className="summary">
+                      Your AI product team leader. You talk only to Firstmate;
+                      it hands the work to your specialists and brings back the
+                      results.
+                    </p>
+                  </div>
+                </header>
+                <LeadControls agent={chosen} {...(onLink && { onLink })} />
+              </section>
+            ) : (
+              <SpecialistPanel
+                key={chosen.id}
+                agent={chosen}
+                position={
+                  specialists.findIndex((item) => item.id === chosen.id) + 1
+                }
+                total={specialists.length}
+                onAdded={setSelected}
+                {...(onLink && { onLink })}
+              />
+            ))}
+        </div>
       ) : (
         <p className="muted">Finish setup to meet Firstmate and your agents.</p>
       )}
-      {agent && (
-        <section
-          className="rb-panel"
-          aria-label={agent.role}
-          style={{ marginTop: 8 }}
-        >
-          <header>
-            <h2>{agent.role}</h2>
-            <span className="tag">
-              {agent.kind === "lead"
-                ? "Lead agent"
-                : agent.kind === "always_on"
-                  ? "Always on"
-                  : "Temporary"}
-            </span>
-            <span className="grow" />
-            <button
-              className="btn"
-              aria-pressed={watch}
-              onClick={() => setWatch(!watch)}
-            >
-              Watch
-            </button>
-            {agent.kind !== "lead" && (
-              <button
-                className="btn quiet"
-                onClick={() => {
-                  work("toggle-agent", { agentId: agent.id, enabled: false });
-                  setSelected(null);
-                }}
-              >
-                Remove
-              </button>
-            )}
-          </header>
-          <div style={{ padding: "0 18px 18px", display: "grid", gap: 10 }}>
-            {agentProfile(agent.role) && (
-              <p>
-                <span className="muted">What it does · </span>
-                {agentProfile(agent.role)?.summary}
-              </p>
-            )}
-            <p>
-              <span className="muted">Now doing · </span>
-              {agent.nowDoing ?? "Nothing right now"}
-            </p>
-            <p style={{ whiteSpace: "pre-wrap" }}>
-              <span className="muted">Output so far · </span>
-              {agent.output || "No output yet"}
-            </p>
-            {watch && (
-              // The live, read-only session view from the delivery runtime.
-              <div className="legacy-surface">
-                <AgentsPanel onOpenWorker={() => undefined} />
-              </div>
-            )}
-          </div>
-        </section>
-      )}
     </Page>
+  );
+}
+function LeadControls({
+  agent,
+  onLink,
+}: {
+  agent: AgentRow;
+  onLink?: (url: string) => void;
+}) {
+  const [watch, setWatch] = useState(false);
+  return (
+    <AgentControls
+      agent={agent}
+      watch={watch}
+      onWatch={setWatch}
+      onLink={onLink}
+    />
   );
 }
 
@@ -870,6 +1042,66 @@ export function Roadmap({
 }
 
 // ── Sprints ──────────────────────────────────────────────────────────────────
+/** Sprint dates by work area. Every bar sits inside its own area's row. */
+export function SprintTimeline({
+  snapshot,
+  sprints,
+  range,
+  weeks,
+  onOpen,
+}: {
+  snapshot: Snapshot;
+  sprints: (Sprint & { draft: boolean })[];
+  range: { start: string; end: string };
+  weeks: string[];
+  onOpen(sprint: Sprint): void;
+}) {
+  return (
+    <div className="rb-timeline">
+      <span />
+      <div className="axis">
+        {weeks.map((week) => (
+          <span key={week}>{week}</span>
+        ))}
+      </div>
+      {[...new Set(sprints.map((sprint) => sprint.workAreaId))].map((id) => (
+        <Fragment key={id}>
+          <div className="label">
+            <div style={{ fontWeight: 600 }}>{areaOf(snapshot, id)?.name}</div>
+            <div className="muted small">
+              {sprints.find((sprint) => sprint.workAreaId === id)?.team}
+            </div>
+          </div>
+          <div className="track">
+            {sprints
+              .filter((sprint) => sprint.workAreaId === id)
+              .map((sprint) => {
+                const bar = timelineBar(sprint, range);
+                return (
+                  bar && (
+                    <button
+                      key={sprint.id}
+                      className={"bar" + (sprint.draft ? " draft" : "")}
+                      style={{
+                        left: `${bar.left * 100}%`,
+                        width: `${bar.width * 100}%`,
+                        justifyContent: "flex-start",
+                      }}
+                      onClick={() => onOpen(sprint)}
+                    >
+                      {sprint.name}
+                      {sprint.draft ? " draft" : ""}
+                    </button>
+                  )
+                );
+              })}
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 export function Sprints({
   snapshot,
   now,
@@ -902,7 +1134,59 @@ export function Sprints({
       ...sprint,
       workAreaName: areaOf(snapshot, sprint.workAreaId)?.name ?? "",
     }));
-  const current = sprints.find((sprint) => sprint.id === sprintId) ?? null;
+  const azure = useAzureSprints(areas, areaId, setNote);
+  const azureArea = areas.find(
+    (area) => area.productId === azure.productId && azure.productId,
+  );
+  const fromAzure =
+    azure.reply && azureArea && (!areaId || areaId === azureArea.id)
+      ? adoSprints(
+          azure.reply.sprints,
+          azure.reply.team.name,
+          azureArea.id,
+          azureArea.name,
+        ).map((sprint) => {
+          const read =
+            azure.items?.state === "ready" &&
+            sprint.id === `ado:${azure.items.sprint}`
+              ? azure.items.items
+              : [];
+          return {
+            ...sprint,
+            done: read.filter((item) =>
+              /^(done|closed|completed)$/i.test(item.state),
+            ).length,
+            total: read.length,
+            stories: read.map((item) => ({
+              id: String(item.id),
+              title: `#${item.id} ${item.title}`,
+              points: null,
+              owner: item.assignee,
+            })),
+            out: [],
+            capacity: null,
+          };
+        })
+      : [];
+  const overview = [...sprints, ...fromAzure];
+  // Azure answered, but nothing is current or upcoming: say what it did return.
+  const lastAzure =
+    azure.reply && fromAzure.length ? latestEndedSprint(fromAzure, now) : null;
+  const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
+  const azureDetail = new Map(
+    (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
+      String(item.id),
+      `${item.type} · ${item.state}`,
+    ]),
+  );
+  const openAzure = current?.id.startsWith("ado:")
+    ? current.id.slice("ado:".length)
+    : null;
+  const openSprint = azure.openSprint;
+  // Opening an Azure sprint reads its work items (read-only).
+  useEffect(() => {
+    if (openAzure) openSprint(openAzure);
+  }, [openAzure]);
   const draft =
     sprints.find(
       (sprint) => sprint.draft && (!areaId || sprint.workAreaId === areaId),
@@ -970,9 +1254,34 @@ export function Sprints({
         chips={["/sprint plan", "Move story 124 to sprint 16"]}
         model={model}
         onSend={(text) => {
-          if (/^\/sprint plan\b/.test(text)) return void planSprint();
+          const command = sprintCommand(text);
+          if (command?.kind === "plan") return void planSprint();
+          if (command) return azure.run(command);
           const target =
-            areaId || current?.workAreaId || sprints[0]?.workAreaId;
+            areaId ||
+            current?.workAreaId ||
+            sprints[0]?.workAreaId ||
+            azureArea?.id;
+          if (target && azure.reply && target === azureArea?.id) {
+            const path = azure.reply.sprints.find(
+              (item) => `ado:${item.id}` === current?.id,
+            );
+            holdSprintContext(
+              target,
+              sprintContextText({
+                team: azure.reply.team.name,
+                sprints: azure.reply.sprints,
+                open:
+                  path && azure.items?.state === "ready"
+                    ? {
+                        name: path.name,
+                        path: path.path,
+                        items: azure.items.items,
+                      }
+                    : null,
+              }),
+            );
+          }
           if (target) onWork(target, text);
           else setNote("Choose a work area first.");
         }}
@@ -1044,7 +1353,17 @@ export function Sprints({
           </div>
         )}
         {tab === "Stories" &&
-          (current.stories.length ? (
+          (openAzure &&
+          azure.items?.sprint === openAzure &&
+          !current.stories.length ? (
+            <p className="muted" role="status">
+              {azure.items.state === "loading"
+                ? sprintReplies.itemsLoading
+                : azure.items.state === "error"
+                  ? sprintReplies.itemsLost
+                  : sprintReplies.itemsNone}
+            </p>
+          ) : current.stories.length ? (
             <div className="rb-board">
               {[
                 ...new Set(
@@ -1059,9 +1378,10 @@ export function Sprints({
                       <div className="rb-tile" key={story.id}>
                         <span className="name">{story.title}</span>
                         <span className="meta">
-                          {story.points === null
-                            ? "Not sized"
-                            : `${story.points} points`}
+                          {azureDetail.get(story.id) ??
+                            (story.points === null
+                              ? "Not sized"
+                              : `${story.points} points`)}
                         </span>
                       </div>
                     ))}
@@ -1151,59 +1471,85 @@ export function Sprints({
             open it.
           </p>
           <div className="rb-rows">
-            {sprintOverview(sprints, now, areaId || undefined).map((sprint) => {
-              const row = sprintRow(sprint, now);
-              return (
+            {sprintOverview(overview, now, areaId || undefined).map(
+              (sprint) => {
+                const row = sprintRow(sprint, now);
+                return (
+                  <button
+                    key={sprint.id}
+                    className="rb-rowitem"
+                    onClick={() => {
+                      setSprintId(sprint.id);
+                      setTab("Summary");
+                    }}
+                  >
+                    <span>
+                      <span className="name">{row.title}</span>
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                      >
+                        {[
+                          sprint.team,
+                          `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                      >
+                        {sprint.goal}
+                      </span>
+                    </span>
+                    <span className="muted">{row.progress}</span>
+                    <span>
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                      >
+                        {row.timing}
+                      </span>
+                      {row.flags.map((flag) => (
+                        <span
+                          key={flag}
+                          className="small"
+                          style={{
+                            display: "block",
+                            color: "var(--amun-status-signed-out)",
+                          }}
+                        >
+                          {flag}
+                        </span>
+                      ))}
+                    </span>
+                  </button>
+                );
+              },
+            )}
+          </div>
+          {!sprintOverview(overview, now, areaId || undefined).length &&
+            (lastAzure ? (
+              <p className="muted">
+                {azure.reply?.team.name} has no current or upcoming sprints. Its
+                latest was {lastAzure.name} (ended {shortDate(lastAzure.end)}).{" "}
                 <button
-                  key={sprint.id}
-                  className="rb-rowitem"
+                  className="link"
                   onClick={() => {
-                    setSprintId(sprint.id);
+                    setSprintId(lastAzure.id);
                     setTab("Summary");
                   }}
                 >
-                  <span>
-                    <span className="name">{row.title}</span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {[
-                        sprint.team,
-                        `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {sprint.goal}
-                    </span>
-                  </span>
-                  <span className="muted">{row.progress}</span>
-                  <span>
-                    <span className="muted small" style={{ display: "block" }}>
-                      {row.timing}
-                    </span>
-                    {row.flags.map((flag) => (
-                      <span
-                        key={flag}
-                        className="small"
-                        style={{
-                          display: "block",
-                          color: "var(--amun-status-signed-out)",
-                        }}
-                      >
-                        {flag}
-                      </span>
-                    ))}
-                  </span>
+                  Open {lastAzure.name}
                 </button>
-              );
-            })}
-          </div>
-          {!sprintOverview(sprints, now, areaId || undefined).length && (
-            <p className="muted">
-              No current or upcoming sprints. Ask Firstmate to plan one with
-              /sprint plan.
-            </p>
-          )}
+              </p>
+            ) : (
+              <p className="muted">
+                No current or upcoming sprints. Ask Firstmate to plan one with
+                /sprint plan.
+              </p>
+            ))}
         </section>
       )}
       {view === "timeline" && (
@@ -1212,57 +1558,16 @@ export function Sprints({
           <p className="muted small" style={{ margin: "4px 0 12px" }}>
             Solid = current or upcoming sprint · Outline = next draft
           </p>
-          <div className="rb-timeline">
-            <span />
-            <div className="axis">
-              {weeks.map((week) => (
-                <span key={week}>{week}</span>
-              ))}
-            </div>
-            {[...new Set(sprints.map((sprint) => sprint.workAreaId))].map(
-              (id) => (
-                <div key={id} style={{ display: "contents" }}>
-                  <div className="label">
-                    <div style={{ fontWeight: 600 }}>
-                      {areaOf(snapshot, id)?.name}
-                    </div>
-                    <div className="muted small">
-                      {sprints.find((sprint) => sprint.workAreaId === id)?.team}
-                    </div>
-                  </div>
-                  <div className="track">
-                    {sprints
-                      .filter((sprint) => sprint.workAreaId === id)
-                      .map((sprint) => {
-                        const bar = timelineBar(sprint, range);
-                        return (
-                          bar && (
-                            <button
-                              key={sprint.id}
-                              className={"bar" + (sprint.draft ? " draft" : "")}
-                              style={{
-                                left: `${bar.left * 100}%`,
-                                width: `${bar.width * 100}%`,
-                                justifyContent: "flex-start",
-                              }}
-                              onClick={() =>
-                                sprint.draft
-                                  ? setView("plan")
-                                  : setSprintId(sprint.id)
-                              }
-                            >
-                              {sprint.name}
-                              {sprint.draft ? " draft" : ""}
-                            </button>
-                          )
-                        );
-                      })}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-          {!sprints.length && (
+          <SprintTimeline
+            snapshot={snapshot}
+            sprints={overview}
+            range={range}
+            weeks={weeks}
+            onOpen={(sprint) =>
+              sprint.draft ? setView("plan") : setSprintId(sprint.id)
+            }
+          />
+          {!overview.length && (
             <p className="muted" style={{ marginTop: 12 }}>
               No sprints to show yet.
             </p>
@@ -1451,6 +1756,12 @@ export function Portfolio({
       (!group || area.groupId === group),
   );
   const statuses = [...new Set(all.map((area) => area.status))];
+  const objectives = snapshot.objectives.filter(
+    (item) =>
+      (!group || item.groupId === group) &&
+      (item.groupId === null ||
+        all.some((area) => area.groupId === item.groupId)),
+  );
   return (
     <Page
       title="Portfolio"
@@ -1504,6 +1815,27 @@ export function Portfolio({
         </>
       }
     >
+      {objectives.length > 0 && (
+        <div className="rb-work" aria-label="Objectives">
+          {objectives.map((objective) => (
+            <div className="rb-inline" key={objective.id}>
+              <div className="row">
+                <strong className="grow">{objective.metric}</strong>
+                <span className="tag">Objective</span>
+              </div>
+              <span className="muted small">{objectiveLine(objective)}</span>
+              <span className="muted small">
+                {objective.links.length
+                  ? `Linked to ${objective.links
+                      .map((id) => areaOf(snapshot, id)?.name)
+                      .filter(Boolean)
+                      .join(", ")}`
+                  : "Not linked to any work yet"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {areas.length ? (
         <div className="rb-work">
           {areas.map((area) => {
@@ -1523,11 +1855,19 @@ export function Portfolio({
                 <span className="meta">
                   {[
                     typeLabels[area.type],
+                    area.type === "project" ? area.client : null,
                     groupName(snapshot, area.groupId) ?? "No group yet",
                     area.status,
-                  ].join(" · ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
                 {area.purpose && <span className="meta">{area.purpose}</span>}
+                {openBlockers(snapshot.blockers, area.id).map((item) => (
+                  <span className="meta" key={item.id}>
+                    Blocked: {item.title} · {blockerLine(item, Date.now())}
+                  </span>
+                ))}
               </button>
             );
           })}
@@ -1599,9 +1939,19 @@ export function Rfps({
   const [over, setOver] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const allowed = new Set(areasInScope(snapshot).map((area) => area.id));
-  const rfps = snapshot.rfps.filter((rfp) => allowed.has(rfp.id));
-  const current = rfps.find((rfp) => rfp.id === selected) ?? null;
+  const tracked = snapshot.rfps.filter((rfp) => allowed.has(rfp.id));
   const name = (id: string) => areaOf(snapshot, id)?.name ?? "RFP";
+  const [search, setSearch] = useState("");
+  const [owner, setOwner] = useState("");
+  const [stageFilter, setStageFilter] = useState<RfpStage | "">("");
+  const rfps = filterRfps(tracked, {
+    text: search,
+    owner,
+    stage: stageFilter,
+    name,
+  });
+  const filtering = Boolean(search.trim() || owner || stageFilter);
+  const current = tracked.find((rfp) => rfp.id === selected) ?? null;
   const move = async (id: string, stage: RfpStage) => {
     if (stage === "handed_to_delivery") {
       const result = await workAsync("handoff-rfp", { areaId: id });
@@ -1689,22 +2039,26 @@ export function Rfps({
             chips={["Track an RFP"]}
             model={model}
             onSend={async (text) => {
-              const title = text.replace(/^track an rfp:?\s*/i, "").trim();
-              if (!title) return setNote("Name the RFP you want to track.");
-              const due = /\bdue\s+(.+)$/i.exec(title);
-              const parsed = due
-                ? Date.parse(due[1]! + " " + new Date(now).getFullYear())
+              const request = rfpFromRequest(text, snapshot.groups);
+              if (!request.name)
+                return setNote("Name the RFP you want to track.");
+              const facts = rfpDetails(text, new Date(now));
+              const parsed = request.due
+                ? Date.parse(request.due + " " + new Date(now).getFullYear())
                 : NaN;
-              const named =
-                title.replace(/,?\s*\bdue\s+.+$/i, "").trim() || title;
-              const client = /\b(?:for|from)\s+(.+)$/i.exec(named)?.[1] ?? "";
               const result = await workAsync("save-rfp", {
-                groupId: snapshot.setup.activeGroupId,
-                client,
-                name: named,
-                deadline: Number.isNaN(parsed)
-                  ? null
-                  : new Date(parsed).toISOString(),
+                // Only a group the request names; otherwise the one in use.
+                groupId: request.groupId ?? snapshot.setup.activeGroupId,
+                client: request.client ?? facts.client ?? "",
+                name: request.name,
+                deadline:
+                  facts.deadline ??
+                  (Number.isNaN(parsed)
+                    ? null
+                    : new Date(parsed).toISOString()),
+                responseOwner: facts.responseOwner,
+                accountOwner: facts.accountOwner,
+                presales: facts.presales,
               });
               setNote(result.ok ? "" : result.message);
               if (result.ref) setSelected(result.ref);
@@ -1713,6 +2067,54 @@ export function Rfps({
         </>
       }
     >
+      <div className="row wrap" style={{ marginBottom: 12 }}>
+        <input
+          type="text"
+          className="grow"
+          aria-label="Search RFPs"
+          placeholder="Search RFPs by name, client or owner"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <select
+          aria-label="Filter by owner"
+          value={owner}
+          onChange={(event) => setOwner(event.target.value)}
+        >
+          <option value="">Any owner</option>
+          {rfpOwners(tracked).map((person) => (
+            <option key={person} value={person}>
+              {person}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by stage"
+          value={stageFilter}
+          onChange={(event) =>
+            setStageFilter(event.target.value as RfpStage | "")
+          }
+        >
+          <option value="">Any stage</option>
+          {[...rfpStages, ...rfpClosed].map((stage) => (
+            <option key={stage} value={stage}>
+              {rfpStageLabels[stage]}
+            </option>
+          ))}
+        </select>
+        {filtering && (
+          <button
+            className="link small"
+            onClick={() => {
+              setSearch("");
+              setOwner("");
+              setStageFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
       <div className="rb-board">
         {rfpStages.map((stage) => (
           <section
@@ -1727,7 +2129,17 @@ export function Rfps({
             onDrop={(event) => {
               event.preventDefault();
               setOver(null);
-              void move(event.dataTransfer.getData("text/plain"), stage);
+              const id = event.dataTransfer.getData("text/plain");
+              const dropped = tracked.find((rfp) => rfp.id === id);
+              if (!dropped) return;
+              const action = rfpDrop(dropped.stage, stage);
+              if (action === "move") void move(id, stage);
+              if (action === "use_handoff") {
+                setSelected(id);
+                setNote(
+                  "Use Hand to delivery on the RFP card once the proposal is signed and the BRD is approved.",
+                );
+              }
             }}
           >
             <header>
@@ -1740,9 +2152,14 @@ export function Rfps({
           </section>
         ))}
       </div>
-      {!rfps.length && (
+      {!tracked.length && (
         <p className="muted">
           No RFPs are being tracked. Tell Firstmate about one below.
+        </p>
+      )}
+      {tracked.length > 0 && !rfps.length && (
+        <p className="muted" role="status">
+          No RFPs match. Clear the filters to see them all.
         </p>
       )}
       <button

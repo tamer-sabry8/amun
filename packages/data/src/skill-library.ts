@@ -114,6 +114,18 @@ export class SkillLibrary {
       })
       .immediate();
   }
+  uninstall(product: string, name: string) {
+    const key = JSON.stringify([product, name]);
+    this.db
+      .transaction(() => {
+        const gone = this.db
+          .prepare("DELETE FROM installed_skill_text WHERE skill_id=?")
+          .run(key).changes;
+        if (!gone) throw Error("Skill not installed");
+        this.db.prepare("DELETE FROM skills WHERE id=?").run(key);
+      })
+      .immediate();
+  }
   use(product: string, name: string, hash: string) {
     const row = this.db
       .prepare(

@@ -19,12 +19,14 @@ const run = (file: string, args: string[]) =>
   execFileSync(file, args, { encoding: "utf8", maxBuffer: 4_000_000 });
 const sourceCommit = run("git", ["rev-parse", "HEAD"]).trim();
 const dirty = Boolean(run("git", ["status", "--porcelain"]));
-const { version } = JSON.parse(
+const { version, displayVersion } = JSON.parse(
   readFileSync(
     new URL("../apps/desktop/package.json", import.meta.url),
     "utf8",
   ),
 );
+if (!displayVersion)
+  throw Error("apps/desktop/package.json needs displayVersion");
 execFileSync("pnpm", ["--filter", "@amun/desktop", "package"], {
   stdio: "inherit",
 });
@@ -41,7 +43,7 @@ const output = resolve("../releases");
 mkdirSync(output, { recursive: true });
 const dmg = join(
   output,
-  `Amun-${version}-beta-arm64-${sourceCommit.slice(0, 7)}.dmg`,
+  `Amun-${displayVersion.replaceAll(" ", "-")}-arm64-${sourceCommit.slice(0, 7)}.dmg`,
 );
 try {
   run("/usr/bin/ditto", [app, join(stage, "Amun.app")]);
@@ -68,6 +70,7 @@ try {
     sourceCommit,
     dirty,
     version,
+    displayVersion,
     platform: "darwin",
     arch: "arm64",
     sha256: createHash("sha256").update(readFileSync(dmg)).digest("hex"),

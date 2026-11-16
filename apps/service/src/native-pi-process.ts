@@ -90,6 +90,14 @@ export class NativePiProcess {
           ...(this.config.mcpModules
             ? { AMUN_MCP_MODULES: this.config.mcpModules }
             : {}),
+          ...(process.env.AMUN_E2E_TEST_PROVIDERS
+            ? { AMUN_E2E_TEST_PROVIDERS: process.env.AMUN_E2E_TEST_PROVIDERS }
+            : {}),
+          ...(process.env.AMUN_E2E_SLOW_NATIVE_MS
+            ? {
+                AMUN_E2E_SLOW_NATIVE_MS: process.env.AMUN_E2E_SLOW_NATIVE_MS,
+              }
+            : {}),
           AMUN_AUTH_ROOT: root,
           AMUN_AUTH_SDK: join(dirname(dirname(entry)), "index.js"),
         },
@@ -151,7 +159,8 @@ export class NativePiProcess {
   }
   close() {
     clearTimeout(this.timer);
-    this.pending = undefined;
+    // Whoever is waiting on a cancelled operation is told, never left hanging.
+    this.failure();
     const child = this.child;
     this.child = undefined;
     if (!child) return;

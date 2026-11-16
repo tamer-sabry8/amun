@@ -135,7 +135,7 @@ async function sweep(
   for (const line of registry.split(/\r?\n/)) {
     if (!line.trim() || line.startsWith("#")) continue;
     const row =
-      /^- amun-(codex|claude) - [^()]+\(home: ([^;)]+); scope: [^()]*; projects: [^;()]*; added \d{4}-\d{2}-\d{2}\)$/.exec(
+      /^- amun-(codex|claude|pi) - [^()]+\(home: ([^;)]+); scope: [^()]*; projects: [^;()]*; added \d{4}-\d{2}-\d{2}\)$/.exec(
         line,
       );
     if (!row || row[2] !== join(git, row[1] + "-worker") || homes.has(row[2]))

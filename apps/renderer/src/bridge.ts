@@ -1,5 +1,9 @@
 import { updateResult } from "../../../packages/contracts/src/stakeholder.ts";
-import { workEvent } from "../../../packages/contracts/src/work.ts";
+import {
+  workEvent,
+  workSnapshot,
+  issueReasons,
+} from "../../../packages/contracts/src/work.ts";
 import {
   chatResult,
   backlogResult,
@@ -15,8 +19,12 @@ import {
   prResult,
   deliveryResult,
   prototypeResult,
+  previewResult,
   crewRoster,
   crewInventory,
+  crewSessionText,
+  codeChangeResult,
+  diagnosticsResult,
   type WorkspaceSnapshot,
   type AuthEvent,
 } from "@amun/contracts";
@@ -110,6 +118,21 @@ export function initializeBridge() {
         for (const listener of eventListeners) listener(work.data);
         return;
       }
+      // A snapshot that does not read must never leave the window waiting.
+      if (message.data?.kind === "work-snapshot") {
+        const broken = workSnapshot.safeParse(message.data);
+        const reasons = broken.success
+          ? ["(root): invalid_union"]
+          : issueReasons(broken.error);
+        port?.postMessage({ version: 1, kind: "work-diagnostic", reasons });
+        const failed = {
+          version: 1,
+          kind: "work-snapshot-failed",
+          reasons,
+        };
+        for (const listener of eventListeners) listener(failed);
+        return;
+      }
       const workspace = workspaceEvent.safeParse(message.data);
       if (workspace.success) {
         const event = workspace.data;
@@ -150,7 +173,10 @@ export function initializeBridge() {
       }
       const pull = deliveryResult
         .or(prototypeResult)
+        .or(previewResult)
         .or(prResult)
+        .or(codeChangeResult)
+        .or(crewSessionText)
         .safeParse(message.data);
       if (pull.success) {
         for (const f of eventListeners) f(pull.data);
@@ -159,6 +185,11 @@ export function initializeBridge() {
       const roster = crewRoster.safeParse(message.data);
       if (roster.success) {
         for (const f of eventListeners) f(roster.data);
+        return;
+      }
+      const diagnostics = diagnosticsResult.safeParse(message.data);
+      if (diagnostics.success) {
+        for (const f of eventListeners) f(diagnostics.data);
         return;
       }
       const chat = chatResult.safeParse(message.data);

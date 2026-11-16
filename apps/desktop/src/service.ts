@@ -1,3 +1,4 @@
+import { documentContext } from "../../renderer/src/rebuild/document-context.ts";
 import { updateCommand } from "../../../packages/contracts/src/stakeholder.ts";
 import { StakeholderUpdates } from "../../../packages/data/src/stakeholder.ts";
 import { writeStakeholderPdf } from "./stakeholder-pdf.ts";
@@ -9,8 +10,16 @@ import {
   trustRef,
   type Harness,
 } from "./delegation.ts";
-import { acceptFirstRunPrompts } from "../../../packages/crew/src/first-run-prompts.ts";
-import { prototypeCommand } from "../../../packages/contracts/src/prototype.ts";
+import {
+  acceptFirstRunPrompts,
+  readyFor,
+} from "../../../packages/crew/src/first-run-prompts.ts";
+import {
+  prototypeCommand,
+  previewCommand,
+} from "../../../packages/contracts/src/prototype.ts";
+import { previewSource } from "../../../packages/domain/src/work/prototype-source.ts";
+import { openHtmlPreview } from "./prototype-preview.ts";
 import { implementationRun } from "./implementation-run.ts";
 import {
   deliveryCharter,
@@ -20,6 +29,11 @@ import { loadEndpointReceipt } from "../../../packages/crew/src/endpoint-receipt
 import { deliveryCommand } from "../../../packages/contracts/src/crew.ts";
 import { readPullWorkspace } from "./pr-workspace.ts";
 import { prCommand } from "../../../packages/contracts/src/pr-workspace.ts";
+import { codeChangeCommand } from "../../../packages/contracts/src/code-change.ts";
+import { CodeChanges } from "./code-change.ts";
+import { CodeChangeError, CodeWorkspace, gitRunner } from "./code-workspace.ts";
+import { githubCode } from "./github-code.ts";
+import { repositoryTarget } from "./pr-repositories.ts";
 import { ChatSession } from "./firstmate-chat.ts";
 import { FirstmateChat } from "../../../packages/data/src/firstmate-chat.ts";
 import { runAdoOperation } from "./ado-operations.ts";
@@ -45,7 +59,11 @@ import { FirstmateReleases } from "../../../packages/crew/src/firstmate-release.
 import { handleBridgeRequest } from "../../../packages/data/src/pi-bridge.ts";
 import { crewProfile } from "../../../packages/crew/src/crew-profile.ts";
 import { readCrewBearings } from "../../../packages/crew/src/firstmate-bearings.ts";
-import { crewList } from "../../../packages/contracts/src/crew.ts";
+import {
+  crewList,
+  crewSessionRead,
+} from "../../../packages/contracts/src/crew.ts";
+import { captureOwnedTmux } from "../../../packages/crew/src/capture-owned-tmux.ts";
 import { listReceiptTasks } from "../../../packages/crew/src/endpoint-receipt.ts";
 import {
   readHosting,
@@ -66,7 +84,12 @@ import {
   createGithubIssue,
 } from "../../../packages/auth/src/github-mcp.ts";
 import { GithubIssueReview } from "../../../packages/data/src/github-issue.ts";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { lineDiff } from "../../../packages/domain/src/notion-update.ts";
+import {
+  adoParentOf,
+  adoWorkItemOf,
+} from "../../../packages/domain/src/ado-update.ts";
 import { NotionConversationReview } from "../../../packages/data/src/notion-review.ts";
 import {
   nativePiCommand,
@@ -94,14 +117,23 @@ import { CouncilService } from "../../../packages/council/src/service.ts";
 import { gitFetcher } from "../../../packages/council/src/git-fetcher.ts";
 import { Room } from "../../../packages/council/src/room.ts";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import {
+  savedModelLabel,
+  testProviders,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import {
   councilCommand,
   planOpen,
   planPlaces,
+  contentSearch,
+  trackerTypes,
   planPublish,
   toolsCommand,
   workAttachment,
   workDelegate,
+  workDiagnostic,
+  failureReasons,
 } from "../../../packages/contracts/src/work.ts";
 import { spawn as spawnProcess } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -109,13 +141,31 @@ import { homedir } from "node:os";
 import { workspaceIdentity } from "../../../packages/data/src/identity.ts";
 import {
   PlanBlocked,
+  PlanNotSent,
   PlanPublisher,
 } from "../../../packages/data/src/plan-publication.ts";
-import { adoPlanTarget, notionPlanTarget } from "./plan-targets.ts";
+import { productScope } from "./product-scope.ts";
+import {
+  adoPlanTarget,
+  adoPayloadNote,
+  adoRequiredNotes,
+  adoUpdate,
+  adoUpdateChange,
+  type AdoTypeNames,
+  pickAdoType,
+  resolveAdoTypes,
+  localClaimRefusalEvent,
+  notionUpdateRefusalEvent,
+  notionPlanTarget,
+  notionPageOf,
+  notionUpdateText,
+  notionChangedNote,
+} from "./plan-targets.ts";
 import { readAttachment } from "../../../packages/data/src/attachment-reader.ts";
 import { ToolRegistry } from "../../../packages/data/src/tool-registry.ts";
 import { probeTools } from "./tool-probe.ts";
 import { trackerName } from "../../../packages/domain/src/work/flows.ts";
+import { retryOutcome } from "../../../packages/domain/src/work/permissions.ts";
 import {
   AuthBroker,
   connectionId,
@@ -125,6 +175,13 @@ import {
   macKeyring,
   type EntryLike,
 } from "../../../packages/auth/src/keyring.ts";
+import {
+  KeychainReader,
+  hangingKeychain,
+  keychainWaitingNote,
+  keychainWorker,
+  type KeychainTransport,
+} from "../../../packages/auth/src/keychain-reader.ts";
 import { probeConnection } from "../../../packages/auth/src/probe.ts";
 import { AuthSession } from "../../../packages/auth/src/session.ts";
 import { connectionSchema } from "../../../packages/contracts/src/auth.ts";
@@ -134,12 +191,23 @@ import {
   Redactor,
   createSafeLogger,
 } from "../../../packages/security/src/redaction.ts";
+import {
+  LogBuffer,
+  diagnosticsReport,
+} from "../../../packages/security/src/diagnostics.ts";
+import {
+  diagnosticsRequest,
+  diagnosticsResult,
+} from "../../../packages/contracts/src/diagnostics.ts";
 import { ActionStore } from "../../../packages/data/src/outbox.ts";
 import type Database from "better-sqlite3";
 import { openWorkspace } from "../../../packages/data/src/workspace.ts";
 import { observeCandidate } from "../../../packages/crew/src/herdr-candidate.ts";
 import { CrewObserver } from "../../service/src/crew-observer.ts";
-import { observeOwnedTmux } from "../../../packages/crew/src/observe-owned-tmux.ts";
+import {
+  endpointPresence,
+  observeOwnedTmux,
+} from "../../../packages/crew/src/observe-owned-tmux.ts";
 import { openBackendTerminal } from "../../service/src/backend-terminal.ts";
 import { backendTerminalOpen } from "../../../packages/contracts/src/terminal.ts";
 import { piOpen } from "../../../packages/contracts/src/index.ts";
@@ -161,61 +229,211 @@ const workspace = openWorkspace(
   requireNative(databaseModule) as typeof Database,
 );
 const redactor = new Redactor();
-const logger = createSafeLogger(redactor, process.stdout);
+const logBuffer = new LogBuffer();
+const logger = createSafeLogger(redactor, {
+  write: (chunk: string) => {
+    logBuffer.write(chunk);
+    return process.stdout.write(chunk);
+  },
+});
+const serviceStartedAt = new Date();
 const outputs = new SafeOutputs(workspace, redactor, logger);
 outputs.audit("system", "service.started", "workspace", {});
 let syncingMemory = false;
-const workspaceService = new WorkspaceService(workspace, redactor);
+const workspaceService = new WorkspaceService(
+  workspace,
+  redactor,
+  join(workspaceRoot, "skills-store"),
+);
 // UX rebuild model: groups, work areas, records, plans, RFPs (migration 29).
 const workStore = new WorkStore(workspace, redactor);
+let lastWorkFailure = "";
+/** Reports a reason once per change: to Diagnostics and to this process's stderr. */
+function reportWorkFailure(event: string, reasons: string[]) {
+  const text = reasons.join("; ");
+  if (text === lastWorkFailure) return;
+  lastWorkFailure = text;
+  logger.error(event, { reasons });
+  process.stderr.write(`amun-service: ${event}: ${text}\n`);
+}
+/** Runs a work command; a snapshot that cannot be built becomes a plain failure event. */
+function handleWork(message: unknown) {
+  try {
+    return workStore.handle(message);
+  } catch (error) {
+    const reasons = failureReasons(error);
+    reportWorkFailure("work.snapshot.failed", reasons);
+    return [
+      { version: 1 as const, kind: "work-snapshot-failed" as const, reasons },
+    ];
+  }
+}
+/** The Azure DevOps project a work area publishes to, with its connection. */
+async function adoConnection(workAreaId: string | null) {
+  const mapped = workAreaId
+    ? (workspace
+        .prepare(
+          "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
+        )
+        .pluck()
+        .get(workAreaId) as string | undefined)
+    : undefined;
+  const saved = workspace
+    .prepare(
+      "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
+    )
+    .pluck()
+    .get() as string | undefined;
+  const reference = mapped ?? (saved ? JSON.parse(saved) : undefined);
+  if (typeof reference !== "string")
+    throw new PlanBlocked(
+      "Choose the Azure DevOps project for this work before publishing.",
+    );
+  let source: ReturnType<typeof projectSource<Connection>>;
+  try {
+    source = projectSource(reference, authMetadata.list());
+  } catch {
+    throw new PlanBlocked(
+      "Connect the Azure DevOps collection in Settings, then retry.",
+    );
+  }
+  const secret = await credentials.get(
+    workspaceIdentity(workspace) + "/" + connectionId(source.connection),
+  );
+  if (!secret)
+    throw new PlanBlocked(
+      "Connect the Azure DevOps collection in Settings, then retry.",
+    );
+  redactor.register(secret);
+  const transport = azureTransport(source.collection, secret);
+  const discovery = new BoardDiscovery(
+    source.collection,
+    source.project,
+    transport,
+  );
+  const typesKey = "work.ado.types:" + reference;
+  return {
+    source,
+    transport,
+    discovery,
+    /** The story and task types Amun has learned for this project. */
+    learned(): AdoTypeNames | undefined {
+      try {
+        const saved = workspace
+          .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+          .pluck()
+          .get(typesKey);
+        const value: unknown =
+          typeof saved === "string" ? JSON.parse(saved) : null;
+        if (!value || typeof value !== "object") return undefined;
+        const { story, task } = value as Record<string, unknown>;
+        return {
+          ...(typeof story === "string" ? { story } : {}),
+          ...(typeof task === "string" ? { task } : {}),
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    learn(names: AdoTypeNames) {
+      const merged = { ...this.learned(), ...names };
+      const clean = Object.fromEntries(
+        Object.entries(merged).filter(([, value]) => typeof value === "string"),
+      );
+      if (JSON.stringify(clean) === JSON.stringify(this.learned() ?? {}))
+        return;
+      workspace
+        .prepare(
+          "INSERT INTO workspace_settings(id,value_json) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+        )
+        .run(typesKey, JSON.stringify(clean));
+    },
+  };
+}
+/**
+ * The story and task types a work area's Azure DevOps project uses, for the
+ * review card and Firstmate. Read-only; a slow or failed read gives what was
+ * learned before, or nothing.
+ */
+async function adoTypeInfo(workAreaId: string | null) {
+  let connection: Awaited<ReturnType<typeof adoConnection>>;
+  try {
+    // A credential read waiting on a macOS prompt must not hold this up.
+    connection = await Promise.race([
+      adoConnection(workAreaId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Error("credential_wait")), 4000).unref(),
+      ),
+    ]);
+  } catch {
+    return null;
+  }
+  const learned = connection.learned();
+  const wait = new Promise<undefined>((resolve) =>
+    setTimeout(() => resolve(undefined), 4000).unref(),
+  );
+  const [backlog, schema] = await Promise.all([
+    Promise.race([connection.discovery.backlogTypes(), wait]).catch(
+      () => undefined,
+    ),
+    Promise.race([connection.discovery.processSchema(), wait]).catch(
+      () => undefined,
+    ),
+  ]);
+  const names = schema
+    ? resolveAdoTypes(schema, backlog, learned)
+    : {
+        story: backlog?.story ?? learned?.story,
+        task: backlog?.task ?? learned?.task,
+      };
+  if (backlog?.story) connection.learn(names);
+  return {
+    project: connection.source.project,
+    collection: connection.source.collection,
+    names,
+    schema,
+  };
+}
 // An approved plan is written to its destinations here. Each destination
 // reuses its existing connection; a missing one blocks that item only.
-const planPublisher = new PlanPublisher(
+const noAzureProject =
+  "Choose the Azure DevOps project in this project’s Backlog panel first.";
+function savedPublishingSource(id: string) {
+  const saved = workspace
+    .prepare(
+      "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
+    )
+    .pluck()
+    .get() as string | undefined;
+  try {
+    const reference: unknown = saved ? JSON.parse(saved) : undefined;
+    return typeof reference === "string"
+      ? { id, title: "", kind: "ado", reference }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const planPublisher: PlanPublisher = new PlanPublisher(
   workspace,
   workStore,
   async (destination, scope) => {
     if (destination === "ado") {
-      const mapped = scope.workAreaId
-        ? (workspace
-            .prepare(
-              "SELECT s.external_id FROM work_areas a JOIN sources s ON s.product_id=a.product_id WHERE a.id=? AND s.kind='ado' AND s.external_id IS NOT NULL ORDER BY s.title,s.id LIMIT 1",
-            )
-            .pluck()
-            .get(scope.workAreaId) as string | undefined)
-        : undefined;
-      const saved = workspace
-        .prepare(
-          "SELECT value_json FROM workspace_settings WHERE id='work.ado.project'",
-        )
-        .pluck()
-        .get() as string | undefined;
-      const reference = mapped ?? (saved ? JSON.parse(saved) : undefined);
-      if (typeof reference !== "string")
-        throw new PlanBlocked(
-          "Choose the Azure DevOps project for this work before publishing.",
-        );
-      let source: ReturnType<typeof projectSource<Connection>>;
-      try {
-        source = projectSource(reference, authMetadata.list());
-      } catch {
-        throw new PlanBlocked(
-          "Connect the Azure DevOps collection in Settings, then retry.",
-        );
-      }
-      const secret = authKeyring().get(
-        workspaceIdentity(workspace) + "/" + connectionId(source.connection),
-      );
-      if (!secret)
-        throw new PlanBlocked(
-          "Connect the Azure DevOps collection in Settings, then retry.",
-        );
-      redactor.register(secret);
-      const transport = azureTransport(source.collection, secret);
+      const connection = await adoConnection(scope.workAreaId);
       return adoPlanTarget(
-        source.collection,
-        source.project,
-        new BoardDiscovery(source.collection, source.project, transport),
-        new AdoWriteClient(source.collection, source.project, transport),
+        connection.source.collection,
+        connection.source.project,
+        connection.discovery,
+        new AdoWriteClient(
+          connection.source.collection,
+          connection.source.project,
+          connection.transport,
+        ),
+        {
+          backlog: () => connection.discovery.backlogTypes(),
+          learned: () => connection.learned(),
+          learn: (names) => connection.learn(names),
+        },
       );
     }
     if (destination === "notion") {
@@ -238,7 +456,9 @@ const planPublisher = new PlanPublisher(
       const workspaceId = notionConnection.identity?.workspaceId;
       if (!workspaceId)
         throw new PlanBlocked("Reconnect Notion in Settings, then retry.");
-      return notionPlanTarget(target, workspaceId, notionConnection);
+      return notionPlanTarget(target, workspaceId, notionConnection, (pageId) =>
+        planPublisher.notionPage(pageId),
+      );
     }
     throw new PlanBlocked(
       `Publishing to ${trackerName(destination)} is not available yet.`,
@@ -277,6 +497,52 @@ function requireWorkerOn(harness: unknown) {
     throw new WorkerTurnedOff(harness === "claude" ? "Claude Code" : "Codex");
 }
 class WorkerTurnedOff extends Error {}
+class CopilotOnly extends Error {}
+
+/**
+ * Re-runs only the items of an approved plan that were not created, under the
+ * same approval, and tells Firstmate the outcome in one line. A plan edited
+ * since approval is not sent; the owner is asked to review it again.
+ */
+async function retryFailedItems(planId: string) {
+  if (planPublisher.needsReview(planId)) return [];
+  const plan = () => workStore.snapshot().plans.find((p) => p.id === planId);
+  const before = plan();
+  const failed = new Set(
+    (before?.results ?? [])
+      .filter((result) => result.state === "failed")
+      .map((result) => result.id),
+  );
+  const events = await planPublisher.publish(planId, { retryFailed: true });
+  const after = plan();
+  if (after && failed.size) {
+    const items = after.items
+      .filter((item) => failed.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        summary: item.summary,
+        state:
+          after.results.find((result) => result.id === item.id)?.state ??
+          ("failed" as const),
+      }));
+    const note = planPublisher
+      .writes(planId)
+      .find((write) =>
+        items.some((item) => item.id === write.id && item.state === "failed"),
+      )?.note;
+    if (after.workAreaId)
+      workStore.handle({
+        version: 1,
+        kind: "work",
+        action: "message",
+        workAreaId: after.workAreaId,
+        role: "firstmate",
+        text: retryOutcome(items, note ?? null),
+        card: { kind: "plan-retry" },
+      } as never);
+  }
+  return events;
+}
 
 // After a restart, a write that was sent and never confirmed is looked up
 // once the connections are ready. Nothing new is sent from here.
@@ -316,7 +582,8 @@ const councilService = new CouncilService({
     };
   },
   askServer: {
-    command: process.execPath,
+    // The validated helper chosen by the main process; dev builds use this one.
+    command: process.env.AMUN_PI_BINARY || process.execPath,
     args: [process.env.AMUN_COUNCIL_ASK ?? ""],
     env: { ELECTRON_RUN_AS_NODE: "1" },
   },
@@ -328,7 +595,7 @@ const councilService = new CouncilService({
       start: (directory: string) => {
         room?.stop();
         room = new Room(directory, {
-          node: process.execPath,
+          node: process.env.AMUN_PI_BINARY || process.execPath,
           env: { ELECTRON_RUN_AS_NODE: "1" },
         });
         return room.start();
@@ -366,6 +633,31 @@ const authKeyring = () => {
   };
   return macKeyring(native.Entry);
 };
+/** Idle and read paths use this; the native Keychain call runs off this thread. */
+const credentials = new KeychainReader(
+  process.env.AMUN_E2E_KEYCHAIN_HANG === "1"
+    ? hangingKeychain
+    : (() => {
+        // The thread starts at the first read, never at startup.
+        let transport: KeychainTransport | undefined;
+        let listener: Parameters<KeychainTransport["onReply"]>[0] | undefined;
+        return {
+          post: (request) => {
+            if (!transport) {
+              transport = keychainWorker(
+                process.env.AMUN_AUTH_MODULE ?? "",
+                join(process.cwd(), "amun-native.cjs"),
+              );
+              if (listener) transport.onReply(listener);
+            }
+            transport.post(request);
+          },
+          onReply: (next) => {
+            listener = next;
+          },
+        } satisfies KeychainTransport;
+      })(),
+);
 const authBroker = new AuthBroker(
   workspaceIdentity(workspace),
   {
@@ -375,6 +667,7 @@ const authBroker = new AuthBroker(
   },
   redactor,
   probeConnection,
+  credentials,
 );
 let cloudflareBusy = false;
 const notionConnection = new NotionConnection({
@@ -437,8 +730,11 @@ let togglingCalm = false;
 let backupBusy = false;
 const reminderListeners = new Set<() => void>();
 function checkReminders(missed: boolean) {
-  if (workspaceService.reminders.deliver(Date.now(), missed))
+  const due = workStore.reminders.deliver(missed);
+  if (workspaceService.reminders.deliver(Date.now(), missed) || due.length)
     for (const refresh of reminderListeners) refresh();
+  if (due.length)
+    process.parentPort?.postMessage({ kind: "reminders-due", reminders: due });
 }
 checkReminders(true);
 setInterval(() => checkReminders(false), 1000).unref();
@@ -513,7 +809,10 @@ process.parentPort?.on("message", (event) => {
 
   const port = event.ports[0];
   if (!port) return;
-  const refreshReminders = () => port.postMessage(workspaceService.snapshot());
+  const refreshReminders = () => {
+    port.postMessage(workspaceService.snapshot());
+    port.postMessage(workStore.snapshot());
+  };
   reminderListeners.add(refreshReminders);
   port.once("close", () => reminderListeners.delete(refreshReminders));
   let notionPreview: { title: string; text: string; at: number } | undefined;
@@ -745,7 +1044,10 @@ process.parentPort?.on("message", (event) => {
   let pi: PiSession | undefined;
   let opening = false;
   let closed = false;
-  const repositoryCredential = (kind: "ado" | "github", url: string) => {
+  // The new shell never sets the legacy "Product context", so renderer
+  // requests are checked against the products that exist instead.
+  const knownProduct = productScope(workspace, () => closed);
+  const repositoryCredential = async (kind: "ado" | "github", url: string) => {
     const conn = authMetadata
       .list()
       .find(
@@ -755,7 +1057,7 @@ process.parentPort?.on("message", (event) => {
             new URL(url).href.replace(/\/$/, ""),
       );
     if (conn) {
-      const secret = authKeyring().get(
+      const secret = await credentials.get(
         workspaceIdentity(workspace) + "/" + connectionId(conn),
       );
       if (secret) {
@@ -764,7 +1066,9 @@ process.parentPort?.on("message", (event) => {
       }
     }
     if (kind === "github" && url === "https://github.com") {
-      const stored = JSON.parse(authKeyring().get(githubAccount) ?? "null");
+      const stored = JSON.parse(
+        (await credentials.get(githubAccount)) ?? "null",
+      );
       const grant = githubGrant.parse(stored?.grant);
       if (
         grant.expires_in &&
@@ -775,28 +1079,114 @@ process.parentPort?.on("message", (event) => {
     }
     throw Error("Connect the mapped repository host in Settings.");
   };
+  // Every sign-in saved for a host. Writing picks the first one GitHub says
+  // may write to the repository; nothing here is logged or stored again.
+  const repositoryTokens = async (url: string) => {
+    const found: string[] = [];
+    const conn = authMetadata
+      .list()
+      .find(
+        (c) =>
+          c.kind === "github" &&
+          new URL(c.baseUrl).href.replace(/\/$/, "") ===
+            new URL(url).href.replace(/\/$/, ""),
+      );
+    const secret = conn
+      ? await credentials.get(
+          workspaceIdentity(workspace) + "/" + connectionId(conn),
+        )
+      : null;
+    if (secret) found.push(secret);
+    if (url === "https://github.com") {
+      try {
+        const stored = JSON.parse(
+          (await credentials.get(githubAccount)) ?? "null",
+        );
+        const grant = githubGrant.parse(stored?.grant);
+        if (
+          !grant.expires_in ||
+          Date.now() < stored.savedAt + grant.expires_in * 1000
+        )
+          found.push(grant.access_token);
+      } catch {
+        // No device sign-in saved.
+      }
+    }
+    for (const token of found) redactor.register(token);
+    return found;
+  };
+  const sayInArea = (workAreaId: string, text: string) => {
+    const events = workStore.handle({
+      version: 1,
+      kind: "work",
+      action: "message",
+      workAreaId,
+      role: "firstmate",
+      text,
+    });
+    if (!closed) for (const event of events) port.postMessage(event);
+  };
+  const codeChanges = new CodeChanges({
+    db: workspace,
+    root: workspaceRoot!,
+    workspace: new CodeWorkspace(
+      workspaceRoot!,
+      gitRunner(process.env.AMUN_GIT_BINARY || "git"),
+    ),
+    host: githubCode,
+    tokens: repositoryTokens,
+    say: sayInArea,
+    report: (event, error) =>
+      logger.error(event, {
+        reason: redactor.text(
+          error instanceof Error ? error.message : String(error),
+        ),
+      }),
+    revise: async (meta, note) => {
+      await delegations.start({
+        workAreaId: meta.workAreaId,
+        agent: meta.agent,
+        title: meta.title,
+        task: "Change the working copy as the owner asked.",
+        revise: { codeId: meta.id, note },
+      });
+    },
+  });
   const prototypes = new PrototypeSession(
     workspace,
     workspaceRoot!,
-    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    knownProduct,
     async (id, text) => {
       const releases = await FirstmateReleases.open(
         workspaceRoot!,
         process.env.AMUN_FIRSTMATE_ARCHIVES!,
       );
-      requireWorkerOn("claude");
+      requireWorkerOn("pi");
       await supervisor.ensureRunning();
       return sendDelivery(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
         process.env.AMUN_TMUX_BINARY!,
-        "claude",
+        "pi",
         id,
         text,
       );
     },
   );
-  port.once("close", () => void prototypes.close());
+  // Finished prototype pages, served from Amun itself; one per output.
+  const pages = new Map<
+    string,
+    { html: string; page: Awaited<ReturnType<typeof openHtmlPreview>> }
+  >();
+  const closePages = async () => {
+    const open = [...pages.values()];
+    pages.clear();
+    await Promise.all(open.map((entry) => entry.page.close().catch(() => {})));
+  };
+  port.once("close", () => {
+    void prototypes.close();
+    void closePages();
+  });
   // Firstmate hands work to an agent: a real Claude Code or Codex worker,
   // started and messaged by Firstmate's own scripts, works from the agent's
   // brief, and its result returns to the chat it was asked in.
@@ -852,16 +1242,113 @@ process.parentPort?.on("message", (event) => {
             name: area.name,
             type: area.type[0]!.toUpperCase() + area.type.slice(1),
             purpose: area.purpose,
+            groupId: area.groupId,
           }
         : null;
     },
+    sources(areaId, task) {
+      return documentContext({
+        snapshot: workStore.snapshot(),
+        areaId,
+        request: task,
+        used: 0,
+        limit: 100_000,
+        forAgent: true,
+      });
+    },
+    code: {
+      async prepare(input) {
+        // The change belongs to the project its work area is in.
+        const product =
+          (workspace
+            .prepare("SELECT product_id FROM work_areas WHERE id=?")
+            .pluck()
+            .get(input.workAreaId) as string | undefined) ??
+          workspaceService.snapshot().preferences.productId;
+        let wanted: ReturnType<typeof repositoryTarget> | undefined;
+        try {
+          wanted = repositoryTarget(input.repo);
+        } catch {
+          wanted = undefined;
+        }
+        const key = (target: ReturnType<typeof repositoryTarget>) =>
+          target.provider === "GitHub"
+            ? `${target.origin}/${target.owner}/${target.repo}`.toLowerCase()
+            : "";
+        const sameRepo = (reference: string) => {
+          try {
+            return !!wanted && key(wanted) === key(repositoryTarget(reference));
+          } catch {
+            return false;
+          }
+        };
+        if (!product || wanted?.provider !== "GitHub")
+          return {
+            refusal:
+              "I can only change code in a GitHub repository. Tell me which repository to use first.",
+          };
+        let reference = (
+          workspace
+            .prepare(
+              "SELECT external_id FROM sources WHERE product_id=? AND kind='repo' AND external_id IS NOT NULL",
+            )
+            .pluck()
+            .all(product) as string[]
+        ).find(sameRepo);
+        // A repository the owner named is connected to the project for reading.
+        if (!reference) {
+          reference = wanted.url;
+          workspace
+            .prepare(
+              "INSERT INTO sources(id,product_id,kind,external_id,title,retrieved_at,hash) VALUES (?,?,?,?,?,?,?)",
+            )
+            .run(
+              randomUUID(),
+              product,
+              "repo",
+              reference,
+              `${wanted.owner}/${wanted.repo}`,
+              new Date().toISOString(),
+              createHash("sha256").update(reference).digest("hex"),
+            );
+        }
+        const source = { reference };
+        try {
+          const { meta, worktree } = await codeChanges.prepare({
+            product,
+            workAreaId: input.workAreaId,
+            agent: input.agent,
+            title: input.title,
+            repo: source.reference,
+          });
+          return {
+            id: meta.id,
+            worktree,
+            branch: meta.branch,
+            base: meta.base,
+            repo: `${meta.owner}/${meta.name}`,
+          };
+        } catch (error) {
+          if (error instanceof CodeChangeError)
+            return { refusal: redactor.text(error.message) };
+          throw error;
+        }
+      },
+      async open(id) {
+        const meta = await codeChanges.meta(id);
+        return {
+          id,
+          worktree: join(workspaceRoot!, "code", id, "worktree"),
+          branch: meta.branch,
+          base: meta.base,
+          repo: `${meta.owner}/${meta.name}`,
+        };
+      },
+      submit: (id, summary) => codeChanges.submit(id, summary),
+    },
     harness() {
-      const tools = new ToolRegistry(workspace);
-      return tools.enabled(workerTool.claude)
-        ? "claude"
-        : tools.enabled(workerTool.codex)
-          ? "codex"
-          : null;
+      // All delegated work runs on Pi with GitHub Copilot; there is no Claude or Codex fallback.
+      return "pi";
     },
     async ready(harness, allow) {
       const releases = await FirstmateReleases.open(
@@ -872,12 +1359,23 @@ process.parentPort?.on("message", (event) => {
       await supervisor.ensureRunning();
       // Start the worker (this does nothing when it is already running) and
       // let it reach its own prompt before any job is sent.
-      await dispatchFirstmate(
+      const dispatched = await dispatchFirstmate(
         releases,
         process.env.AMUN_CREW_RECEIPTS!,
         process.env.AMUN_TMUX_BINARY!,
         { harness, charter: deliveryCharter },
       );
+      // A worker that is not verifiably running is never waited for.
+      if (
+        (
+          await observeOwnedTmux(
+            process.env.AMUN_CREW_RECEIPTS!,
+            "amun-" + harness,
+            process.env.AMUN_TMUX_BINARY!,
+          )
+        ).endpoint !== "verified"
+      )
+        throw new Error("The worker is not running. " + dispatched);
       const receipt = await loadEndpointReceipt(
         process.env.AMUN_CREW_RECEIPTS!,
         "amun-" + harness,
@@ -889,10 +1387,11 @@ process.parentPort?.on("message", (event) => {
         "tmux-" + process.getuid!(),
         "default",
       );
-      const { blocked } = await acceptFirstRunPrompts({
+      const { blocked, ready } = await acceptFirstRunPrompts({
         target: "firstmate:fm-amun-" + harness,
         worktree,
         allow,
+        ready: readyFor(harness),
         verify: () => releases.verifyHomes(revision, [home, worktree]),
         tmux: (args) =>
           new Promise<string>((resolve, reject) =>
@@ -904,7 +1403,18 @@ process.parentPort?.on("message", (event) => {
             ),
           ),
       });
+      if (blocked === "timeout" || (!blocked && !ready))
+        throw new Error("The worker did not reach its prompt in time.");
       return blocked ? "asks-trust" : "ready";
+    },
+    async workerGone(harness) {
+      return (
+        (await endpointPresence(
+          process.env.AMUN_CREW_RECEIPTS!,
+          "amun-" + harness,
+          process.env.AMUN_TMUX_BINARY!,
+        )) === "gone"
+      );
     },
     // The owner's answer is kept per worker folder: a new folder asks again.
     trust: {
@@ -933,7 +1443,7 @@ process.parentPort?.on("message", (event) => {
   const chatSession = new ChatSession(
     chats,
     supervisor,
-    () => (closed ? null : workspaceService.snapshot().preferences.productId),
+    knownProduct,
     (event) => port.postMessage(event),
   );
   let backendOpening = false;
@@ -977,12 +1487,34 @@ process.parentPort?.on("message", (event) => {
     (event) => port.postMessage(event),
   );
   let rosterBusy = false;
+  let readingSession = false;
   let lastBoardRead: { scope: string; reader: BoardDiscovery } | undefined;
   let updatingFirstmate = false;
   port.on("message", (message) => {
     const response = handleHealthRequest(message.data);
+    const diagnostics = diagnosticsRequest.safeParse(message.data);
     if (response) port.postMessage(response);
-    else if (
+    else if (diagnostics.success) {
+      port.postMessage(
+        diagnosticsResult.parse({
+          version: 1,
+          kind: "diagnostics-result",
+          id: diagnostics.data.id,
+          text: diagnosticsReport(
+            {
+              "Amun version": process.env.AMUN_APP_VERSION ?? "unknown",
+              Electron: process.versions.electron ?? "unknown",
+              Chromium: process.versions.chrome ?? "unknown",
+              Node: process.versions.node,
+              System: `${process.platform} ${process.arch}`,
+              "Service started": serviceStartedAt.toISOString(),
+            },
+            logBuffer.recent(),
+            redactor,
+          ),
+        }),
+      );
+    } else if (
       message.data?.kind === "refresh-crew" &&
       message.data.version === 1
     ) {
@@ -1024,6 +1556,32 @@ process.parentPort?.on("message", (event) => {
         .finally(() => {
           rosterBusy = false;
         });
+    } else if (crewSessionRead.safeParse(message.data).success) {
+      if (readingSession) return;
+      readingSession = true;
+      const { taskId } = crewSessionRead.parse(message.data);
+      const root = process.env.AMUN_CREW_RECEIPTS,
+        binary = process.env.AMUN_TMUX_BINARY;
+      void (
+        root && binary
+          ? captureOwnedTmux(root, taskId, binary, (text) =>
+              redactor.text(text),
+            )
+          : Promise.resolve(null)
+      )
+        .then((text) => {
+          if (!closed)
+            port.postMessage({
+              version: 1,
+              kind: "crew-session-text",
+              taskId,
+              live: text !== null,
+              text: text ?? "",
+            });
+        })
+        .finally(() => {
+          readingSession = false;
+        });
     } else if (crewList.safeParse(message.data).success) {
       if (listingCrew) return;
       listingCrew = true;
@@ -1048,23 +1606,37 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       const request = parsed.data;
       const context = workspaceService.snapshot().productContext;
-      if (context?.productId !== request.productId) return;
-      const source = context.sources.find(
-        (s) => s.id === request.sourceId && s.kind === "ado",
-      );
+      // Sprints are read-only and follow the saved binding, not the open product.
+      const readOnlySprints =
+        request.kind === "backlog-read" &&
+        (request.action === "sprints" || request.action === "sprint-items");
+      const sources =
+        context?.productId === request.productId
+          ? context.sources
+          : knownProduct(request.productId)
+            ? workspaceService.productSources(request.productId)
+            : null;
+      if (!sources) return;
+      const source =
+        sources.find((s) => s.id === request.sourceId && s.kind === "ado") ??
+        (readOnlySprints
+          ? // The project the work already publishes to: a mapped Azure
+            // project of the product, else the one saved for publication.
+            (sources.find((s) => s.kind === "ado" && s.reference) ??
+            savedPublishingSource(request.sourceId))
+          : undefined);
       const meta = {
         kind: "backlog-result",
         productId: request.productId,
         requestId: request.requestId,
       };
       const read = async () => {
-        if (!source?.reference)
-          throw Error("Map an Azure project in Product context.");
+        if (!source?.reference) throw Error(noAzureProject);
         const { connection, collection, project } = projectSource(
           source.reference,
           authMetadata.list(),
         );
-        const secret = authKeyring().get(
+        const secret = await credentials.get(
           workspaceIdentity(workspace) + "/" + connectionId(connection),
         );
         if (!secret)
@@ -1099,14 +1671,40 @@ process.parentPort?.on("message", (event) => {
               project,
               azureTransport(collection, secret),
             ),
-            () =>
-              workspaceService.snapshot().preferences.productId ===
-              request.productId,
+            () => knownProduct(request.productId) !== null,
           );
         if (request.action === "schema")
           return { ...meta, view: "schema", schema: await d.processSchema() };
         if (request.action === "teams")
           return { ...meta, view: "teams", teams: await d.teams() };
+        if (request.action === "sprints") {
+          const wanted = request.team.toLowerCase();
+          const team = (await d.teams()).find(
+            (t) =>
+              t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+          );
+          if (!team) throw Error("unknown_team");
+          return {
+            ...meta,
+            view: "sprints",
+            team,
+            sprints: await d.sprints(team.id),
+          };
+        }
+        if (request.action === "sprint-items") {
+          const wanted = request.team.toLowerCase();
+          const team = (await d.teams()).find(
+            (t) =>
+              t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+          );
+          if (!team) throw Error("unknown_team");
+          return {
+            ...meta,
+            view: "sprint-items",
+            sprint: request.sprint,
+            ...(await d.iterationItems(team.id, request.sprint)),
+          };
+        }
         if (request.action === "options") {
           return {
             ...meta,
@@ -1151,18 +1749,66 @@ process.parentPort?.on("message", (event) => {
               ? "Azure denied read access to this board."
               : raw === "request_rejected_401"
                 ? "Azure sign-in expired. Check the connection in Settings."
-                : raw === "Connect the mapped Azure collection in Settings."
-                  ? raw
-                  : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
+                : raw === "unknown_team"
+                  ? "I couldn’t find that team in this project."
+                  : raw ===
+                        "Connect the mapped Azure collection in Settings." ||
+                      raw === keychainWaitingNote
+                    ? raw
+                    : "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
           return { ...meta, view: "error", message };
         })
         .then((reply) => {
-          if (
-            !closed &&
-            workspaceService.snapshot().productContext?.productId ===
-              request.productId
-          )
-            port.postMessage(reply);
+          if (knownProduct(request.productId)) port.postMessage(reply);
+        });
+    } else if (message.data?.kind === "output-preview") {
+      const parsed = previewCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      void (async () => {
+        const row = workspace
+          .prepare("SELECT type,body FROM library_outputs WHERE id=?")
+          .get(cmd.outputId) as { type: string; body: string } | undefined;
+        const source = row && previewSource(row.type, row.body);
+        if (!source)
+          return {
+            id: cmd.id,
+            message: "There is no prototype page to show in this item yet.",
+          };
+        if (source.kind === "url")
+          return { id: cmd.id, url: source.url, message: "Preview opened." };
+        const known = pages.get(cmd.outputId);
+        if (known?.html !== source.html) {
+          await known?.page.close().catch(() => {});
+          pages.delete(cmd.outputId);
+          if (pages.size >= 8) {
+            const [oldest] = pages.keys();
+            if (oldest) {
+              await pages
+                .get(oldest)
+                ?.page.close()
+                .catch(() => {});
+              pages.delete(oldest);
+            }
+          }
+          pages.set(cmd.outputId, {
+            html: source.html,
+            page: await openHtmlPreview(source.html, () => !closed),
+          });
+        }
+        return {
+          id: cmd.id,
+          url: pages.get(cmd.outputId)!.page.url,
+          message: "Preview opened.",
+        };
+      })()
+        .catch(() => ({
+          id: cmd.id,
+          message: "The preview could not be opened. Please try again.",
+        }))
+        .then((r) => {
+          if (!closed)
+            port.postMessage({ kind: "output-preview-result", ...r });
         });
     } else if (message.data?.kind === "prototype") {
       const parsed = prototypeCommand.safeParse(message.data);
@@ -1182,10 +1828,7 @@ process.parentPort?.on("message", (event) => {
               : "Prototype output is unavailable. Check the Designer run and try again.",
         }))
         .then((r) => {
-          if (
-            !closed &&
-            workspaceService.snapshot().preferences.productId === cmd.product
-          ) {
+          if (knownProduct(cmd.product)) {
             port.postMessage(r);
             port.postMessage(workspaceService.snapshot());
           }
@@ -1194,8 +1837,7 @@ process.parentPort?.on("message", (event) => {
       const parsed = deliveryCommand.safeParse(message.data);
       if (!parsed.success) return;
       const cmd = parsed.data,
-        current = () =>
-          closed ? null : workspaceService.snapshot().preferences.productId;
+        current = () => knownProduct(cmd.product);
       void implementationRun(
         cmd,
         workspace,
@@ -1206,13 +1848,13 @@ process.parentPort?.on("message", (event) => {
             workspaceRoot!,
             process.env.AMUN_FIRSTMATE_ARCHIVES!,
           );
-          requireWorkerOn("codex");
+          requireWorkerOn("pi");
           await supervisor.ensureRunning();
           return sendDelivery(
             releases,
             process.env.AMUN_CREW_RECEIPTS!,
             process.env.AMUN_TMUX_BINARY!,
-            "codex",
+            "pi",
             id,
             text,
           );
@@ -1229,7 +1871,7 @@ process.parentPort?.on("message", (event) => {
               number,
             },
             workspace,
-            workspaceService.snapshot().productContext?.sources ?? [],
+            workspaceService.productSources(cmd.product),
             current,
             repositoryCredential,
           );
@@ -1259,12 +1901,11 @@ process.parentPort?.on("message", (event) => {
     } else if (message.data?.kind === "pr-workspace") {
       const parsed = prCommand.safeParse(message.data);
       if (!parsed.success) return;
-      const product = () =>
-        closed ? null : workspaceService.snapshot().preferences.productId;
+      const product = () => knownProduct(parsed.data.product);
       void readPullWorkspace(
         parsed.data,
         workspace,
-        workspaceService.snapshot().productContext?.sources ?? [],
+        workspaceService.productSources(parsed.data.product),
         product,
         repositoryCredential,
       )
@@ -1274,7 +1915,7 @@ process.parentPort?.on("message", (event) => {
           product: parsed.data.product,
           message:
             e instanceof Error &&
-            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file)/.test(
+            /^(Approve|Review|The PR|The current|Merge |Pull request changed|Refresh|Select |Connect |Map |Product changed|PR head|Text diff|Binary file|Waiting for permission)/.test(
               e.message,
             )
               ? redactor.text(e.message).slice(0, 512)
@@ -1282,6 +1923,71 @@ process.parentPort?.on("message", (event) => {
         }))
         .then((r) => {
           if (product() === parsed.data.product) port.postMessage(r);
+        });
+    } else if (message.data?.kind === "code-change") {
+      const parsed = codeChangeCommand.safeParse(message.data);
+      if (!parsed.success) return;
+      const cmd = parsed.data;
+      const product = () => knownProduct(cmd.product);
+      void (async () => {
+        if (product() !== cmd.product)
+          throw new CodeChangeError("That project is no longer available.");
+        let note = "";
+        try {
+          if (cmd.action === "approve")
+            note = await codeChanges.approve(
+              cmd.product,
+              cmd.reviewId,
+              cmd.binding,
+              cmd.workAreaId,
+            );
+          else if (cmd.action === "changes")
+            await codeChanges.changes(
+              cmd.product,
+              cmd.reviewId,
+              cmd.note,
+              cmd.workAreaId,
+            );
+        } catch (error) {
+          if (!(error instanceof CodeChangeError))
+            logger.error("code-change.action.failed", {
+              reason: redactor.text(
+                error instanceof Error ? error.message : String(error),
+              ),
+            });
+          note =
+            error instanceof CodeChangeError
+              ? redactor.text(error.message).slice(0, 512)
+              : "That did not go through. Nothing was sent twice; check the change again.";
+        }
+        return {
+          kind: "code-change-result",
+          id: cmd.id,
+          product: cmd.product,
+          message: note,
+          cards: await codeChanges.cards(cmd.product, cmd.workAreaId),
+        };
+      })()
+        .catch((error: unknown) => {
+          if (!(error instanceof CodeChangeError))
+            logger.error("code-change.list.failed", {
+              reason: redactor.text(
+                error instanceof Error ? error.message : String(error),
+              ),
+            });
+          return {
+            kind: "code-change-result",
+            id: cmd.id,
+            product: cmd.product,
+            message:
+              error instanceof CodeChangeError && error.message
+                ? redactor.text(error.message).slice(0, 512)
+                : "Code changes could not be loaded. Please try again.",
+            cards: [],
+          };
+        })
+        .then((r) => {
+          if (product() === cmd.product) port.postMessage(r);
         });
     } else if (message.data?.kind === "firstmate-chat") {
       void chatSession.handle(message.data);
@@ -1293,6 +1999,10 @@ process.parentPort?.on("message", (event) => {
         .then((reply) => {
           if (!closed) port.postMessage(reply);
         });
+    } else if (message.data?.kind === "skill-fetch") {
+      void workspaceService.fetchSkills(message.data).then((reply) => {
+        if (!closed) port.postMessage(reply);
+      });
     } else if (message.data?.kind === "document-import") {
       void workspaceService.importDocument(message.data).then((reply) => {
         if (!closed) port.postMessage(reply);
@@ -1302,8 +2012,10 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       const cmd = parsed.data;
       const active = () =>
-        !closed &&
-        workspaceService.snapshot().preferences.productId === cmd.productId;
+        cmd.productId === null
+          ? !closed &&
+            workspaceService.snapshot().preferences.productId === null
+          : knownProduct(cmd.productId) !== null;
       const reply = (fields: Record<string, unknown>) => {
         if (active())
           port.postMessage({
@@ -1499,12 +2211,18 @@ process.parentPort?.on("message", (event) => {
               )
               ?.ref?.slice(8)
           : undefined;
+      const retryOption =
+        message.data.action === "resolve-attention" &&
+        workStore
+          .snapshot()
+          .attention.find((item) => item.id === message.data.attentionId)
+          ?.options.some((option) => option.startsWith("Retry the"));
       // The owner allowing a worker to use its own folder.
       const allowed =
         message.data.action === "resolve-attention" &&
         message.data.resolution === "answer" &&
         message.data.answer === allowWorker
-          ? (["claude", "codex"] as Harness[]).find(
+          ? (["pi", "claude", "codex"] as Harness[]).find(
               (harness) =>
                 workStore
                   .snapshot()
@@ -1513,7 +2231,28 @@ process.parentPort?.on("message", (event) => {
                   )?.ref === trustRef(harness),
             )
           : undefined;
-      const events = workStore.handle(message.data);
+      const proposal = message.data;
+      const stored =
+        proposal.action === "update-plan"
+          ? workStore.snapshot().plans.find((p) => p.id === proposal.planId)
+          : undefined;
+      const latestOwner =
+        proposal.action === "propose-plan" && proposal.workAreaId
+          ? (workStore
+              .snapshot()
+              .messages.filter(
+                (m) => m.workAreaId === proposal.workAreaId && m.role === "you",
+              )
+              .at(-1)?.text ?? "")
+          : "";
+      const refusal =
+        localClaimRefusalEvent(proposal, latestOwner) ??
+        notionUpdateRefusalEvent(
+          proposal,
+          stored,
+          (pageId) => !!planPublisher.notionPage(pageId),
+        );
+      const events = refusal ? [refusal] : handleWork(message.data);
       for (const event of events) port.postMessage(event);
       if (allowed) void delegations.allow(allowed).catch(() => undefined);
       const result = events.find((event) => event.kind === "work-result");
@@ -1526,10 +2265,13 @@ process.parentPort?.on("message", (event) => {
             ? retried
             : null;
       if (planId)
-        void planPublisher
-          .publish(planId)
+        void (
+          retryOption ? retryFailedItems(planId) : planPublisher.publish(planId)
+        )
           .then((published) => {
-            if (!closed) for (const event of published) port.postMessage(event);
+            if (closed) return;
+            for (const event of published) port.postMessage(event);
+            if (retryOption) port.postMessage(workStore.snapshot());
           })
           .catch((error: unknown) =>
             logger.error("plan.publish.failed", {
@@ -1577,8 +2319,11 @@ process.parentPort?.on("message", (event) => {
       if (!parsed.success) return;
       // Continues an approval already given: looks up, then retries within
       // the budget. A plan that was never approved is left alone.
-      void planPublisher
-        .publish(parsed.data.planId)
+      void (
+        parsed.data.retry
+          ? retryFailedItems(parsed.data.planId)
+          : planPublisher.publish(parsed.data.planId)
+      )
         .then((published) => {
           if (closed) return;
           for (const event of published) port.postMessage(event);
@@ -1592,7 +2337,11 @@ process.parentPort?.on("message", (event) => {
         .writes(parsed.data.planId)
         .find((item) => item.id === parsed.data.itemId);
       // Only a link Amun itself recorded for a created item is opened.
-      if (written?.state !== "created" || !written.url) return;
+      if (
+        (written?.state !== "created" && written?.note !== notionChangedNote) ||
+        !written.url
+      )
+        return;
       let url: URL;
       try {
         url = new URL(written.url);
@@ -1613,6 +2362,19 @@ process.parentPort?.on("message", (event) => {
           return;
         await open([url.href]);
       })();
+    } else if (message.data?.kind === "work-diagnostic") {
+      const parsed = workDiagnostic.safeParse(message.data);
+      if (parsed.success)
+        reportWorkFailure("work.snapshot.unreadable", parsed.data.reasons);
+    } else if (message.data?.kind === "content-search") {
+      const parsed = contentSearch.safeParse(message.data);
+      if (!parsed.success) return;
+      port.postMessage({
+        version: 1,
+        kind: "content-search-result",
+        requestId: parsed.data.requestId,
+        hits: workStore.search(parsed.data.query),
+      });
     } else if (message.data?.kind === "plan-places") {
       const parsed = planPlaces.safeParse(message.data);
       if (!parsed.success) return;
@@ -1654,44 +2416,291 @@ process.parentPort?.on("message", (event) => {
           return null;
         }
       };
-      port.postMessage({
-        version: 1,
-        kind: "plan-places-result",
-        planId: plan.id,
-        places: plan.items.map((item) => {
-          const own = item.fields.destination;
-          const destination =
-            typeof own === "string" && own.trim()
-              ? own.trim().toLowerCase()
-              : plan.destination;
-          const area = item.fields.area;
-          const place =
-            destination === "ado"
-              ? ado()
-              : destination === "notion"
-                ? setting("notion.destination.title")
-                : destination === "amun"
-                  ? "Amun"
-                  : null;
-          return {
-            id: item.id,
-            destination,
-            place:
-              place && destination === "ado" && typeof area === "string"
-                ? `${place} · ${area}`
-                : place && destination === "notion"
-                  ? `New page under “${place}”`
-                  : place,
-            problem: place
-              ? null
-              : destination === "ado"
-                ? "No Azure DevOps project is chosen for this work yet."
+      const post = async (info: Awaited<ReturnType<typeof adoTypeInfo>>) => {
+        const written = planPublisher.writes(plan.id);
+        // Only an unpublished item can still turn out to be a duplicate.
+        const existing = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            if (
+              plan.state !== "proposed" ||
+              written.some((entry) => entry.id === item.id)
+            )
+              return null;
+            const found = await planPublisher.alreadyThere(
+              plan.id,
+              item,
+              destination,
+            );
+            return found ? { id: found.externalId } : null;
+          }),
+        );
+        // An update shows what the work item holds now beside what it becomes.
+        const updates = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const named = adoWorkItemOf(item.fields);
+            if (destination !== "ado" || !named.named) return null;
+            if (!named.id)
+              return {
+                id: 0,
+                problem: "That is not an Azure DevOps work item number.",
+                change: null,
+              };
+            try {
+              const connection = await adoConnection(plan.workAreaId);
+              const planned = info?.schema
+                ? adoUpdate(
+                    { ...item, marker: "", destination },
+                    info.schema,
+                    connection.source.project,
+                    connection.source.collection,
+                  )
+                : null;
+              const now = await new AdoWriteClient(
+                connection.source.collection,
+                connection.source.project,
+                connection.transport,
+              ).item(named.id);
+              return {
+                id: named.id,
+                problem: null,
+                change: planned ? adoUpdateChange(now, planned.fields) : null,
+              };
+            } catch (error) {
+              return {
+                id: named.id,
+                problem:
+                  error instanceof PlanNotSent
+                    ? error.message
+                    : `Amun could not open #${named.id} in this Azure DevOps project.`,
+                change: null,
+              };
+            }
+          }),
+        );
+        // A new item named under an existing one: read-only check that the
+        // parent is a work item in this same project, so the owner sees it.
+        const parents = await Promise.all(
+          plan.items.map(async (item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const named = adoParentOf(item.fields);
+            if (destination !== "ado" || !named.named) return null;
+            if (adoWorkItemOf(item.fields).named)
+              return {
+                id: named.id ? String(named.id) : "",
+                title: null,
+                problem:
+                  "Amun can only set a parent when it creates a new item, not on an existing one.",
+              };
+            if (!named.id)
+              return {
+                id: "",
+                title: null,
+                problem:
+                  "The parent is not an Azure DevOps work item number. Ask Firstmate to fix it.",
+              };
+            try {
+              const connection = await adoConnection(plan.workAreaId);
+              const now = await new AdoWriteClient(
+                connection.source.collection,
+                connection.source.project,
+                connection.transport,
+              ).item(named.id);
+              const title = now.fields["System.Title"];
+              return {
+                id: String(named.id),
+                title: typeof title === "string" ? title : null,
+                problem: null,
+              };
+            } catch {
+              return {
+                id: String(named.id),
+                title: null,
+                problem: `Amun could not open #${named.id} in this Azure DevOps project, so it cannot be approved. Ask Firstmate to check the parent number.`,
+              };
+            }
+          }),
+        );
+        if (closed) return;
+        port.postMessage({
+          version: 1,
+          kind: "plan-places-result",
+          planId: plan.id,
+          places: plan.items.map((item) => {
+            const own = item.fields.destination;
+            const destination =
+              typeof own === "string" && own.trim()
+                ? own.trim().toLowerCase()
+                : plan.destination;
+            const area = item.fields.area;
+            const place =
+              destination === "ado"
+                ? ado()
                 : destination === "notion"
-                  ? "No Notion destination is chosen yet."
-                  : `Publishing to ${trackerName(destination)} is not available yet.`,
-          };
-        }),
-      });
+                  ? setting("notion.destination.title")
+                  : destination === "amun"
+                    ? "Amun"
+                    : null;
+            const wanted =
+              typeof item.fields.type === "string" && item.fields.type.trim()
+                ? item.fields.type.trim()
+                : null;
+            const kind =
+              destination === "ado" && info
+                ? ((info.schema
+                    ? pickAdoType(wanted, info.schema, info.names)?.name
+                    : undefined) ??
+                  wanted ??
+                  info.names.story ??
+                  null)
+                : null;
+            const note = written.find((entry) => entry.id === item.id)?.note;
+            // What a new work item will really hold, so approval covers it.
+            const payload =
+              destination === "ado" &&
+              info?.schema &&
+              !adoWorkItemOf(item.fields).named
+                ? adoPayloadNote(
+                    { ...item, marker: "", destination },
+                    info.schema,
+                    info.project,
+                    info.collection,
+                    info.names,
+                  )
+                : null;
+            const update = updates[plan.items.indexOf(item)] ?? null;
+            const parent = parents[plan.items.indexOf(item)] ?? null;
+            const page =
+              destination === "notion" ? notionPageOf(item.fields) : undefined;
+            const receipt = page ? planPublisher.notionPage(page) : undefined;
+            const result = receipt
+              ? notionUpdateText(
+                  { title: receipt.title, body: receipt.body },
+                  item.fields,
+                )
+              : undefined;
+            const change = result
+              ? lineDiff(
+                  `Title: ${receipt!.title}\n${receipt!.body}`,
+                  `Title: ${result.title}\n${result.body}`,
+                )
+              : null;
+            const newTitle = item.fields.title;
+            const newBody = item.fields.body ?? item.fields.description;
+            const content =
+              destination === "notion" && !page
+                ? String(
+                    typeof newBody === "string" && newBody.trim()
+                      ? newBody
+                      : typeof newTitle === "string" && newTitle.trim()
+                        ? newTitle
+                        : item.summary,
+                  )
+                : null;
+            return {
+              id: item.id,
+              destination,
+              kind,
+              existing: existing[plan.items.indexOf(item)] ?? null,
+              note:
+                note?.startsWith("“") || note?.startsWith("Linked under")
+                  ? note
+                  : null,
+              ...(parent ? { parent } : {}),
+              ...(payload?.sentAs ? { sentAs: payload.sentAs } : {}),
+              ...(page ? { kind: "page update", change } : {}),
+              ...(content !== null ? { content } : {}),
+              ...(update
+                ? { kind: "work item update", change: update.change }
+                : {}),
+              changedInNotion: note === notionChangedNote,
+              failure:
+                note &&
+                note !== notionChangedNote &&
+                !note.startsWith("“") &&
+                !note.startsWith("Linked under") &&
+                !note.startsWith("Already exists")
+                  ? note.slice(0, 400)
+                  : null,
+              place: update?.id
+                ? `${place ?? "Azure DevOps"} · Work item #${update.id}`
+                : place && destination === "ado" && typeof area === "string"
+                  ? `${place} · ${area}`
+                  : place && destination === "notion"
+                    ? page
+                      ? `Page Amun created under “${place}”`
+                      : `Under: ${place}`
+                    : place,
+              problem: update?.problem
+                ? update.problem
+                : payload?.problem
+                  ? payload.problem
+                  : parent?.problem
+                    ? parent.problem
+                    : page
+                      ? !receipt
+                        ? "Amun did not create this page, so it will not change it."
+                        : !receipt.version
+                          ? "Amun did not record how this page looked when it wrote it, so it will not change it."
+                          : !result
+                            ? "An update needs the new content, or the lines to add, but not both."
+                            : null
+                      : place
+                        ? null
+                        : destination === "ado"
+                          ? "No Azure DevOps project is chosen for this work yet."
+                          : destination === "notion"
+                            ? "No Notion destination is chosen yet."
+                            : `Publishing to ${trackerName(destination)} is not available yet.`,
+            };
+          }),
+        });
+      };
+      if (
+        plan.items.some((item) => {
+          const own = item.fields.destination;
+          return (
+            (typeof own === "string" && own.trim()
+              ? own.trim().toLowerCase()
+              : plan.destination) === "ado"
+          );
+        })
+      )
+        void adoTypeInfo(plan.workAreaId).then(post, () => post(null));
+      else void post(null);
+    } else if (message.data?.kind === "tracker-types") {
+      const parsed = trackerTypes.safeParse(message.data);
+      if (!parsed.success) return;
+      const workAreaId = parsed.data.workAreaId;
+      void adoTypeInfo(workAreaId)
+        .catch(() => null)
+        .then((info) =>
+          port.postMessage({
+            version: 1,
+            kind: "tracker-types-result",
+            workAreaId,
+            project: info?.project ?? null,
+            story: info?.names.story ?? null,
+            task: info?.names.task ?? null,
+            needs:
+              info?.schema && info.names
+                ? adoRequiredNotes(info.schema, info.names)
+                : [],
+          }),
+        );
     } else if (message.data?.kind === "work-delegate") {
       const parsed = workDelegate.safeParse(message.data);
       if (!parsed.success) return;
@@ -1914,6 +2923,29 @@ process.parentPort?.on("message", (event) => {
         return;
       if (nativeRequest.success && nativeRequest.data.action === "run") {
         const request = nativeRequest.data;
+        if (request.command === "default-model") {
+          // The prompt box's label: read from Pi's saved files, no worker.
+          const read = (name: string) =>
+            readFile(join(process.env.AMUN_AUTH_ROOT!, name), "utf8")
+              .then((text) => JSON.parse(text) as unknown)
+              .catch(() => undefined);
+          void Promise.all([read("settings.json"), read("auth.json")]).then(
+            ([settings, credentials]) =>
+              sendNative(request.id, {
+                kind: "message",
+                text: JSON.stringify(
+                  savedModelLabel(
+                    settings,
+                    credentials && typeof credentials === "object"
+                      ? Object.keys(credentials)
+                      : [],
+                    testProviders(process.env),
+                  ),
+                ),
+              }),
+          );
+          return;
+        }
         if (request.command === "mcp" && request.argument === "obsidian") {
           const configured = authMetadata
             .list()
@@ -2039,15 +3071,17 @@ process.parentPort?.on("message", (event) => {
                   : result,
               ),
             )
-            .catch((error: unknown) =>
+            .catch((error: unknown) => {
+              if (process.env.AMUN_DEBUG_SWALLOWED)
+                console.error("[amun-debug] bearings failed:", error);
               sendNative(request.id, {
                 kind: "message",
                 text:
                   error instanceof BoardError
                     ? error.message
                     : "Crew snapshot unavailable. Check the crew worktree and runtime dependencies.",
-              }),
-            );
+              });
+            });
           return;
         }
         if (request.command === "crew-dispatch") {
@@ -2066,9 +3100,8 @@ process.parentPort?.on("message", (event) => {
                 process.env.AMUN_FIRSTMATE_ARCHIVES!,
               );
               const dispatch: unknown = JSON.parse(request.argument);
-              requireWorkerOn(
-                (dispatch as { harness?: unknown } | null)?.harness,
-              );
+              if ((dispatch as { harness?: unknown } | null)?.harness !== "pi")
+                throw new CopilotOnly();
               const text = await dispatchFirstmate(
                 releases,
                 process.env.AMUN_CREW_RECEIPTS!,
@@ -2090,9 +3123,11 @@ process.parentPort?.on("message", (event) => {
               sendNative(request.id, {
                 kind: "message",
                 text:
-                  error instanceof WorkerTurnedOff
-                    ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
-                    : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
+                  error instanceof CopilotOnly
+                    ? "Crew workers run on GitHub Copilot through Pi. Choose the Pi worker."
+                    : error instanceof WorkerTurnedOff
+                      ? `${error.message} is turned off under Tools already on this Mac. Turn it on to hand it work.`
+                      : "Firstmate could not dispatch this worker. Check the CLI installation, Amun subscription profile and crew worktree.",
               });
             } finally {
               crewDispatchBusy = false;
@@ -2146,7 +3181,9 @@ process.parentPort?.on("message", (event) => {
                   throw Error("Invalid action");
               }
               sendNative(request.id, { kind: "message", text });
-            } catch {
+            } catch (error) {
+              if (process.env.AMUN_DEBUG_SWALLOWED)
+                console.error("[amun-debug] release operation failed:", error);
               sendNative(request.id, {
                 kind: "message",
                 text: "Firstmate release operation failed. Check the retained package and workspace.",
@@ -2573,10 +3610,37 @@ process.parentPort?.on("message", (event) => {
           "notion-cancel",
           "notion-disconnect",
           "notion-target",
+          "notion-status",
         ].includes(parsedAuth.data.action)
       ) {
         const command = parsedAuth.data;
-        if (command.action === "notion-target") {
+        // What is saved is known without any network or Keychain access.
+        const savedMark = () =>
+          !!workspace
+            .prepare(
+              "SELECT 1 FROM workspace_settings WHERE id IN ('notion.saved','notion.destination') LIMIT 1",
+            )
+            .get();
+        const setSaved = (saved: boolean) =>
+          saved
+            ? workspace
+                .prepare(
+                  "INSERT INTO workspace_settings(id,value_json) VALUES ('notion.saved','true') ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+                )
+                .run()
+            : workspace
+                .prepare(
+                  "DELETE FROM workspace_settings WHERE id='notion.saved'",
+                )
+                .run();
+        if (command.action === "notion-status") {
+          port.postMessage({
+            version: 1,
+            kind: "auth-status",
+            id: "notion-mcp",
+            status: savedMark() ? "configured" : "missing",
+          });
+        } else if (command.action === "notion-target") {
           void notionConnection
             .inspectTarget(command.url)
             .then((destination) => {
@@ -2614,7 +3678,7 @@ process.parentPort?.on("message", (event) => {
             .then(() => {
               workspace
                 .prepare(
-                  "DELETE FROM workspace_settings WHERE id='notion.destination'",
+                  "DELETE FROM workspace_settings WHERE id IN ('notion.destination','notion.saved')",
                 )
                 .run();
               port.postMessage({
@@ -2656,6 +3720,7 @@ process.parentPort?.on("message", (event) => {
               command.action === "notion-connect",
             )
             .then(() => {
+              setSaved(true);
               port.postMessage({
                 version: 1,
                 kind: "auth-status",

@@ -351,6 +351,24 @@ describe("objectives (Q56)", () => {
     expect(snap().objectives).toMatchObject([
       { id, current: 75, links: [task] },
     ]);
+    send("save-objective", {
+      objectiveId: id,
+      groupId: employer,
+      metric: "% billable",
+      baseline: null,
+      target: 90,
+      current: null,
+      dueDate: "2027-06-30",
+      workAreaIds: [task, project],
+    });
+    expect(snap().objectives).toMatchObject([
+      {
+        id,
+        baseline: null,
+        dueDate: "2027-06-30",
+        links: [project, task].sort(),
+      },
+    ]);
     const elsewhere = area(side, "task", "Other");
     expect(
       send("save-objective", {
@@ -638,7 +656,7 @@ describe("attention, activity and offers", () => {
     ]);
     expect(snap().activity).toHaveLength(2);
   });
-  it("drafts only after the offer is accepted and never sends", () => {
+  it("accepting an offer closes it once and never shows a draft that is not running", () => {
     const { employer } = setup();
     const work = area(employer, "project", "E-Cabinet");
     const offer = send("attention", {
@@ -648,11 +666,12 @@ describe("attention, activity and offers", () => {
       title: "BRD approval is still unconfirmed",
       detail: "Draft a follow-up?",
     }).ref!;
-    expect(snap().activity).toEqual([]);
     send("resolve-attention", { attentionId: offer, resolution: "accept" });
-    expect(snap().activity).toMatchObject([
-      { state: "running", text: "Drafting: BRD approval is still unconfirmed" },
-    ]);
+    send("resolve-attention", { attentionId: offer, resolution: "accept" });
+    expect(snap().activity).toEqual([]);
+    expect(snap().attention.find((item) => item.id === offer)?.state).toBe(
+      "done",
+    );
   });
   it("stores an answer and requires one", () => {
     const { employer } = setup();
@@ -715,6 +734,23 @@ describe("tasks, projects and relations", () => {
     expect(send("convert-task", { areaId: task, convert: true }).ok).toBe(
       false,
     );
+  });
+  it("keeps the model with a Firstmate reply and leaves other messages without one", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Model label");
+    send("message", { workAreaId: id, role: "you", text: "Hi", model: "x/y" });
+    send("message", {
+      workAreaId: id,
+      role: "firstmate",
+      text: "Hello",
+      model: "github-copilot/claude-sonnet-5.5",
+    });
+    send("message", { workAreaId: id, role: "firstmate", text: "Older" });
+    expect(snap().messages.map((message) => message.model)).toEqual([
+      null,
+      "github-copilot/claude-sonnet-5.5",
+      null,
+    ]);
   });
   it("links a delivery project to a product without merging them, and asks across groups", () => {
     const { employer, side } = setup();
@@ -1075,6 +1111,13 @@ describe("sprints, scope, library, decisions, council and agents", () => {
       send("add-agent", { description: "temp helper", always: false }).ok,
     ).toBe(true);
   });
+  it("adds a catalog specialist under its full name", () => {
+    setup();
+    const id = send("add-agent", { description: "Research & Insights" }).ref!;
+    expect(snap().agents.find((item) => item.id === id)?.role).toBe(
+      "Research & Insights",
+    );
+  });
   it("records decisions with who decided and when", () => {
     const { employer } = setup();
     const id = send("record-decision", {
@@ -1287,7 +1330,7 @@ describe("memory updates (F10)", () => {
       { value: "Omar", state: "current", confirmed: 1 },
     ]);
     // Never claimed as saved to the memory home until it actually is.
-    expect(snap().memory).toEqual({ unsynced: 1, disputed: 0 });
+    expect(snap().memory).toMatchObject({ unsynced: 1, disputed: 0 });
   });
   it("asks, citing the source, when evidence contradicts what the user confirmed", () => {
     const { employer } = setup();
@@ -1346,6 +1389,60 @@ describe("memory updates (F10)", () => {
   });
 });
 
+describe("correcting and forgetting remembered facts (UC09)", () => {
+  const claim = (groupId: string, value: string, source = "Email") => ({
+    groupId,
+    key: "reports-to",
+    value,
+    source,
+    observedAt: "2026-11-10",
+    confirmed: true,
+  });
+  it("lists current facts and corrects one in place, to be sent on again", () => {
+    const { employer } = setup();
+    const id = send("record-claim", claim(employer, "Layla")).ref!;
+    db.prepare("UPDATE memory_claims SET synced=1 WHERE id=?").run(id);
+    expect(snap().memory.facts).toMatchObject([
+      { id, key: "reports-to", value: "Layla", source: "Email", synced: true },
+    ]);
+    expect(send("correct-claim", { claimId: id, value: "Omar" }).ok).toBe(true);
+    expect(snap().memory.facts).toMatchObject([
+      {
+        id,
+        value: "Omar",
+        source: "Corrected by you",
+        confirmed: true,
+        synced: false,
+      },
+    ]);
+    expect(snap().memory.unsynced).toBe(1);
+  });
+  it("forgets a fact with its earlier versions and any open question", () => {
+    const { employer } = setup();
+    send("record-claim", claim(employer, "Layla"));
+    send("record-claim", claim(employer, "Omar"));
+    const current = snap().memory.facts[0]!;
+    send("record-claim", { ...claim(employer, "Zed"), confirmed: false });
+    expect(snap().attention.at(-1)!.state).not.toBe("done");
+    expect(send("forget-claim", { claimId: current.id }).ok).toBe(true);
+    expect(snap().memory.facts).toEqual([]);
+    expect(snap().memory.disputed).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM memory_claims").get()).toEqual(
+      {
+        n: 0,
+      },
+    );
+    expect(snap().attention.at(-1)).toMatchObject({
+      state: "done",
+      answer: "Forgotten",
+    });
+    expect(send("forget-claim", { claimId: current.id }).ok).toBe(false);
+    expect(send("correct-claim", { claimId: current.id, value: "x" }).ok).toBe(
+      false,
+    );
+  });
+});
+
 describe("renaming a work", () => {
   it("changes the name at once, with no plan and nothing to approve", () => {
     const { employer } = setup();
@@ -1398,5 +1495,74 @@ describe("a failed publication says what failed and why", () => {
       detail:
         "“Change product name” was not created. Publishing to Amun is not available yet. Nothing was duplicated.",
     });
+  });
+  it("an RFP made from Home is on the board with its stated fields, once", () => {
+    const { employer } = setup();
+    const made = send("save-rfp", {
+      groupId: employer,
+      name: "QA-20261114-RFP-Retest",
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: "Tamer",
+    }).ref!;
+    send("save-rfp", {
+      groupId: employer,
+      name: "QA-20261114-RFP-Retest",
+      client: "QA Sandbox",
+      deadline: "2026-12-01T00:00:00.000Z",
+      responseOwner: "Tamer",
+    });
+    const rfps = snap().rfps.filter((item) => item.id === made);
+    expect(rfps).toMatchObject([
+      {
+        client: "QA Sandbox",
+        stage: "received",
+        deadline: "2026-12-01T00:00:00.000Z",
+        responseOwner: "Tamer",
+        accountOwner: null,
+      },
+    ]);
+    expect(snap().rfps).toHaveLength(1);
+    expect(snap().areas.find((a) => a.id === made)).toMatchObject({
+      type: "rfp",
+      groupId: employer,
+    });
+  });
+  it("an RFP work area made another way is still on the board, unknowns empty", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Bare",
+    }).ref!;
+    expect(snap().rfps).toMatchObject([
+      { id: made, stage: "received", client: "", deadline: null },
+    ]);
+    send("create-area", { groupId: employer, type: "rfp", name: "Bare" });
+    expect(snap().rfps).toHaveLength(1);
+  });
+  it("repairs an RFP work area that predates board records, once", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Legacy",
+    }).ref!;
+    db.prepare("DELETE FROM rfps WHERE work_area_id=?").run(made);
+    expect(snap().rfps).toMatchObject([
+      { id: made, stage: "received", client: "", deadline: null },
+    ]);
+    expect(snap().rfps).toHaveLength(1);
+  });
+  it("leaves a deleted RFP off the board", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "rfp",
+      name: "Gone",
+    }).ref!;
+    db.prepare("DELETE FROM rfps WHERE work_area_id=?").run(made);
+    db.prepare("UPDATE work_areas SET status='deleted' WHERE id=?").run(made);
+    expect(snap().rfps).toEqual([]);
   });
 });

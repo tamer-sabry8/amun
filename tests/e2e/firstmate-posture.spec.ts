@@ -2,6 +2,7 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, realpath, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("captain starts real primary supervision, enters away posture and resumes the owner after quit", async () => {
   test.setTimeout(180000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-posture-")));
@@ -12,6 +13,7 @@ test("captain starts real primary supervision, enters away posture and resumes t
         : {}),
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
     });

@@ -1011,4 +1011,110 @@ CREATE TABLE work_messages (
   // 31 · Items left unticked at approval wait in their own proposal, which
   // remembers the plan it was split from.
   `ALTER TABLE work_plans ADD COLUMN split_from TEXT REFERENCES work_plans(id);`,
+  // 32 · Accepting an offer used to add a "Drafting" row that nothing ever
+  // finished. Those rows are closed as never started rather than left running
+  // or marked done.
+  `UPDATE work_activity SET state='failed',text=text || ' — never started: accepting this did not begin a draft. Ask again in its conversation.' WHERE ref LIKE 'offer:%' AND state='running';`,
+  // 33 · The model that wrote each Firstmate reply, shown beside its name.
+  // Older messages keep it empty.
+  `ALTER TABLE work_messages ADD COLUMN model TEXT;`,
+  // 34 · Blockers: what is stuck on a work area, who owns unblocking it (free
+  // text, may be empty) and when it was raised.
+  `CREATE TABLE work_blockers (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  title TEXT NOT NULL,
+  owner TEXT,
+  raised_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE INDEX work_blockers_area ON work_blockers(work_area_id);`,
+  // 35 · Document versions and approval: each content change keeps a version
+  // (who made it and when); the owner's approval records the version approved.
+  `CREATE TABLE library_output_versions (
+  output_id TEXT NOT NULL REFERENCES library_outputs(id),
+  version INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  author TEXT NOT NULL CHECK (author IN ('owner','firstmate','agent')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (output_id, version)
+);
+INSERT INTO library_output_versions(output_id,version,body,author,created_at)
+  SELECT id,1,body,'owner',updated_at FROM library_outputs;
+ALTER TABLE library_outputs ADD COLUMN approved_version INTEGER;
+ALTER TABLE library_outputs ADD COLUMN approved_at TEXT;`,
+  // 36 · An objective can carry a due date. Its title stays the existing
+  // metric column, and an unknown baseline stays NULL (never invented).
+  `ALTER TABLE work_objectives ADD COLUMN due_date TEXT;`,
+  // 37 · Reminders: a time, some words and the work area it was asked in, if
+  // any. A reminder is never a work item. One that came due while Amun was
+  // closed or asleep keeps the time it was due (missed_at).
+  `CREATE TABLE work_reminders (
+  id TEXT PRIMARY KEY NOT NULL,
+  text TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  work_area_id TEXT REFERENCES work_areas(id),
+  state TEXT NOT NULL CHECK (state IN ('scheduled','due','done','cancelled')),
+  missed_at TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE INDEX work_reminders_due ON work_reminders(state,due_at);`,
+  // 38 · Search by content: one full-text index over document, record and
+  // conversation text, kept current by triggers. Words are stemmed, so
+  // "pricing" finds "prices". The group of a hit is read from its source at
+  // search time, so moving work between groups never leaves a stale index.
+  `CREATE VIRTUAL TABLE content_index USING fts5(
+  kind UNINDEXED,
+  ref UNINDEXED,
+  title,
+  body,
+  tokenize = 'porter unicode61 remove_diacritics 2'
+);
+INSERT INTO content_index(kind,ref,title,body) SELECT 'document',id,title,body FROM library_outputs;
+INSERT INTO content_index(kind,ref,title,body) SELECT 'record',id,title,body FROM work_records;
+INSERT INTO content_index(kind,ref,title,body) SELECT 'message',id,'',text FROM work_messages WHERE role IN ('you','firstmate');
+CREATE TRIGGER content_index_output_add AFTER INSERT ON library_outputs BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('document',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_output_edit AFTER UPDATE OF title,body ON library_outputs BEGIN
+  DELETE FROM content_index WHERE kind='document' AND ref=old.id;
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('document',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_output_drop AFTER DELETE ON library_outputs BEGIN
+  DELETE FROM content_index WHERE kind='document' AND ref=old.id;
+END;
+CREATE TRIGGER content_index_record_add AFTER INSERT ON work_records BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('record',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_record_edit AFTER UPDATE OF title,body ON work_records BEGIN
+  DELETE FROM content_index WHERE kind='record' AND ref=old.id;
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('record',new.id,new.title,new.body);
+END;
+CREATE TRIGGER content_index_record_drop AFTER DELETE ON work_records BEGIN
+  DELETE FROM content_index WHERE kind='record' AND ref=old.id;
+END;
+CREATE TRIGGER content_index_message_add AFTER INSERT ON work_messages WHEN new.role IN ('you','firstmate') BEGIN
+  INSERT INTO content_index(kind,ref,title,body) VALUES ('message',new.id,'',new.text);
+END;
+CREATE TRIGGER content_index_message_drop AFTER DELETE ON work_messages BEGIN
+  DELETE FROM content_index WHERE kind='message' AND ref=old.id;
+END;`,
+  // 39 · The owner's acceptance of a checklist document: the decision, the
+  // version it was made on and a short reason. Latest decision only.
+  `ALTER TABLE library_outputs ADD COLUMN acceptance TEXT CHECK (acceptance IN ('accepted','not_yet','rejected'));
+ALTER TABLE library_outputs ADD COLUMN acceptance_version INTEGER;
+ALTER TABLE library_outputs ADD COLUMN acceptance_reason TEXT;
+ALTER TABLE library_outputs ADD COLUMN acceptance_at TEXT;`,
+  // 40 · What a Notion page looked like when Amun last wrote it (its edit time
+  // and a fingerprint of its content), so a later update can stop when someone
+  // changed the page in Notion in between.
+  `ALTER TABLE plan_writes ADD COLUMN page_version TEXT;`,
+  // 41 · Version 1 of a document that existed before versions were kept was
+  // filled in as the owner's, which nobody recorded. Those rows have no known author.
+  `ALTER TABLE library_output_versions ADD COLUMN author_known INTEGER NOT NULL DEFAULT 1;
+UPDATE library_output_versions SET author_known=0 WHERE version=1 AND author='owner';`,
+  // 42 · The Notion parent a page was created under, so a later update can
+  // tell the page is still in the destination when Notion does not say.
+  `ALTER TABLE plan_writes ADD COLUMN page_parent TEXT;`,
 ] as const;

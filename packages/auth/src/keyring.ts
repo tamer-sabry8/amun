@@ -4,16 +4,19 @@ export interface EntryLike {
   setPassword(value: string): void;
   deletePassword(): boolean;
 }
+export function assertKeychainAccount(account: string): void {
+  if (
+    !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion|cloudflare|obsidian)-[a-f0-9]{32}$/.test(
+      account,
+    )
+  )
+    throw Error("Invalid Keychain account");
+}
 export function macKeyring(
   Entry: new (service: string, account: string) => EntryLike,
 ): Keyring {
   const entry = (account: string) => {
-    if (
-      !/^[a-zA-Z0-9_-]{1,128}\/(ado|github|notion|cloudflare|obsidian)-[a-f0-9]{32}$/.test(
-        account,
-      )
-    )
-      throw Error("Invalid Keychain account");
+    assertKeychainAccount(account);
     return new Entry("ai.amun", account);
   };
   return {

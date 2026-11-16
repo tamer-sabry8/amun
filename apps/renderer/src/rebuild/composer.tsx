@@ -1,7 +1,14 @@
 // Composer (Q27, Q70): `+` add things · `/` skills and commands · `@` agents
 // and work areas. Routing is automatic and shown as a label. The mic only
 // dictates into the box; nothing runs until the user sends.
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
+import { bridge } from "../bridge.ts";
 import {
   builtInCommands,
   composerTrigger,
@@ -16,6 +23,12 @@ import { councilCommands } from "../../../../packages/domain/src/work/council.ts
 import { Icon } from "../icons.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { takeOff } from "./motion.ts";
+import { useDismiss } from "./use-dismiss.ts";
+import { firstmateCommands } from "../composer-command.ts";
+import {
+  FirstmateCommandReply,
+  useFirstmateCommands,
+} from "./firstmate-commands.tsx";
 
 export const allCommands: SlashCommand[] = [
   ...builtInCommands,
@@ -55,6 +68,8 @@ export function Composer({
   onPick,
   onRemoveFile,
   pickNonce = 0,
+  skills = false,
+  onBoard,
 }: {
   placeholder?: string;
   chips?: string[];
@@ -74,7 +89,27 @@ export function Composer({
   onRemoveFile?(name: string): void;
   /** Changing this opens the file picker, e.g. for "Choose another file". */
   pickNonce?: number;
+  /** Offer Firstmate's built-in skills in the "/" list and run them here. */
+  skills?: boolean;
+  /** Opens a Bearings board; without it the board link is left out. */
+  onBoard?(url: string): void;
 }) {
+  const commands = useFirstmateCommands();
+  const workspace = useSyncExternalStore(
+    bridge.subscribe,
+    () => bridge.getSnapshot().workspace,
+    () => null,
+  );
+  // Skills the owner has reviewed and approved in Settings.
+  const mySkills = skills
+    ? (workspace?.productContext?.skillLibrary?.installed ?? []).filter(
+        (skill) =>
+          ![...allCommands, ...firstmateCommands].some(
+            (command) => command.name === skill.name,
+          ),
+      )
+    : [];
+  const wantedSkill = useRef<string | null>(null);
   const [draft, setDraft] = useState(initial);
   const [own, setFiles] = useState<string[]>([]);
   const files = attached ?? own;
@@ -85,12 +120,28 @@ export function Composer({
   const [dismissed, setDismissed] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const addMenu = useRef<HTMLDivElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const addRoots = useRef([addMenu, addButton]).current;
   const recognition = useRef<Recognition | null>(null);
 
   const trigger = dismissed ? null : composerTrigger(draft, caret);
   const options =
     trigger?.trigger === "/"
-      ? matchCommands(allCommands, trigger.query).map((command) => ({
+      ? matchCommands(
+          skills
+            ? [
+                ...allCommands,
+                ...firstmateCommands,
+                ...mySkills.map((skill) => ({
+                  name: skill.name,
+                  hint: "",
+                  description: "Your skill",
+                })),
+              ]
+            : allCommands,
+          trigger.query,
+        ).map((command) => ({
           key: command.name,
           label: "/" + command.name,
           hint: command.description,
@@ -115,10 +166,32 @@ export function Composer({
     element.style.height = Math.min(element.scrollHeight, 200) + "px";
   }, [draft]);
   useEffect(() => () => recognition.current?.stop(), []);
+  useEffect(
+    () =>
+      bridge.onEvent((event) => {
+        const draftEvent = event as { kind?: string; text?: string };
+        if (
+          draftEvent.kind === "workspace-skill-draft" &&
+          wantedSkill.current &&
+          typeof draftEvent.text === "string"
+        ) {
+          wantedSkill.current = null;
+          setDraft(draftEvent.text);
+          setCaret(draftEvent.text.length);
+          setDismissed(true);
+          area.current?.focus();
+        }
+      }),
+    [],
+  );
   useEffect(() => {
     if (pickNonce) picker.current?.click();
   }, [pickNonce]);
 
+  useDismiss(plus, addRoots, (reason) => {
+    setPlus(false);
+    if (reason === "escape") area.current?.focus();
+  });
   const change = (text: string, position = text.length) => {
     setDraft(text);
     setCaret(position);
@@ -128,6 +201,23 @@ export function Composer({
     if (!trigger) return;
     const start =
       trigger.trigger === "/" ? 0 : draft.slice(0, caret).lastIndexOf("@");
+    const skill =
+      trigger.trigger === "/"
+        ? mySkills.find((item) => "/" + item.name + " " === insert)
+        : undefined;
+    if (skill) {
+      // The approved instructions fill the box for the owner to read and edit;
+      // nothing is sent until they press Send.
+      wantedSkill.current = skill.name;
+      bridge.send({
+        version: 1,
+        kind: "workspace",
+        action: "use-skill",
+        productId: workspace!.productContext!.productId,
+        name: skill.name,
+        digest: skill.digest,
+      });
+    }
     const next = draft.slice(0, start) + insert + draft.slice(caret);
     change(next, start + insert.length);
     area.current?.focus();
@@ -137,8 +227,14 @@ export function Composer({
     const text = draft.trim();
     if ((!text && !files.length) || busy) return;
     recognition.current?.stop();
+    if (skills && !files.length && commands.send(text)) {
+      setPlus(false);
+      setDraft("");
+      return;
+    }
     takeOff(sendButton.current?.firstElementChild);
     onSend(text, files);
+    setPlus(false);
     setDraft("");
     setFiles([]);
   };
@@ -200,6 +296,7 @@ export function Composer({
 
   return (
     <div className="rb-composer-wrap">
+      {skills && <FirstmateCommandReply state={commands} onBoard={onBoard} />}
       {chips.length > 0 && (
         <div className="rb-chips">
           {chips.map((chip) => (
@@ -236,7 +333,28 @@ export function Composer({
           </div>
         )}
         {plus && (
-          <div className="rb-menu" role="menu" aria-label="Add">
+          <div
+            className="rb-menu"
+            role="menu"
+            aria-label="Add"
+            ref={addMenu}
+            // A pointer press must not take focus from the message box before
+            // the click lands, or the menu closes first and the choice is lost.
+            onMouseDown={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              setPlus(false);
+              area.current?.focus();
+            }}
+            onBlur={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (
+                !next ||
+                (!addMenu.current?.contains(next) && next !== area.current)
+              )
+                setPlus(false);
+            }}
+          >
             {plusMenu.map(([id, label]) => (
               <button
                 key={id}
@@ -287,7 +405,11 @@ export function Composer({
           }
           onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           onKeyDown={keys}
-          onBlur={() => setPlus(false)}
+          onBlur={(event) => {
+            // Moving into the menu with the keyboard keeps it open.
+            if (!addMenu.current?.contains(event.relatedTarget as Node | null))
+              setPlus(false);
+          }}
         />
         <input
           ref={picker}
@@ -316,6 +438,7 @@ export function Composer({
             className="icon-btn"
             aria-label="Add files, screenshots or sources"
             aria-expanded={plus}
+            ref={addButton}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setPlus(!plus)}
           >

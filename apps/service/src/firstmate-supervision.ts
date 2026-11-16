@@ -1,3 +1,8 @@
+import {
+  copilotModelSelector,
+  copilotProvider,
+  testProviders,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import { spawn } from "node:child_process";
 import {
   cp,
@@ -149,6 +154,7 @@ export class FirstmateSupervision {
           this.entry,
           "--mode",
           "rpc",
+          ...modelArguments(),
           "--no-session",
           "--no-tools",
           "--no-extensions",
@@ -355,4 +361,11 @@ export class FirstmateSupervision {
     this.disposed = true;
     return this.stopChild?.() ?? Promise.resolve();
   }
+}
+
+/** Pi's provider and model arguments; the e2e fixture declaration leaves both to Pi's default. */
+export function modelArguments(env = process.env): string[] {
+  return testProviders(env).length
+    ? []
+    : ["--provider", copilotProvider, "--model", copilotModelSelector];
 }

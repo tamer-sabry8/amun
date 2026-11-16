@@ -31,6 +31,9 @@ it("maps verified task identity into a stable Run without inventing model or com
   expect(
     observedRun("m0", { ...record, harness: "codex" }, "main").harness,
   ).toBe("codex");
+  expect(observedRun("m0", { ...record, harness: "pi" }, "main").harness).toBe(
+    "pi",
+  );
   expect(() => observedRun("", record, "amun/worker")).toThrow();
   expect(() => observedRun("m0", record, "")).toThrow();
 });

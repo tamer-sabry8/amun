@@ -1,13 +1,20 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { WorkspaceSnapshot } from "@amun/contracts";
+import { BlockerRow } from "./blocker-row.tsx";
+import { useEffect, useRef, useState } from "react";
+import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   failureOverflow,
+  planStateNote,
   previewNote,
   updateMessage,
 } from "../../../../packages/domain/src/work/home.ts";
-import { approveLabel } from "../../../../packages/domain/src/work/permissions.ts";
+import { adoParentOf } from "../../../../packages/domain/src/ado-update.ts";
+import {
+  approveLabel,
+  countedNoun,
+  planNoun,
+} from "../../../../packages/domain/src/work/permissions.ts";
 import {
   rfpAuthoringBoundary,
   scopeCheck,
@@ -17,13 +24,41 @@ import {
 import {
   maxRatio,
   minRatio,
+  modelDisplay,
 } from "../../../../packages/domain/src/work/shell.ts";
+import { previewSource } from "../../../../packages/domain/src/work/prototype-source.ts";
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
+import { useDismiss } from "./use-dismiss.ts";
+import { latestTurnStart, scrollTarget } from "./scroll-target.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
+import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
-import { Backlog } from "./lazy.tsx";
+import { Backlog, PrdView } from "./lazy.tsx";
+import { PullRequests } from "./pull-requests.tsx";
+import { takeSprintContext } from "./sprint-context.ts";
 import { Composer } from "./composer.tsx";
+import { documentContext, draftBodies } from "./document-context.ts";
+import {
+  MarkdownDoc,
+  MarkdownMessage,
+  type Citations,
+} from "./markdown-doc.tsx";
+import { citationContext, type Cite } from "./citations.ts";
+import { browserStore, readSource } from "../backlog-selection.ts";
+import {
+  acceptanceLabel,
+  approvalLabel,
+  approvalOf,
+  decisionWords,
+  type Decision,
+} from "./document-approval.ts";
+import {
+  acceptanceType,
+  checklistSummary,
+} from "../../../../packages/domain/src/work/acceptance.ts";
+import { VersionHistory } from "./document-versions.tsx";
+import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   heldMessage,
@@ -39,12 +74,44 @@ import {
   portionWords,
   useAttachments,
 } from "./attachments.ts";
-import { planPlacesResult } from "../../../../packages/contracts/src/work.ts";
+import {
+  planPlacesResult,
+  trackerTypesResult,
+} from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work, workAsync } from "./store.ts";
 import {
+  answerQuestion,
+  answerScope,
+  requestPlanChanges,
+} from "./accept-offer.ts";
+import { pendingOffers } from "./offer-turns.ts";
+import {
+  blockerLine,
+  blockerUpdateLines,
+  findBlocker,
+  openBlockers,
+} from "../../../../packages/domain/src/work/blockers.ts";
+import {
+  factLine,
+  findFact,
+} from "../../../../packages/domain/src/work/facts.ts";
+import { findNamed } from "../../../../packages/domain/src/work/flows.ts";
+import { reminderIntent } from "../../../../packages/domain/src/work/reminders.ts";
+import {
+  retryIntent,
+  retryTarget,
+} from "../../../../packages/domain/src/work/retry-request.ts";
+import {
   agentNews,
+  delegationTask,
+  factsFor,
   amunProtocol,
+  areaTurnContext,
+  publicationLines,
+  failedPublicationLines,
+  notionPageLines,
+  standingPermissionLines,
   areaOf,
   parseAmunActions,
   typeLabels,
@@ -53,17 +120,12 @@ import {
   type Snapshot,
 } from "./view-model.ts";
 
-const PrdWorkspace = lazy(() =>
-  import("../prd-workspace.tsx").then(({ PrdWorkspace }) => ({
-    default: PrdWorkspace,
-  })),
-);
-
 export type PaneTarget =
   | { kind: "output"; id: string }
   | { kind: "plan"; id: string }
   | { kind: "prd" }
   | { kind: "backlog" }
+  | { kind: "pulls" }
   | { kind: "browser"; url: string }
   | null;
 
@@ -308,9 +370,7 @@ function InlineCard({
             <button
               key={answer}
               className="btn"
-              onClick={() =>
-                work("scope-answer", { workAreaId: areaId, item, answer })
-              }
+              onClick={() => answerScope({ areaId, item, answer })}
             >
               {label}
             </button>
@@ -321,7 +381,8 @@ function InlineCard({
   }
   if (card.kind === "update") {
     const text = String(card.message ?? "");
-    const check = updateMessage(text);
+    // The blocker lines Amun adds are not part of the 50–90 words.
+    const check = updateMessage(text.split(/\n\n(?=Blocked: )/)[0] ?? text);
     const copy = async (what: string, value: string) => {
       if (await copyText(value)) setCopied(what);
     };
@@ -357,6 +418,19 @@ interface Place {
   destination: string;
   place: string | null;
   problem: string | null;
+  kind?: string | null | undefined;
+  note?: string | null | undefined;
+  existing?: { id: string } | null | undefined;
+  change?:
+    { kind: "same" | "add" | "remove"; text: string }[] | null | undefined;
+  failure?: string | null | undefined;
+  changedInNotion?: boolean | undefined;
+  sentAs?: string | undefined;
+  content?: string | null | undefined;
+  parent?:
+    | { id: string; title: string | null; problem: string | null }
+    | null
+    | undefined;
 }
 /** Where each item of a plan would go, asked from the service. */
 function usePlaces(planId: string, fingerprint: string) {
@@ -372,6 +446,79 @@ function usePlaces(planId: string, fingerprint: string) {
   }, [planId, fingerprint]);
   return places;
 }
+
+type TrackerTypes = {
+  project: string;
+  story: string;
+  task: string | null;
+  needs: { type: string; fields: string[] }[];
+};
+const trackerCache = new Map<string, TrackerTypes>();
+/**
+ * The work item types of the area's Azure DevOps project, so Firstmate
+ * proposes the project's own type from the start. Read once per area; a slow
+ * or missing answer only means Firstmate is not told.
+ */
+function askTrackerTypes(areaId: string) {
+  const known = trackerCache.get(areaId);
+  if (known) return Promise.resolve(known);
+  return new Promise<TrackerTypes | null>((resolve) => {
+    const finish = (value: TrackerTypes | null) => {
+      stop();
+      clearTimeout(timer);
+      if (value) trackerCache.set(areaId, value);
+      resolve(value);
+    };
+    const stop = bridge.onEvent((raw) => {
+      const event = trackerTypesResult.safeParse(raw);
+      if (!event.success || event.data.workAreaId !== areaId) return;
+      const { project, story, task, needs } = event.data;
+      finish(project && story ? { project, story, task, needs } : null);
+    });
+    const timer = setTimeout(() => finish(null), 2500);
+    bridge.send({ version: 1, kind: "tracker-types", workAreaId: areaId });
+  });
+}
+/**
+ * The stored reason behind each plan item that was not created, read from the
+ * service once per turn. A slow or missing answer only means Firstmate is not
+ * told that reason.
+ */
+function askFailureReasons(plans: PlanEntry[]) {
+  const wanted = plans.filter((plan) =>
+    plan.results.some((result) => result.state !== "created"),
+  );
+  if (!wanted.length) return Promise.resolve<Record<string, string>>({});
+  return new Promise<Record<string, string>>((resolve) => {
+    const reasons: Record<string, string> = {};
+    const waiting = new Set(wanted.map((plan) => plan.id));
+    const finish = () => {
+      stop();
+      clearTimeout(timer);
+      resolve(reasons);
+    };
+    const stop = bridge.onEvent((raw) => {
+      const event = planPlacesResult.safeParse(raw);
+      if (!event.success || !waiting.delete(event.data.planId)) return;
+      for (const place of event.data.places)
+        if (place.failure)
+          reasons[`${event.data.planId}:${place.id}`] = place.failure;
+      if (!waiting.size) finish();
+    });
+    const timer = setTimeout(finish, 2500);
+    for (const plan of wanted)
+      bridge.send({ version: 1, kind: "plan-places", planId: plan.id });
+  });
+}
+const trackerLine = (types: TrackerTypes | null) =>
+  types
+    ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one or asks for a sub-task under an existing item (then use the sub-task type and the parent field); Amun uses the project's own.${types.needs
+        .map(
+          (need) =>
+            ` ${types.project} requires ${need.fields.join(", ")} for ${countedNoun(2, need.type).slice(2)}: ask the owner for ${need.fields.length === 1 ? "that value" : "those values"} before proposing the item (list the allowed values for any field that has them), then put each in the item's fields under its name (the words before any bracket). Estimates and hours such as Remaining Work are plain numbers. Never choose one yourself.`,
+        )
+        .join("")}`
+    : "";
 
 type PlanEntry = Snapshot["plans"][number];
 function PlanItem({
@@ -398,6 +545,7 @@ function PlanItem({
         `${key.charAt(0).toUpperCase()}${key.slice(1)}: ${value}`,
     )
     .join(" · ");
+  const parent = place?.parent;
   const settled = plan.state !== "proposed" && plan.state !== "approved";
   return (
     <span style={{ display: "grid", gap: 4 }}>
@@ -406,6 +554,7 @@ function PlanItem({
         <>
           <span className="row wrap small">
             <span className="tag">{trackerName(destination)}</span>
+            {place?.kind && <span className="tag">{place.kind}</span>}
             {place?.place && <span className="muted">{place.place}</span>}
             {place?.problem && (
               <span style={{ color: "var(--amun-status-signed-out)" }}>
@@ -413,17 +562,74 @@ function PlanItem({
               </span>
             )}
           </span>
-          <span className="muted small">{fields || "No field changes"}</span>
+          {parent && !parent.problem && (
+            <span className="small">
+              Under #{parent.id}
+              {parent.title ? ` · ${parent.title}` : ""}
+            </span>
+          )}
+          {place?.sentAs && <span className="small muted">{place.sentAs}</span>}
+          {place?.existing && (
+            <span className="small" role="status">
+              <span className="tag warn">Already there</span>{" "}
+              {`Already in ${trackerName(destination)} as ${/^\d+$/.test(place.existing.id) ? "#" : ""}${place.existing.id} — approving will link, not create.`}
+            </span>
+          )}
+          {place?.change ? (
+            <span
+              className="small prd-diff"
+              role="group"
+              aria-label="What will change"
+              style={{ display: "grid", gap: 2, whiteSpace: "pre-wrap" }}
+            >
+              {place.change.map((line, index) =>
+                line.kind === "add" ? (
+                  <ins key={index}>{"+ " + line.text}</ins>
+                ) : line.kind === "remove" ? (
+                  <del key={index}>{"− " + line.text}</del>
+                ) : (
+                  <span key={index} className="muted">
+                    {"  " + line.text}
+                  </span>
+                ),
+              )}
+            </span>
+          ) : place?.content ? (
+            <span
+              className="small"
+              role="group"
+              aria-label="Exactly what the page will say"
+              tabIndex={0}
+              style={{
+                display: "block",
+                whiteSpace: "pre-wrap",
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+            >
+              {place.content}
+            </span>
+          ) : (
+            <span className="muted small">{fields || "No field changes"}</span>
+          )}
         </>
       )}
       {result?.state === "created" && (
         <span className="row wrap small">
           <span className="tag good">
-            Created
+            {result.linked
+              ? "Already exists"
+              : result.updated
+                ? "Updated"
+                : "Created"}
             {result.externalId && /^\d+$/.test(result.externalId)
               ? " #" + result.externalId
               : ""}
           </span>
+          {result.linked && (
+            <span className="muted">Linked, not created again.</span>
+          )}
+          {place?.note && <span className="muted">{place.note}</span>}
           {result.url && (
             <button
               className="link"
@@ -445,18 +651,49 @@ function PlanItem({
         <>
           <span className="row wrap small">
             <span
-              className={"tag " + (result.state === "failed" ? "bad" : "warn")}
+              className={
+                "tag " +
+                (result.state === "failed" && !place?.changedInNotion
+                  ? "bad"
+                  : "warn")
+              }
             >
-              {result.state === "failed" ? "Not created" : "Being checked"}
+              {place?.changedInNotion
+                ? "Changed in Notion"
+                : result.state === "failed"
+                  ? place?.kind?.endsWith("update")
+                    ? "Not updated"
+                    : "Not created"
+                  : "Being checked"}
             </span>
-            <span className="muted">
-              {result.state === "failed"
-                ? (place?.problem ??
-                  `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
-                : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
+            <span className="muted" role="status">
+              {place?.changedInNotion
+                ? "Changed in Notion since Amun last wrote it. Nothing was overwritten."
+                : result.state === "failed"
+                  ? (place?.failure ??
+                    place?.problem ??
+                    `${trackerName(destination)} did not accept this. Nothing was duplicated.`)
+                  : `${trackerName(destination)} did not confirm. Amun looks for it before sending anything again.`}
             </span>
           </span>
-          {settled && (
+          {settled && place?.changedInNotion && (
+            <span>
+              <button
+                className="btn"
+                onClick={() =>
+                  bridge.send({
+                    version: 1,
+                    kind: "plan-open",
+                    planId: plan.id,
+                    itemId: item.id,
+                  })
+                }
+              >
+                Review the newer version
+              </button>
+            </span>
+          )}
+          {settled && !place?.changedInNotion && (
             <span>
               <button
                 className="btn"
@@ -465,6 +702,7 @@ function PlanItem({
                     version: 1,
                     kind: "plan-publish",
                     planId: plan.id,
+                    ...(result.state === "failed" ? { retry: true } : {}),
                   })
                 }
               >
@@ -492,7 +730,14 @@ function PlanReview({
   const places = usePlaces(planId, plan?.fingerprint ?? "");
   if (!plan) return <p className="muted">That plan is no longer available.</p>;
   const changed = plan.state === "proposed" && seen !== plan.fingerprint;
-  const noun = plan.kind === "stories" ? "story" : "change";
+  // The real work item type, when every item goes to one the project names.
+  const realType = planNoun(
+    plan.items.map((item) => ({
+      kind: places.find((entry) => entry.id === item.id)?.kind,
+      fields: item.fields,
+    })),
+  );
+  const noun = realType ?? (plan.kind === "stories" ? "story" : "change");
   const proposed = plan.state === "proposed";
   const ticked = plan.items.filter((item) => !skipped.includes(item.id));
   // Items left out of an earlier approval of this plan, still waiting.
@@ -500,13 +745,22 @@ function PlanReview({
     (item) => item.splitFrom === plan.id && item.state === "proposed",
   );
   const pick = proposed && plan.items.length > 1;
+  // A parent that cannot be read, or is still being checked, blocks approval.
+  const parentBlocked = ticked.some((item) => {
+    if (!adoParentOf(item.fields).named) return false;
+    const entry = places.find((place) => place.id === item.id);
+    if (entry && entry.destination !== "ado") return false;
+    return !entry?.parent || !!entry.parent.problem;
+  });
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ fontSize: 20 }}>{plan.summary || "Proposed changes"}</h2>
       <p className="muted">
-        To {planDestinations(plan)} · {plan.items.length}{" "}
-        {plan.items.length === 1 ? "item" : "items"} ·{" "}
-        {proposed ? previewNote(plan.destination) : "Approved"}
+        To {planDestinations(plan)} ·{" "}
+        {realType
+          ? countedNoun(plan.items.length, realType)
+          : `${plan.items.length} ${plan.items.length === 1 ? "item" : "items"}`}{" "}
+        · {planStateNote(plan.state, plan.destination)}
       </p>
       <div style={{ display: "grid", gap: 14 }}>
         {plan.items.map((item) => {
@@ -605,7 +859,7 @@ function PlanReview({
           <div className="row">
             <button
               className="btn primary"
-              disabled={changed || !ticked.length}
+              disabled={changed || !ticked.length || parentBlocked}
               onClick={() =>
                 work("approve-plan", {
                   planId: plan.id,
@@ -620,10 +874,7 @@ function PlanReview({
                 ? `Approve and publish ${ticked.length} of ${plan.items.length}`
                 : approveLabel(plan.items.length, noun)}
             </button>
-            <button
-              className="btn"
-              onClick={() => work("request-changes", { planId: plan.id })}
-            >
+            <button className="btn" onClick={() => requestPlanChanges(plan)}>
               Request changes
             </button>
           </div>
@@ -643,26 +894,59 @@ function PlanReview({
   );
 }
 
-function OutputDoc({
+export function OutputDoc({
   snapshot,
   areaId,
   outputId,
   editing,
   onAsk,
+  onPreview,
+  citations,
 }: {
   snapshot: Snapshot;
   areaId: string;
   outputId: string;
   editing: boolean;
   onAsk(text: string): void;
+  onPreview?(url: string): void;
+  citations?: Citations;
 }) {
   const item = snapshot.library.find((entry) => entry.id === outputId);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState("");
+  const waiting = useRef("");
+  useEffect(
+    () =>
+      bridge.onEvent((raw) => {
+        const result = previewResult.safeParse(raw);
+        if (!result.success || result.data.id !== waiting.current) return;
+        waiting.current = "";
+        setPreviewing(false);
+        setPreviewNotice(result.data.url ? "" : result.data.message);
+        if (result.data.url) onPreview?.(result.data.url);
+      }),
+    [onPreview],
+  );
+  useEffect(() => {
+    waiting.current = "";
+    setPreviewing(false);
+    setPreviewNotice("");
+  }, [outputId]);
   const [body, setBody] = useState(item?.body ?? "");
   const area = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setBody(item?.body ?? ""), [outputId]);
+  useEffect(() => {
+    // The saved copy has caught up with what was typed.
+    if (item && draftBodies.get(item.id) === item.body)
+      draftBodies.delete(item.id);
+  }, [item?.body]);
   if (!item)
     return <p className="muted">That item is no longer in the Library.</p>;
   const record = item.section === "record";
+  const approval = approvalOf(item);
+  const unknownItems = checklistSummary(body).unknown;
+  const openable =
+    !editing && !!onPreview && previewSource(item.type, item.body) !== null;
   const save = (next: string) => {
     if (record || next === item.body) return;
     work("save-output", {
@@ -675,10 +959,11 @@ function OutputDoc({
       workAreaIds: item.workAreaIds,
     });
   };
-  const insert = (snippet: string) => {
+  const insert = (make: string | ((before: string) => string)) => {
     const element = area.current;
     if (!element) return;
     const at = element.selectionStart;
+    const snippet = typeof make === "function" ? make(body.slice(0, at)) : make;
     const next = body.slice(0, at) + snippet + body.slice(element.selectionEnd);
     setBody(next);
     save(next);
@@ -695,21 +980,89 @@ function OutputDoc({
           <span className={"tag" + (item.needsLinking ? " warn" : "")}>
             {item.status}
           </span>
+          {approval.state !== "none" && (
+            <span
+              className={"tag" + (approval.state === "changed" ? " warn" : "")}
+            >
+              {approvalLabel(approval)}
+            </span>
+          )}
+          {item.acceptance && (
+            <span
+              className={
+                "tag" +
+                (item.acceptance.decision !== "accepted" ||
+                item.version > item.acceptance.version
+                  ? " warn"
+                  : "")
+              }
+            >
+              {acceptanceLabel(item)}
+            </span>
+          )}
+          {item.type === acceptanceType && unknownItems > 0 && (
+            <span className="tag warn">
+              {unknownItems === 1
+                ? "1 item has no evidence yet"
+                : `${unknownItems} items have no evidence yet`}
+            </span>
+          )}
           {!item.workAreaIds.includes(areaId) && (
             <span className="tag">From the Library</span>
           )}
         </div>
-        <textarea
-          ref={area}
-          aria-label={item.title}
-          readOnly={!editing || record}
-          value={body}
-          placeholder={
-            record ? "" : "Start writing, or ask Firstmate to draft this."
-          }
-          onChange={(event) => setBody(event.target.value)}
-          onBlur={() => save(body)}
-        />
+        {openable && (
+          <div className="row">
+            <button
+              className="btn quiet"
+              disabled={previewing}
+              onClick={() => {
+                waiting.current = crypto.randomUUID();
+                setPreviewing(true);
+                setPreviewNotice("");
+                bridge.send({
+                  version: 1,
+                  kind: "output-preview",
+                  id: waiting.current,
+                  outputId: item.id,
+                });
+              }}
+            >
+              Open preview
+            </button>
+            <span className="note" role="status">
+              {previewing ? "Opening the preview…" : previewNotice}
+            </span>
+          </div>
+        )}
+        {!editing ? (
+          <MarkdownDoc
+            body={body}
+            disabled={record}
+            {...(citations ? { citations } : {})}
+            onToggle={(line) => {
+              const next = toggleTask(body, line);
+              setBody(next);
+              draftBodies.set(item.id, next);
+              save(next);
+            }}
+          />
+        ) : (
+          <textarea
+            ref={area}
+            aria-label={item.title}
+            readOnly={record}
+            value={body}
+            placeholder={
+              record ? "" : "Start writing, or ask Firstmate to draft this."
+            }
+            onChange={(event) => {
+              setBody(event.target.value);
+              draftBodies.set(item.id, event.target.value);
+            }}
+            onBlur={() => save(body)}
+          />
+        )}
       </div>
       {record && (
         <form
@@ -749,13 +1102,7 @@ function OutputDoc({
       {editing && !record && (
         <div className="rb-toolbar" role="toolbar" aria-label="Document tools">
           <button onClick={() => insert("\n## Heading\n")}>Text</button>
-          <button
-            onClick={() =>
-              insert("\n| Column | Column |\n| --- | --- |\n|  |  |\n")
-            }
-          >
-            Table
-          </button>
+          <button onClick={() => insert(tableSnippet)}>Table</button>
           <button onClick={() => insert("\n- [ ] ")}>Checklist</button>
           <button
             className="ask"
@@ -783,7 +1130,6 @@ export function WorkSession({
   onResize,
   onExpand,
   onGroupNeeded,
-  onDiagnostics,
   onSettings,
 }: {
   snapshot: Snapshot;
@@ -800,10 +1146,17 @@ export function WorkSession({
   onResize(ratio: number): void;
   onExpand(): void;
   onGroupNeeded(): void;
-  onDiagnostics(): void;
   onSettings(): void;
 }) {
   const context = workContext(snapshot, areaId, now);
+  // The failure's own details are its plan's per-item reasons.
+  const failureRef = context?.failure?.ref;
+  const failurePlanId = failureRef?.startsWith("failure:")
+    ? failureRef.slice(8)
+    : null;
+  const failurePlan = snapshot.plans.some((plan) => plan.id === failurePlanId)
+    ? failurePlanId
+    : null;
   const [busy, setBusy] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
   const [menu, setMenu] = useState<"title" | "mode" | "area" | "fail" | null>(
@@ -811,6 +1164,20 @@ export function WorkSession({
   );
   const [editing, setEditing] = useState(true);
   const [renaming, setRenaming] = useState(false);
+  /** The decision being written for a checklist; its reason is asked first. */
+  const [deciding, setDeciding] = useState<Decision | null>(null);
+  const [decisionProblem, setDecisionProblem] = useState("");
+  /** Version history of the open document: the list ("list") or one version. */
+  const [history, setHistory] = useState<"list" | number | null>(null);
+  const titleRoot = useRef<HTMLElement>(null);
+  useDismiss(menu === "title", titleRoot, () => setMenu(null));
+  const openDocument = pane?.kind === "output" ? pane.id : null;
+  useEffect(() => {
+    setMenu((current) => (current === "title" ? null : current));
+    setHistory(null);
+    setDeciding(null);
+    setDecisionProblem("");
+  }, [openDocument]);
   const [dragging, setDragging] = useState(false);
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
     null,
@@ -819,10 +1186,44 @@ export function WorkSession({
   const [copiedLog, setCopiedLog] = useState("");
   /** The name being typed while this work is renamed; null when it is not. */
   const [areaName, setAreaName] = useState<string | null>(null);
+  /** The client being typed for a project; null when it is not. */
+  const [clientDraft, setClientDraft] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  const latestReply = useRef<HTMLDivElement>(null);
+  const shown = useRef<{ areaId: string; count: number } | null>(null);
   const sentFirst = useRef<string | null>(null);
+  /** The owner's latest words, so a brief can carry the length they asked for. */
+  const lastRequest = useRef("");
+
+  /** Cited sources open in the panes Amun already has; nothing is written. */
+  const productId = context?.area.productId ?? null;
+  const productSources =
+    productId && workspace?.productContext?.productId === productId
+      ? workspace.productContext.sources
+      : [];
+  const citations: Citations = {
+    context: citationContext({
+      items: snapshot.library,
+      sources: productSources,
+      preferredSourceId: productId
+        ? readSource(
+            browserStore(),
+            productId,
+            productSources.filter((s) => s.kind === "ado").map((s) => s.id),
+          )
+        : "",
+    }),
+    onOpen: (cite: Cite) =>
+      onPane(
+        cite.kind === "output"
+          ? { kind: "output", id: cite.id }
+          : cite.kind === "web"
+            ? { kind: "browser", url: cite.url }
+            : { kind: "prd" },
+      ),
+  };
 
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction) => {
@@ -834,19 +1235,31 @@ export function WorkSession({
         title: proposed.title,
         body: proposed.body,
         workAreaIds: [areaId],
+        author: "firstmate",
       });
     else if (proposed.do === "plan")
-      work("propose-plan", {
-        groupId: null,
-        workAreaId: areaId,
-        planKind: proposed.planKind,
-        destination: proposed.destination,
-        summary: proposed.summary,
-        items: proposed.items.map((item) => ({
-          id: crypto.randomUUID(),
-          ...item,
-        })),
-      });
+      void (async () => {
+        const result = await workAsync("propose-plan", {
+          groupId: null,
+          workAreaId: areaId,
+          planKind: proposed.planKind,
+          destination: proposed.destination,
+          summary: proposed.summary,
+          items: proposed.items.map((item) => ({
+            id: crypto.randomUUID(),
+            ...item,
+          })),
+        });
+        // A refused plan never exists, so say so here; Firstmate is told with
+        // the owner's next message (see agentNews).
+        if (!result.ok)
+          work("message", {
+            workAreaId: areaId,
+            role: "firstmate",
+            text: `Nothing was raised for your approval. ${result.message}`,
+            card: { kind: "plan-refused" },
+          });
+      })();
     else if (proposed.do === "question" || proposed.do === "offer")
       work("attention", {
         attentionKind: proposed.do,
@@ -866,6 +1279,167 @@ export function WorkSession({
     else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
+    else if (proposed.do === "client") {
+      // Inside Amun and undone by setting it again; only projects have one.
+      if (context?.area.type === "project")
+        work("update-area", { areaId, patch: { client: proposed.name } });
+    } else if (proposed.do === "repo") {
+      // Read-only mapping on this Mac; merging stays a governed plan.
+      const pid = context?.area.productId ?? null;
+      const mapped = workspace?.productContext;
+      if (pid && mapped?.productId === pid) {
+        if (!mapped.sources.some((s) => s.reference === proposed.url))
+          bridge.send({
+            version: 1,
+            kind: "workspace",
+            action: "map-source",
+            productId: pid,
+            sourceKind: "repo",
+            title: proposed.url.split("/").slice(-2).join("/").slice(0, 512),
+            reference: proposed.url,
+          });
+      } else
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: "Open Pull requests once, then ask me again to connect the repository.",
+        });
+    } else if (proposed.do === "objective" || proposed.do === "objective-link")
+      void (async () => {
+        // Inside Amun: saved at once, and its links stay in this group.
+        const snap = latest.current.snapshot;
+        const groupId = context?.area.groupId ?? null;
+        const reply = (text: string) =>
+          work("message", { workAreaId: areaId, role: "firstmate", text });
+        const named = (names: string[]) => {
+          const found: string[] = [];
+          const missing: string[] = [];
+          for (const name of names) {
+            const area = findNamed(
+              snap.areas.filter((item) => item.groupId === groupId),
+              name,
+              (item) => item.name,
+            );
+            if (area) found.push(area.id);
+            else missing.push(name);
+          }
+          return { found, missing };
+        };
+        const { found, missing } = named(proposed.areas);
+        const note = missing.length
+          ? ` I could not tell which work you meant by ${missing.map((name) => `“${name}”`).join(", ")}, so I did not link it. Say a few words from its name.`
+          : "";
+        if (!groupId) {
+          reply(
+            "Choose a group for this work first, then I can track an objective for it.",
+          );
+          return;
+        }
+        if (proposed.do === "objective") {
+          await workAsync("save-objective", {
+            groupId,
+            metric: proposed.title,
+            baseline: proposed.baseline,
+            target: proposed.target,
+            current: proposed.baseline,
+            dueDate: proposed.due,
+            workAreaIds: [...new Set([areaId, ...found])],
+          });
+          if (note) reply(note.trim());
+          return;
+        }
+        const objective = findNamed(
+          snap.objectives.filter((item) => item.groupId === groupId),
+          proposed.objective,
+          (item) => item.metric,
+        );
+        if (!objective) {
+          reply(
+            `I could not tell which objective you meant by “${proposed.objective}”. Say a few words from its title.`,
+          );
+          return;
+        }
+        await workAsync("save-objective", {
+          objectiveId: objective.id,
+          groupId,
+          metric: objective.metric,
+          baseline: objective.baseline,
+          target: objective.target,
+          current: objective.current,
+          evidenceDate: objective.evidenceDate,
+          reviewDate: objective.reviewDate,
+          dueDate: objective.dueDate,
+          conflict: objective.conflict,
+          workAreaIds: [...new Set([...objective.links, ...found])],
+        });
+        if (note) reply(note.trim());
+      })();
+    else if (
+      proposed.do === "blocker" ||
+      proposed.do === "blocker-owner" ||
+      proposed.do === "unblock"
+    ) {
+      // Inside Amun, like a rename: recorded at once and changed by saying so.
+      const open = openBlockers(latest.current.snapshot.blockers, areaId);
+      if (proposed.do === "blocker")
+        work("raise-blocker", {
+          areaId,
+          title: proposed.title,
+          owner: proposed.owner,
+        });
+      else {
+        const found = findBlocker(open, proposed.blocker);
+        if (!found)
+          work("message", {
+            workAreaId: areaId,
+            role: "firstmate",
+            text: `I could not tell which blocker you meant by “${proposed.blocker}”. Say a few words from its title.`,
+          });
+        else if (proposed.do === "unblock")
+          work("resolve-blocker", { blockerId: found.id });
+        else
+          work("set-blocker-owner", {
+            blockerId: found.id,
+            owner: proposed.owner,
+          });
+      }
+    } else if (
+      proposed.do === "fact-correct" ||
+      proposed.do === "fact-forget"
+    ) {
+      // Inside Amun, like a rename: changed at once and undone by saying so.
+      const snap = latest.current.snapshot;
+      const found = findFact(
+        factsFor(snap, context?.area.groupId ?? null),
+        proposed.fact,
+      );
+      if (!found)
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: `I could not tell which remembered fact you meant by “${proposed.fact}”. Say a few words from it.`,
+        });
+      else if (proposed.do === "fact-forget")
+        work("forget-claim", { claimId: found.id });
+      else work("correct-claim", { claimId: found.id, value: proposed.value });
+    } else if (proposed.do === "convert")
+      void (async () => {
+        const name = context?.area.name ?? "This";
+        // Same record, same id: the conversation and its links stay put.
+        const result =
+          context?.area.type === "task"
+            ? await workAsync("convert-task", { areaId, convert: true })
+            : null;
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: !result
+            ? `“${name}” is not a task, so there is nothing to convert.`
+            : result.ok
+              ? `Done. “${name}” is now a project. Its conversation, history, links, objective and tracker are kept, and nothing outside Amun was changed.`
+              : `I could not convert “${name}”. ${result.message}`,
+        });
+      })();
     else if (proposed.do === "delegate")
       // The service starts the worker; the result returns to this chat.
       bridge.send({
@@ -874,7 +1448,9 @@ export function WorkSession({
         workAreaId: areaId,
         agent: proposed.agent,
         title: proposed.title,
-        task: proposed.task,
+        task: delegationTask(proposed.task, lastRequest.current),
+        ...(proposed.acceptance ? { acceptance: true } : {}),
+        ...(proposed.repo ? { repo: proposed.repo } : {}),
       });
     else if (proposed.do === "delete")
       // Deleting is the owner's call: Firstmate can only ask.
@@ -884,14 +1460,22 @@ export function WorkSession({
         text: "Delete this work?",
         card: { kind: "delete-work" },
       });
-    else if (proposed.do === "update")
+    else if (proposed.do === "update") {
+      // Every open blocker goes in with its owner and age, as of now.
+      const stuck = blockerUpdateLines(
+        openBlockers(latest.current.snapshot.blockers, areaId),
+        Date.now(),
+      );
+      const message = stuck.length
+        ? `${proposed.message}\n\n${stuck.join("\n")}`
+        : proposed.message;
       work("message", {
         workAreaId: areaId,
         role: "card",
-        text: proposed.message,
-        card: { kind: "update", message: proposed.message },
+        text: message,
+        card: { kind: "update", message },
       });
-    else if (groupId)
+    } else if (groupId)
       work("rule-case", {
         groupId,
         situation: proposed.situation,
@@ -911,8 +1495,33 @@ export function WorkSession({
     /** This turn carries Amun's rules for a conversation that lacked them. */
     briefing = false,
   ) => {
-    if (inFlight.has(areaId)) return;
+    if (inFlight.has(areaId)) {
+      // A turn is still out (for example a waiting message being retried):
+      // a new message waits behind it instead of being dropped.
+      if (!retry) {
+        const queued = {
+          text,
+          scoped,
+          activityId,
+          image,
+          reason: "busy" as const,
+        };
+        holdMessage(areaId, queued);
+        setWaiting(queued);
+      }
+      return;
+    }
     inFlight.add(areaId);
+    // A message that is out stays saved until Firstmate has answered, so a
+    // slow turn, a reload or a retry can never leave the newest one unsaved.
+    if (!retry)
+      holdMessage(areaId, {
+        text,
+        scoped,
+        activityId,
+        image,
+        reason: "busy" as const,
+      });
     setProblem("");
     setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
@@ -932,6 +1541,14 @@ export function WorkSession({
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
+      const client = parsed.actions.find((item) => item.do === "client");
+      const blocked = parsed.actions.find((item) => item.do === "blocker");
+      const tracked = parsed.actions.find(
+        (item) => item.do === "objective" || item.do === "objective-link",
+      );
+      const remembered = parsed.actions.find(
+        (item) => item.do === "fact-correct" || item.do === "fact-forget",
+      );
       // A rename always gets a plain confirmation, even from a silent reply.
       const handed = parsed.actions.flatMap((item) =>
         item.do === "delegate" ? [`${item.agent} is on “${item.title}”.`] : [],
@@ -940,27 +1557,76 @@ export function WorkSession({
         parsed.text ||
         (renamed?.do === "rename"
           ? `Done. This is now called “${renamed.name}”.`
-          : // Handing work over is always said, even from a silent reply.
-            handed.join(" "));
+          : client?.do === "client" && context?.area.type === "project"
+            ? client.name
+              ? `Done. The client is now ${client.name}.`
+              : "Done. The client is cleared."
+            : tracked?.do === "objective"
+              ? `Saved. I am tracking “${tracked.title}”${tracked.baseline === null ? "; its starting point is unknown" : ""}.`
+              : tracked?.do === "objective-link"
+                ? "Done. I have linked that objective."
+                : blocked?.do === "blocker"
+                  ? `Noted. “${blocked.title}” is blocked${blocked.owner ? `, and ${blocked.owner} owns unblocking it` : ", and nobody owns unblocking it yet"}.`
+                  : remembered
+                    ? remembered.do === "fact-forget"
+                      ? "Done. I have forgotten that."
+                      : "Done. I have corrected that."
+                    : // Handing work over is always said, even from a silent reply.
+                      handed.join(" "));
       if (said)
         work("message", {
           workAreaId: areaId,
           role: "firstmate",
           text: said,
+          model: turn.model,
         });
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
-      if (retry) {
+      // Only the message this turn carried leaves the wait; a newer one stays.
+      if (heldMessage(areaId)?.scoped === scoped) {
         releaseMessage(areaId);
         setWaiting(null);
       }
+      if (heldMessage(areaId)) retryWaiting();
     } else if (turn.needsProvider || retry) {
+      const newer = heldMessage(areaId);
+      if (newer && newer.scoped !== scoped) {
+        // A message queued behind this turn now waits for the provider too.
+        if (turn.needsProvider && waitReason(newer) === "busy") {
+          const message = { ...newer, reason: "provider" as const };
+          holdMessage(areaId, message);
+          setWaiting(message);
+        }
+        return;
+      }
+      if (
+        !turn.needsProvider &&
+        waitReason(heldMessage(areaId) ?? {}) === "busy"
+      ) {
+        // A message that only queued behind a turn is not a provider wait.
+        releaseMessage(areaId);
+        setWaiting(null);
+        setProblem(turn.reason);
+        return;
+      }
       // Kept, not failed: it goes out once a provider is connected.
-      const message = { text, scoped, activityId: row, image };
+      const message = {
+        text,
+        scoped,
+        activityId: row,
+        image,
+        reason: "provider" as const,
+      };
       holdMessage(areaId, message);
       setWaiting(message);
       return;
-    } else setProblem(turn.reason);
+    } else {
+      setProblem(turn.reason);
+      // This turn failed for a reason other than a provider: it is not kept.
+      if (heldMessage(areaId)?.scoped === scoped) releaseMessage(areaId);
+      // A message queued behind this failed turn is still sent.
+      if (heldMessage(areaId)) retryWaiting();
+    }
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
       work("activity", {
@@ -976,6 +1642,49 @@ export function WorkSession({
   const [pickNonce, setPickNonce] = useState(0);
   const send = async (typed: string) => {
     if ((!typed.trim() && !attachments.files.length) || !context) return;
+    // A reminder is kept by Amun and answered here; it is not sent on to
+    // Firstmate's model and creates no work.
+    if (!attachments.files.length && reminderIntent(typed)) {
+      const text = typed.trim();
+      await workAsync("message", { workAreaId: areaId, role: "you", text });
+      const result = await workAsync("reminder", { text, workAreaId: areaId });
+      await workAsync("message", {
+        workAreaId: areaId,
+        role: "firstmate",
+        text: result.message,
+      });
+      return;
+    }
+    // Asking in words to retry a failed item runs the same governed retry as
+    // the Retry button, under the same approval; Firstmate then reports it.
+    const retry =
+      !attachments.files.length && retryIntent(typed)
+        ? retryTarget(snapshot.plans, areaId, typed)
+        : null;
+    if (retry && retry.kind !== "none") {
+      await workAsync("message", {
+        workAreaId: areaId,
+        role: "you",
+        text: typed.trim(),
+      });
+      if (retry.kind === "retry")
+        bridge.send({
+          version: 1,
+          kind: "plan-publish",
+          planId: retry.planId,
+          retry: true,
+        });
+      else
+        await workAsync("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text:
+            retry.kind === "review"
+              ? "That plan changed after you approved it, so I cannot retry it. Please review and approve it again."
+              : "More than one item failed. Use the Retry button on the one you mean.",
+        });
+      return;
+    }
     // Files in the draft travel with this message.
     const files = await attachments.take();
     const text =
@@ -983,6 +1692,7 @@ export function WorkSession({
     // One message waits at a time; a new one replaces the wait, not the text.
     releaseMessage(areaId);
     setWaiting(null);
+    lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
     // A conversation that has not been told Amun's rules gets them with this
     // message: the first one for a work area, and the first after Firstmate's
@@ -991,12 +1701,54 @@ export function WorkSession({
     // Read before this message is added: what agents finished since the
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
+    const record = snapshot.rfps.find((item) => item.id === areaId);
+    const tracker = await askTrackerTypes(areaId);
+    const reasons = await askFailureReasons(
+      snapshot.plans.filter((plan) => plan.workAreaId === areaId),
+    );
+    const header = areaTurnContext(
+      context.area,
+      typeLabels[context.area.type],
+      context.group,
+      record,
+      openBlockers(snapshot.blockers, areaId).map(
+        (item) => `${item.title} (${blockerLine(item, now)})`,
+      ),
+      factsFor(snapshot, context.area.groupId ?? null)
+        .slice(0, 30)
+        .map(factLine),
+      standingPermissionLines(snapshot, context.area.groupId ?? null),
+      [trackerLine(tracker), takeSprintContext(areaId)]
+        .filter(Boolean)
+        .join(" "),
+      publicationLines(snapshot, areaId),
+      context.objectives.map((item) => `${item.metric} (${item.line})`),
+      snapshot.areas
+        .filter(
+          (item) => item.groupId === context.area.groupId && item.id !== areaId,
+        )
+        .map((item) => item.name),
+      notionPageLines(snapshot, areaId),
+      failedPublicationLines(snapshot, areaId, reasons),
+    );
     const scoped = briefing
-      ? `${amunProtocol}\n\n[${typeLabels[context.area.type]}: ${context.area.name}${context.group ? " · " + context.group : ""}]\n${text}`
-      : text;
+      ? `${amunProtocol}\n\n${header}${text}`
+      : `${header}${text}`;
+    const withFiles = files.length
+      ? `${scoped}\n\n${attachmentBlock(files)}`
+      : scoped;
+    // Saved documents travel after the owner's words, labelled as reference.
+    const fresh = latest.current;
+    const documents = documentContext({
+      snapshot: fresh.snapshot,
+      areaId,
+      request: text,
+      openId: fresh.pane?.kind === "output" ? fresh.pane.id : null,
+      used: news.length + withFiles.length,
+    });
     await deliver(
       text,
-      news + (files.length ? `${scoped}\n\n${attachmentBlock(files)}` : scoped),
+      news + (documents ? `${withFiles}\n\n${documents}` : withFiles),
       null,
       files.find((file) => file.image)?.image ?? undefined,
       false,
@@ -1018,6 +1770,34 @@ export function WorkSession({
       message.scoped.includes(amunProtocol),
     );
   };
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  // send() awaits before reading the Library; a save landing meanwhile must
+  // not be missed, or a document just typed reaches Firstmate as empty.
+  const latest = useRef({ snapshot, pane });
+  latest.current = { snapshot, pane };
+  useEffect(() => {
+    // Offers the owner accepted: each becomes a real request to Firstmate
+    // here, once. One a restart cut short is said so, and not sent again.
+    // Claiming again on every new acceptance sends an offer for the work that
+    // is already open straight away; claimed turns are never claimed twice.
+    if (!context) return;
+    const claim = () => {
+      const { send: queued, interrupted } = pendingOffers.claim(areaId);
+      if (interrupted.length)
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: "Amun closed while I was starting the draft you asked for, so I cannot tell whether it finished. Read the conversation above before asking again.",
+        });
+      for (const turn of queued)
+        void sendRef
+          .current(turn.text)
+          .finally(() => pendingOffers.done(turn.id));
+    };
+    claim();
+    return pendingOffers.subscribe(claim);
+  }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
     setWaiting(heldMessage(areaId));
@@ -1046,8 +1826,19 @@ export function WorkSession({
     }
   }, [first, areaId, !!context]);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [context?.messages.length, busy]);
+    if (!context) return;
+    const seen = shown.current;
+    shown.current = { areaId, count: context.messages.length };
+    const target = scrollTarget(
+      seen?.areaId === areaId ? seen.count : null,
+      context.messages,
+      busy,
+    );
+    if (target === "latest-reply" && latestReply.current)
+      latestReply.current.scrollIntoView({ block: "start" });
+    else if (target === "latest-reply" || target === "end")
+      end.current?.scrollIntoView({ block: "end" });
+  }, [areaId, !!context, context?.messages.length, busy]);
   useEffect(() => {
     work("touch-area", { areaId });
   }, [areaId]);
@@ -1058,6 +1849,7 @@ export function WorkSession({
       </div>
     );
   const { area } = context;
+  const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
   const questions = snapshot.attention.filter(
     (item) =>
@@ -1092,7 +1884,9 @@ export function WorkSession({
           ? "PRD"
           : pane?.kind === "backlog"
             ? "Backlog"
-            : (output?.title ?? "");
+            : pane?.kind === "pulls"
+              ? "Pull requests"
+              : (output?.title ?? "");
   const newOutput = async () => {
     const result = await workAsync("save-output", {
       groupId: area.groupId,
@@ -1201,6 +1995,17 @@ export function WorkSession({
                     >
                       Rename
                     </button>
+                    {area.type === "project" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          setClientDraft(area.client ?? "");
+                        }}
+                      >
+                        {area.client ? "Change client" : "Set client"}
+                      </button>
+                    )}
                     <button
                       role="menuitem"
                       onClick={() => setConfirmDelete(true)}
@@ -1238,6 +2043,37 @@ export function WorkSession({
             )}
           </span>
           <span className="tag">{typeLabels[area.type]}</span>
+          {area.type === "project" && clientDraft !== null && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const next = clientDraft.trim();
+                if (next !== (area.client ?? ""))
+                  work("update-area", {
+                    areaId,
+                    patch: { client: next || null },
+                  });
+                setClientDraft(null);
+              }}
+            >
+              <input
+                type="text"
+                aria-label="Client for this project"
+                placeholder="Client name"
+                autoFocus
+                maxLength={200}
+                value={clientDraft}
+                onChange={(event) => setClientDraft(event.target.value)}
+                onBlur={() => setClientDraft(null)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setClientDraft(null);
+                }}
+              />
+            </form>
+          )}
+          {area.type === "project" && area.client && clientDraft === null && (
+            <span className="tag">Client: {area.client}</span>
+          )}
           {area.convertedFrom && <span className="tag">Was a task</span>}
           <span className="grow" />
           {area.productId && !open && (
@@ -1253,6 +2089,12 @@ export function WorkSession({
                 onClick={() => onPane({ kind: "backlog" })}
               >
                 Backlog
+              </button>
+              <button
+                className="btn quiet"
+                onClick={() => onPane({ kind: "pulls" })}
+              >
+                Pull requests
               </button>
             </>
           )}
@@ -1283,11 +2125,33 @@ export function WorkSession({
             {context.failure.options[0] && (
               <button
                 className="btn"
-                onClick={() =>
-                  send(
-                    `${context.failure!.options[0]}: check what already exists first, then continue.`,
-                  )
-                }
+                onClick={() => {
+                  const planId = context.failure!.ref?.startsWith("failure:")
+                    ? context.failure!.ref.slice(8)
+                    : null;
+                  const plan = snapshot.plans.find(
+                    (item) => item.id === planId,
+                  );
+                  if (!planId || !plan) {
+                    // Not tied to a plan Amun can continue: ask Firstmate.
+                    void send(
+                      `${context.failure!.options[0]}: check what already exists first, then continue.`,
+                    );
+                  } else if (
+                    !["approved", "partial", "failed"].includes(plan.state)
+                  ) {
+                    // Changed since approval: the owner reviews it again.
+                    onPane({ kind: "plan", id: planId });
+                  } else
+                    bridge.send({
+                      version: 1,
+                      kind: "plan-publish",
+                      planId,
+                      ...(context.failure!.options[0]!.startsWith("Retry")
+                        ? { retry: true }
+                        : {}),
+                    });
+                }}
               >
                 {context.failure.options[0]}
               </button>
@@ -1306,15 +2170,17 @@ export function WorkSession({
                 role="menu"
                 style={{ right: 8, top: "calc(100% + 4px)" }}
               >
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setMenu(null);
-                    onDiagnostics();
-                  }}
-                >
-                  {failureOverflow[0]}
-                </button>
+                {failurePlan && (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(null);
+                      onPane({ kind: "plan", id: failurePlan });
+                    }}
+                  >
+                    {failureOverflow[0]}
+                  </button>
+                )}
                 <button
                   role="menuitem"
                   onClick={async () => {
@@ -1354,34 +2220,47 @@ export function WorkSession({
                       : `Tell Firstmate what you want done for ${area.name}.`)}
                 </p>
               )}
-              {context.objective && (
-                <div className="rb-inline" aria-label="Objective">
+              {openBlockers(snapshot.blockers, areaId).map((item) => (
+                <BlockerRow
+                  key={item.id}
+                  blocker={item}
+                  projectName={area.name}
+                  now={now}
+                />
+              ))}
+              {context.objectives.map((objective) => (
+                <div
+                  className="rb-inline"
+                  aria-label="Objective"
+                  key={objective.id}
+                >
                   <div className="row">
-                    <strong className="grow">{context.objective.metric}</strong>
+                    <strong className="grow">{objective.metric}</strong>
                     <span
                       className={
                         "tag " +
-                        (context.objective.progress.state === "reached"
+                        (objective.progress.state === "reached"
                           ? "good"
-                          : context.objective.progress.state === "conflict"
+                          : objective.progress.state === "conflict"
                             ? "warn"
                             : "")
                       }
                     >
-                      {context.objective.progress.label}
+                      Objective
                     </span>
                   </div>
-                  {"ratio" in context.objective.progress && (
+                  <span className="muted small">{objective.line}</span>
+                  {"ratio" in objective.progress && (
                     <div className="rb-capacity" aria-hidden="true">
                       <i
                         style={{
-                          width: `${(context.objective.progress.ratio ?? 0) * 100}%`,
+                          width: `${(objective.progress.ratio ?? 0) * 100}%`,
                         }}
                       />
                     </div>
                   )}
                 </div>
-              )}
+              ))}
               {context.rfp && (
                 <div className="rb-inline" aria-label="RFP status">
                   <div className="row wrap">
@@ -1409,19 +2288,38 @@ export function WorkSession({
               )}
               {context.messages.map((message, position) =>
                 message.role === "card" ? (
-                  <InlineCard
-                    key={message.id}
-                    snapshot={snapshot}
-                    areaId={areaId}
-                    card={
-                      (message.card ?? {
-                        kind: "note",
-                        text: message.text,
-                      }) as Card
-                    }
-                  />
+                  message.id === lastReplyId ? (
+                    <div key={message.id} ref={latestReply}>
+                      <InlineCard
+                        snapshot={snapshot}
+                        areaId={areaId}
+                        card={
+                          (message.card ?? {
+                            kind: "note",
+                            text: message.text,
+                          }) as Card
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <InlineCard
+                      key={message.id}
+                      snapshot={snapshot}
+                      areaId={areaId}
+                      card={
+                        (message.card ?? {
+                          kind: "note",
+                          text: message.text,
+                        }) as Card
+                      }
+                    />
+                  )
                 ) : (
-                  <div key={message.id} className={"rb-msg " + message.role}>
+                  <div
+                    key={message.id}
+                    ref={message.id === lastReplyId ? latestReply : undefined}
+                    className={"rb-msg " + message.role}
+                  >
                     {/* Firstmate is named where its turn begins, on the left;
                         the owner's own messages sit on the right. */}
                     {message.role === "firstmate" &&
@@ -1429,9 +2327,23 @@ export function WorkSession({
                         <span className="who">
                           <FirstmateMark size={18} />
                           Firstmate
+                          {modelDisplay(message.model ?? null) && (
+                            <span className="muted small">
+                              {"· "}
+                              {modelDisplay(message.model ?? null)}
+                            </span>
+                          )}
                         </span>
                       )}
-                    {message.text}
+                    {message.role === "firstmate" ? (
+                      <MarkdownMessage
+                        text={message.text}
+                        onLink={(url) => onPane({ kind: "browser", url })}
+                        citations={citations}
+                      />
+                    ) : (
+                      message.text
+                    )}
                   </div>
                 ),
               )}
@@ -1444,29 +2356,31 @@ export function WorkSession({
                   >
                     Waiting to send
                   </span>
-                  <div className="rb-inline amber" role="alert">
-                    <span>
-                      <strong style={{ fontWeight: 600 }}>
-                        Connect an AI provider to send this.
-                      </strong>{" "}
-                      Your message is saved and goes out once, as soon as a
-                      provider is connected.
-                    </span>
-                    <div className="row">
-                      <button className="btn primary" onClick={onSettings}>
-                        Connect a provider
-                      </button>
-                      <button
-                        className="btn quiet"
-                        onClick={() => {
-                          releaseMessage(areaId);
-                          setWaiting(null);
-                        }}
-                      >
-                        Discard message
-                      </button>
+                  {waitParts(waitReason(waiting)).providerAlert && (
+                    <div className="rb-inline amber" role="alert">
+                      <span>
+                        <strong style={{ fontWeight: 600 }}>
+                          Connect an AI provider to send this.
+                        </strong>{" "}
+                        Your message is saved and goes out once, as soon as a
+                        provider is connected.
+                      </span>
+                      <div className="row">
+                        <button className="btn primary" onClick={onSettings}>
+                          Connect a provider
+                        </button>
+                        <button
+                          className="btn quiet"
+                          onClick={() => {
+                            releaseMessage(areaId);
+                            setWaiting(null);
+                          }}
+                        >
+                          Discard message
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
               {steps.length > 0 && (
@@ -1507,7 +2421,9 @@ export function WorkSession({
               {plans.map((plan) => (
                 <div className="rb-inline" key={plan.id}>
                   <strong>{plan.summary}</strong>
-                  <span className="note">{previewNote(plan.destination)}</span>
+                  <span className="note">
+                    {previewNote(plan.destination, planDestinations(plan))}
+                  </span>
                   <button
                     className="btn"
                     style={{ justifySelf: "start" }}
@@ -1554,13 +2470,7 @@ export function WorkSession({
                       <button
                         key={option}
                         className="btn"
-                        onClick={() =>
-                          work("resolve-attention", {
-                            attentionId: question.id,
-                            resolution: "answer",
-                            answer: option,
-                          })
-                        }
+                        onClick={() => answerQuestion(question, option)}
                       >
                         {option}
                       </button>
@@ -1727,6 +2637,8 @@ export function WorkSession({
           key={seed?.nonce ?? "composer"}
           initial={seed?.text ?? ""}
           autoFocus
+          skills
+          onBoard={(url) => onPane({ kind: "browser", url })}
           busy={busy}
           model={model}
           placeholder={
@@ -1785,7 +2697,7 @@ export function WorkSession({
             }}
           />
           <section className="rb-artifact" aria-label={paneTitle || "Document"}>
-            <header>
+            <header ref={titleRoot}>
               {renaming && output ? (
                 <form
                   className="grow"
@@ -1895,6 +2807,67 @@ export function WorkSession({
                     role="menuitem"
                     onClick={() => {
                       setMenu(null);
+                      setHistory("list");
+                    }}
+                  >
+                    Version history
+                  </button>
+                  {output.type === acceptanceType ? (
+                    <>
+                      {(["accepted", "not_yet", "rejected"] as const).map(
+                        (decision) => (
+                          <button
+                            key={decision}
+                            role="menuitem"
+                            onClick={() => {
+                              setMenu(null);
+                              setDecisionProblem("");
+                              setDeciding(decision);
+                            }}
+                          >
+                            {decision === "accepted"
+                              ? "Accept"
+                              : decision === "not_yet"
+                                ? "Not yet"
+                                : "Reject"}
+                          </button>
+                        ),
+                      )}
+                      {output.acceptance && (
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            setMenu(null);
+                            work("record-acceptance", {
+                              outputId: output.id,
+                              decision: null,
+                            });
+                          }}
+                        >
+                          Clear my decision
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setMenu(null);
+                        work("approve-output", {
+                          outputId: output.id,
+                          approved: approvalOf(output).state !== "approved",
+                        });
+                      }}
+                    >
+                      {approvalOf(output).state === "approved"
+                        ? "Remove approval"
+                        : "Mark as approved"}
+                    </button>
+                  )}
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(null);
                       work("save-output", {
                         outputId: output.id,
                         groupId: output.groupId,
@@ -1985,37 +2958,98 @@ export function WorkSession({
                   hidden={menu !== null || dragging}
                 />
               )}
-              {pane.kind === "output" && (
+              {pane.kind === "output" && output && history !== null && (
+                <VersionHistory
+                  item={output}
+                  version={history === "list" ? null : history}
+                  onOpen={(version) => setHistory(version ?? "list")}
+                  onClose={() => setHistory(null)}
+                />
+              )}
+              {pane.kind === "output" && output && deciding && (
+                <form
+                  className="rb-inline amber"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    const reason = String(
+                      new FormData(event.currentTarget).get("reason") ?? "",
+                    ).trim();
+                    const result = await workAsync("record-acceptance", {
+                      outputId: output.id,
+                      decision: deciding,
+                      reason,
+                    });
+                    if (result.ok) setDeciding(null);
+                    else setDecisionProblem(result.message);
+                  }}
+                >
+                  <label className="field">
+                    <span>
+                      {decisionWords[deciding]}: say why in a few words. This
+                      only records your decision; nothing is published or
+                      merged.
+                    </span>
+                    <input
+                      name="reason"
+                      type="text"
+                      maxLength={500}
+                      autoFocus
+                      required
+                    />
+                  </label>
+                  <span role="alert">{decisionProblem}</span>
+                  <div className="row">
+                    <button className="btn" type="submit">
+                      Save my decision
+                    </button>
+                    <button
+                      className="btn quiet"
+                      type="button"
+                      onClick={() => setDeciding(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+              {pane.kind === "output" && history === null && (
                 <OutputDoc
                   snapshot={snapshot}
                   areaId={areaId}
                   outputId={pane.id}
                   editing={editing}
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
+                  onPreview={(url) => onPane({ kind: "browser", url })}
+                  citations={citations}
                 />
               )}
+              {pane.kind === "pulls" &&
+                (workspace?.productContext?.productId === area.productId ? (
+                  <PullRequests
+                    key={workspace.productContext.productId}
+                    context={workspace.productContext}
+                    workAreaId={areaId}
+                    onAsk={(text) => setSeed({ text, nonce: Date.now() })}
+                  />
+                ) : (
+                  <p className="muted" role="status">
+                    Opening…
+                  </p>
+                ))}
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
-                  <div className="legacy-surface" style={{ maxWidth: "none" }}>
-                    {pane.kind === "prd" ? (
-                      <Suspense
-                        fallback={<p role="status">Opening the PRD…</p>}
-                      >
-                        <PrdWorkspace
-                          key={workspace.productContext.productId}
-                          context={workspace.productContext}
-                          mode="Write"
-                          setMode={() => undefined}
-                          openPreview={() => undefined}
-                        />
-                      </Suspense>
-                    ) : (
-                      <Backlog
-                        key={workspace.productContext.productId}
-                        context={workspace.productContext}
-                      />
-                    )}
-                  </div>
+                  pane.kind === "prd" ? (
+                    <PrdView
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                      openPreview={(url) => onPane({ kind: "browser", url })}
+                    />
+                  ) : (
+                    <Backlog
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                    />
+                  )
                 ) : (
                   <p className="muted" role="status">
                     Opening…

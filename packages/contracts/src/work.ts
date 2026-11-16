@@ -65,6 +65,10 @@ const writeResult = z.strictObject({
   externalId: z.string().max(256).optional(),
   /** Where the created item can be opened. */
   url: z.string().max(2048).optional(),
+  /** The item already existed in the destination, so it was linked, not created. */
+  linked: z.boolean().optional(),
+  /** An existing page was changed; nothing new was created. */
+  updated: z.boolean().optional(),
 });
 const planStory = z.strictObject({
   id,
@@ -100,6 +104,7 @@ export const setupPatch = z.strictObject({
   libraryGroupBy: z.enum(["work", "type", "none"]).optional(),
 });
 
+export const documentAuthor = z.enum(["owner", "firstmate", "agent"]);
 export const workSnapshot = z.strictObject({
   version: z.literal(1),
   kind: z.literal("work-snapshot"),
@@ -168,6 +173,7 @@ export const workSnapshot = z.strictObject({
       current: z.number().nullable(),
       evidenceDate: stamp.nullable(),
       reviewDate: stamp.nullable(),
+      dueDate: stamp.nullable(),
       conflict: z.boolean(),
       links: z.array(id),
     }),
@@ -261,6 +267,29 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  blockers: z.array(
+    z.strictObject({
+      id,
+      workAreaId: id,
+      title: z.string(),
+      owner: z.string().nullable(),
+      raisedAt: stamp,
+      resolvedAt: stamp.nullable(),
+    }),
+  ),
+  reminders: z
+    .array(
+      z.strictObject({
+        id,
+        text: z.string(),
+        dueAt: stamp,
+        workAreaId: id.nullable(),
+        state: z.enum(["scheduled", "due", "done", "cancelled"]),
+        /** The time it was due, when Amun was closed or asleep then. */
+        missedAt: stamp.nullable(),
+      }),
+    )
+    .default([]),
   rfps: z.array(
     z.strictObject({
       id,
@@ -323,6 +352,31 @@ export const workSnapshot = z.strictObject({
       needsLinking: z.boolean(),
       body: z.string(),
       updatedAt: stamp,
+      /** The latest version number; records have no history. */
+      version: z.number().int().min(1).default(1),
+      /** The version the owner approved, if any. */
+      approvedVersion: z.number().int().min(1).nullable().default(null),
+      /** The owner's acceptance of a checklist: separate from any publishing. */
+      acceptance: z
+        .strictObject({
+          decision: z.enum(["accepted", "not_yet", "rejected"]),
+          version: z.number().int().min(1),
+          reason: z.string(),
+          decidedAt: stamp,
+        })
+        .nullable()
+        .default(null),
+      /** The newest versions first, each with the text as it was then. */
+      versions: z
+        .array(
+          z.strictObject({
+            version: z.number().int().min(1),
+            author: documentAuthor.nullable(),
+            createdAt: stamp,
+            body: z.string(),
+          }),
+        )
+        .default([]),
     }),
   ),
   decisions: z.array(
@@ -400,6 +454,19 @@ export const workSnapshot = z.strictObject({
     /** Facts saved on this Mac that are not yet in the memory home. */
     unsynced: z.int(),
     disputed: z.int(),
+    /** What Amun currently remembers, newest first: the owner can correct or forget each. */
+    facts: z.array(
+      z.strictObject({
+        id,
+        groupId: id.nullable(),
+        key: z.string(),
+        value: z.string(),
+        source: z.string(),
+        observedAt: stamp,
+        confirmed: z.boolean(),
+        synced: z.boolean(),
+      }),
+    ),
   }),
   messages: z.array(
     z.strictObject({
@@ -408,6 +475,8 @@ export const workSnapshot = z.strictObject({
       role: z.enum(["you", "firstmate", "card"]),
       text: z.string(),
       card: z.json().nullable(),
+      /** The model that wrote a Firstmate reply; empty on older messages. */
+      model: z.string().max(200).nullable().optional(),
       createdAt: stamp,
     }),
   ),
@@ -472,6 +541,7 @@ export const workCommand = z.discriminatedUnion("action", [
       name: name.optional(),
       groupId: id.optional(),
       purpose: text.optional(),
+      client: text.nullable().optional(),
       status: z.string().max(64).optional(),
       dueAt: stamp.nullable().optional(),
       effort: effort.nullable().optional(),
@@ -518,6 +588,7 @@ export const workCommand = z.discriminatedUnion("action", [
     current: z.number().nullable(),
     evidenceDate: stamp.nullable().default(null),
     reviewDate: stamp.nullable().default(null),
+    dueDate: stamp.nullable().default(null),
     conflict: z.boolean().default(false),
     workAreaIds: z.array(id).max(32),
   }),
@@ -579,6 +650,17 @@ export const workCommand = z.discriminatedUnion("action", [
     resolution: z.enum(["done", "snooze", "answer", "accept"]),
     answer: z.string().max(16384).optional(),
   }),
+  act("raise-blocker", {
+    areaId: id,
+    title: name,
+    owner: text.nullable().default(null),
+  }),
+  act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
+  act("resolve-blocker", { blockerId: id }),
+  act("reminder", { text: z.string().max(16384), workAreaId: id.nullable() }),
+  act("finish-reminder", { reminderId: id }),
+  act("snooze-reminder", { reminderId: id }),
+  act("cancel-reminder", { reminderId: id }),
   act("save-rfp", {
     areaId: id.optional(),
     groupId: id.nullable(),
@@ -644,6 +726,19 @@ export const workCommand = z.discriminatedUnion("action", [
     body: longText.default(""),
     status: z.string().max(64).default("Draft"),
     workAreaIds: z.array(id).max(32).default([]),
+    author: documentAuthor.default("owner"),
+  }),
+  act("restore-output-version", {
+    outputId: id,
+    versionNumber: z.number().int().min(1),
+  }),
+  // Only the owner's title menu sends this; nothing else approves a document.
+  act("approve-output", { outputId: id, approved: z.boolean() }),
+  // Only the owner's title menu sends this; it never publishes or merges.
+  act("record-acceptance", {
+    outputId: id,
+    decision: z.enum(["accepted", "not_yet", "rejected"]).nullable(),
+    reason: z.string().trim().max(500).default(""),
   }),
   act("record-decision", {
     decisionId: id.optional(),
@@ -721,6 +816,8 @@ export const workCommand = z.discriminatedUnion("action", [
     observedAt: stamp,
     confirmed: z.boolean(),
   }),
+  act("correct-claim", { claimId: id, value: text.min(1) }),
+  act("forget-claim", { claimId: id }),
   act("resolve-claim", {
     attentionId: id,
     keep: z.enum(["current", "incoming"]),
@@ -730,6 +827,7 @@ export const workCommand = z.discriminatedUnion("action", [
     role: z.enum(["you", "firstmate", "card"]),
     text: z.string().max(16384),
     card: z.json().nullable().default(null),
+    model: z.string().max(200).nullable().default(null),
   }),
 ]);
 export type WorkCommand = z.infer<typeof workCommand>;
@@ -793,6 +891,13 @@ export const workDelegate = z.strictObject({
   agent: name,
   title: name,
   task: z.string().trim().min(1).max(8000),
+  /** The job is an acceptance checklist: every item cites its evidence. */
+  acceptance: z.boolean().optional(),
+  /** The job changes code in this connected repository (its https address). */
+  repo: z
+    .url({ protocol: /^https$/ })
+    .max(512)
+    .optional(),
 });
 /** A file added from the composer: read on the Mac and filed in the Library. */
 export const workAttachment = z.strictObject({
@@ -824,6 +929,34 @@ export const workAttachmentResult = z.strictObject({
   recordId: z.string().nullable(),
 });
 
+/** Search by content; the service limits it to the owner's current group. */
+export const contentSearch = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("content-search"),
+  requestId: id,
+  query: z.string().max(200),
+});
+export const contentSearchResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("content-search-result"),
+  requestId: id,
+  hits: z.array(
+    z.strictObject({
+      kind: z.enum(["document", "record", "message"]),
+      id,
+      title: z.string(),
+      snippet: z.array(
+        z.strictObject({ text: z.string(), match: z.boolean() }),
+      ),
+      workAreaId: id.nullable(),
+    }),
+  ),
+});
+
+export type ContentSearchHit = z.infer<
+  typeof contentSearchResult
+>["hits"][number];
+
 /** Where each item of a plan would be written, in words the owner can check. */
 export const planPlaces = z.strictObject({
   version: z.literal(1),
@@ -842,14 +975,77 @@ export const planPlacesResult = z.strictObject({
       place: z.string().nullable(),
       /** What to do when there is no place. */
       problem: z.string().nullable(),
+      /** The work item type Azure DevOps will create, in the project's words. */
+      kind: z.string().max(128).nullable().optional(),
+      /** Said when an item was created as a different type than planned. */
+      note: z.string().max(400).nullable().optional(),
+      /** An item with this title already exists in the destination. */
+      existing: z
+        .strictObject({ id: z.string().max(256) })
+        .nullable()
+        .optional(),
+      /** The exact change to an existing Notion page, line by line. */
+      change: z
+        .array(
+          z.strictObject({
+            kind: z.enum(["same", "add", "remove"]),
+            text: z.string().max(4096),
+          }),
+        )
+        .max(2000)
+        .nullable()
+        .optional(),
+      /** The exact text a new Notion page will hold, secrets already removed. */
+      content: z.string().max(20000).nullable().optional(),
+      /** Plain words for why the destination did not take this item. */
+      failure: z.string().max(400).nullable().optional(),
+      /** The page changed in Notion after Amun wrote it; nothing was sent. */
+      changedInNotion: z.boolean().optional(),
+      /** How a field travels when the type has no field of its own for it. */
+      sentAs: z.string().max(400).optional(),
+      /** The existing work item a new Azure DevOps item is created under. */
+      parent: z
+        .strictObject({
+          id: z.string().max(16),
+          title: z.string().max(512).nullable(),
+          /** Said when it cannot be read in this project; blocks approval. */
+          problem: z.string().max(400).nullable(),
+        })
+        .nullable()
+        .optional(),
     }),
   ),
+});
+/** Asks which work item types a work area's Azure DevOps project uses. */
+export const trackerTypes = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("tracker-types"),
+  workAreaId: id,
+});
+export const trackerTypesResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("tracker-types-result"),
+  workAreaId: id,
+  project: z.string().max(256).nullable(),
+  story: z.string().max(128).nullable(),
+  task: z.string().max(128).nullable(),
+  /** Fields the project requires per type that the owner must give values for. */
+  needs: z
+    .array(
+      z.strictObject({
+        type: z.string().max(128),
+        fields: z.array(z.string().max(256)).max(20),
+      }),
+    )
+    .max(4),
 });
 /** Check or retry an approved plan's outstanding items; never a new approval. */
 export const planPublish = z.strictObject({
   version: z.literal(1),
   kind: z.literal("plan-publish"),
   planId: id,
+  /** Re-run only the items that were not created, within the same approval. */
+  retry: z.boolean().optional(),
 });
 /** Open a created item in the browser. Only links Amun recorded are opened. */
 export const planOpen = z.strictObject({
@@ -921,10 +1117,48 @@ export const toolsReport = z.strictObject({
   ),
 });
 export type ToolsReport = z.infer<typeof toolsReport>;
+
+/** Where a payload broke the contract: paths and codes only, never values. */
+export function issueReasons(error: z.ZodError, limit = 20) {
+  const seen = new Set<string>();
+  for (const issue of error.issues) {
+    const keys =
+      issue.code === "unrecognized_keys" ? ` [${issue.keys.join(",")}]` : "";
+    seen.add(`${issue.path.join(".") || "(root)"}: ${issue.code}${keys}`);
+    if (seen.size >= limit) break;
+  }
+  return [...seen];
+}
+/** Why a failure happened, as paths and codes only (never values). */
+export function failureReasons(error: unknown): string[] {
+  if (error instanceof z.ZodError) return issueReasons(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  return [
+    `(snapshot): ${error instanceof Error ? error.name : "error"}${
+      typeof code === "string" ? " " + code.slice(0, 64) : ""
+    }`,
+  ];
+}
+const reasonList = z.array(z.string().max(300)).max(20);
+/** The service could not build the workspace snapshot. */
+export const workSnapshotFailed = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-snapshot-failed"),
+  reasons: reasonList,
+});
+/** The renderer could not read a snapshot; it tells the service why. */
+export const workDiagnostic = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("work-diagnostic"),
+  reasons: reasonList,
+});
 export const workEvent = z.discriminatedUnion("kind", [
   toolsReport,
+  workSnapshotFailed,
   workAttachmentResult,
   planPlacesResult,
+  contentSearchResult,
+  trackerTypesResult,
   workSnapshot,
   councilStatus,
   z.strictObject({

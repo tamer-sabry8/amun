@@ -1,7 +1,84 @@
 import type { Transport } from "./client.ts";
 import { azurePathSegment } from "./path.ts";
 import type { AdoStep, AdoReceipt } from "../../data/src/ado-batch.ts";
+/** Azure's rejection of a create because the work item type is not in the project. */
+export class AdoTypeMissing extends Error {}
+const missingTypeText =
+  /TF26199|VS402\d+|work item type\b[^.]*\b(does not exist|not found)\b|is not a work item type|WorkItemType(NotFound|DoesNotExist)/i;
+/** True for Azure's wording when a work item type is not in the project. */
+export const isMissingTypeText = (text: string) => missingTypeText.test(text);
+/** Azure's own refusal text, with links and secrets removed and trimmed. */
+export function redactAdoMessage(text: unknown) {
+  return String(text ?? "")
+    .replace(/https?:\/\/\S+/gi, "[link]")
+    .replace(/(bearer|basic|token|pat|password)[\s:=]+\S+/gi, "$1 [removed]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+}
+/** A non-2xx Azure answer. The message stays the short status code. */
+export class AdoRejected extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super("request_rejected_" + status);
+  }
+}
+const rejectionDetail = (data: unknown) => {
+  const body = data && typeof data === "object" ? (data as object) : {};
+  const pick = (key: string) => {
+    const value = (body as Record<string, unknown>)[key];
+    return typeof value === "string" ? value : "";
+  };
+  const message = redactAdoMessage(pick("message"));
+  const code = redactAdoMessage(pick("typeKey") || pick("errorCode"));
+  return code && !message.includes(code)
+    ? message
+      ? `${message} (${code})`
+      : code
+    : message;
+};
+/** Both a trailing slash and none give exactly one slash before _apis. */
+export const workItemUrl = (collection: string, id: number) =>
+  collection.replace(/\/*$/, "/") + "_apis/wit/workItems/" + id;
+const typeMissing = (status: number, data: unknown) => {
+  if (status !== 400 && status !== 404) return false;
+  const body = data && typeof data === "object" ? (data as object) : {};
+  return ["typeKey", "message"].some(
+    (key) => key in body && isMissingTypeText(String((body as never)[key])),
+  );
+};
+/** Azure reports a person as an object; the plan may name them either way. */
+export function sameAdoField(key: string, actual: unknown, expected: unknown) {
+  if (key === "System.AssignedTo" && actual && typeof actual === "object") {
+    const who = actual as { uniqueName?: unknown; displayName?: unknown };
+    const want = String(expected).trim().toLowerCase();
+    const names = [
+      who.uniqueName,
+      who.displayName,
+      typeof who.displayName === "string" && typeof who.uniqueName === "string"
+        ? `${who.displayName} <${who.uniqueName}>`
+        : undefined,
+    ];
+    return names.some(
+      (name) => typeof name === "string" && name.toLowerCase() === want,
+    );
+  }
+  return actual === expected;
+}
+const decoded = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+const sameProject = (actual: string, expected: string) =>
+  decoded(actual).trim().toLowerCase() ===
+  decoded(expected).trim().toLowerCase();
 type Item = AdoReceipt & {
+  url?: string;
   fields: Record<string, unknown>;
   relations?: { rel: string; url: string }[];
 };
@@ -24,10 +101,21 @@ export class AdoWriteClient {
       (route.includes("?") ? "&" : "?") +
       "api-version=7.0";
     const r = await this.transport(method, url, body);
-    if (r.status < 200 || r.status >= 300)
-      throw Error(
-        r.status === 412 ? "revision_conflict" : "request_rejected_" + r.status,
-      );
+    if (r.status < 200 || r.status >= 300) {
+      if (
+        method === "POST" &&
+        route.startsWith("workitems/$") &&
+        typeMissing(r.status, r.data)
+      )
+        throw Object.assign(
+          new AdoTypeMissing("request_rejected_" + r.status),
+          {
+            detail: rejectionDetail(r.data),
+          },
+        );
+      if (r.status === 412) throw Error("revision_conflict");
+      throw new AdoRejected(r.status, rejectionDetail(r.data));
+    }
     return r.data;
   }
   async item(id: number) {
@@ -42,7 +130,7 @@ export class AdoWriteClient {
       !Number.isSafeInteger(r.rev) ||
       !r.fields ||
       (r.fields["System.TeamProject"] &&
-        r.fields["System.TeamProject"] !== this.project)
+        !sameProject(String(r.fields["System.TeamProject"]), this.project))
     )
       throw Error("Azure item identity mismatch");
     return r;
@@ -53,14 +141,8 @@ export class AdoWriteClient {
       throw Error("Azure type changed");
     for (const [k, v] of Object.entries(step.fields)) {
       const actual = item.fields[k];
-      const value =
-        k === "System.AssignedTo" &&
-        actual &&
-        typeof actual === "object" &&
-        "uniqueName" in actual
-          ? actual.uniqueName
-          : actual;
-      if (value === v) continue;
+      if (sameAdoField(k, actual, v)) continue;
+      const value = actual;
       if (
         (k === "System.Description" ||
           k === "Microsoft.VSTS.Common.AcceptanceCriteria") &&
@@ -92,6 +174,22 @@ export class AdoWriteClient {
       throw Error("Azure revision did not advance");
     return { id: item.id, rev: item.rev };
   }
+  /** The server's own URL for the parent, else one built from the collection. */
+  private async parentUrl(parent: number) {
+    try {
+      const own = ((await this.call("GET", "workitems/" + parent)) as Item)
+        ?.url;
+      if (
+        typeof own === "string" &&
+        new URL(own).origin === new URL(this.collection).origin &&
+        new RegExp("/workitems/" + parent + "$", "i").test(own)
+      )
+        return own;
+    } catch {
+      // Fall back to the collection address below.
+    }
+    return workItemUrl(this.collection, parent);
+  }
   async write(step: AdoStep, parent: number | null) {
     const patch: { op: string; path: string; value: unknown }[] = [];
     if (step.remoteId)
@@ -113,7 +211,7 @@ export class AdoWriteClient {
           path: "/relations/-",
           value: {
             rel: "System.LinkTypes.Hierarchy-Reverse",
-            url: this.collection + "_apis/wit/workItems/" + parent,
+            url: await this.parentUrl(parent),
           },
         });
     }
@@ -140,5 +238,68 @@ export class AdoWriteClient {
     })) as { workItems: { id: number }[] };
     if (result?.workItems?.length !== 1) return undefined;
     return this.verify(result.workItems[0]!.id, step, parent);
+  }
+  /**
+   * Read-only: the lowest-numbered item in this project with this exact title,
+   * type and parent that Amun created (it carries an Amun marker tag).
+   */
+  async existing(
+    title: string,
+    type: string | string[],
+    parent: number | null = null,
+  ) {
+    const types = Array.isArray(type) ? type : [type];
+    const quote = (value: string) => value.replaceAll("'", "''");
+    const search = (names: string[]) =>
+      this.call("POST", "wiql", {
+        query:
+          "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Title] = '" +
+          quote(title) +
+          "' AND [System.WorkItemType] IN (" +
+          names.map((name) => "'" + quote(name) + "'").join(",") +
+          ") ORDER BY [System.Id]",
+      }) as Promise<{ workItems?: { id: number }[] }>;
+    let result: { workItems?: { id: number }[] };
+    try {
+      result = await search(types);
+    } catch (error) {
+      // Azure DevOps Server rejects the whole query when one listed type is not
+      // in the project, so each type is asked alone and an unknown one has none.
+      if (
+        types.length < 2 ||
+        !(error instanceof Error) ||
+        error.message !== "request_rejected_400"
+      )
+        throw error;
+      const workItems: { id: number }[] = [];
+      for (const name of types) {
+        try {
+          workItems.push(...((await search([name]))?.workItems ?? []));
+        } catch (single) {
+          if (
+            !(single instanceof Error) ||
+            single.message !== "request_rejected_400"
+          )
+            throw single;
+        }
+      }
+      result = { workItems: workItems.sort((a, b) => a.id - b.id) };
+    }
+    // A tag query cannot match by prefix, so the marker is checked on each.
+    for (const { id } of (result?.workItems ?? []).slice(0, 20)) {
+      const item = await this.item(id);
+      const tags = String(item.fields["System.Tags"] ?? "")
+        .split(";")
+        .map((t) => t.trim());
+      const above = item.relations
+        ?.filter((r) => r.rel === "System.LinkTypes.Hierarchy-Reverse")
+        .map((r) => Number(/\/workitems\/(\d+)$/i.exec(r.url)?.[1]));
+      const sameParent = parent
+        ? above?.includes(parent)
+        : !above || above.length === 0;
+      if (sameParent && tags.some((t) => t.startsWith("Amun-")))
+        return { id: item.id };
+    }
+    return undefined;
   }
 }

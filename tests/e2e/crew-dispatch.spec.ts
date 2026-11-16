@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadEndpointReceipt } from "../../packages/crew/src/endpoint-receipt.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 async function workerIdentities(pane: number, harness: string) {
   const { stdout } = await promisify(execFile)(
     "/bin/ps",
@@ -59,6 +60,7 @@ test("Firstmate dispatches both persistent subscription workers and publishes th
       ...(executablePath ? { executablePath } : {}),
       args: [
         ...(executablePath ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
     });

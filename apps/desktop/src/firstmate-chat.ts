@@ -10,7 +10,7 @@ export class ChatSession {
   constructor(
     private chat: FirstmateChat,
     private primary: FirstmateSupervision,
-    private selected: () => string | null,
+    private selected: (product: string) => string | null,
     private send: (message: unknown) => void,
   ) {}
   async handle(input: unknown) {
@@ -18,7 +18,7 @@ export class ChatSession {
     if (!parsed.success) return;
     const cmd = parsed.data;
     if (cmd.action === "history") {
-      if (this.selected() === cmd.productId)
+      if (this.selected(cmd.productId) === cmd.productId)
         this.send({
           kind: "firstmate-chat-result",
           phase: "history",
@@ -30,7 +30,7 @@ export class ChatSession {
       return;
     }
     const turn = cmd.turn;
-    if (this.selected() !== turn.productId) return;
+    if (this.selected(turn.productId) !== turn.productId) return;
     if (cmd.action !== "send") {
       if (
         this.current?.productId !== turn.productId ||
@@ -56,7 +56,10 @@ export class ChatSession {
     }
     this.current = turn;
     try {
-      while (this.current && this.selected() === this.current.productId) {
+      while (
+        this.current &&
+        this.selected(this.current.productId) === this.current.productId
+      ) {
         const t: ChatTurn = this.current;
         let begun = false;
         try {
@@ -91,7 +94,7 @@ export class ChatSession {
     }
   }
   private emit(t: ChatTurn, phase: string, text: string) {
-    if (this.selected() === t.productId)
+    if (this.selected(t.productId) === t.productId)
       this.send({
         kind: "firstmate-chat-result",
         productId: t.productId,

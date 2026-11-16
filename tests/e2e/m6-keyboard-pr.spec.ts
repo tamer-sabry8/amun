@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { reach } from "../support/keyboard.ts";
 import { connectionId } from "../../packages/auth/src/broker.ts";
 import { acceptanceDb } from "../support/ado-acceptance-drafts.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("packaged reviewer binds a native TEST review and merge decision to the exact TEST head", async () => {
   const lookup = process.env.AMUN_TEST_GITHUB_REPO,
     number = Number(process.env.AMUN_TEST_PR),
@@ -51,6 +52,7 @@ test("packaged reviewer binds a native TEST review and merge decision to the exa
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

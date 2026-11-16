@@ -1,10 +1,11 @@
 // Settings (handoff §9): accounts and models, tools, groups and routing,
 // permissions, Council, skills, themes, data, advanced. Runtime vocabulary
 // lives only under Advanced.
-import { useState } from "react";
-import type { UiPreferences, WorkspaceSnapshot } from "@amun/contracts";
+import { useEffect, useState } from "react";
+import type { WorkspaceSnapshot } from "@amun/contracts";
 import {
   gateLabels,
+  permissionChanges,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
 import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
@@ -12,14 +13,31 @@ import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
-import { BackupControls, Settings as LegacySettings } from "../shell.tsx";
-import { NativePiPanel } from "../native-pi-panel.tsx";
-import { AgentsPanel } from "../agents-panel.tsx";
-import { SkillsLibrary } from "../skills-library.tsx";
+import {
+  ConversationTools,
+  DiagnosticsTools,
+  FirstmateRuntime,
+} from "./advanced-panels.tsx";
+import { BackupPanel, SkillsPanel } from "./settings-panels.tsx";
 import { ModelCards, tools } from "./wizard.tsx";
 import { ToolCards } from "./tool-cards.tsx";
+import { ConnectionCards } from "./connection-cards.tsx";
 import { council, work } from "./store.ts";
-import { groupName, shortDate, type Snapshot } from "./view-model.ts";
+import { copyText } from "./clipboard.ts";
+import {
+  buildDate,
+  buildInfo,
+  readSystem,
+  versionDetails,
+  versionLine,
+  type SystemInfo,
+} from "./version-info.ts";
+import {
+  groupName,
+  permissionText,
+  shortDate,
+  type Snapshot,
+} from "./view-model.ts";
 
 export const settingsSections = [
   ["models", "Accounts and models"],
@@ -31,6 +49,7 @@ export const settingsSections = [
   ["themes", "Themes"],
   ["data", "Data and backup"],
   ["advanced", "Advanced"],
+  ["about", "About"],
 ] as const;
 export type SettingsSection = (typeof settingsSections)[number][0];
 
@@ -76,12 +95,16 @@ export function Settings({
   councilStatus,
   section,
   onSection,
+  skillsProductId = null,
+  onSkillsProduct = () => undefined,
 }: {
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
   councilStatus: CouncilStatus | null;
   section: SettingsSection;
   onSection(section: SettingsSection): void;
+  skillsProductId?: string | null;
+  onSkillsProduct?(productId: string): void;
 }) {
   const [group, setGroup] = useState("");
   const [permission, setPermission] = useState({
@@ -90,16 +113,18 @@ export function Settings({
     permit: "create",
   });
   const [problem, setProblem] = useState("");
+  const [system, setSystem] = useState<SystemInfo>({
+    macos: "unknown",
+    arch: "unknown",
+  });
+  const [copied, setCopied] = useState("");
+  useEffect(() => {
+    if (section === "about") void readSystem().then(setSystem);
+  }, [section]);
   const trackers = [
     ...tools.map(([id]) => id).filter((id) => id !== "obsidian"),
     "amun",
   ];
-  const preferences: UiPreferences = workspace?.preferences ?? {
-    theme: "tamer-sabry-default",
-    productId: null,
-    islandSize: "card",
-    pinnedTabs: [],
-  };
   return (
     <div className="rb-scroll">
       <div className="rb-page">
@@ -111,7 +136,7 @@ export function Settings({
             {settingsSections.map(([id, label]) => (
               <button
                 key={id}
-                className="rb-nav"
+                className="rb-snav"
                 aria-current={section === id ? "page" : undefined}
                 onClick={() => onSection(id)}
               >
@@ -133,14 +158,6 @@ export function Settings({
                 Firstmate picks a model per task type from the accounts above,
                 and every run shows the model it used.
               </p>
-              <details>
-                <summary className="link">
-                  Review coding assistants on this Mac
-                </summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <NativePiPanel subscriptionsOnly />
-                </div>
-              </details>
             </section>
           )}
           {section === "tools" && (
@@ -150,13 +167,7 @@ export function Settings({
                 Connect the tools your team uses. Connecting a tool never lets
                 Amun publish to it without the approvals under Permissions.
               </p>
-              <div className="legacy-surface">
-                <LegacySettings
-                  section="connections"
-                  preferences={preferences}
-                  onPreferences={() => undefined}
-                />
-              </div>
+              <ConnectionCards />
             </section>
           )}
           {section === "groups" && (
@@ -338,6 +349,34 @@ export function Settings({
                     None. Firstmate asks before each change outside a
                     conversation’s scope.
                   </p>
+                )}
+                {snapshot.permissions.length > 0 && (
+                  <section aria-label="Recent changes" className="rb-rows">
+                    <h4>Recent changes</h4>
+                    {permissionChanges(snapshot.permissions).map((change) => (
+                      <div
+                        className="rb-rowitem"
+                        key={`${change.id}-${change.kind}`}
+                      >
+                        <span>
+                          <span className="name">
+                            You{" "}
+                            {change.kind === "allowed"
+                              ? "allowed"
+                              : "took away"}{" "}
+                            {permissionText(change.action, change.destination)}
+                          </span>
+                          <br />
+                          <span className="muted small">
+                            {groupName(snapshot, change.groupId)}
+                          </span>
+                        </span>
+                        <span className="muted small">
+                          {shortDate(change.at)}
+                        </span>
+                      </div>
+                    ))}
+                  </section>
                 )}
                 <form
                   className="row wrap"
@@ -550,17 +589,42 @@ export function Settings({
                 Skills you install appear in the composer under /. Each one is
                 reviewed before it is used.
               </p>
-              {workspace?.productContext ? (
-                <div className="legacy-surface">
-                  <SkillsLibrary
-                    key={workspace.productContext.productId}
-                    context={workspace.productContext}
-                  />
-                </div>
-              ) : (
+              {!workspace?.products.length ? (
                 <p className="muted">
-                  Open a product to add or review its skills.
+                  Create a product first, then add its skills here.
                 </p>
+              ) : (
+                <>
+                  {workspace.products.length > 1 && (
+                    <span className="row muted small">
+                      Product
+                      <select
+                        aria-label="Product"
+                        value={skillsProductId ?? ""}
+                        onChange={(event) =>
+                          onSkillsProduct(event.target.value)
+                        }
+                      >
+                        {workspace.products.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  )}
+                  {workspace.productContext &&
+                  workspace.productContext.productId === skillsProductId ? (
+                    <SkillsPanel
+                      key={workspace.productContext.productId}
+                      context={workspace.productContext}
+                    />
+                  ) : (
+                    <p className="muted" role="status">
+                      Opening…
+                    </p>
+                  )}
+                </>
               )}
             </section>
           )}
@@ -619,36 +683,64 @@ export function Settings({
                 {snapshot.memory.disputed > 0 &&
                   ` ${snapshot.memory.disputed} ${snapshot.memory.disputed === 1 ? "is" : "are"} waiting for your answer.`}
               </p>
-              <div className="legacy-surface">
-                <BackupControls />
-              </div>
+              <BackupPanel />
             </section>
           )}
           {section === "advanced" && (
             <section aria-labelledby="rb-s-adv" style={{ maxWidth: "none" }}>
               <h2 id="rb-s-adv">Advanced</h2>
               <p className="muted">
-                Runtime controls, sessions and diagnostics. Most people never
-                need these.
+                Firstmate’s runtime and tools for your conversation. Most people
+                never need these.
               </p>
-              <details>
-                <summary className="link">Agent runtime and sessions</summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <AgentsPanel onOpenWorker={() => undefined} />
+              <FirstmateRuntime />
+              <ConversationTools />
+              <DiagnosticsTools />
+            </section>
+          )}
+          {section === "about" && (
+            <section aria-labelledby="rb-s-about">
+              <h2 id="rb-s-about">About</h2>
+              <div className="rb-rows">
+                <div className="rb-rowitem">
+                  <span>
+                    <span className="name">Amun</span>
+                    <br />
+                    <span className="muted small">
+                      {versionLine(buildInfo)}
+                    </span>
+                  </span>
                 </div>
-              </details>
-              <details>
-                <summary className="link">
-                  Firstmate conversation, commands and imports
-                </summary>
-                <div className="legacy-surface" style={{ marginTop: 10 }}>
-                  <NativePiPanel />
+                <div className="rb-rowitem">
+                  <span>
+                    <span className="name">Build</span>
+                    <br />
+                    <span className="muted small">
+                      {buildInfo.commit} · {buildDate(buildInfo)}
+                    </span>
+                  </span>
                 </div>
-              </details>
-              <p className="muted small">
-                The earlier workspace remains available for comparison at Amun’s
-                address with ?legacy=1.
+              </div>
+              <p className="muted">
+                Ad-hoc signed beta for trusted testers. Not notarized.
               </p>
+              <div className="row">
+                <button
+                  className="btn quiet"
+                  onClick={async () =>
+                    setCopied(
+                      (await copyText(versionDetails(buildInfo, system)))
+                        ? "Copied."
+                        : "Couldn’t copy. Try again.",
+                    )
+                  }
+                >
+                  Copy version details
+                </button>
+                <span className="muted small" role="status" aria-live="polite">
+                  {copied}
+                </span>
+              </div>
             </section>
           )}
         </div>

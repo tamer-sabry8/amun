@@ -1,4 +1,5 @@
 import { SkillLibrary } from "./skill-library.ts";
+import { cloneSkills, SkillSourceError } from "./skill-source.ts";
 import { Reminders } from "./reminders.ts";
 import { MemorySync } from "./memory-sync.ts";
 import { portfolio, dependencies } from "./portfolio.ts";
@@ -14,6 +15,7 @@ import type Database from "better-sqlite3";
 import {
   productAuthoring,
   documentImport,
+  skillFetch,
   workspaceCommand,
   workspaceSnapshot,
   uiPreferences,
@@ -31,7 +33,11 @@ export class WorkspaceService {
   private readonly documents: ProductDocuments;
   private readonly attention: AttentionStore;
   private readonly redactor: Redactor;
-  constructor(db: Database.Database, redactor = new Redactor()) {
+  constructor(
+    db: Database.Database,
+    redactor = new Redactor(),
+    private readonly skillsStore?: string,
+  ) {
     this.db = db;
     this.skillLibrary = new SkillLibrary(db);
     this.reminders = new Reminders(db);
@@ -63,6 +69,19 @@ export class WorkspaceService {
         "INSERT INTO workspace_settings(id,value_json) VALUES ('ui_preferences',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
       )
       .run(JSON.stringify(preferences));
+  }
+  /** Mapped sources of any product, for read-only lookups that need no open product. */
+  productSources(productId: string) {
+    return this.db
+      .prepare(
+        "SELECT id,title,kind,external_id AS reference FROM sources WHERE product_id=? ORDER BY title,id",
+      )
+      .all(productId) as {
+      id: string;
+      title: string;
+      kind: string;
+      reference: string | null;
+    }[];
   }
   private productContext(productId: string | null) {
     if (!productId) return null;
@@ -283,6 +302,41 @@ export class WorkspaceService {
       };
     }
   }
+  /** Clones a skills source into Amun's own store and queues each skill for review. */
+  async fetchSkills(
+    input: unknown,
+    clone: typeof cloneSkills = cloneSkills,
+  ): Promise<WorkspaceEvent> {
+    try {
+      const parsed = skillFetch.safeParse(input);
+      if (!parsed.success || !this.skillsStore)
+        throw new SkillSourceError(
+          "Enter a web address that starts with https://",
+        );
+      if (this.preferences().productId !== parsed.data.productId)
+        throw new SkillSourceError("Open the product first, then try again.");
+      const { origin, skills } = await clone(parsed.data.url, this.skillsStore);
+      if (this.preferences().productId !== parsed.data.productId)
+        throw new SkillSourceError("Open the product first, then try again.");
+      for (const skill of skills)
+        this.skillLibrary.review(
+          parsed.data.productId,
+          skill.name,
+          this.redactor.text((origin + "#" + skill.path).slice(0, 512)),
+          this.redactor.text(skill.source),
+        );
+      return this.snapshot();
+    } catch (e) {
+      return {
+        version: 1,
+        kind: "workspace-error",
+        message:
+          e instanceof SkillSourceError
+            ? e.message
+            : "Those skills could not be added. Check the address and try again.",
+      };
+    }
+  }
   async importDocument(input: unknown): Promise<WorkspaceEvent> {
     try {
       const parsed = documentImport.safeParse(input);
@@ -399,6 +453,7 @@ export class WorkspaceService {
       } else if (
         command.action === "review-skill" ||
         command.action === "decide-skill" ||
+        command.action === "remove-skill" ||
         command.action === "use-skill"
       ) {
         if (command.productId !== this.preferences().productId)
@@ -410,6 +465,8 @@ export class WorkspaceService {
             this.redactor.text(command.origin),
             this.redactor.text(command.source),
           );
+        else if (command.action === "remove-skill")
+          this.skillLibrary.uninstall(command.productId, command.name);
         else if (command.action === "decide-skill")
           this.skillLibrary.decide(
             command.productId,
@@ -486,6 +543,24 @@ export class WorkspaceService {
             if (this.preferences().productId !== command.productId)
               throw Error("Product selection changed");
             const reference = this.redactor.text(command.reference);
+            if (command.sourceId) {
+              const changed = this.db
+                .prepare(
+                  "UPDATE sources SET external_id=?,title=?,hash=?,retrieved_at=? WHERE id=? AND product_id=? AND kind=?",
+                )
+                .run(
+                  reference,
+                  this.redactor.text(command.title),
+                  createHash("sha256").update(reference).digest("hex"),
+                  new Date().toISOString(),
+                  command.sourceId,
+                  command.productId,
+                  command.sourceKind,
+                );
+              if (!changed.changes)
+                throw Error("That source belongs to another product");
+              return;
+            }
             this.db
               .prepare(
                 "INSERT INTO sources(id,product_id,kind,external_id,title,retrieved_at,hash) VALUES (?,?,?,?,?,?,?)",

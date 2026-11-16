@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { catalog } from "../../packages/contracts/src/firstmate-release.ts";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("one-click rollback survives restart and prepares the retained source without changing existing worktrees", async () => {
   const executablePath = process.env.AMUN_PACKAGED_PATH;
@@ -38,6 +39,7 @@ test("one-click rollback survives restart and prepares the retained source witho
       ...(executablePath ? { executablePath } : {}),
       args: [
         ...(executablePath ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       chromiumSandbox: true,
@@ -50,13 +52,33 @@ test("one-click rollback survives restart and prepares the retained source witho
       return page.getByRole("region", { name: "Firstmate runtime" });
     };
     let view = await panel();
-    const prepare = async (pin: typeof current) => {
-      await view
-        .getByRole("button", { name: "Prepare Firstmate worktree" })
-        .click();
+    // A loaded full-suite run can make one release operation time out; the
+    // product reports that with a fixed message, so click again (bounded).
+    const failed = "Firstmate release operation failed.";
+    const attempt = async (
+      button: string,
+      expected: string,
+      timeout: number,
+    ) => {
       const status = view.getByRole("status");
+      for (let tries = 1; ; tries++) {
+        await view
+          .getByRole("button", { name: button })
+          .click({ timeout: 3000 });
+        await expect(status).toContainText(
+          new RegExp(
+            expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "|" + failed,
+          ),
+          { timeout },
+        );
+        if (!(await status.innerText()).includes(failed) || tries === 3) break;
+      }
+      await expect(status).toContainText(expected, { timeout: 1000 });
+      return status;
+    };
+    const prepare = async (pin: typeof current) => {
       const prefix = "Prepared Firstmate " + pin.commit + " at ";
-      await expect(status).toContainText(prefix, { timeout: 60000 });
+      const status = await attempt("Prepare Firstmate worktree", prefix, 60000);
       const home = (await status.innerText()).slice(prefix.length);
       expect(home.startsWith(root + "/workspace/firstmate-home-")).toBe(true);
       expect((await lstat(join(home, ".git"))).isFile()).toBe(true);
@@ -71,23 +93,19 @@ test("one-click rollback survives restart and prepares the retained source witho
     };
     await expect(view.getByRole("status")).toContainText(current.commit);
     const openCrew = async () => {
-      await view
-        .getByRole("button", { name: "Open persistent crew home" })
-        .click({ timeout: 3000 });
-      const status = view.getByRole("status");
-      await expect(status).toContainText(
+      const status = await attempt(
+        "Open persistent crew home",
         "Crew home for " + current.commit + " at ",
-        { timeout: 60000 },
+        60000,
       );
       return (await status.innerText()).split(" at ")[1]!;
     };
     const crew = await openCrew();
     const original = await prepare(current);
-    await view
-      .getByRole("button", { name: "Roll back to previous Firstmate" })
-      .click();
-    await expect(view.getByRole("status")).toContainText(
+    await attempt(
+      "Roll back to previous Firstmate",
       "Restored Firstmate revision " + previous!.commit,
+      30000,
     );
     await app.close();
     app = await launch();

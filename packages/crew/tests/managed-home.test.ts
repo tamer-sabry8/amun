@@ -50,12 +50,21 @@ describe("Firstmate managed home", () => {
       "crew-dispatch.json": '{"default":{"harness":"codex"}}',
     };
     expect(mergeOverlay(overlay)).toEqual({
+      "crew-harness": "pi",
+      "supervision-branch-model": "github-copilot/claude-sonnet-5.5",
       ...overlay,
       "claude-permission-mode": "auto",
       "codex-permission-mode": "restricted",
     });
     expect(overlay["claude-permission-mode"]).toBe("bypass");
     expect(overlay["codex-permission-mode"]).toBe("bypass");
+  });
+  it("defaults secondary workers and supervision to GitHub Copilot through Pi", () => {
+    expect(mergeOverlay({ backend: "tmux" })).toMatchObject({
+      "crew-harness": "pi",
+      "secondmate-harness": "pi github-copilot/claude-sonnet-5.5",
+      "supervision-branch-model": "github-copilot/claude-sonnet-5.5",
+    });
   });
   it.each([
     { backend: "unsupported" },

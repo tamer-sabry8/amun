@@ -20,6 +20,7 @@ import {
 } from "../../contracts/src/firstmate-release.ts";
 import { verifyDistributionArchive } from "./distribution.ts";
 import {
+  addOwnedWorker,
   createFirstmateWorktrees,
   ownedWorktreeBranch,
 } from "./firstmate-worktree.ts";
@@ -95,13 +96,19 @@ export class FirstmateReleases {
       );
       if (!/^[a-f0-9]{40}$/.test(revision))
         throw Error("Invalid crew revision");
-      for (const harness of ["codex", "claude"]) {
-        if (
-          (await ownedWorktreeBranch(home, join(root, harness + "-worker"))) !==
-          "amun/" + harness + "-worker"
-        )
-          throw Error("Unexpected crew worktree branch");
+      const pi = join(root, "pi-worker");
+      try {
+        await lstat(pi);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        // A home made before Copilot routing: add the worker to its own repository.
+        await addOwnedWorker(home, "pi").catch(async () => {
+          // A concurrent caller may have added it first; verification below decides.
+          await lstat(pi);
+        });
       }
+      if ((await ownedWorktreeBranch(home, pi)) !== "amun/pi-worker")
+        throw Error("Unexpected crew worktree branch");
       return { home, revision };
     };
     try {
@@ -222,7 +229,7 @@ export class FirstmateReleases {
       const worktrees = await createFirstmateWorktrees(
         tree,
         join(owner, "git"),
-        crew ? ["primary", "codex-worker", "claude-worker"] : ["primary"],
+        crew ? ["primary", "pi-worker"] : ["primary"],
       );
       await writeFile(join(owner, "source-revision"), pin.commit, {
         mode: 0o600,

@@ -90,6 +90,59 @@ export function authority(
     : { allowed: false, ask: "approval" };
 }
 
+export interface PermissionChange {
+  id: string;
+  kind: "allowed" | "revoked";
+  at: string;
+  groupId: string;
+  destination: string;
+  action: string;
+}
+
+/**
+ * Every grant and revoke the owner made, newest first. A revoke keeps its
+ * row, so the history is the rows themselves; nothing else is stored.
+ */
+export function permissionChanges(
+  permissions: {
+    id: string;
+    groupId: string;
+    destination: string;
+    action: string;
+    createdAt: string;
+    revokedAt: string | null;
+  }[],
+  limit = 20,
+): PermissionChange[] {
+  const changes = permissions.flatMap((item) => {
+    const base = {
+      id: item.id,
+      groupId: item.groupId,
+      destination: item.destination,
+      action: item.action,
+    };
+    const allowed: PermissionChange = {
+      ...base,
+      kind: "allowed",
+      at: item.createdAt,
+    };
+    return item.revokedAt
+      ? [allowed, { ...base, kind: "revoked" as const, at: item.revokedAt }]
+      : [allowed];
+  });
+  // A revoke in the same instant as its grant is the later event.
+  const order = (change: PermissionChange) =>
+    change.kind === "revoked" ? 1 : 0;
+  return changes
+    .sort(
+      (a, b) =>
+        b.at.localeCompare(a.at) ||
+        order(b) - order(a) ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, limit);
+}
+
 export interface PlanItem {
   id: string;
   summary: string;
@@ -150,9 +203,35 @@ export function approvalSurface(plan: {
     : "tray";
 }
 
-export function approveLabel(count: number, noun = "story") {
+/** "1 story", "2 product backlog items". */
+export function countedNoun(count: number, noun: string) {
   const plural = noun.endsWith("y") ? noun.slice(0, -1) + "ies" : noun + "s";
-  return `Approve and publish ${count} ${count === 1 ? noun : plural}`;
+  return `${count} ${count === 1 ? noun : plural}`;
+}
+
+const taskNames = new Set(["task", "sub-task", "subtask", "sub task"]);
+/**
+ * What a plan's items are called on its button: their own type in lower case
+ * ("task", "product backlog item"), "item" when they differ, and null when
+ * no item says. `kind` is the project's name for the type, when known.
+ */
+export function planNoun(
+  items: {
+    kind?: string | null | undefined;
+    fields: Record<string, string | number | null>;
+  }[],
+) {
+  const names = items.map((item) => {
+    const own = item.kind ?? item.fields.type ?? item.fields["Work item type"];
+    const name = typeof own === "string" ? own.trim().toLowerCase() : "";
+    return taskNames.has(name) ? "task" : name;
+  });
+  if (names.every((name) => !name)) return null;
+  return new Set(names).size === 1 ? names[0]! : "item";
+}
+
+export function approveLabel(count: number, noun = "story") {
+  return `Approve and publish ${countedNoun(count, noun)}`;
 }
 
 export interface WriteResult {
@@ -160,6 +239,10 @@ export interface WriteResult {
   state: "created" | "failed" | "unknown";
   externalId?: string | undefined;
   url?: string | undefined;
+  /** Already existed in the destination: linked, not created. */
+  linked?: boolean | undefined;
+  /** An existing page was changed, not created. */
+  updated?: boolean | undefined;
 }
 /** Partial writes are reported per item; an uncertain write is never replayed blind (UC21). */
 export function writeSummary(results: WriteResult[]) {
@@ -167,6 +250,10 @@ export function writeSummary(results: WriteResult[]) {
   const failed = results.filter((result) => result.state === "failed");
   const unknown = results.filter((result) => result.state === "unknown");
   const retry = failed.map((result) => result.id);
+  const linked = created.filter((result) => result.linked).length;
+  const updated = created.filter(
+    (result) => result.updated && !result.linked,
+  ).length;
   return {
     created: created.length,
     failed: failed.length,
@@ -174,7 +261,9 @@ export function writeSummary(results: WriteResult[]) {
     retry,
     reconcileFirst: unknown.map((result) => result.id),
     text:
-      `${created.length} created, ${failed.length} not created` +
+      `${created.length - linked - updated} created, ${failed.length} not created` +
+      (updated ? `, ${updated} updated` : "") +
+      (linked ? `, ${linked} already existed (linked, not created)` : "") +
       (unknown.length ? `, ${unknown.length} being checked` : "") +
       ", nothing duplicated",
     button: unknown.length
@@ -207,6 +296,23 @@ export function failureDetail(
   if (reason && failed.length === 1) parts.push(reason);
   parts.push("Nothing was duplicated.");
   return parts.join(" ");
+}
+
+/** One line for Firstmate after the owner retried a failed publication. */
+export function retryOutcome(
+  items: { summary: string; state: "created" | "failed" | "unknown" }[],
+  reason: string | null,
+) {
+  if (!items.length) return "Nothing was left to retry.";
+  const done = items.filter((item) => item.state === "created").length;
+  const left = items.filter((item) => item.state === "failed").length;
+  const checking = items.length - done - left;
+  const parts = [
+    `Retried ${items.length === 1 ? "the 1 item" : `the ${items.length} items`} that was not published: ${done} created`,
+  ];
+  if (left) parts.push(`${left} still not created`);
+  if (checking) parts.push(`${checking} being checked`);
+  return parts.join(", ") + "." + (reason && left === 1 ? " " + reason : "");
 }
 
 export interface RuleCase {

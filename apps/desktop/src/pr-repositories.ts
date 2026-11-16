@@ -44,8 +44,54 @@ export function repositoryTarget(reference: string) {
     url: u.href,
   };
 }
+export type PullRow = {
+  number: number;
+  title: string;
+  url: string;
+  author?: string;
+  draft?: boolean;
+  checks?: "passing" | "failing" | "running" | "none";
+  files?: number;
+  additions?: number;
+  deletions?: number;
+};
+const rollup: Record<string, PullRow["checks"]> = {
+  SUCCESS: "passing",
+  FAILURE: "failing",
+  ERROR: "failing",
+  PENDING: "running",
+  EXPECTED: "running",
+};
+export type GithubNode = {
+  number: number;
+  title: string;
+  url: string;
+  isDraft: boolean;
+  author: { login: string } | null;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  commits: {
+    nodes: { commit: { statusCheckRollup: { state: string } | null } }[];
+  };
+};
+/** One open pull request from GitHub's list query, trimmed to what the list shows. */
+export function githubRow(node: GithubNode): PullRow {
+  const state = node.commits.nodes[0]?.commit.statusCheckRollup?.state;
+  return {
+    number: node.number,
+    title: node.title,
+    url: node.url,
+    ...(node.author ? { author: node.author.login } : {}),
+    draft: node.isDraft,
+    checks: (state && rollup[state]) || "none",
+    files: node.changedFiles,
+    additions: node.additions,
+    deletions: node.deletions,
+  };
+}
 export interface PullAdapter {
-  list(): Promise<{ number: number; title: string; url: string }[]>;
+  list(): Promise<PullRow[]>;
   details(number: number): Promise<PullDetail>;
   diff(
     number: number,

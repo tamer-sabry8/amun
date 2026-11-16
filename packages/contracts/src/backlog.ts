@@ -10,6 +10,13 @@ const context = {
 export const backlogRead = z.discriminatedUnion("action", [
   z.strictObject({ ...context, action: z.literal("teams") }),
   z.strictObject({ ...context, action: z.literal("schema") }),
+  z.strictObject({ ...context, action: z.literal("sprints"), team: id }),
+  z.strictObject({
+    ...context,
+    action: z.literal("sprint-items"),
+    team: id,
+    sprint: id,
+  }),
   z.strictObject({ ...context, action: z.literal("options"), team: id }),
   z.strictObject({
     ...context,
@@ -67,6 +74,35 @@ export const backlogResult = z.discriminatedUnion("view", [
   }),
   z.object({ ...common, view: z.literal("error"), message: z.string() }),
   z.object({ ...common, view: z.literal("teams"), teams: z.array(named) }),
+  z.object({
+    ...common,
+    view: z.literal("sprints"),
+    team: named,
+    sprints: z.array(
+      z.object({
+        id,
+        name: id,
+        path: id,
+        start: z.string().max(64),
+        finish: z.string().max(64),
+      }),
+    ),
+  }),
+  z.object({
+    ...common,
+    view: z.literal("sprint-items"),
+    sprint: id,
+    items: z.array(
+      z.object({
+        id: z.number().int().positive(),
+        title: z.string(),
+        type: z.string(),
+        state: z.string(),
+        assignee: z.string().nullable(),
+      }),
+    ),
+    more: z.boolean(),
+  }),
   z.object({
     ...common,
     view: z.literal("options"),

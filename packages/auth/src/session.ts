@@ -3,6 +3,7 @@ import {
   type AuthCommand,
   type AuthEvent,
 } from "../../contracts/src/auth.ts";
+import { keychainWaitingNote } from "./keychain-reader.ts";
 import { AuthBroker, connectionId, type Connection } from "./broker.ts";
 export interface LoginProcess {
   answer(id: string, value: string): void;
@@ -24,11 +25,13 @@ export class AuthSession {
   private readonly start: StartLogin;
   private readonly readiness: (
     provider: string,
-  ) => Promise<"configured" | "missing" | "error">;
+  ) => Promise<"configured" | "missing" | "error" | "unknown">;
   private login: LoginProcess | undefined;
   /** Providers whose check was asked for while a sign-in was running. */
   private readonly deferred = new Set<string>();
   private closed = false;
+  private refreshing = false;
+  waitingMs = 10_000;
   private generation = 0;
   constructor(
     broker: AuthBroker,
@@ -46,11 +49,38 @@ export class AuthSession {
     this.readiness = readiness;
   }
   private list(): void {
+    const connections = this.metadata.list();
     this.send({
       version: 1,
       kind: "auth-connections",
-      connections: this.broker.describe(this.metadata.list()),
+      connections: this.broker.describe(connections),
     });
+    if (this.refreshing) return;
+    // The saved sign-ins are read off this path; a pending macOS prompt only
+    // delays the badges, never the other messages.
+    this.refreshing = true;
+    const waiting = setTimeout(
+      () =>
+        this.send({
+          version: 1,
+          kind: "auth-notice",
+          message: keychainWaitingNote,
+        }),
+      this.waitingMs,
+    );
+    waiting.unref();
+    void this.broker
+      .refresh(connections)
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(waiting);
+        this.refreshing = false;
+        this.send({
+          version: 1,
+          kind: "auth-connections",
+          connections: this.broker.describe(this.metadata.list()),
+        });
+      });
   }
   private async check(provider: string): Promise<void> {
     this.send({
@@ -61,11 +91,11 @@ export class AuthSession {
     });
     // "configured" means the credential is stored and Pi accepts it. It is
     // not proof that a model answers, so it is never promoted to "ready".
-    let status: "configured" | "missing" | "error";
+    let status: "configured" | "missing" | "error" | "unknown";
     try {
       status = await this.readiness(provider);
     } catch {
-      status = "error";
+      status = "unknown";
     }
     this.send({ version: 1, kind: "auth-status", id: provider, status });
   }

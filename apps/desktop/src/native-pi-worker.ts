@@ -84,11 +84,25 @@ import {
   NativePiActions,
   type NativePiSession,
 } from "../../../packages/crew/src/native-pi.ts";
+import {
+  CopilotUnavailable,
+  selectCopilotModel,
+  testProviders,
+} from "../../../packages/crew/src/copilot-routing.ts";
 import { preparePiAuth } from "../../../packages/auth/src/pi-auth.ts";
 import { JsonLineDecoder } from "../../../packages/crew/src/jsonl.ts";
 const root = process.env.AMUN_AUTH_ROOT,
   entry = process.env.AMUN_AUTH_SDK;
 if (!root || !entry) throw Error("Native Pi configuration unavailable");
+interface ModelRuntimeView {
+  getAvailable(
+    provider: string,
+  ): Promise<readonly { provider: string; id: string }[]>;
+}
+interface DefaultModelSettings {
+  getDefaultProvider(): string | undefined;
+  getDefaultModel(): string | undefined;
+}
 type Runtime = NativeSessionRuntime & {
   session: ExtensionSession &
     ResourceSession &
@@ -99,7 +113,10 @@ type Runtime = NativeSessionRuntime & {
     PreferenceSession &
     ExportSession &
     SettingsSession & {
-      modelRuntime: { listCredentials(): Promise<{ providerId: string }[]> };
+      modelRuntime: {
+        listCredentials(): Promise<{ providerId: string }[]>;
+        hasConfiguredAuth(providerId: string): boolean;
+      };
       sessionManager: { getBranch(): unknown[] };
       sessionId: string;
       getActiveToolNames(): string[];
@@ -172,7 +189,7 @@ async function initialize() {
   const sessions = join(cwd, "sessions");
   await privateDirectory(sessions);
   const sdk = (await import(pathToFileURL(entry!).href)) as {
-    ModelRuntime: { create(options: unknown): Promise<unknown> };
+    ModelRuntime: { create(options: unknown): Promise<ModelRuntimeView> };
     getPackageDir(): string;
     readStoredCredential(provider: string, path: string): unknown;
     ProjectTrustStore: new (root: string) => TrustStore;
@@ -183,9 +200,10 @@ async function initialize() {
         dir: string,
       ): Promise<{ id: string; name?: string; path: string; cwd: string }[]>;
     };
-    createAgentSessionServices(
-      options: unknown,
-    ): Promise<{ diagnostics: unknown[] }>;
+    createAgentSessionServices(options: unknown): Promise<{
+      diagnostics: unknown[];
+      settingsManager: DefaultModelSettings;
+    }>;
     createAgentSessionFromServices(options: unknown): Promise<unknown>;
     createAgentSessionRuntime(
       factory: (options: {
@@ -233,8 +251,14 @@ async function initialize() {
           noContextFiles: true,
         },
       });
+      const model = await selectCopilotModel(
+        modelRuntime,
+        services.settingsManager,
+        testProviders(process.env),
+      );
       const created = await sdk.createAgentSessionFromServices({
         services,
+        ...(model ? { model } : {}),
         sessionManager: options.sessionManager,
         sessionStartEvent: options.sessionStartEvent,
         noTools: "all",
@@ -274,6 +298,19 @@ async function initialize() {
     sdk.SessionManager.list(cwd, sessions),
   );
 }
+/**
+ * The SDK may start a session on a default model it has no credentials for (only
+ * when test providers leave Copilot unselected); that is no model at all. Used
+ * only when e2e test providers are declared: the snapshot-only auth check must
+ * not block production sends, where the SDK re-checks auth asynchronously.
+ */
+const authenticatedModel = () => {
+  const session = runtime?.session;
+  const model = session?.model;
+  return model && session.modelRuntime.hasConfiguredAuth(model.provider)
+    ? model
+    : undefined;
+};
 const decoder = new JsonLineDecoder(4194304);
 const send = (id: string, result: unknown) =>
   process.stdout.write(
@@ -563,7 +600,21 @@ process.stdin.on("data", (chunk: string) => {
           await resourceDirectories(root!);
           await reviewed!.refresh();
         }
+        {
+          // Test-only: the app passes this on unpackaged runs only.
+          const slow = Number(process.env.AMUN_E2E_SLOW_NATIVE_MS);
+          if (
+            slow > 0 &&
+            (command.command === "conversation" ||
+              command.command === "conversation-send")
+          )
+            await new Promise((done) => setTimeout(done, slow));
+        }
         if (command.command === "conversation-send") {
+          if (testProviders(process.env).length > 0 && !authenticatedModel())
+            throw new CopilotUnavailable(
+              "No model is available. Sign in to GitHub Copilot under Settings › Accounts and models.",
+            );
           if (runtime!.session.getActiveToolNames().length)
             throw Error("Native model turn has unexpected tools");
           queueRequests.clear();
@@ -724,8 +775,12 @@ process.stdin.on("data", (chunk: string) => {
             session.sessionName ?? "Unnamed conversation",
             session.sessionManager.getBranch(),
             redactor,
-            session.model
-              ? session.model.provider + "/" + session.model.id
+            (
+              testProviders(process.env).length > 0
+                ? authenticatedModel()
+                : session.model
+            )
+              ? session.model!.provider + "/" + session.model!.id
               : null,
           );
           if (command.command === "debug") {
@@ -913,14 +968,17 @@ process.stdin.on("data", (chunk: string) => {
         send(command.id, result);
       })()
         .catch(
-          () =>
+          (error: unknown) =>
             !stopping &&
             send(command.id, {
               kind: "message",
               text:
-                command.command === "conversation-send"
-                  ? "Turn outcome could not be verified. Read the conversation before sending another message."
-                  : "This native action could not be completed. Check session state and the supported argument.",
+                // No turn ran: the owner is told how to connect, not left guessing.
+                error instanceof CopilotUnavailable
+                  ? error.message
+                  : command.command === "conversation-send"
+                    ? "Turn outcome could not be verified. Read the conversation before sending another message."
+                    : "This native action could not be completed. Check session state and the supported argument.",
             }),
         )
         .finally(() => {

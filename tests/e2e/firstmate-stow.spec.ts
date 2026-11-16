@@ -9,13 +9,18 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("stow measures a new real Firstmate home and records the empty sweep", async () => {
   test.setTimeout(90000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-stow-")));
   const binary = process.env.AMUN_PACKAGED_PATH;
   const app = await electron.launch({
     ...(binary ? { executablePath: binary } : {}),
-    args: [...(binary ? [] : ["apps/desktop"]), "--user-data-dir=" + root],
+    args: [
+      ...(binary ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
+      "--user-data-dir=" + root,
+    ],
   });
   try {
     const page = await app.firstWindow();
@@ -52,10 +57,10 @@ test("stow measures a new real Firstmate home and records the empty sweep", asyn
     expect(await readFile(join(data, "stow-receipt.md"), "utf8")).not.toContain(
       marker,
     );
-    const worker = join(root, "workspace", owner, "git/codex-worker");
+    const worker = join(root, "workspace", owner, "git/pi-worker");
     await mkdir(join(worker, "data"), { recursive: true });
     await mkdir(join(worker, "config"), { recursive: true });
-    await writeFile(join(worker, ".fm-secondmate-home"), "amun-codex\n");
+    await writeFile(join(worker, ".fm-secondmate-home"), "amun-pi\n");
     await writeFile(join(worker, "config/startup-memory-budget"), "7500\n");
     await writeFile(
       join(worker, "data/learnings.md"),
@@ -67,7 +72,7 @@ test("stow measures a new real Firstmate home and records the empty sweep", asyn
     );
     await writeFile(
       join(data, "secondmates.md"),
-      "- amun-codex - local worker (home: " +
+      "- amun-pi - local worker (home: " +
         worker +
         "; scope: tests; projects: none; added 2026-11-08)\n",
     );
@@ -107,7 +112,11 @@ test("local Stow learns a selected conversation and remembers each pin decision 
   const launch = () =>
     electron.launch({
       ...(binary ? { executablePath: binary } : {}),
-      args: [...(binary ? [] : ["apps/desktop"]), "--user-data-dir=" + root],
+      args: [
+        ...(binary ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
+        "--user-data-dir=" + root,
+      ],
     });
   let app = await launch(),
     page = await app.firstWindow();

@@ -35,15 +35,27 @@ export async function checkPiReadiness(
       throw error;
     }
   },
-): Promise<"configured" | "missing" | "error"> {
+): Promise<"configured" | "missing" | "error" | "unknown"> {
   try {
     if (!modelLoginOptions.some((option) => option.provider === provider))
       return "error";
     await preparePiAuth(root);
     return await withRefreshLock(root, async () => {
+      // --no-refresh reads auth.json without Pi's own lock or any network call:
+      // a stored OAuth credential counts as signed in even when its access
+      // token has expired, and a refresh (which can fail or rotate the token
+      // under the running worker) is never attempted by a status check.
       const output = await run(
         binary,
-        [entry, "auth", "check", "--provider", provider, "--json"],
+        [
+          entry,
+          "auth",
+          "check",
+          "--provider",
+          provider,
+          "--json",
+          "--no-refresh",
+        ],
         {
           cwd: root,
           timeout: 20000,
@@ -63,6 +75,7 @@ export async function checkPiReadiness(
       return parseReadiness(provider, output);
     });
   } catch {
-    return "error";
+    // A timeout, spawn failure or unsafe store says nothing about the sign-in.
+    return "unknown";
   }
 }

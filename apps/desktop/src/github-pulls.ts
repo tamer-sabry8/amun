@@ -1,5 +1,9 @@
 import { Octokit } from "@octokit/rest";
-import type { PullAdapter } from "./pr-repositories.ts";
+import {
+  githubRow,
+  type GithubNode,
+  type PullAdapter,
+} from "./pr-repositories.ts";
 import type { PullDetail } from "../../../packages/contracts/src/pr-workspace.ts";
 type Graph = {
   repository: {
@@ -61,14 +65,15 @@ export function githubPulls(
     return b.toString("utf8");
   };
   return {
-    list: async () =>
-      (
-        await api.paginate(api.rest.pulls.list, {
-          ...where,
-          state: "open",
-          per_page: 100,
-        })
-      ).map((x) => ({ number: x.number, title: x.title, url: x.html_url })),
+    list: async () => {
+      const g = await api.graphql<{
+        repository: { pullRequests: { nodes: GithubNode[] } };
+      }>(
+        `query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,first:50,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{number title url isDraft additions deletions changedFiles author{login} commits(last:1){nodes{commit{statusCheckRollup{state}}}}}}}}`,
+        where,
+      );
+      return g.repository.pullRequests.nodes.map(githubRow);
+    },
     details: async (n) => {
       const [p, g, changed, reviews, user] = await Promise.all([
         pull(n),

@@ -68,10 +68,27 @@ export function attentionRow(item: Attention): AttentionRow {
 }
 
 /** What a proposal has not done yet, named for where it would go. */
-export function previewNote(destination: string) {
+export function previewNote(destination: string, named?: string) {
   return destination === "ado"
     ? "Preview only · No Azure DevOps changes"
-    : "Preview only · Nothing changes until you approve";
+    : `Preview only · ${named ? `To ${named} · ` : ""}Nothing changes until you approve`;
+}
+/** One honest header line per plan state; never claims approval for a plan that was not approved. */
+export function planStateNote(state: string, destination: string) {
+  switch (state) {
+    case "proposed":
+      return previewNote(destination);
+    case "changes_requested":
+      return "Changes requested · nothing was published";
+    case "approved":
+    case "published":
+    case "partial":
+      return "Approved";
+    case "failed":
+      return "Approved · publishing did not finish";
+    default:
+      return "Not published";
+  }
 }
 /** Labels that make clear what an accepted offer or a result did not do (Q50). */
 export const outcomeNotes = {
@@ -254,6 +271,8 @@ export type ConnectionState =
   "checking" | "signed_in" | "connected" | "signed_out" | "not_working";
 export function connectionStatus(input: {
   state: ConnectionState;
+  /** The check has finished without an answer: still neutral, but recoverable. */
+  finished?: boolean;
   reason?: "out_of_credits" | "service_down" | "model_not_enabled" | null;
 }) {
   const reasons = {
@@ -266,7 +285,7 @@ export function connectionStatus(input: {
       icon: "checking",
       tone: "checking",
       text: "Checking…",
-      action: null,
+      action: input.finished ? "Try again" : null,
     };
   // Signed in and accepted, but no model has answered yet. Kept apart from
   // "Connected", which is only claimed after a real reply.
@@ -324,7 +343,9 @@ export function fromLegacyStatus(
 ): ConnectionState {
   const value = (status ?? "missing").toLowerCase();
   if (value === "configured" && history.checked) return "signed_in";
-  if (value === "checking" || value === "configured") return "checking";
+  // "unknown" means the check could not answer; it is never "signed out".
+  if (value === "checking" || value === "configured" || value === "unknown")
+    return "checking";
   if (value === "ready" || value === "connected") return "connected";
   if (value === "error" || value === "failed")
     return history.everReady || history.attempted
@@ -375,6 +396,6 @@ export function nextRetry(input: {
     : ("surface" as const);
 }
 export const failureOverflow = [
-  "View diagnostics",
+  "See why it failed",
   "Copy log for a coding agent",
 ] as const;

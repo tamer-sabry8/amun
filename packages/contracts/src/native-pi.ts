@@ -56,6 +56,8 @@ export const textAttachmentRequest = z.strictObject({
     .max(12000)
     .refine((text) => !/[\p{Cc}]/u.test(text.replace(/[\r\n\t]/g, ""))),
 });
+/** Room for document excerpts plus Amun context, still bounded per turn. */
+export const nativeTurnTextLimit = 200_000;
 export const nativeTurnRequest = z.strictObject({
   image: z
     .string()
@@ -68,7 +70,7 @@ export const nativeTurnRequest = z.strictObject({
   text: z
     .string()
     .min(1)
-    .max(12000)
+    .max(nativeTurnTextLimit)
     .refine(
       (s) =>
         Boolean(s.trim()) && !s.includes("\0") && !/^[!\/]/.test(s.trimStart()),
@@ -223,6 +225,8 @@ export const nativePiResult = z.discriminatedUnion("kind", [
     title: z.string().max(256),
     text: z.string().max(262144),
     omittedItems: z.number().int().min(0).max(10000),
+    replyCount: z.number().int().min(0).optional(),
+    latestReply: z.string().max(262144).optional(),
   }),
   z.strictObject({
     kind: z.literal("import-review"),

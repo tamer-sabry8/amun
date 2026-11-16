@@ -19,8 +19,15 @@ interface State {
   snapshot: WorkSnapshot | null;
   result: WorkResult | null;
   council: CouncilStatus | null;
+  /** Why the workspace could not be read: paths and codes, never values. */
+  failure: string[] | null;
 }
-let state: State = { snapshot: null, result: null, council: null };
+let state: State = {
+  snapshot: null,
+  result: null,
+  council: null,
+  failure: null,
+};
 const listeners = new Set<() => void>();
 const resultListeners = new Set<(result: WorkResult) => void>();
 const emit = () => {
@@ -32,7 +39,9 @@ export function receive(raw: unknown) {
   const parsed = workEvent.safeParse(raw);
   if (!parsed.success) return false;
   if (parsed.data.kind === "work-snapshot")
-    state = { ...state, snapshot: parsed.data };
+    state = { ...state, snapshot: parsed.data, failure: null };
+  else if (parsed.data.kind === "work-snapshot-failed")
+    state = { ...state, failure: parsed.data.reasons };
   else if (parsed.data.kind === "council-status")
     state = { ...state, council: parsed.data };
   else if (parsed.data.kind !== "work-result") return false;
@@ -70,10 +79,16 @@ export const workStore = {
     emit();
   },
   reset: () => {
-    state = { snapshot: null, result: null, council: null };
+    state = { snapshot: null, result: null, council: null, failure: null };
     emit();
   },
 };
+/** Asks the service for the workspace again, after a failure. */
+export function retryWorkSnapshot() {
+  state = { ...state, failure: null };
+  emit();
+  bridge.send({ version: 1, kind: "work", action: "snapshot" });
+}
 
 type Action = WorkCommand["action"];
 type Payload<A extends Action> = Omit<

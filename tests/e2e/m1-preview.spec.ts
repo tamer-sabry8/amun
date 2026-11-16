@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native preview fits its inspector and hides behind overlays without reloading", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-preview-shell-"));
   const server = createServer((_req, res) =>
@@ -15,6 +16,7 @@ test("native preview fits its inspector and hides behind overlays without reload
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

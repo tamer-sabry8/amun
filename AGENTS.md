@@ -68,6 +68,8 @@ Acceptance harnesses must retain a temporary real-provider entry throughout the 
 
 The owner's workflow handoff is `Amun-Claude-Code-workflow-handoff.md` in the owner's Amun folder; it takes precedence over older documents that describe a broader rebuild. The work is wiring existing capabilities into the current interface. The current state and the next assignment are in `docs/HANDOFF-NEXT-AGENT.md`; start new work on a new branch from `main`.
 
+The legacy shell (`apps/renderer/src/shell.tsx`, `?legacy=1`, `AMUN_LEGACY_SHELL`) is test-only and must not ship: packaged builds always render the rebuilt shell (`apps/renderer/src/rebuild/app.tsx`) and no visible text may point to the legacy shell. Playwright runs hide their windows (`AMUN_E2E_HIDE_WINDOWS=1`).
+
 Pull request 10 ("R1 beta bug fixes") was closed by the owner's decision on 13 November 2026. Do not reopen it, merge it, or raise it.
 
 Every UI change needs the owner's approval before implementation. Show the actual current screen beside the proposed change in an annotatable preview, say which workflow it enables, and wait. Run every UI change through the `/impeccable` skill. Approval of a workflow does not approve its visual design.
@@ -80,3 +82,18 @@ Live-test destinations chosen by the owner:
 - Notion: child pages under `test for Amun to use`. That page is the publishing-test destination only, not a memory parent unless the owner selects it.
 
 Several agents work in this repository at once, including a crash investigation on other branches. Stay on your own branch and worktree; do not touch other worktrees or branches.
+
+## Firstmate principles (captain → Firstmate → crew)
+
+Owner instruction, 15 November 2026. Amun follows upstream Firstmate (github.com/kunchenguid/firstmate): the owner is the captain and talks only to Firstmate. Firstmate knows the work, orchestrates and delegates all real work to its crew (agents/secondmates), supervises them, and the crew report back to Firstmate, which reports plain outcomes to the captain.
+
+- Do not change this workflow. Do not let Firstmate do crew work itself, and do not let the UI bypass Firstmate to talk to crew.
+- Do not remove delegation, supervision, watch-a-crewmate, report-back or approval paths.
+- The visible crew is a core Firstmate feature. A view that lets the captain watch a crewmate's live session must be kept; it may be reworded or restyled (for example "Watch <agent>" instead of "terminal"), never deleted.
+- If a requested UI change would alter this workflow, stop and explain instead.
+
+## Council principles (Roast Room)
+
+Owner instruction, 15 November 2026. Amun's Council follows upstream Roast Room (github.com/nateherkai/roast-room). The Chair reads the decision, asks for missing facts, recommends a council (recommended / default board / everyone / other) and the owner confirms before it runs. The seated advisors argue in rounds. The owner gets a scored verdict and a downloadable PDF. "Ask <seat>" gets one seat's answer. Board settings are ask/auto/default.
+
+- Do not change this flow or remove the Chair's confirmation step.

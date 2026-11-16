@@ -32,6 +32,18 @@ export interface FirstRunInput {
 }
 /** The idle prompt of the two worker tools. */
 export const workerReady = /Ask Codex to do anything|\? for shortcuts/;
+/**
+ * Pi's idle screen, from its own footer (pi-coding-agent footer.js): context
+ * use and window, then the model, e.g. "0.0%/128k (auto)   claude-sonnet-5.5".
+ * Pi has no "?" hint line, and its footer is also drawn while the owner is
+ * being asked about project trust, which is not ready.
+ */
+export const piReady =
+  /\d+(?:\.\d+)?%\/\d+(?:\.\d+)?[kKM]?(?: \(auto\))?\s{2,}\S/;
+const piAsking = /Project trust|Saved decision:|Trust project folder\?/;
+/** The idle-screen pattern for a worker tool. */
+export const readyFor = (harness: string) =>
+  harness === "pi" ? piReady : workerReady;
 export type FirstRunStep = "trusted-folder" | "trusted-hooks";
 
 const squeeze = (text: string) => text.replace(/\s+/g, "");
@@ -60,6 +72,13 @@ export function firstRunPrompt(
     /^Review hooks/.test(on)
   )
     return { step: "trusted-hooks", keys: ["Down", "Enter"] };
+  if (piAsking.test(screen) && squeeze(screen).includes(squeeze(worktree)))
+    // Pi's own project-trust question. It is answered only when the cursor is
+    // on the plain "Trust" option, which saves trust for this folder alone.
+    return {
+      step: "trusted-folder",
+      keys: /^\s*[→›❯>]\s*(?:✓\s*)?Trust\s*$/m.test(screen) ? ["Enter"] : [],
+    };
   return null;
 }
 
@@ -67,11 +86,14 @@ export function firstRunPrompt(
  * Watches the worker's pane for a short while and answers the two first-run
  * prompts if they appear. Returns what it answered, in order.
  */
-export async function acceptFirstRunPrompts(
-  input: FirstRunInput,
-): Promise<{ taken: FirstRunStep[]; blocked: FirstRunStep | null }> {
+export async function acceptFirstRunPrompts(input: FirstRunInput): Promise<{
+  taken: FirstRunStep[];
+  blocked: FirstRunStep | "timeout" | null;
+  ready: boolean;
+}> {
   const taken: FirstRunStep[] = [];
-  let quiet = 0;
+  let quiet = 0,
+    ready = false;
   for (let poll = 0; poll < (input.polls ?? 60); poll++) {
     let screen = "";
     try {
@@ -80,7 +102,8 @@ export async function acceptFirstRunPrompts(
       // The pane is not there yet, or has gone: nothing to answer.
     }
     const prompt = firstRunPrompt(screen, input.worktree);
-    if (prompt && !input.allow) return { taken, blocked: prompt.step };
+    if (prompt && (!input.allow || !prompt.keys.length))
+      return { taken, blocked: prompt.step, ready: false };
     if (prompt && !taken.includes(prompt.step)) {
       // Each kind is answered once, and only after the check passes.
       await input.verify();
@@ -90,12 +113,20 @@ export async function acceptFirstRunPrompts(
       }
       taken.push(prompt.step);
       quiet = 0;
-    } else if (!prompt && (input.ready ?? workerReady).test(screen)) {
+    } else if (
+      !prompt &&
+      !piAsking.test(screen) &&
+      (input.ready ?? workerReady).test(screen)
+    ) {
       // The tool is at its own prompt: nothing more to answer. Seen twice,
       // so a screen caught between two prompts is not mistaken for ready.
-      if (++quiet >= 2) break;
+      if (++quiet >= 2) {
+        ready = true;
+        break;
+      }
     } else quiet = 0;
     await new Promise((resolve) => setTimeout(resolve, input.waitMs ?? 2000));
   }
-  return { taken, blocked: null };
+  // Running out of time is not readiness: nothing may be sent to the worker.
+  return { taken, blocked: ready ? null : "timeout", ready };
 }

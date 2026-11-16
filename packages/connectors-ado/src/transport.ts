@@ -1,4 +1,5 @@
 import type { Transport } from "./client.ts";
+import { isMissingTypeText, redactAdoMessage } from "./governed-writes.ts";
 /** Use the supported SDK transport, explicitly pinning routes in the proof client to Server 2022 API 7.0. */
 export function azureTransport(base: string, pat: string): Transport {
   let api:
@@ -52,7 +53,42 @@ export function azureTransport(base: string, pat: string): Transport {
         error && typeof error === "object" && "statusCode" in error
           ? error.statusCode
           : undefined;
-      if (typeof status === "number") return { status, data: null };
+      // Only Azure's refusal text (redacted) and its error code are passed on.
+      if (typeof status === "number") {
+        const result =
+          "result" in (error as object)
+            ? (error as { result: unknown }).result
+            : null;
+        const body =
+          result && typeof result === "object"
+            ? (result as Record<string, unknown>)
+            : {};
+        const message = redactAdoMessage(
+          typeof body.message === "string"
+            ? body.message
+            : error instanceof Error
+              ? error.message
+              : "",
+        );
+        const missing =
+          (status === 400 || status === 404) && isMissingTypeText(message);
+        const code =
+          typeof body.typeKey === "string"
+            ? body.typeKey
+            : missing
+              ? "WorkItemTypeDoesNotExistException"
+              : typeof body.errorCode === "number" ||
+                  typeof body.errorCode === "string"
+                ? String(body.errorCode)
+                : "";
+        return {
+          status,
+          data:
+            message || code
+              ? { ...(code ? { typeKey: code } : {}), message }
+              : null,
+        };
+      }
       throw new Error("Azure transport failed");
     }
   };

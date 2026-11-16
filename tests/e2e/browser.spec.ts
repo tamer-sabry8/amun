@@ -1,5 +1,6 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 import { createServer } from "node:http";
+import { packagedProofProfile } from "../support/packaged-launch.ts";
 
 test("browser isolates a local prototype, redirects, popups, permissions and service ports", async () => {
   const server = createServer((request, response) => {
@@ -22,6 +23,7 @@ test("browser isolates a local prototype, redirects, popups, permissions and ser
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
       "--amun-proof",
+      ...packagedProofProfile(),
     ],
     ...(process.env.AMUN_PACKAGED_PATH
       ? { executablePath: process.env.AMUN_PACKAGED_PATH }

@@ -1,5 +1,10 @@
 import { it, expect } from "vitest";
-import { AdoWriteClient } from "../src/governed-writes.ts";
+import {
+  AdoRejected,
+  AdoTypeMissing,
+  AdoWriteClient,
+  workItemUrl,
+} from "../src/governed-writes.ts";
 const base = "https://example.test/C/";
 it("creates at the root with the approved marker and parent, verifies the receipt, then commits separately using the reviewed revision", async () => {
   const calls: { method: string; url: string; body: unknown }[] = [];
@@ -47,7 +52,8 @@ it("creates at the root with the approved marker and parent, verifies the receip
     remoteId: null,
   };
   await client.write(step, 1);
-  expect(calls[0]?.body).toEqual(
+  const post = calls.find((x) => x.method === "POST");
+  expect(post?.body).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         path: "/fields/System.Tags",
@@ -56,7 +62,7 @@ it("creates at the root with the approved marker and parent, verifies the receip
       expect.objectContaining({ path: "/relations/-" }),
     ]),
   );
-  expect(calls[0]?.body).not.toEqual(
+  expect(post?.body).not.toEqual(
     expect.arrayContaining([
       expect.objectContaining({ path: "/fields/System.AssignedTo" }),
     ]),
@@ -141,4 +147,147 @@ it("accepts Azure rich-text block-end spacing but rejects changed text", async (
   });
   fields["System.Description"] = "<ul><li>The result was visible. </li> </ul>";
   await expect(client.verify(2, step, null)).rejects.toThrow("verification");
+});
+it("marks only Azure's missing-type rejection of a create", async () => {
+  const step = {
+    itemId: "i",
+    type: "User Story",
+    parentId: null,
+    fields: { "System.Title": "T" },
+    marker: "Amun-1",
+    revision: 0,
+    remoteId: null,
+  };
+  const reply = (status: number, data: unknown) =>
+    new AdoWriteClient(base, "POCs", async () => ({ status, data }));
+  await expect(
+    reply(404, { typeKey: "WorkItemTypeDoesNotExistException" }).write(
+      step,
+      null,
+    ),
+  ).rejects.toBeInstanceOf(AdoTypeMissing);
+  await expect(
+    reply(400, {
+      message: "TF26199: The work item type User Story does not exist.",
+    }).write(step, null),
+  ).rejects.toBeInstanceOf(AdoTypeMissing);
+  const other = await reply(400, { message: "Field is required" })
+    .write(step, null)
+    .catch((error: Error) => error);
+  expect(other).not.toBeInstanceOf(AdoTypeMissing);
+  expect((other as Error).message).toBe("request_rejected_400");
+});
+const found = (project: string, id = 5) => ({
+  id,
+  rev: 1,
+  fields: {
+    "System.TeamProject": project,
+    "System.Title": "T",
+    "System.Tags": "Amun-x",
+  },
+  relations: [],
+});
+it("accepts a project name that differs only by case or encoding", async () => {
+  const client = new AdoWriteClient(base, "My POCs", async () => ({
+    status: 200,
+    data: found("my%20pocs"),
+  }));
+  await expect(client.item(5)).resolves.toMatchObject({ id: 5 });
+});
+it("still refuses an item from another project", async () => {
+  const client = new AdoWriteClient(base, "POCs", async () => ({
+    status: 200,
+    data: found("Other"),
+  }));
+  await expect(client.item(5)).rejects.toThrow("identity mismatch");
+});
+it("asks each type alone when the server rejects an unknown type in the search", async () => {
+  const queries: string[] = [];
+  const client = new AdoWriteClient(base, "POCs", async (method, url, body) => {
+    if (url.includes("wiql")) {
+      const query = (body as { query: string }).query;
+      queries.push(query);
+      if (query.includes(",")) return { status: 400, data: {} };
+      if (query.includes("'Nope'")) return { status: 400, data: {} };
+      return { status: 200, data: { workItems: [{ id: 5 }] } };
+    }
+    return { status: 200, data: found("POCs") };
+  });
+  await expect(
+    client.existing("T", ["Product Backlog Item", "Nope"]),
+  ).resolves.toEqual({ id: 5 });
+  expect(queries).toHaveLength(3);
+});
+it("still fails a search a single type cannot answer", async () => {
+  const client = new AdoWriteClient(base, "POCs", async () => ({
+    status: 400,
+    data: {},
+  }));
+  await expect(client.existing("T", "Task", 1)).rejects.toThrow(
+    "request_rejected_400",
+  );
+});
+
+it("builds the parent relation URL with exactly one slash, with or without a trailing slash", () => {
+  const expected = "https://example.test/C/_apis/wit/workItems/7";
+  expect(workItemUrl("https://example.test/C/", 7)).toBe(expected);
+  expect(workItemUrl("https://example.test/C", 7)).toBe(expected);
+});
+it("links to the parent's own server URL when it has one", async () => {
+  const bodies: unknown[] = [];
+  const own = "https://example.test/C/guid/_apis/wit/workItems/1";
+  const fields = {
+    "System.Title": "T",
+    "System.WorkItemType": "Task",
+    "System.Tags": "M",
+  };
+  const client = new AdoWriteClient(
+    "https://example.test/C",
+    "P",
+    async (method, url, body) => {
+      if (method === "POST") bodies.push(body);
+      const id = method === "GET" && /workitems\/1\?/.test(url) ? 1 : 2;
+      return {
+        status: 200,
+        data: {
+          id,
+          rev: 1,
+          url: own,
+          fields,
+          relations: [{ rel: "System.LinkTypes.Hierarchy-Reverse", url: own }],
+        },
+      };
+    },
+  );
+  await client.write(
+    {
+      itemId: "a",
+      type: "Task",
+      parentId: "p",
+      fields: { "System.Title": "T" },
+      marker: "M",
+      revision: 0,
+      remoteId: null,
+    },
+    1,
+  );
+  expect(JSON.stringify(bodies[0])).toContain(own);
+});
+it("keeps Azure's refusal text, redacted, on a rejected write", async () => {
+  const client = new AdoWriteClient(base, "P", async () => ({
+    status: 400,
+    data: {
+      message:
+        "TF401320: Rule Error for field Title at https://u:secret@x.test/a token abc123",
+      typeKey: "RuleValidationException",
+    },
+  }));
+  const error = (await client.item(1).catch((e) => e)) as AdoRejected;
+  expect(error.message).toBe("request_rejected_400");
+  expect(error.detail).toContain(
+    "TF401320: Rule Error for field Title at [link]",
+  );
+  expect(error.detail).toContain("token [removed]");
+  expect(error.detail).toContain("RuleValidationException");
+  expect(error.detail).not.toContain("secret");
 });

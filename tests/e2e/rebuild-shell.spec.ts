@@ -8,6 +8,7 @@ import {
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 // UX rebuild journey in a disposable profile: four-step setup → Welcome →
 // first work conversation with a resizable document → the six destinations,
@@ -46,6 +47,7 @@ const launch = (root: string) =>
   electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH
@@ -154,6 +156,31 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
 
     // First work: nothing matches, so one card offers where it belongs
     const composer = page.getByLabel("Message Firstmate");
+    // Real pointer presses on the Add menu must reach the file picker.
+    await composer.focus();
+    await page
+      .getByRole("button", { name: "Add files, screenshots or sources" })
+      .click();
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("menuitem", { name: "Upload files" }).click();
+    expect((await chooser).isMultiple()).toBe(true);
+    await expect(page.getByRole("menu", { name: "Add" })).toHaveCount(0);
+    // A reminder is kept, not filed as work, and comes back on Home.
+    await composer.fill("Remind me in 3 seconds to review the QA PRD");
+    await composer.press("Enter");
+    await expect(page.getByText(/^Okay\. I’ll remind you/)).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Choose where this belongs" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Reminder: review the QA PRD")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("button", {
+        name: "Mark the reminder “review the QA PRD” as done",
+      })
+      .click();
+    await expect(page.getByText("Reminder: review the QA PRD")).toHaveCount(0);
     await composer.fill("Create a product called Agentic Platform");
     await composer.press("Enter");
     await expect(
@@ -197,6 +224,30 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       timeout: 30_000,
     });
     await shot(page, "07-work-session");
+    // The session pane keeps the UI font and the message list keeps its room.
+    const [bodyFont, composerFont, listHeight] = await page.evaluate(() => [
+      getComputedStyle(document.body).fontFamily,
+      getComputedStyle(document.querySelector(".rb-convo textarea")!)
+        .fontFamily,
+      document.querySelector(".rb-convo")!.getBoundingClientRect().height,
+    ]);
+    expect(composerFont).toBe(bodyFont);
+    expect(composerFont).not.toMatch(/mono/i);
+    expect(listHeight).toBeGreaterThan(300);
+
+    // PRD and Backlog panes use the shell's own look, not the earlier workspace.
+    await page.getByRole("button", { name: "PRD", exact: true }).click();
+    await expect(page.getByText("No PRD yet")).toBeVisible();
+    await expect(page.locator(".legacy-surface")).toHaveCount(0);
+    await shot(page, "07a-prd-pane");
+    await page.getByRole("button", { name: "Close the document" }).click();
+    await page.getByRole("button", { name: "Backlog", exact: true }).click();
+    await expect(
+      page.getByRole("form", { name: "Connect an Azure DevOps project" }),
+    ).toBeVisible();
+    await shot(page, "07b-backlog-pane");
+    await scan(page, "backlog pane");
+    await page.getByRole("button", { name: "Close the document" }).click();
 
     // Document pane: sidebar collapses, divider resizes, expand and restore
     await page.getByRole("button", { name: "New document" }).click();
@@ -219,6 +270,24 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       .getByLabel("Untitled")
       .fill("# Agentic Platform\n\nOne-page brief.");
     await shot(page, "08-document-pane");
+    // The saved document's text travels with the request, labelled as reference.
+    await doc.getByRole("button", { name: "Ask Firstmate" }).click();
+    await composer.press("End");
+    await composer.pressSequentially("review this saved document");
+    await composer.press("Enter");
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => localStorage.getItem("amun.held-messages") ?? ""),
+        { timeout: 40_000 },
+      )
+      .toContain("One-page brief.");
+    const held = await page.evaluate(
+      () => localStorage.getItem("amun.held-messages") ?? "",
+    );
+    expect(held).toContain("source id:");
+    expect(held).toContain("INCLUDED IN FULL");
+    expect(held).toContain("untrusted reference");
     await scan(page, "work session with document");
     await page.getByRole("button", { name: "Expand the document" }).click();
     await expect(
@@ -247,7 +316,11 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
         .getByText("Smart Inspection for DMT"),
     ).toBeVisible();
     await expect(page.getByText("No response owner").first()).toBeVisible();
-    await page.getByLabel("Stage").selectOption("won");
+    await page.getByLabel("Search RFPs").fill("zzz-nothing");
+    await expect(page.getByText("No RFPs match.")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByText("No RFPs match.")).toHaveCount(0);
+    await page.getByLabel(/^Stage/).selectOption("won");
     const handToDelivery = page.getByRole("button", {
       name: "Hand to delivery",
       exact: true,
@@ -344,7 +417,57 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await scan(page, "sprints");
     await nav.getByRole("button", { name: "Agents" }).click();
     await expect(page.getByRole("button", { name: /Firstmate/ })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Product Manager" }),
+    ).toBeVisible();
+    await expect(page.getByText(/\d+ of \d+ selected/)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /PR\/FAQ/ }).first(),
+    ).toBeVisible();
+    const selectedCard = page.getByRole("button", {
+      name: /^Product Manager/,
+      pressed: true,
+    });
+    await expect(selectedCard).toHaveCSS("border-top-width", "2px");
+    await expect(selectedCard).not.toHaveCSS(
+      "border-top-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await selectedCard.scrollIntoViewIfNeeded();
+    await page
+      .locator(".rb-agents .list > .grid")
+      .evaluate((node) => node.scrollTo(0, 0));
     await shot(page, "16-agents");
+    for (const [width, height] of [
+      [1200, 800],
+      [900, 700],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      const fit = await page.evaluate(() => {
+        const root = document.documentElement;
+        const panel = document.querySelector(".rb-spec-panel");
+        const edges = [
+          ...document.querySelectorAll(
+            ".rb-spec-panel, .rb-spec-panel h2, .rb-spec-panel > header, .rb-spec-panel .block",
+          ),
+        ].map((node) => node.getBoundingClientRect().right);
+        return {
+          page: root.scrollWidth - root.clientWidth,
+          panelScroll: panel ? panel.scrollWidth - panel.clientWidth : 0,
+          edge: Math.max(...edges) - root.clientWidth,
+        };
+      });
+      expect(fit.page).toBeLessThanOrEqual(0);
+      expect(fit.panelScroll).toBeLessThanOrEqual(0);
+      expect(fit.edge).toBeLessThanOrEqual(0);
+    }
+    await page.getByRole("button", { name: /^Research & Insights/ }).click();
+    await expect(
+      page.getByRole("region", { name: "Research & Insights" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Remove from team" }),
+    ).toBeVisible();
     await scan(page, "agents");
     await nav.getByRole("button", { name: "Council" }).click();
     await expect(page.getByText(/Advisors are simulations/)).toBeVisible();
@@ -363,6 +486,17 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     await expect(
       page.getByText("Using information across groups", { exact: true }),
     ).toBeVisible();
+    await page.getByLabel("Group", { exact: true }).selectOption({ index: 1 });
+    await page.getByLabel("Where").selectOption("notion");
+    await page.getByRole("button", { name: "Allow" }).click();
+    const recent = page.getByRole("region", { name: "Recent changes" });
+    await expect(
+      recent.getByText("You allowed Create items in Notion"),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Revoke" }).click();
+    await expect(
+      recent.getByText("You took away Create items in Notion"),
+    ).toBeVisible();
     await shot(page, "18-permissions");
     await scan(page, "permissions");
     await page
@@ -376,6 +510,14 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
     );
     await shot(page, "19-light-theme");
     await scan(page, "themes, light");
+    await page
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("button", { name: "About" })
+      .click();
+    await expect(page.getByText(/Version Beta 0\.9 \(0\.9\.0\)/)).toBeVisible();
+    await expect(
+      page.getByText("Ad-hoc signed beta for trusted testers. Not notarized."),
+    ).toBeVisible();
 
     // ⌘K search finds the work and opens its conversation
     await page.keyboard.press("Meta+k");

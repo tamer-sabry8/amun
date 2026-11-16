@@ -2,6 +2,7 @@ import { expect, test, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm, mkdir, writeFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("owned Pi template and skill commands expand into an editable draft", async () => {
   const root = await realpath(
@@ -37,6 +38,7 @@ test("owned Pi template and skill commands expand into an editable draft", async
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

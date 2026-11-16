@@ -8,6 +8,14 @@ import {
   type WorkspaceSnapshot,
 } from "@amun/contracts";
 import { bridge } from "./bridge.ts";
+import { BacklogSetup } from "./backlog-setup.tsx";
+import {
+  browserStore,
+  readBoard,
+  readSource,
+  writeBoard,
+  writeSource,
+} from "./backlog-selection.ts";
 type Context = NonNullable<WorkspaceSnapshot["productContext"]>;
 type Option = { id: string; name: string };
 function Choice({
@@ -35,9 +43,24 @@ function Choice({
     </label>
   );
 }
-export function Backlog({ context }: { context: Context }) {
+export function Backlog({
+  context,
+  embedded,
+}: {
+  context: Context;
+  embedded?: boolean | undefined;
+}) {
   const sources = context.sources.filter((s) => s.kind === "ado");
-  const [sourceId, setSource] = useState("");
+  const mapped = sources.map((s) => s.id);
+  const [sourceId, setSource] = useState(() =>
+    readSource(browserStore(), context.productId, mapped),
+  );
+  // A project that is no longer mapped is dropped; a remembered one returns
+  // when the product's sources arrive after the first render.
+  useEffect(() => {
+    if (sourceId && mapped.includes(sourceId)) return;
+    setSource(readSource(browserStore(), context.productId, mapped));
+  }, [context.productId, mapped.join("\n"), sourceId]);
   return (
     <section aria-label="Azure DevOps backlog">
       <h2>Backlog</h2>
@@ -102,14 +125,28 @@ export function Backlog({ context }: { context: Context }) {
       {sources.length ? (
         <>
           <Choice
-            label="Azure project"
+            label={embedded ? "Project" : "Azure project"}
             options={sources.map((s) => ({ id: s.id, name: s.title }))}
             value={sourceId}
-            onChange={setSource}
+            onChange={(id) => {
+              writeSource(browserStore(), context.productId, id);
+              setSource(id);
+            }}
           />
+          {sources.some((s) => s.id === sourceId) && (
+            <details>
+              <summary>Change this project</summary>
+              <BacklogSetup
+                key={sourceId}
+                productId={context.productId}
+                source={sources.find((s) => s.id === sourceId)!}
+              />
+            </details>
+          )}
           {sources.some((s) => s.id === sourceId) && (
             <TeamBoard
               context={context}
+              embedded={embedded}
               key={sourceId}
               sourceId={sourceId}
               productId={context.productId}
@@ -117,10 +154,10 @@ export function Backlog({ context }: { context: Context }) {
           )}
         </>
       ) : (
-        <p>
-          Map an Azure DevOps project URL in Product context to open its
-          backlog.
-        </p>
+        <>
+          <p>Connect an Azure DevOps project to open its backlog.</p>
+          <BacklogSetup productId={context.productId} />
+        </>
       )}
     </section>
   );
@@ -129,7 +166,9 @@ function TeamBoard({
   context,
   sourceId,
   productId,
+  embedded,
 }: {
+  embedded?: boolean | undefined;
   context: Context;
   sourceId: string;
   productId: string;
@@ -146,6 +185,11 @@ function TeamBoard({
   const [schema, setSchema] =
     useState<Extract<BacklogResult, { view: "schema" }>["schema"]>();
   const pending = useRef("");
+  // What was chosen last time, until it has been checked against Azure.
+  const restoring = useRef(readBoard(browserStore(), productId, sourceId));
+  function remember(selection: { team: string; level: string } | undefined) {
+    writeBoard(browserStore(), productId, sourceId, selection);
+  }
   function send(action: string, fields: Record<string, string> = {}) {
     const requestId = crypto.randomUUID();
     pending.current = requestId;
@@ -160,6 +204,9 @@ function TeamBoard({
       ...fields,
     });
   }
+  useEffect(() => {
+    if (restoring.current) send("teams");
+  }, []);
   useEffect(
     () =>
       bridge.onEvent((event) => {
@@ -184,8 +231,44 @@ function TeamBoard({
         pending.current = "";
         const reply = parsed.data;
         setStatus(reply.view === "error" ? reply.message : "");
-        if (reply.view === "teams") setTeams(reply.teams);
-        if (reply.view === "options") setOptions(reply);
+        const saved = restoring.current;
+        if (reply.view === "teams") {
+          setTeams(reply.teams);
+          if (saved?.team) {
+            if (reply.teams.some((t) => t.id === saved.team)) {
+              setTeam(saved.team);
+              send("options", { team: saved.team });
+            } else {
+              restoring.current = undefined;
+              remember(undefined);
+              setStatus(
+                "The team you used before is no longer available. Choose a team.",
+              );
+            }
+          }
+        }
+        if (reply.view === "options") {
+          setOptions(reply);
+          if (saved) {
+            restoring.current = undefined;
+            if (saved.level && reply.levels.some((l) => l.id === saved.level))
+              setLevel(saved.level);
+            else {
+              remember({ team: saved.team, level: "" });
+              if (saved.level)
+                setStatus(
+                  "The backlog level you used before is no longer available. Choose a level.",
+                );
+            }
+          }
+        }
+        if (reply.view === "error" && saved) {
+          restoring.current = undefined;
+          setStatus(
+            "Your earlier team and level could not be restored. " +
+              reply.message,
+          );
+        }
         if (reply.view === "schema") setSchema(reply.schema);
         if (reply.view === "cards") setResult(reply);
       }),
@@ -200,15 +283,19 @@ function TeamBoard({
     <>
       <button
         onClick={() => {
+          restoring.current = undefined;
+          remember(undefined);
           setTeams([]);
           setTeam("");
           clearBoard();
           send("teams");
         }}
       >
-        Load teams
+        {embedded ? "Find teams" : "Load teams"}
       </button>
-      <button onClick={() => send("schema")}>Load process details</button>
+      <button onClick={() => send("schema")}>
+        {embedded ? "Show how this project works" : "Load process details"}
+      </button>
       {schema && (
         <details open>
           <summary>{schema.process ?? "Project process"}</summary>
@@ -236,11 +323,13 @@ function TeamBoard({
       )}
       {teams.length > 0 && (
         <Choice
-          label="Azure team"
+          label={embedded ? "Team" : "Azure team"}
           options={teams}
           value={team}
           onChange={(id) => {
             pending.current = "";
+            restoring.current = undefined;
+            remember(id ? { team: id, level: "" } : undefined);
             setStatus("");
             setTeam(id);
             clearBoard();
@@ -264,6 +353,8 @@ function TeamBoard({
             value={level}
             onChange={(id) => {
               pending.current = "";
+              restoring.current = undefined;
+              remember({ team, level: id });
               setStatus("");
               setLevel(id);
               setResult(undefined);
@@ -276,7 +367,7 @@ function TeamBoard({
               send("cards", { team, level });
             }}
           >
-            Load work items
+            {embedded ? "Show work items" : "Load work items"}
           </button>
         </>
       )}

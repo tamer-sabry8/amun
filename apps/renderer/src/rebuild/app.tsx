@@ -50,13 +50,45 @@ import { Settings } from "./lazy.tsx";
 import {
   connectWorkStore,
   council,
+  retryWorkSnapshot,
   work,
   workAsync,
   workStore,
 } from "./store.ts";
+import { acceptOffer } from "./accept-offer.ts";
 import { areaOf, homeModel, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
+
+function WorkspaceFailure({ reasons }: { reasons: string[] }) {
+  const [copied, setCopied] = useState(false);
+  const details = reasons.length ? reasons.join("\n") : "No details";
+  return (
+    <div role="alert" style={{ padding: 48 }}>
+      <p>Amun couldn’t open your workspace. Your data is safe.</p>
+      <p className="muted small" aria-live="polite">
+        {copied ? "Details copied" : ""}
+      </p>
+      <div className="rb-inline">
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(details)
+              .then(() => setCopied(true))
+              .catch(() => setCopied(false));
+          }}
+        >
+          Copy details
+        </button>
+        <button className="btn" type="button" onClick={retryWorkSnapshot}>
+          Try again
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   const bridgeState = useSyncExternalStore(
@@ -147,19 +179,48 @@ export function App() {
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, [layout.palette, layout.rail, bridgeState.prompt]);
-  // The earlier PRD and backlog flows follow the selected product.
+  // The earlier PRD and backlog flows follow the selected product. In
+  // Settings › Skills they follow the product chosen there, which starts as
+  // the one the owner last opened.
   const activeArea = snapshot ? areaOf(snapshot, layout.workAreaId) : null;
+  const [lastProduct, setLastProduct] = useState<string | null>(null);
+  const [skillsProduct, setSkillsProduct] = useState("");
   useEffect(() => {
-    const productId = activeArea?.productId ?? null;
+    if (activeArea?.productId) setLastProduct(activeArea.productId);
+  }, [activeArea?.productId]);
+  const products = bridgeState.workspace?.products ?? [];
+  const recentProduct = (snapshot?.areas ?? [])
+    .filter((area) => area.productId)
+    .sort((a, b) =>
+      (b.lastContextAt ?? b.createdAt).localeCompare(
+        a.lastContextAt ?? a.createdAt,
+      ),
+    )[0]?.productId;
+  const recentArea = [...(snapshot?.areas ?? [])].sort((a, b) =>
+    (b.lastContextAt ?? b.createdAt).localeCompare(
+      a.lastContextAt ?? a.createdAt,
+    ),
+  )[0]?.id;
+  const settingsProduct =
+    [skillsProduct, lastProduct, recentProduct].find((id) =>
+      products.some((product) => product.id === id),
+    ) ??
+    products[0]?.id ??
+    null;
+  const wantedProduct =
+    layout.route === "settings" && section === "skills"
+      ? settingsProduct
+      : (activeArea?.productId ?? null);
+  useEffect(() => {
     const preferences = bridgeState.workspace?.preferences;
-    if (preferences && preferences.productId !== productId)
+    if (preferences && preferences.productId !== wantedProduct)
       bridge.send({
         version: 1,
         kind: "workspace",
         action: "preferences",
-        preferences: { ...preferences, productId },
+        preferences: { ...preferences, productId: wantedProduct },
       });
-  }, [activeArea?.productId, bridgeState.workspace?.preferences.productId]);
+  }, [wantedProduct, bridgeState.workspace?.preferences.productId]);
   useEffect(() => {
     dispatch({
       type: "artifact",
@@ -208,6 +269,13 @@ export function App() {
     setFirst(null);
     dispatch({ type: "go", route: "home" });
   }, [openAreaGone]);
+  if (!snapshot && state.failure)
+    return (
+      <div className="rb setup">
+        <WorkspaceFailure reasons={state.failure} />
+        <AuthPrompt />
+      </div>
+    );
   if (!snapshot)
     return (
       <div className="rb setup">
@@ -255,9 +323,8 @@ export function App() {
     };
     if (step.step === "file_work" && step.areaId)
       return openWork(step.areaId, text);
-    if (!result.ok && step.step !== "unreadable")
+    if (!result.ok || step.step === "unreadable" || step.step === "reminder")
       return setNote(result.message);
-    if (step.step === "unreadable") return setNote(result.message);
     setPending({ ...step, step: step.step ?? "", text, files });
   };
   const view = homeModel(
@@ -370,14 +437,13 @@ export function App() {
               onOpen: openAttention,
               onPrimary: (item) => {
                 if (item.kind === "offer") {
-                  work("resolve-attention", {
-                    attentionId: item.id,
-                    resolution: "accept",
-                  });
-                  setNote(
-                    "Draft only · Nothing sent · Approval status unchanged",
+                  const raw = snapshot.attention.find(
+                    (entry) => entry.id === item.id,
                   );
-                  if (item.workAreaId) openWork(item.workAreaId);
+                  if (!raw) return;
+                  const accepted = acceptOffer(raw);
+                  setNote(accepted.note);
+                  if (accepted.areaId) openWork(accepted.areaId);
                   return;
                 }
                 if (item.kind === "result")
@@ -487,17 +553,20 @@ export function App() {
               setSection("groups");
               go("settings");
             }}
-            onDiagnostics={() => {
-              setSection("advanced");
-              go("settings");
-            }}
             onSettings={() => {
               setSection("models");
               go("settings");
             }}
           />
         ) : layout.route === "agents" ? (
-          <Agents snapshot={snapshot} model={model} />
+          <Agents
+            snapshot={snapshot}
+            model={model}
+            {...(recentArea && {
+              onLink: (url: string) =>
+                openWork(recentArea, undefined, { kind: "browser", url }),
+            })}
+          />
         ) : layout.route === "council" ? (
           <Council
             snapshot={snapshot}
@@ -553,6 +622,8 @@ export function App() {
             councilStatus={state.council}
             section={section}
             onSection={setSection}
+            skillsProductId={settingsProduct}
+            onSkillsProduct={setSkillsProduct}
           />
         )}
         {layout.rail && !expandedRail && (
@@ -620,6 +691,22 @@ export function App() {
         onClose={() => dispatch({ type: "palette", open: false })}
         onRoute={go}
         onWork={(id) => openWork(id)}
+        onHit={(item) => {
+          dispatch({ type: "palette", open: false });
+          if (!item.workAreaId) {
+            go("home");
+            if (item.kind !== "message")
+              setNote(
+                "Link this to a piece of work to open it beside its conversation.",
+              );
+            return;
+          }
+          openWork(
+            item.workAreaId,
+            undefined,
+            item.kind === "document" ? { kind: "output", id: item.id } : null,
+          );
+        }}
         onBrowser={
           layout.route === "work"
             ? () => {

@@ -169,3 +169,59 @@ it("rejects invalid JSON, duplicate operations and orphan approvals", () => {
   ).toThrow();
   db.close();
 });
+
+it("closes Drafting rows that accepting an offer once left running", () => {
+  const db = new Database(":memory:");
+  migrate(db, 31);
+  const insert = db.prepare(
+    "INSERT INTO work_activity(id,group_id,work_area_id,text,state,ref,created_at) VALUES (?,?,?,?,?,?,?)",
+  );
+  insert.run("a1", null, null, "Drafting: BRD", "running", "offer:x", "t");
+  insert.run("a2", null, null, "Reviewing", "running", "job:y", "t");
+  migrate(db);
+  const rows = db
+    .prepare("SELECT id,state,text FROM work_activity ORDER BY id")
+    .all() as { id: string; state: string; text: string }[];
+  expect(rows[0]).toMatchObject({ state: "failed" });
+  expect(rows[0]!.text).toContain("never started");
+  expect(rows[1]).toMatchObject({ state: "running", text: "Reviewing" });
+});
+it("gives documents saved before versions existed a first version", () => {
+  const db = new Database(":memory:");
+  migrate(db, 34);
+  db.prepare(
+    "INSERT INTO library_outputs(id,type,title,body,created_at,updated_at) VALUES ('o','doc','Old','text','2026-11-01T00:00:00Z','2026-11-02T00:00:00Z')",
+  ).run();
+  migrate(db);
+  expect(
+    db
+      .prepare(
+        "SELECT version,body,author,created_at FROM library_output_versions",
+      )
+      .all(),
+  ).toEqual([
+    {
+      version: 1,
+      body: "text",
+      author: "owner",
+      created_at: "2026-11-02T00:00:00Z",
+    },
+  ]);
+  expect(
+    db.prepare("SELECT approved_version FROM library_outputs").get(),
+  ).toEqual({ approved_version: null });
+  db.close();
+});
+
+it("adds a due date to objectives saved before it existed, keeping unknown values unknown", () => {
+  const db = new Database(":memory:");
+  migrate(db, 35);
+  db.prepare(
+    "INSERT INTO work_objectives(id,metric,baseline,target,current,conflict) VALUES ('o','Win rate',NULL,40,NULL,0)",
+  ).run();
+  migrate(db);
+  expect(
+    db.prepare("SELECT baseline,target,due_date FROM work_objectives").get(),
+  ).toEqual({ baseline: null, target: 40, due_date: null });
+  db.close();
+});

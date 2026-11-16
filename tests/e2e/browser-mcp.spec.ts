@@ -2,6 +2,7 @@ import { expect, test, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 
 test("Browser adapters report a blank isolated Chrome session", async () => {
   test.setTimeout(90000);
@@ -15,6 +16,7 @@ test("Browser adapters report a blank isolated Chrome session", async () => {
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

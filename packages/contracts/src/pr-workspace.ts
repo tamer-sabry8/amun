@@ -23,6 +23,12 @@ export const prRow = z.object({
   source: key,
   url: z.url(),
   provider: z.enum(["GitHub", "Azure Repos"]),
+  author: key.optional(),
+  draft: z.boolean().optional(),
+  checks: z.enum(["passing", "failing", "running", "none"]).optional(),
+  files: z.number().int().nonnegative().optional(),
+  additions: z.number().int().nonnegative().optional(),
+  deletions: z.number().int().nonnegative().optional(),
 });
 export const prDetail = z.object({
   sourceBranch: key,

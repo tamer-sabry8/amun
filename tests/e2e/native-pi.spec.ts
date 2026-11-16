@@ -3,6 +3,7 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm, mkdir, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("native Pi commands create an owned SDK session and update its real name", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "amun-native-ui-")));
   const cwd = join(root, "pi-workspace"),
@@ -61,6 +62,7 @@ test("native Pi commands create an owned SDK session and update its real name", 
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

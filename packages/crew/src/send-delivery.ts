@@ -14,7 +14,7 @@ export async function sendDelivery(
   releases: FirstmateReleases,
   receipts: string,
   binary: string,
-  harness: "codex" | "claude",
+  harness: "codex" | "claude" | "pi",
   id: string,
   text: string,
 ) {

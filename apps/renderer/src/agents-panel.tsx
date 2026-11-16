@@ -19,7 +19,7 @@ export function AgentsPanel({
   const releaseRequest = useRef<string | null>(null);
   const [releaseStatus, setReleaseStatus] = useState("");
   const [releaseBusy, setReleaseBusy] = useState(false);
-  const [harness, setHarness] = useState("codex");
+  const [harness, setHarness] = useState("pi");
   const [charter, setCharter] = useState("");
   function dispatch() {
     if (releaseRequest.current || !charter.trim()) return;
@@ -236,8 +236,7 @@ export function AgentsPanel({
             disabled={releaseBusy}
             onChange={(e) => setHarness(e.target.value)}
           >
-            <option value="codex">Codex CLI · restricted</option>
-            <option value="claude">Claude Code · auto</option>
+            <option value="pi">GitHub Copilot (Pi) · Claude Sonnet 5.5</option>
           </select>
         </label>
         <label>

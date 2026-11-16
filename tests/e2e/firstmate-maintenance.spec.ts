@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("the actual idle Firstmate branch executes only bounded local maintenance", async () => {
   test.skip(
     process.env.AMUN_LIVE_MAINTENANCE !== "1",
@@ -127,6 +128,7 @@ test("the actual idle Firstmate branch executes only bounded local maintenance",
     ...(executablePath ? { executablePath } : {}),
     args: [
       ...(executablePath ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
   });

@@ -2,12 +2,14 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { packagedTestSwitches } from "../support/packaged-launch.ts";
 test("M1 shell has fixed navigation, explicit overlay drawers and persisted accessible themes", async () => {
   const root = await mkdtemp(join(tmpdir(), "amun-m1-shell-"));
   const launch = () =>
     electron.launch({
       args: [
         ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+        ...packagedTestSwitches(),
         "--user-data-dir=" + root,
       ],
       ...(process.env.AMUN_PACKAGED_PATH
@@ -59,6 +61,7 @@ test("drawer intent and grace timers are exact, pinning is exclusive and Escape 
   const app = await electron.launch({
     args: [
       ...(process.env.AMUN_PACKAGED_PATH ? [] : ["apps/desktop"]),
+      ...packagedTestSwitches(),
       "--user-data-dir=" + root,
     ],
     ...(process.env.AMUN_PACKAGED_PATH

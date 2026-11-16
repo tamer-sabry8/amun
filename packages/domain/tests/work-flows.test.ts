@@ -5,9 +5,16 @@ import {
   externalChange,
   isCommitted,
   memoryUpdate,
+  findNamed,
+  knownDate,
+  knownNumber,
+  objectiveLine,
   objectiveProgress,
+  filterRfps,
   rfpCard,
+  rfpDrop,
   rfpHandoff,
+  rfpOwners,
   route,
   scopeCheck,
   syncLabel,
@@ -25,6 +32,7 @@ import {
   fromLegacyStatus,
   islandItem,
   nextRetry,
+  planStateNote,
   previewNote,
   rankWork,
   shouldAutoTest,
@@ -272,6 +280,39 @@ describe("RFP tracking and handoff (F7)", () => {
     deliveryProjectId: null,
     lossReason: null,
     ...extra,
+  });
+  it("filters a board by text, owner and stage, and lists owners once", () => {
+    const list = [
+      rfp({ id: "a", client: "DMT", responseOwner: "Sara" }),
+      rfp({ id: "b", stage: "won", accountOwner: "Sara", presales: " Omar " }),
+      rfp({ id: "c", client: "Ministry" }),
+    ];
+    const name = (id: string) =>
+      ({ a: "Smart Inspection", b: "Fleet", c: "Roads" })[id] ?? "";
+    expect(filterRfps(list, { name }).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(
+      filterRfps(list, { name, text: " inspect" }).map((r) => r.id),
+    ).toEqual(["a"]);
+    expect(filterRfps(list, { name, text: "dmt" }).map((r) => r.id)).toEqual([
+      "a",
+    ]);
+    expect(filterRfps(list, { name, owner: "Sara" }).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(
+      filterRfps(list, { name, owner: "Sara", stage: "won" }).map((r) => r.id),
+    ).toEqual(["b"]);
+    expect(rfpOwners(list)).toEqual(["Omar", "Sara"]);
+  });
+  it("a drop moves like the Stage control but never hands to delivery", () => {
+    expect(rfpDrop("received", "received")).toBe("none");
+    expect(rfpDrop("received", "won")).toBe("move");
+    expect(rfpDrop("won", "handed_to_delivery")).toBe("use_handoff");
   });
   it("counts down and flags a missing owner", () => {
     expect(rfpCard(rfp(), now)).toMatchObject({
@@ -673,6 +714,17 @@ describe("connection status (Q11–Q12)", () => {
       text: "Checking…",
       action: null,
     });
+    // Pending has no action; a finished-but-unknown check keeps the neutral
+    // text and offers the way back in.
+    expect(connectionStatus({ state: "checking", finished: true })).toEqual({
+      icon: "checking",
+      tone: "checking",
+      text: "Checking…",
+      action: "Try again",
+    });
+    expect(
+      connectionStatus({ state: "checking", finished: false }).action,
+    ).toBe(null);
     expect(connectionStatus({ state: "connected" })).toMatchObject({
       text: "Connected",
       action: null,
@@ -714,6 +766,9 @@ describe("connection status (Q11–Q12)", () => {
     expect(fromLegacyStatus(undefined)).toBe("signed_out");
     expect(fromLegacyStatus("missing")).toBe("signed_out");
     expect(fromLegacyStatus("cancelled")).toBe("signed_out");
+    // A check that could not answer is never "signed out".
+    expect(fromLegacyStatus("unknown")).toBe("checking");
+    expect(fromLegacyStatus("unknown", { attempted: true })).toBe("checking");
     expect(fromLegacyStatus("checking")).toBe("checking");
     expect(fromLegacyStatus("configured")).toBe("checking");
     expect(fromLegacyStatus("ready")).toBe("connected");
@@ -738,7 +793,18 @@ describe("stakeholder update and failures", () => {
     expect(updateMessage("").note).toContain("never sends");
   });
   it("says what a proposal has not changed, for its destination", () => {
+    expect(planStateNote("changes_requested", "notion")).toBe(
+      "Changes requested · nothing was published",
+    );
+    expect(planStateNote("proposed", "ado")).toBe(previewNote("ado"));
+    expect(planStateNote("published", "notion")).toBe("Approved");
+    expect(planStateNote("changes_requested", "notion")).not.toContain(
+      "Approved",
+    );
     expect(previewNote("ado")).toBe("Preview only · No Azure DevOps changes");
+    expect(previewNote("notion", "Notion")).toBe(
+      "Preview only · To Notion · Nothing changes until you approve",
+    );
     expect(previewNote("amun")).toBe(
       "Preview only · Nothing changes until you approve",
     );
@@ -761,5 +827,40 @@ describe("stakeholder update and failures", () => {
     expect(nextRetry({ attempts: 1, uncertainWrite: false, budget: 1 })).toBe(
       "surface",
     );
+  });
+});
+
+describe("objective tracker (UC15)", () => {
+  const base = {
+    metric: "Win rate",
+    baseline: null,
+    target: 40,
+    current: null,
+    evidenceDate: null,
+    reviewDate: null,
+    conflict: false,
+  };
+  it("never invents a baseline, a target or a date", () => {
+    expect(knownNumber("")).toBeNull();
+    expect(knownNumber("unknown")).toBeNull();
+    expect(knownNumber(null)).toBeNull();
+    expect(knownNumber("35%")).toBe(35);
+    expect(knownNumber(12)).toBe(12);
+    expect(knownDate("soon")).toBeNull();
+    expect(knownDate("2027-02-30")).toBeNull();
+    expect(knownDate("2027-06-30")).toBe("2027-06-30");
+  });
+  it("says the baseline is unknown, and adds the due date when there is one", () => {
+    expect(objectiveLine(base)).toBe("Baseline unknown");
+    expect(objectiveLine({ ...base, dueDate: "2027-06-30" })).toBe(
+      "Baseline unknown · due 2027-06-30",
+    );
+  });
+  it("finds one thing by a few words, and nothing when it is ambiguous", () => {
+    const areas = [{ name: "Pricing review" }, { name: "Pricing page" }];
+    const name = (item: { name: string }) => item.name;
+    expect(findNamed(areas, "pricing review", name)).toBe(areas[0]);
+    expect(findNamed(areas, "pricing", name)).toBeNull();
+    expect(findNamed(areas, "", name)).toBeNull();
   });
 });

@@ -1,10 +1,9 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
+import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
+import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
 import { useState } from "react";
-import {
-  outcomeNotes,
-  type AttentionRow,
-} from "../../../../packages/domain/src/work/home.ts";
+import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
 import {
   route,
@@ -15,6 +14,8 @@ import {
   gateLabels,
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
+import { reminderTime } from "../../../../packages/domain/src/work/reminders.ts";
+import { BlockerRow } from "./blocker-row.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { Composer } from "./composer.tsx";
@@ -23,6 +24,8 @@ import {
   formatDate,
   groupName,
   homeModel,
+  areaOf,
+  scopedBlockers,
   shortDate,
   trayFor,
   typeLabels,
@@ -67,12 +70,30 @@ export function IntakeCard({
   const [target, setTarget] = useState(
     /(\d{1,3})\s?%/.exec(pending.text)?.[1] ?? "",
   );
+  const [due, setDue] = useState("");
   const [error, setError] = useState("");
   const create = async (type: string, name: string) => {
+    if (type === "rfp") {
+      // The same record as Track an RFP, with the facts the request states.
+      const facts = rfpDetails(pending.text);
+      const result = await workAsync("save-rfp", {
+        groupId,
+        name,
+        client: facts.client ?? "",
+        deadline: facts.deadline,
+        responseOwner: facts.responseOwner,
+        accountOwner: facts.accountOwner,
+        presales: facts.presales,
+      });
+      return result.ok ? result.ref : null;
+    }
+    // "…for client X", read the same way an RFP's client is.
+    const client = type === "project" ? rfpDetails(pending.text).client : null;
     const result = await workAsync("create-area", {
       groupId,
       type: type as "product" | "project" | "task" | "rfp",
       name,
+      ...(client ? { client } : {}),
     });
     return result.ok ? result.ref : null;
   };
@@ -216,6 +237,7 @@ export function IntakeCard({
             baseline: number(baseline),
             target: number(target),
             current: number(baseline),
+            dueDate: due || null,
             workAreaIds: [id],
           });
           onOpen(id, pending.text);
@@ -253,6 +275,14 @@ export function IntakeCard({
               placeholder="Not set"
               value={target}
               onChange={(event) => setTarget(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            Due date
+            <input
+              type="date"
+              value={due}
+              onChange={(event) => setDue(event.target.value)}
             />
           </label>
         </div>
@@ -367,8 +397,12 @@ function Row({
   const primary = () => {
     if (row.primary === "Review changes" && row.tray) return onToggle();
     if (row.primary === "Yes, draft it") {
-      work("resolve-attention", { attentionId: row.id, resolution: "accept" });
-      return onAccepted(outcomeNotes.draft);
+      const item = snapshot.attention.find((entry) => entry.id === row.id);
+      if (!item) return;
+      const accepted = acceptOffer(item);
+      onAccepted(accepted.note);
+      // The draft is asked for in the work's own conversation.
+      return accepted.areaId ? onOpen() : undefined;
     }
     if (row.primary === "View findings")
       work("resolve-attention", { attentionId: row.id, resolution: "done" });
@@ -482,7 +516,7 @@ function Row({
             </button>
             <button
               className="btn"
-              onClick={() => work("request-changes", { planId: tray.plan.id })}
+              onClick={() => requestPlanChanges(tray.plan)}
             >
               Request changes
             </button>
@@ -532,6 +566,12 @@ export function Home({
     const item = snapshot.attention.find((entry) => entry.id === row.id);
     return item ? kinds.includes(item.kind) : false;
   });
+  // Blockers wait here with the rest, each with its owner and age.
+  const blocked = filter === "open" ? scopedBlockers(snapshot) : [];
+  const reminders =
+    filter === "open"
+      ? snapshot.reminders.filter((item) => item.state === "due")
+      : [];
   const openRow = (id: string) => {
     const item = snapshot.attention.find((entry) => entry.id === id);
     onOpen(item?.workAreaId ?? null);
@@ -570,6 +610,7 @@ export function Home({
         key={seed?.nonce ?? "composer"}
         initial={seed?.text ?? ""}
         autoFocus
+        skills
         placeholder={placeholder}
         chips={pending ? [] : chips}
         model={model}
@@ -584,7 +625,7 @@ export function Home({
       />
     </>
   );
-  if (view.welcome)
+  if (view.welcome && !reminders.length)
     return (
       <div className="rb-scroll">
         <div className="rb-page">
@@ -654,7 +695,9 @@ export function Home({
         <section className="rb-panel" aria-labelledby="rb-att-h">
           <header>
             <h2 id="rb-att-h">Needs your attention</h2>
-            <span className="count">{view.rows.length}</span>
+            <span className="count">
+              {view.rows.length + blocked.length + reminders.length}
+            </span>
             <span className="grow" />
             {kinds && (
               <button className="btn quiet" onClick={() => setKinds(null)}>
@@ -676,6 +719,50 @@ export function Home({
               </button>
             </div>
           </header>
+          {blocked.map((item) => (
+            <BlockerRow
+              key={item.id}
+              blocker={item}
+              projectName={areaOf(snapshot, item.workAreaId)?.name}
+              now={now}
+              onOpen={() => onOpen(item.workAreaId)}
+            />
+          ))}
+          {reminders.map((item) => (
+            <div className="rb-att" key={item.id}>
+              <div>
+                <div className="label">
+                  {item.missedAt
+                    ? "Missed at " + reminderTime(item.missedAt, new Date(now))
+                    : "Now"}
+                  {item.workAreaId &&
+                    " · " + areaOf(snapshot, item.workAreaId)?.name}
+                </div>
+                <div className="title">Reminder: {item.text}</div>
+              </div>
+              <div className="row">
+                <button
+                  className="btn"
+                  aria-label={`Mark the reminder “${item.text}” as done`}
+                  onClick={() =>
+                    work("finish-reminder", { reminderId: item.id })
+                  }
+                >
+                  Done
+                </button>
+                <button
+                  className="btn quiet"
+                  aria-label={`Snooze the reminder “${item.text}” for 10 minutes`}
+                  onClick={() => {
+                    work("snooze-reminder", { reminderId: item.id });
+                    onNote("Okay. I’ll remind you again in 10 minutes.");
+                  }}
+                >
+                  Snooze 10 minutes
+                </button>
+              </div>
+            </div>
+          ))}
           {rows.length ? (
             rows.map((row) => (
               <Row
@@ -694,7 +781,7 @@ export function Home({
                 onAccepted={onNote}
               />
             ))
-          ) : (
+          ) : blocked.length || reminders.length ? null : (
             <p className="rb-empty">
               {filter === "open"
                 ? "Nothing needs you right now."
@@ -724,6 +811,7 @@ export function Home({
                 <span className="meta">
                   {[
                     typeLabels[area.type],
+                    area.type === "project" && area.client,
                     groupName(snapshot, area.groupId),
                     area.dueAt && "Due " + shortDate(area.dueAt),
                   ]

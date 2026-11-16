@@ -2,6 +2,11 @@
 // Decisions come from packages/domain/src/work; this file persists them.
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
+import { planItemKey, sameItem } from "./plan-publication.ts";
+import { WorkReminders } from "./work-reminders.ts";
+import { searchContent } from "./content-search.ts";
+import { agentCatalog } from "../../domain/src/work/agents.ts";
 import { Redactor } from "../../security/src/redaction.ts";
 import {
   setupState,
@@ -57,7 +62,7 @@ export function withoutDeleted(snapshot: WorkSnapshot): WorkSnapshot {
   const dead = (id: unknown) => typeof id === "string" && gone.has(id);
   const kept = (ids: unknown) =>
     Array.isArray(ids) ? ids.filter((id) => !dead(id)) : ids;
-  const unlinkOnly = new Set(["council", "decisions"]);
+  const unlinkOnly = new Set(["council", "decisions", "reminders"]);
   const result: Record<string, unknown> = { ...snapshot };
   for (const [key, value] of Object.entries(snapshot)) {
     if (!Array.isArray(value)) continue;
@@ -93,7 +98,9 @@ export class WorkStore {
     this.db = db;
     this.redactor = redactor;
     this.now = now;
+    this.reminders = new WorkReminders(db, now, (text) => this.clean(text));
   }
+  readonly reminders: WorkReminders;
   private stamp() {
     return this.now().toISOString();
   }
@@ -109,6 +116,43 @@ export class WorkStore {
   private clean(value: string) {
     return this.redactor.text(value);
   }
+  /** How many versions the snapshot carries; older ones stay in the database. */
+  private static readonly versionsShown = 30;
+  private versionsOf(outputId: string, approved: unknown) {
+    const rows = this.all(
+      "SELECT version,body,author,author_known,created_at FROM library_output_versions WHERE output_id=? ORDER BY version DESC LIMIT ?",
+      outputId,
+      WorkStore.versionsShown,
+    );
+    const latest = rows.length ? Number(rows[0]!.version) : 1;
+    return {
+      version: latest,
+      approvedVersion: approved === null ? null : Number(approved),
+      versions: rows.map((row) => ({
+        version: Number(row.version),
+        author: row.author_known
+          ? (row.author as "owner" | "firstmate" | "agent")
+          : null,
+        createdAt: String(row.created_at),
+        body: String(row.body),
+      })),
+    };
+  }
+  private addVersion(
+    outputId: string,
+    body: string,
+    author: string,
+    now: string,
+  ) {
+    this.run(
+      "INSERT INTO library_output_versions(output_id,version,body,author,created_at) VALUES (?,COALESCE((SELECT MAX(version) FROM library_output_versions WHERE output_id=?),0)+1,?,?,?)",
+      outputId,
+      outputId,
+      body,
+      author,
+      now,
+    );
+  }
 
   setup(): SetupState {
     const row = this.get(
@@ -120,6 +164,13 @@ export class WorkStore {
     this.run(
       "INSERT INTO workspace_settings(id,value_json) VALUES ('work_setup',?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
       JSON.stringify(setupState.parse(value)),
+    );
+  }
+
+  /** RFP work areas made before they were board records get one, once. */
+  private adoptRfps() {
+    this.run(
+      "INSERT OR IGNORE INTO rfps(work_area_id,client,stage) SELECT id,'','received' FROM work_areas WHERE type='rfp' AND status<>'deleted' AND id NOT IN (SELECT work_area_id FROM rfps)",
     );
   }
 
@@ -195,6 +246,8 @@ export class WorkStore {
 
   snapshot(): WorkSnapshot {
     this.adoptProducts();
+    this.resolveSuperseded();
+    this.adoptRfps();
     this.run(
       "UPDATE work_attention SET state='open',snoozed_until=NULL WHERE state='snoozed' AND snoozed_until<=?",
       this.stamp(),
@@ -297,6 +350,7 @@ export class WorkStore {
             current: (row.current as number | null) ?? null,
             evidenceDate: (row.evidence_date as string | null) ?? null,
             reviewDate: (row.review_date as string | null) ?? null,
+            dueDate: (row.due_date as string | null) ?? null,
             conflict: bool(row.conflict),
             links: objectiveLinks.get(String(row.id)) ?? [],
           }),
@@ -333,6 +387,17 @@ export class WorkStore {
           createdAt: String(row.created_at),
         })),
         plans: this.plans(),
+        blockers: this.all(
+          "SELECT b.* FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
+        ).map((row) => ({
+          id: String(row.id),
+          workAreaId: String(row.work_area_id),
+          title: String(row.title),
+          owner: (row.owner as string | null) ?? null,
+          raisedAt: String(row.raised_at),
+          resolvedAt: (row.resolved_at as string | null) ?? null,
+        })),
+        reminders: this.reminders.list(),
         rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map(
           (row) => ({
             id: String(row.work_area_id),
@@ -386,6 +451,17 @@ export class WorkStore {
             needsLinking: false,
             body: String(row.body),
             updatedAt: String(row.updated_at),
+            ...this.versionsOf(String(row.id), row.approved_version),
+            acceptance:
+              row.acceptance === null || row.acceptance === undefined
+                ? null
+                : {
+                    decision: row.acceptance as
+                      "accepted" | "not_yet" | "rejected",
+                    version: Number(row.acceptance_version),
+                    reason: String(row.acceptance_reason ?? ""),
+                    decidedAt: String(row.acceptance_at),
+                  },
           })),
           ...records.map((record) => ({
             id: record.id,
@@ -405,6 +481,10 @@ export class WorkStore {
               record.linkage === "unresolved",
             body: record.body,
             updatedAt: record.updatedAt,
+            version: 1,
+            approvedVersion: null,
+            acceptance: null,
+            versions: [],
           })),
         ],
         decisions: this.all(
@@ -441,6 +521,13 @@ export class WorkStore {
         ),
         findings: this.findings(),
         memory: {
+          facts: this.all(
+            "SELECT id,group_id AS groupId,key,value,source,observed_at AS observedAt,confirmed,synced FROM memory_claims WHERE state='current' ORDER BY observed_at DESC,id",
+          ).map((row) => ({
+            ...row,
+            confirmed: bool(row.confirmed),
+            synced: bool(row.synced),
+          })),
           unsynced: Number(
             this.get(
               "SELECT count(*) AS n FROM memory_claims WHERE synced=0 AND state='current'",
@@ -453,7 +540,7 @@ export class WorkStore {
           ),
         },
         messages: this.all(
-          "SELECT id,work_area_id AS workAreaId,role,text,card_json,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
+          "SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
         ).map(({ card_json, ...row }) => ({
           ...row,
           card: card_json ? JSON.parse(String(card_json)) : null,
@@ -623,6 +710,10 @@ export class WorkStore {
     return { id, existing: false };
   }
 
+  /** Content search, always limited to the group the owner is working in. */
+  search(query: string) {
+    return searchContent(this.db, query, this.setup().activeGroupId);
+  }
   handle(input: unknown): WorkEvent[] {
     const parsed = workCommand.safeParse(input);
     if (!parsed.success) return [];
@@ -735,6 +826,15 @@ export class WorkStore {
         return this.intake(command);
       case "create-area": {
         const created = this.createArea(command);
+        // An RFP area is a board record from the start, so it is never a
+        // work with no place on the RFPs board.
+        if (command.type === "rfp" && !created.existing)
+          this.run(
+            "INSERT OR IGNORE INTO rfps(work_area_id,client,stage,deadline) VALUES (?,?,'received',?)",
+            created.id,
+            command.client ? this.clean(command.client) : "",
+            command.dueAt ?? null,
+          );
         return {
           ref: created.id,
           message: created.existing
@@ -752,6 +852,9 @@ export class WorkStore {
         const patch = command.patch;
         if (patch.status === "deleted")
           throw new WorkError("Use Delete to remove a work.");
+        // An RFP keeps its client on its own record.
+        if (patch.client !== undefined && area.type !== "project")
+          throw new WorkError("Only a project has a client here.");
         // Boundaries never move silently: a group change is only ever the
         // user's own explicit choice, recorded here.
         if (patch.groupId !== undefined) this.requireGroup(patch.groupId);
@@ -764,6 +867,14 @@ export class WorkStore {
           [
             "purpose",
             patch.purpose === undefined ? undefined : this.clean(patch.purpose),
+          ],
+          [
+            "client",
+            patch.client === undefined
+              ? undefined
+              : patch.client === null || !patch.client.trim()
+                ? null
+                : this.clean(patch.client.trim()),
           ],
           ["status", patch.status],
           ["due_at", patch.dueAt],
@@ -972,7 +1083,7 @@ export class WorkStore {
               { reason: "cross_group" },
             );
         this.run(
-          "INSERT INTO work_objectives(id,group_id,metric,baseline,target,current,evidence_date,review_date,conflict) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET metric=excluded.metric,baseline=excluded.baseline,target=excluded.target,current=excluded.current,evidence_date=excluded.evidence_date,review_date=excluded.review_date,conflict=excluded.conflict",
+          "INSERT INTO work_objectives(id,group_id,metric,baseline,target,current,evidence_date,review_date,due_date,conflict) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET metric=excluded.metric,baseline=excluded.baseline,target=excluded.target,current=excluded.current,evidence_date=excluded.evidence_date,review_date=excluded.review_date,due_date=excluded.due_date,conflict=excluded.conflict",
           id,
           command.groupId,
           this.clean(command.metric),
@@ -981,6 +1092,7 @@ export class WorkStore {
           command.current,
           command.evidenceDate,
           command.reviewDate,
+          command.dueDate,
           command.conflict ? 1 : 0,
         );
         this.run("DELETE FROM work_objective_links WHERE objective_id=?", id);
@@ -1191,23 +1303,62 @@ export class WorkStore {
                 : "current",
           });
         }
+        // Resolving twice changes nothing: one click, or two, is one answer.
+        if (item.state === "done") return { ref: command.attentionId };
         this.run(
           "UPDATE work_attention SET state='done',answer=?,resolved_at=? WHERE id=?",
           command.answer ? this.clean(command.answer) : null,
           now,
           command.attentionId,
         );
-        if (item.kind === "offer" && command.resolution === "accept")
-          // Accepting the offer only drafts. Nothing is sent.
-          this.activity({
-            groupId: (item.group_id as string | null) ?? null,
-            workAreaId: (item.work_area_id as string | null) ?? null,
-            text: `Drafting: ${String(item.title)}`,
-            state: "running",
-            ref: "offer:" + command.attentionId,
-          });
+        // Accepting an offer closes it and nothing more. Firstmate drafts it
+        // when the owner's conversation sends the request, so there is no
+        // "running" row here that no turn stands behind.
         return { ref: command.attentionId };
       }
+      case "raise-blocker": {
+        this.groupOf(command.areaId);
+        const id = randomUUID();
+        const owner = command.owner?.trim();
+        this.run(
+          "INSERT INTO work_blockers(id,work_area_id,title,owner,raised_at) VALUES (?,?,?,?,?)",
+          id,
+          command.areaId,
+          this.clean(command.title),
+          owner ? this.clean(owner) : null,
+          now,
+        );
+        return { ref: id };
+      }
+      case "set-blocker-owner": {
+        const owner = command.owner?.trim();
+        const changed = this.run(
+          "UPDATE work_blockers SET owner=? WHERE id=? AND resolved_at IS NULL",
+          owner ? this.clean(owner) : null,
+          command.blockerId,
+        ).changes;
+        if (!changed) throw new WorkError("That blocker is already cleared.");
+        return { ref: command.blockerId };
+      }
+      case "reminder":
+        return this.reminders.request(command.text, command.workAreaId);
+      case "finish-reminder":
+        this.reminders.finish(command.reminderId);
+        return {};
+      case "snooze-reminder":
+        this.reminders.snooze(command.reminderId);
+        return {};
+      case "cancel-reminder":
+        this.reminders.cancel(command.reminderId);
+        return {};
+      case "resolve-blocker":
+        // Clearing twice changes nothing.
+        this.run(
+          "UPDATE work_blockers SET resolved_at=? WHERE id=? AND resolved_at IS NULL",
+          now,
+          command.blockerId,
+        );
+        return { ref: command.blockerId };
       case "save-rfp": {
         let areaId = command.areaId;
         if (!areaId) {
@@ -1432,17 +1583,24 @@ export class WorkStore {
               { reason: "cross_group" },
             );
         const id = command.outputId ?? randomUUID();
+        const body = this.clean(command.body);
+        const before = this.get(
+          "SELECT body FROM library_outputs WHERE id=?",
+          id,
+        );
         this.run(
           "INSERT INTO library_outputs(id,group_id,type,title,body,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,body=excluded.body,status=excluded.status,type=excluded.type,updated_at=excluded.updated_at",
           id,
           command.groupId,
           command.type,
           this.clean(command.title),
-          this.clean(command.body),
+          body,
           command.status,
           now,
           now,
         );
+        if (!before || String(before.body) !== body)
+          this.addVersion(id, body, command.author, now);
         this.run("DELETE FROM library_output_links WHERE output_id=?", id);
         for (const areaId of command.workAreaIds)
           this.run(
@@ -1451,6 +1609,69 @@ export class WorkStore {
             areaId,
           );
         return { ref: id };
+      }
+      case "restore-output-version": {
+        const row = this.get(
+          "SELECT v.body FROM library_output_versions v JOIN library_outputs o ON o.id=v.output_id WHERE v.output_id=? AND v.version=?",
+          command.outputId,
+          command.versionNumber,
+        );
+        if (!row)
+          throw new WorkError("That version is no longer there.", {
+            reason: "missing_version",
+          });
+        this.run(
+          "UPDATE library_outputs SET body=?,updated_at=? WHERE id=?",
+          String(row.body),
+          now,
+          command.outputId,
+        );
+        this.addVersion(command.outputId, String(row.body), "owner", now);
+        return { ref: command.outputId };
+      }
+      case "approve-output": {
+        const row = this.get(
+          "SELECT MAX(version) AS latest FROM library_output_versions WHERE output_id=?",
+          command.outputId,
+        );
+        if (!row || row.latest === null)
+          throw new WorkError("That document is no longer there.", {
+            reason: "missing_output",
+          });
+        this.run(
+          "UPDATE library_outputs SET approved_version=?,approved_at=? WHERE id=?",
+          command.approved ? Number(row.latest) : null,
+          command.approved ? now : null,
+          command.outputId,
+        );
+        return { ref: command.outputId };
+      }
+      case "record-acceptance": {
+        const row = this.get(
+          "SELECT o.type,(SELECT MAX(version) FROM library_output_versions WHERE output_id=o.id) AS latest FROM library_outputs o WHERE o.id=?",
+          command.outputId,
+        );
+        if (!row)
+          throw new WorkError("That document is no longer there.", {
+            reason: "missing_output",
+          });
+        if (row.type !== "acceptance")
+          throw new WorkError("Only an acceptance checklist can be accepted.", {
+            reason: "not_a_checklist",
+          });
+        if (command.decision !== null && !command.reason)
+          throw new WorkError("Add a short reason for your decision.", {
+            reason: "reason_needed",
+          });
+        this.run(
+          "UPDATE library_outputs SET acceptance=?,acceptance_version=?,acceptance_reason=?,acceptance_at=? WHERE id=?",
+          command.decision,
+          command.decision ? Number(row.latest) : null,
+          command.decision ? this.clean(command.reason) : null,
+          command.decision ? now : null,
+          command.outputId,
+        );
+        return { ref: command.outputId };
       }
       case "record-decision":
         return { ref: this.decide(command) };
@@ -1512,9 +1733,18 @@ export class WorkStore {
           );
         const role = this.clean(command.role);
         let agent = this.get(
-          "SELECT id FROM work_agents WHERE lower(role)=lower(?)",
+          "SELECT id,state,now_doing FROM work_agents WHERE lower(role)=lower(?)",
           role,
         );
+        // A new task starts without the last task's output.
+        const nowDoing =
+          command.nowDoing === null ? null : this.clean(command.nowDoing);
+        const startsTask =
+          !!agent &&
+          command.state === "working" &&
+          (agent.state === "idle" ||
+            agent.state === "done" ||
+            agent.now_doing !== nowDoing);
         if (!agent) {
           // An agent Firstmate brought in for this job only.
           const id = randomUUID();
@@ -1529,9 +1759,11 @@ export class WorkStore {
         this.run(
           "UPDATE work_agents SET state=?,now_doing=?,enabled=1 WHERE id=?",
           command.state,
-          command.nowDoing === null ? null : this.clean(command.nowDoing),
+          nowDoing,
           agent.id,
         );
+        if (command.output === undefined && startsTask)
+          this.run("UPDATE work_agents SET output='' WHERE id=?", agent.id);
         if (command.output !== undefined)
           this.run(
             "UPDATE work_agents SET output=? WHERE id=?",
@@ -1609,15 +1841,19 @@ export class WorkStore {
           // Report → Library; actionable recommendation → Decisions for
           // review. A verdict never changes roadmap, backlog or tickets.
           const output = randomUUID();
+          const report = command.recommendation
+            ? this.clean(command.recommendation)
+            : "";
           this.run(
             "INSERT INTO library_outputs(id,group_id,type,title,body,status,created_at,updated_at) VALUES (?,?,'council_report',?,?,'Advisory',?,?)",
             output,
             groupId,
             this.clean(`Council · ${command.decision}`),
-            command.recommendation ? this.clean(command.recommendation) : "",
+            report,
             now,
             now,
           );
+          this.addVersion(output, report, "firstmate", now);
           if (command.workAreaId)
             this.run(
               "INSERT INTO library_output_links(output_id,work_area_id) VALUES (?,?)",
@@ -1827,6 +2063,46 @@ export class WorkStore {
           );
         return { ref: id, step: { step: "record" } };
       }
+      case "correct-claim": {
+        const fact = this.get(
+          "SELECT id FROM memory_claims WHERE id=? AND state='current'",
+          command.claimId,
+        );
+        if (!fact) throw new WorkError("That fact is no longer remembered.");
+        // Replaced in place: the old wording is not kept. It is sent on again.
+        this.run(
+          "UPDATE memory_claims SET value=?,source='Corrected by you',observed_at=?,confirmed=1,synced=0 WHERE id=?",
+          this.clean(command.value),
+          now,
+          command.claimId,
+        );
+        return { ref: command.claimId };
+      }
+      case "forget-claim": {
+        const fact = this.get(
+          "SELECT group_id,key FROM memory_claims WHERE id=? AND state='current'",
+          command.claimId,
+        );
+        if (!fact) throw new WorkError("That fact is no longer remembered.");
+        // The earlier versions and any open question about it go too.
+        const same = this.all(
+          "SELECT id FROM memory_claims WHERE ifnull(group_id,'')=ifnull(?,'') AND key=?",
+          fact.group_id,
+          fact.key,
+        ).map((row) => String(row.id));
+        for (const id of same)
+          this.run(
+            "UPDATE work_attention SET state='done',answer='Forgotten',resolved_at=? WHERE ref=? AND state!='done'",
+            now,
+            "claim:" + id,
+          );
+        this.run(
+          "DELETE FROM memory_claims WHERE ifnull(group_id,'')=ifnull(?,'') AND key=?",
+          fact.group_id,
+          fact.key,
+        );
+        return {};
+      }
       case "resolve-claim": {
         const item = this.get(
           "SELECT * FROM work_attention WHERE id=?",
@@ -1874,12 +2150,13 @@ export class WorkStore {
           throw new WorkError("That work area no longer exists.");
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_messages(id,work_area_id,role,text,card_json,created_at) VALUES (?,?,?,?,?,?)",
+          "INSERT INTO work_messages(id,work_area_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?)",
           id,
           command.workAreaId,
           command.role,
           this.clean(command.text),
           command.card === null ? null : JSON.stringify(command.card),
+          command.role === "firstmate" ? command.model : null,
           now,
         );
         this.run(
@@ -2040,6 +2317,8 @@ export class WorkStore {
           })),
         },
       };
+    if (step.step === "reminder")
+      return { ...this.reminders.request(command.text, null), step };
     if (step.step === "unreadable")
       return {
         ok: false,
@@ -2171,6 +2450,87 @@ export class WorkStore {
     return { ref: planId, step: { published: false } };
   }
 
+  /**
+   * An item an old plan failed to create may since have been published by
+   * another plan in the same work area. It is then linked to that item, so the
+   * old plan stops reporting it as unpublished and a retry cannot create it
+   * again.
+   */
+  private resolveSuperseded() {
+    let plans: Record<string, unknown>[];
+    try {
+      plans = this.all(
+        "SELECT id,work_area_id,destination,approved_json,results_json FROM work_plans WHERE state IN ('failed','partial') AND results_json IS NOT NULL",
+      );
+    } catch {
+      return;
+    }
+    for (const plan of plans) {
+      const failed = (
+        list(plan.results_json) as { id: string; state: string }[]
+      ).filter((result) => result.state === "failed");
+      if (!failed.length) continue;
+      const items = list(plan.approved_json) as {
+        id: string;
+        summary: string;
+        fields: Record<string, string | number | null>;
+      }[];
+      let others: Record<string, unknown>[];
+      try {
+        others = this.all(
+          `SELECT w.item_id,w.external_id,w.url,p.approved_json FROM plan_writes w JOIN work_plans p ON p.id=w.plan_id
+           WHERE w.plan_id<>? AND w.state='created' AND w.external_id IS NOT NULL AND p.work_area_id IS ?
+           AND w.destination=? ORDER BY p.created_at,w.rowid`,
+          String(plan.id),
+          (plan.work_area_id as string | null) ?? null,
+          "ado",
+        );
+      } catch {
+        continue;
+      }
+      if (!others.length || plan.destination !== "ado") continue;
+      const found: {
+        id: string;
+        state: "created";
+        externalId: string;
+        url?: string;
+        linked: true;
+      }[] = [];
+      for (const result of failed) {
+        const item = items.find((entry) => entry.id === result.id);
+        if (!item || adoWorkItemOf(item.fields).named) continue;
+        const key = planItemKey(item);
+        const match = others.find((other) => {
+          const before = (list(other.approved_json) as typeof items).find(
+            (entry) => entry.id === other.item_id,
+          );
+          if (!before) return false;
+          const then = planItemKey(before);
+          return sameItem(then, key);
+        });
+        if (match)
+          found.push({
+            id: result.id,
+            state: "created",
+            externalId: String(match.external_id),
+            ...(match.url ? { url: String(match.url) } : {}),
+            linked: true,
+          });
+      }
+      if (!found.length) continue;
+      for (const result of found)
+        this.run(
+          "UPDATE plan_writes SET state='created',external_id=?,url=?,note=? WHERE plan_id=? AND item_id=?",
+          result.externalId,
+          result.url ?? null,
+          `Already exists as #${result.externalId}; linked, not created.`,
+          String(plan.id),
+          result.id,
+        );
+      this.recordResults(String(plan.id), found);
+    }
+  }
+
   private recordResults(
     planId: string,
     results: {
@@ -2178,6 +2538,8 @@ export class WorkStore {
       state: "created" | "failed" | "unknown";
       externalId?: string | undefined;
       url?: string | undefined;
+      linked?: boolean | undefined;
+      updated?: boolean | undefined;
     }[],
   ) {
     const row = this.get("SELECT * FROM work_plans WHERE id=?", planId);
@@ -2241,11 +2603,15 @@ export class WorkStore {
         groupId,
         workAreaId,
         text:
-          result.state === "created"
-            ? `Created ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
-            : result.state === "failed"
-              ? `Not created: ${item.summary}`
-              : `Checking whether this was created: ${item.summary}`,
+          result.state === "created" && result.linked
+            ? `Already exists: ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
+            : result.state === "created" && result.updated
+              ? `Updated ${item.summary}`
+              : result.state === "created"
+                ? `Created ${result.externalId ? "#" + result.externalId + " " : ""}${item.summary}`
+                : result.state === "failed"
+                  ? `Not created: ${item.summary}`
+                  : `Checking whether this was created: ${item.summary}`,
         state: result.state === "created" ? "finished" : "failed",
         ref: "plan:" + planId,
       });
@@ -2375,6 +2741,10 @@ function titleFrom(text: string, files: string[]) {
 }
 /** "A researcher who reads competitor sites" → "Researcher". */
 function roleFrom(description: string) {
+  const named = agentCatalog.find(
+    (agent) => agent.name.toLowerCase() === description.trim().toLowerCase(),
+  );
+  if (named) return named.name;
   const words = description
     .trim()
     .replace(/^(add|create|i need|i want|give me)\s+/i, "")

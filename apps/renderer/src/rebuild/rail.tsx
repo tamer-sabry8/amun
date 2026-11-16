@@ -29,6 +29,7 @@ const typeNames: Record<string, string> = {
   deck: "Deck",
   update: "Update",
   doc: "Doc",
+  acceptance: "Acceptance checklist",
   council_report: "Council report",
   idea: "Idea",
   problem: "Problem",
@@ -207,6 +208,129 @@ export function DownloadsPanel({
         </button>
       </footer>
     </>
+  );
+}
+
+/** What Amun remembers: each fact can be corrected in place or forgotten. */
+function RememberedFacts({ snapshot }: { snapshot: Snapshot }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [forgetting, setForgetting] = useState<string | null>(null);
+  const allowed = visibleGroups(snapshot);
+  const facts = snapshot.memory.facts.filter(
+    (fact) =>
+      allowed === null ||
+      fact.groupId === null ||
+      allowed.includes(fact.groupId),
+  );
+  return (
+    <section style={{ display: "grid", gap: 6 }} aria-label="Remembered facts">
+      <h3>Remembered facts</h3>
+      {facts.length === 0 && (
+        <p className="muted small">Nothing is remembered yet.</p>
+      )}
+      <div className="rb-rows">
+        {facts.map((fact) => (
+          <div className="rb-rowitem" key={fact.id}>
+            {editing === fact.id ? (
+              <form
+                className="row wrap"
+                style={{ gridColumn: "1 / -1" }}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = draft.trim();
+                  if (next && next !== fact.value)
+                    work("correct-claim", { claimId: fact.id, value: next });
+                  setEditing(null);
+                }}
+              >
+                <input
+                  type="text"
+                  className="grow"
+                  aria-label={`Corrected ${fact.key}`}
+                  autoFocus
+                  maxLength={1000}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setEditing(null);
+                  }}
+                />
+                <button className="btn" type="submit">
+                  Save
+                </button>
+                <button
+                  className="btn quiet"
+                  type="button"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : forgetting === fact.id ? (
+              <span
+                className="row wrap"
+                style={{ gridColumn: "1 / -1" }}
+                role="group"
+                aria-label={`Confirm forgetting ${fact.key}`}
+              >
+                <span className="small grow">
+                  Forget “{fact.value}”?
+                  {fact.synced &&
+                    " It stays in Notion until you remove it there."}
+                </span>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setForgetting(null);
+                    work("forget-claim", { claimId: fact.id });
+                  }}
+                >
+                  Forget it
+                </button>
+                <button
+                  className="btn quiet"
+                  onClick={() => setForgetting(null)}
+                >
+                  Keep it
+                </button>
+              </span>
+            ) : (
+              <>
+                <span>
+                  <span className="name">{fact.value}</span>
+                  <br />
+                  <span className="muted small">
+                    {fact.key} · From {fact.source} ·{" "}
+                    {shortDate(fact.observedAt)}
+                  </span>
+                </span>
+                <span />
+                <span className="row wrap">
+                  <button
+                    className="btn quiet"
+                    aria-label={`Correct ${fact.key}`}
+                    onClick={() => {
+                      setDraft(fact.value);
+                      setEditing(fact.id);
+                    }}
+                  >
+                    Correct
+                  </button>
+                  <button
+                    className="btn quiet"
+                    aria-label={`Forget ${fact.key}`}
+                    onClick={() => setForgetting(fact.id)}
+                  >
+                    Forget
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -458,6 +582,7 @@ export function LibraryPanel({
             </section>
           ),
       )}
+      <RememberedFacts snapshot={snapshot} />
       {/* onWork keeps the panel honest about where an item lives */}
       {!all && workAreaId && (
         <button
