@@ -272,6 +272,52 @@ describe("Azure DevOps plan items", () => {
         "Microsoft.VSTS.Common.Activity": "Testing",
       });
     });
+    it("accepts estimates the type has even when it does not require them", () => {
+      const withEstimates = {
+        ...required,
+        types: [
+          {
+            ...required.types[0]!,
+            fields: [
+              ...required.types[0]!.fields,
+              need(
+                "Microsoft.VSTS.Scheduling.OriginalEstimate",
+                "Original Estimate",
+                { required: false },
+              ),
+              need(
+                "Microsoft.VSTS.Scheduling.CompletedWork",
+                "Completed Work",
+                { required: false },
+              ),
+            ],
+          },
+        ],
+      } as unknown as AzureProcessSchema;
+      const given = {
+        type: "Task",
+        "Remaining Work": "6",
+        Activity: "Development",
+        "Original Estimate": "8",
+        "Completed Work": "2",
+      };
+      expect(adoStep(item(given), withEstimates, "POCs").fields).toMatchObject({
+        "Microsoft.VSTS.Scheduling.RemainingWork": 6,
+        "Microsoft.VSTS.Scheduling.OriginalEstimate": 8,
+        "Microsoft.VSTS.Scheduling.CompletedWork": 2,
+      });
+      expect(() =>
+        adoStep(
+          item({ ...given, "Original Estimate": "soon" }),
+          withEstimates,
+          "POCs",
+        ),
+      ).toThrow(/must be a number/);
+      // A type without the field still refuses it rather than dropping it.
+      expect(() => adoStep(item(given), required, "POCs")).toThrow(
+        /Original Estimate/,
+      );
+    });
     it("refuses a value the field does not allow", () => {
       expect(() =>
         adoStep(
@@ -961,12 +1007,12 @@ describe("Notion page updates", () => {
     );
     const fields = { page: pageId, append: "Line two" };
     await target.write({ ...update(), fields });
-    expect(sent).toEqual(["v1:Line one\nLine two"]);
+    expect(sent).toEqual(["v1:Line one\n\nLine two"]);
     expect(
       notionUpdateText({ title: "QA notes", body: "Line one" }, fields),
     ).toEqual({
       title: "QA notes",
-      body: "Line one\nLine two",
+      body: "Line one\n\nLine two",
       append: "Line two",
     });
     expect(

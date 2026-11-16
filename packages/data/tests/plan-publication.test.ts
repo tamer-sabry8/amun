@@ -356,6 +356,60 @@ describe("a refusal from the destination", () => {
   });
 });
 
+describe("an item left being checked after a definite refusal", () => {
+  const refusal =
+    "Azure DevOps refused it: TF401320: Rule Error for field Remaining Work.";
+  const stuck = async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["lost"];
+    ado.blind = true;
+    await publisher.publish(id);
+    expect(plan(id).results[0]!.state).toBe("unknown");
+    db.prepare("UPDATE plan_writes SET note=? WHERE plan_id=?").run(
+      refusal,
+      id,
+    );
+    ado.held.clear();
+    return id;
+  };
+  it("becomes not created with the stored reason when the lookup finds nothing", async () => {
+    const id = await stuck();
+    ado.blind = false;
+    await publisher.publish(id, { reconcileOnly: true });
+    expect(plan(id).results[0]!.state).toBe("failed");
+    expect(publisher.uncertain()).toEqual([]);
+    expect(publisher.writes(id)[0]!.note).toBe(refusal);
+    expect(ado.writes).toHaveLength(1);
+  });
+  it("does not loop when the lookup itself fails", async () => {
+    const id = await stuck();
+    await publisher.publish(id, { reconcileOnly: true });
+    expect(plan(id).results[0]!.state).toBe("failed");
+    expect(publisher.writes(id)[0]!.note).toBe(refusal);
+  });
+  it("still links the item if the lookup finds it", async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["lost"];
+    ado.blind = true;
+    await publisher.publish(id);
+    db.prepare("UPDATE plan_writes SET note=? WHERE plan_id=?").run(
+      refusal,
+      id,
+    );
+    ado.blind = false;
+    await publisher.publish(id, { reconcileOnly: true });
+    expect(plan(id).results[0]!.state).toBe("created");
+  });
+  it("keeps an item uncertain when the stored error is not a definite refusal", async () => {
+    const id = approved([{ summary: "Sample story", fields: {} }]);
+    ado.script = ["lost"];
+    ado.blind = true;
+    await publisher.publish(id);
+    await publisher.publish(id, { reconcileOnly: true });
+    expect(plan(id).results[0]!.state).toBe("unknown");
+  });
+});
+
 describe("approving only some items", () => {
   it("approves and publishes the ticked item and leaves the other waiting", async () => {
     const proposed = send("propose-plan", {

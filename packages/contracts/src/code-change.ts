@@ -11,6 +11,8 @@ export const codeChangeCard = z.strictObject({
   base: short,
   branch: z.string().regex(/^amun\/[a-z0-9][a-z0-9-]{0,60}$/),
   message: z.string().min(1).max(4096),
+  title: z.string().max(512).optional(),
+  body: z.string().max(4096).optional(),
   files: z
     .array(
       z.strictObject({

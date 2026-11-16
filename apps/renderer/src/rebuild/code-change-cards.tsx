@@ -118,6 +118,16 @@ export function CodeChangeCards({
             <span className="muted small">
               New branch {card.branch} from {card.base}
             </span>
+            {card.body && (
+              <details>
+                <summary>
+                  Pull request ({card.title ?? card.message.split("\n")[0]})
+                </summary>
+                <p style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>
+                  {card.body}
+                </p>
+              </details>
+            )}
             <details>
               <summary>Message ({card.message.split("\n")[0]})</summary>
               <p style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>

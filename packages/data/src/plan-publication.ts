@@ -153,6 +153,16 @@ export function refusalReason(destination: string, error: unknown) {
     return `${name} refused the change: it did not accept the content.`;
   return `${name} refused the change.`;
 }
+/**
+ * A stored reason that is the destination's own definite refusal (a 4xx with
+ * its message), so the item was certainly not created.
+ */
+export function isDefiniteRefusal(note: string | null | undefined) {
+  return (
+    !!note &&
+    /^(Azure DevOps|Notion|GitHub|The destination) refused it: ./.test(note)
+  );
+}
 /** An error line for the service log with links and secrets removed. */
 export function redactedError(error: unknown) {
   const text = error instanceof Error ? error.message : String(error ?? "");
@@ -624,9 +634,23 @@ export class PlanPublisher {
           lookFirst = false;
           // Look before sending anything again.
           let found: PlanReceipt | undefined;
+          let lookupFailed = false;
           try {
             found = await api.find(item);
           } catch {
+            lookupFailed = true;
+          }
+          // A recorded definite refusal means nothing was created: a failed
+          // lookup does not keep the item uncertain, and its reason is kept.
+          const stored = (
+            this.db
+              .prepare(
+                "SELECT note FROM plan_writes WHERE plan_id=? AND item_id=?",
+              )
+              .get(planId, row.item_id) as { note: string | null }
+          ).note;
+          const refused = isDefiniteRefusal(stored);
+          if (lookupFailed && !refused) {
             this.set(planId, row.item_id, {
               state: "unknown",
               note: "Could not confirm whether this was created.",
@@ -639,7 +663,10 @@ export class PlanPublisher {
             break;
           }
           state = "missing";
-          this.set(planId, row.item_id, { state, note: null });
+          this.set(planId, row.item_id, {
+            state,
+            note: refused ? stored : null,
+          });
         }
         if (reconcileOnly || attempts >= planWriteBudget) {
           results.push({ id: row.item_id, state: "failed" });

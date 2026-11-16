@@ -109,6 +109,7 @@ import {
   amunProtocol,
   areaTurnContext,
   publicationLines,
+  failedPublicationLines,
   notionPageLines,
   standingPermissionLines,
   areaOf,
@@ -478,12 +479,43 @@ function askTrackerTypes(areaId: string) {
     bridge.send({ version: 1, kind: "tracker-types", workAreaId: areaId });
   });
 }
+/**
+ * The stored reason behind each plan item that was not created, read from the
+ * service once per turn. A slow or missing answer only means Firstmate is not
+ * told that reason.
+ */
+function askFailureReasons(plans: PlanEntry[]) {
+  const wanted = plans.filter((plan) =>
+    plan.results.some((result) => result.state !== "created"),
+  );
+  if (!wanted.length) return Promise.resolve<Record<string, string>>({});
+  return new Promise<Record<string, string>>((resolve) => {
+    const reasons: Record<string, string> = {};
+    const waiting = new Set(wanted.map((plan) => plan.id));
+    const finish = () => {
+      stop();
+      clearTimeout(timer);
+      resolve(reasons);
+    };
+    const stop = bridge.onEvent((raw) => {
+      const event = planPlacesResult.safeParse(raw);
+      if (!event.success || !waiting.delete(event.data.planId)) return;
+      for (const place of event.data.places)
+        if (place.failure)
+          reasons[`${event.data.planId}:${place.id}`] = place.failure;
+      if (!waiting.size) finish();
+    });
+    const timer = setTimeout(finish, 2500);
+    for (const plan of wanted)
+      bridge.send({ version: 1, kind: "plan-places", planId: plan.id });
+  });
+}
 const trackerLine = (types: TrackerTypes | null) =>
   types
     ? `In ${types.project}, stories are ${countedNoun(2, types.story).slice(2)}${types.task ? ` and sub-tasks are ${countedNoun(2, types.task).slice(2)}` : ""}. Leave the type out of Azure DevOps plan items unless the owner names one or asks for a sub-task under an existing item (then use the sub-task type and the parent field); Amun uses the project's own.${types.needs
         .map(
           (need) =>
-            ` ${types.project} requires ${need.fields.join(", ")} for ${countedNoun(2, need.type).slice(2)}: ask the owner for ${need.fields.length === 1 ? "that value" : "those values"} before proposing the item, then put each in the item's fields under that name. Never choose one yourself.`,
+            ` ${types.project} requires ${need.fields.join(", ")} for ${countedNoun(2, need.type).slice(2)}: ask the owner for ${need.fields.length === 1 ? "that value" : "those values"} before proposing the item (list the allowed values for any field that has them), then put each in the item's fields under its name (the words before any bracket). Estimates and hours such as Remaining Work are plain numbers. Never choose one yourself.`,
         )
         .join("")}`
     : "";
@@ -1671,6 +1703,9 @@ export function WorkSession({
     const news = agentNews(context.messages);
     const record = snapshot.rfps.find((item) => item.id === areaId);
     const tracker = await askTrackerTypes(areaId);
+    const reasons = await askFailureReasons(
+      snapshot.plans.filter((plan) => plan.workAreaId === areaId),
+    );
     const header = areaTurnContext(
       context.area,
       typeLabels[context.area.type],
@@ -1694,6 +1729,7 @@ export function WorkSession({
         )
         .map((item) => item.name),
       notionPageLines(snapshot, areaId),
+      failedPublicationLines(snapshot, areaId, reasons),
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`

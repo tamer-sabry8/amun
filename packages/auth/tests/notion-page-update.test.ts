@@ -187,13 +187,14 @@ describe("updating through a mocked Notion MCP", () => {
     const notion = mock();
     const base = notion.snapshot();
     const outcome = await updateNotionPage(
-      request(base, "Created by Amun.\nUpdated by Amun (check)."),
+      request(base, "Created by Amun.\n\nUpdated by Amun (check)."),
       notion.io(),
     );
     expect(outcome.state).toBe("updated");
     expect(notion.content).toBe(
-      `Created by Amun.\nUpdated by Amun (check).\n\n${marker}`,
+      `Created by Amun.\n\nUpdated by Amun (check).\n\n${marker}`,
     );
+    expect(notion.content).not.toContain("<br");
     expect(notion.calls).toEqual(["send", "update_content"]);
   });
 

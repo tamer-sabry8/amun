@@ -31,6 +31,7 @@ import {
   workTypeGuard,
   areaTurnContext,
   publicationLines,
+  failedPublicationLines,
   replyFromTranscript,
   trayFor,
   visibleGroups,
@@ -1153,6 +1154,51 @@ describe("what was already published, for Firstmate", () => {
     expect(publicationLines(snapshot({ plans: many }), "area")).toHaveLength(
       20,
     );
+  });
+  it("gives Firstmate each failed item's stored reason, and no guessing", () => {
+    const failed = {
+      ...plan("9", false, "partial"),
+      results: [{ id: "i9", state: "failed" }],
+    } as unknown as WorkSnapshot["plans"][number];
+    const checking = {
+      ...plan("8", false, "partial"),
+      results: [{ id: "i8", state: "unknown" }],
+    } as unknown as WorkSnapshot["plans"][number];
+    const lines = failedPublicationLines(
+      snapshot({ plans: [plan("1", false), failed, checking] }),
+      "area",
+      {
+        "9:i9":
+          "Azure DevOps refused it: TF401320: Rule Error for field Remaining Work",
+      },
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("was not created");
+    expect(lines[0]).toContain("Reason: Azure DevOps refused it: TF401320");
+    expect(lines[1]).toContain("still being checked");
+    expect(lines[1]).toContain("Reason: none recorded");
+    const text = areaTurnContext(
+      { type: "task", name: "T" },
+      "Task",
+      null,
+      undefined,
+      [],
+      [],
+      undefined,
+      "",
+      [],
+      [],
+      [],
+      [],
+      lines,
+    );
+    expect(text).toContain("Failed publications");
+    expect(text).toContain("TF401320");
+  });
+  it("lets Firstmate ask for estimates instead of claiming they are refused", () => {
+    expect(amunProtocol).not.toMatch(/such as an estimate/);
+    expect(amunProtocol).toContain('"Remaining Work"');
+    expect(amunProtocol).toContain("Never pick a required value yourself");
   });
   it("tells Firstmate never to claim nothing was published", () => {
     const text = areaTurnContext(

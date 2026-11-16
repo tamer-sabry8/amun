@@ -104,7 +104,7 @@ const text = (value: unknown) =>
 
 // The plan's field names as written by people or models ("Acceptance
 // criteria", "Work item type") mapped to the names this adapter uses. Any
-// other field with a value, such as "Assigned to" or "Estimate", is refused
+// other field with a value, such as "Assigned to" or "Tags", is refused
 // instead of being dropped; blank ones are ignored.
 const fieldNames: Record<string, string> = {
   title: "title",
@@ -224,6 +224,10 @@ const listed = (names: string[]) =>
 // Azure refuses these as text; the rest travel as the owner wrote them.
 const numericField =
   /^Microsoft\.VSTS\.Scheduling\.|^Microsoft\.VSTS\.Common\.(Priority|BusinessValue|TimeCriticality|StackRank)$/;
+// Estimate and Activity fields the owner may give a value for even when the
+// project does not require them.
+const optionalAdoField =
+  /^Microsoft\.VSTS\.Scheduling\.(OriginalEstimate|RemainingWork|CompletedWork)$|^Microsoft\.VSTS\.Common\.Activity$/;
 /**
  * The fields a project requires of a work item type that Amun cannot fill
  * itself: the owner has to give a value for each. Fields Azure fills by
@@ -348,13 +352,22 @@ export function adoStep(
       );
     fields["System.IterationPath"] = iteration;
   }
-  // Values the owner gave for the fields this type requires. Anything else
-  // is refused rather than dropped, as before.
+  // Values the owner gave for the fields this type requires, and for its
+  // estimate and Activity fields when it has them. Anything else is refused
+  // rather than dropped, as before.
   const required = requiredAdoFields(type);
+  const claimable = [
+    ...required,
+    ...type.fields.filter(
+      (field) =>
+        optionalAdoField.test(field.referenceName) &&
+        !required.some((entry) => entry.referenceName === field.referenceName),
+    ),
+  ];
   const unclaimed: string[] = [];
   for (const [label, value] of Object.entries(extras)) {
     const key = flat(label);
-    const field = required.find(
+    const field = claimable.find(
       (entry) =>
         flat(entry.name) === key ||
         flat(entry.referenceName) === key ||
@@ -370,6 +383,10 @@ export function adoStep(
         `“${label}” must be one of ${field.allowedValues.slice(0, 12).join(", ")} for a ${type.name} in ${project}.`,
       );
     const number = Number(value.replace(",", "."));
+    if (numericField.test(field.referenceName) && !Number.isFinite(number))
+      throw new PlanNotSent(
+        `“${label}” must be a number for a ${type.name} in ${project}.`,
+      );
     fields[field.referenceName] =
       numericField.test(field.referenceName) && Number.isFinite(number)
         ? number
@@ -1033,7 +1050,12 @@ export function notionUpdateText(
   const body = get("body", "description");
   const append = get("append", "appendtext", "addline", "addlines");
   if (append && body) return undefined;
-  if (append) return { title, body: receipt.body + "\n" + append, append };
+  if (append)
+    return {
+      title,
+      body: receipt.body + "\n\n" + append.replace(/\n+/g, "\n\n"),
+      append,
+    };
   return body ? { title, body } : undefined;
 }
 

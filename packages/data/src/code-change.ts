@@ -9,6 +9,8 @@ export interface CodeChangePayload {
   branch: string;
   message: string;
   title: string;
+  /** The pull request description Amun sends, without its hidden marker. */
+  body?: string;
   files: {
     path: string;
     status: "added" | "changed" | "removed" | "renamed";

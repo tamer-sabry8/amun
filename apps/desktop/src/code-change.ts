@@ -79,14 +79,32 @@ export function describeChange(title: string, summary: string) {
   };
 }
 
-const pullBody = (id: string, message: string) =>
+/** The pull request text, built only from facts Amun controls. */
+export function pullRequestBody(
+  meta: Pick<Meta, "title" | "branch" | "base" | "agent">,
+  files: CodeChangePayload["files"],
+) {
+  const shown = files
+    .slice(0, 10)
+    .map(
+      (f) =>
+        `${f.path} (+${f.additions}${f.deletions ? `/-${f.deletions}` : ""})`,
+    )
+    .join(", ");
+  const more = files.length > 10 ? ` and ${files.length - 10} more` : "";
+  return [
+    meta.title.replace(/\s+/g, " ").trim().slice(0, 200),
+    `Files: ${shown}${more}`,
+    `Branch: ${meta.branch} from ${meta.base}`,
+    `Requested in Amun by the owner; changed by ${meta.agent}; opened by Amun after owner approval. Nothing is merged.`,
+  ].join("\n\n");
+}
+
+const pullBody = (id: string, payload: CodeChangePayload) =>
   [
-    message.split("\n").slice(2).join("\n").trim(),
-    "Opened by Amun after owner approval.",
+    payload.body ?? "Opened by Amun after owner approval. Nothing is merged.",
     pullMarker(id),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  ].join("\n\n");
 
 export class CodeChanges {
   readonly review: CodeChangeReview;
@@ -187,6 +205,7 @@ export class CodeChanges {
       branch: meta.branch,
       message: text.message,
       title: text.title,
+      body: pullRequestBody(meta, found.files),
       files: found.files,
       diffHash: found.diffHash,
       job: id,
@@ -260,6 +279,8 @@ export class CodeChanges {
         base: payload.base,
         branch: payload.branch,
         message: payload.message,
+        title: payload.title,
+        ...(payload.body ? { body: payload.body } : {}),
         files: payload.files,
         diff: item.diff,
         diffHash: payload.diffHash,
@@ -401,7 +422,7 @@ export class CodeChanges {
       this.review.setProgress(id, { commit, pushed: true });
       const pull = await chosen.host.createPull({
         title: item.payload.title,
-        body: pullBody(id, item.payload.message),
+        body: pullBody(id, item.payload),
         head: meta.branch,
         base: meta.base,
       });
@@ -449,7 +470,7 @@ export class CodeChanges {
     if (item.progress.commit && remote === item.progress.commit) {
       const pull = await chosen.host.createPull({
         title: item.payload.title,
-        body: pullBody(id, item.payload.message),
+        body: pullBody(id, item.payload),
         head: meta.branch,
         base: meta.base,
       });

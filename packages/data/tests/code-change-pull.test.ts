@@ -167,7 +167,12 @@ it("pushes a new branch, opens one pull request and records the receipt", async 
   const body = (s.github.createPull as ReturnType<typeof vi.fn>).mock
     .calls[0]![0];
   expect(body).toMatchObject({ head: meta.branch, base: "main" });
-  expect(body.body).toContain("Opened by Amun after owner approval");
+  expect(body.body).toContain("opened by Amun after owner approval");
+  expect(body.body).toContain("Files: a.txt (+1)");
+  expect(body.body).toContain(`Branch: ${meta.branch} from main`);
+  expect(body.body).toContain("Nothing is merged.");
+  expect(body.body).not.toMatch(/uncommitted|did not commit/i);
+  expect(card.body).toBe(body.body.split("\n\n").slice(0, -1).join("\n\n"));
   expect(body.body).toContain("amun-code-change:" + card.id);
   const [done] = await s.changes.cards("p1");
   expect(done).toMatchObject({
