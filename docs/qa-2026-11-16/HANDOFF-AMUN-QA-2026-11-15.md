@@ -501,3 +501,7 @@ Minor: e2e firstmate-stow flaked once (passed on rerun); 23 legacy e2e specs ski
 
 ### 7. DMG from main
 `/Users/tamersabry/Documents/ChatGPT/Amun/releases/Amun-Beta-0.9-arm64-c0130a4.dmg`, built from main c0130a4. sha256 0888a3cc1b67aebbad396f1403f3cba675972661b5aa84b0a7c392d80e7b07db, `hdiutil verify` VALID, ad-hoc signed. Its content is identical to 36ac9d2 plus the merge.
+
+
+### 8. Clean-up done by owner request (16 Nov 05:50)
+The installed app, the Amun profile (`~/Library/Application Support/Amun`), preferences, the 6 Amun Keychain sign-ins, all rollback apps and all old DMGs were deleted. Only `releases/Amun-Beta-0.9-arm64-c0130a4.dmg` remains, for a clean install. After installing, the owner must sign in again (Azure DevOps, Notion, GitHub, models). Earlier QA data is gone, so the old Invites failure in T1 no longer exists. Retest T1–T3 by recreating the scenario: approve a POCs Task under #1091018 without Remaining Work and Activity (expected: refused before sending, with the reason), then with the values (owner approval).
