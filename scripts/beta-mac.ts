@@ -17,7 +17,6 @@ if (process.env.AMUN_BETA !== "1" || process.env.AMUN_RELEASE === "1")
   throw Error("Select trusted tester beta mode exclusively");
 const run = (file: string, args: string[]) =>
   execFileSync(file, args, { encoding: "utf8", maxBuffer: 4_000_000 });
-const sourceCommit = run("git", ["rev-parse", "HEAD"]).trim();
 const dirty = Boolean(run("git", ["status", "--porcelain"]));
 const { version, displayVersion } = JSON.parse(
   readFileSync(
@@ -43,7 +42,7 @@ const output = resolve("../releases");
 mkdirSync(output, { recursive: true });
 const dmg = join(
   output,
-  `Amun-${displayVersion.replaceAll(" ", "-")}-arm64-${sourceCommit.slice(0, 7)}.dmg`,
+  `Amun-${displayVersion.replaceAll(" ", "-")}-arm64.dmg`,
 );
 try {
   run("/usr/bin/ditto", [app, join(stage, "Amun.app")]);
@@ -67,7 +66,6 @@ try {
   run("/usr/bin/hdiutil", ["verify", dmg]);
   const receipt = {
     artifact: dmg,
-    sourceCommit,
     dirty,
     version,
     displayVersion,

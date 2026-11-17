@@ -3,7 +3,7 @@ import { useState } from "react";
 import { attentionItem } from "@amun/contracts";
 import { Island, attentionLabels } from "./island.tsx";
 import type { IslandSize } from "./layout.ts";
-const themes = ["tamer-sabry-default", "navy-gold", "navy-cyan"];
+const themes = ["amun-default", "navy-gold", "navy-cyan"];
 const sizes: IslandSize[] = ["rail", "pill", "card", "expanded"];
 function Gallery() {
   const [theme, setTheme] = useState(themes[0]!);

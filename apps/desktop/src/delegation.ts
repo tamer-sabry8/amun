@@ -40,6 +40,8 @@ export interface DelegationDeps {
   } | null;
   /** The worker tool to use, or null when the owner has turned them all off. */
   harness(): Harness | null;
+  /** Optional fallback worker tools to try when the primary worker encounters an issue. */
+  fallbackHarnesses?(): Harness[];
   /**
    * Starts the worker and lets it reach its own prompt. "asks-trust" means
    * its tool is asking to trust the worker's folder and the owner has not
@@ -351,14 +353,37 @@ export class Delegations {
     try {
       if (!(await this.send(job))) return id;
     } catch (error) {
-      await this.finish(job, "failed", {
-        note:
-          `I could not start ${agent} on ${names[harness]}. ` +
-          (error instanceof Error && error.message
-            ? this.deps.redact(error.message)
-            : "The worker did not start."),
-      });
-      return null;
+      const fallbacks = (this.deps.fallbackHarnesses?.() ?? []).filter(
+        (h) => h !== job.harness,
+      );
+      let recovered = false;
+      for (const nextHarness of fallbacks) {
+        const previousHarness = job.harness;
+        job.harness = nextHarness;
+        await this.save(job);
+        try {
+          const sent = await this.send(job);
+          this.say(
+            input.workAreaId,
+            `Switched ${agent} from ${names[previousHarness]} to ${names[nextHarness]} because ${names[previousHarness]} encountered an issue.`,
+          );
+          if (!sent) return id;
+          recovered = true;
+          break;
+        } catch {
+          // Try next fallback harness if any.
+        }
+      }
+      if (!recovered) {
+        await this.finish(job, "failed", {
+          note:
+            `I could not start ${agent} on ${names[harness]}. ` +
+            (error instanceof Error && error.message
+              ? this.deps.redact(error.message)
+              : "The worker did not start."),
+        });
+        return null;
+      }
     }
     this.watch(job);
     return id;
@@ -637,10 +662,13 @@ export class Delegations {
         card: { kind: "agent-result", agent: job.agent, title: job.title },
       });
     } else
-      this.say(
-        job.workAreaId,
-        outcome.note ?? `${job.agent} did not finish “${job.title}”.`,
-      );
+      this.deps.record({
+        action: "message",
+        workAreaId: job.workAreaId,
+        role: "firstmate",
+        text: outcome.note ?? `${job.agent} did not finish “${job.title}”.`,
+        card: { kind: "agent-result", agent: job.agent, title: job.title },
+      });
   }
 
   close() {

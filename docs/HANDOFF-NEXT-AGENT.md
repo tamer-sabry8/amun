@@ -1,6 +1,6 @@
 # Amun · handoff for the next agent
 
-13 November 2026, updated after pull request 24. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This is the only current handoff; the other `docs/*HANDOFF*.md` files are history, except the two memory documents named below.
+17 November 2026, updated on branch `strip-repo-references` (see `docs/2026-11-17-HANDOFF.md` for full details of the 17 November 2026 changes). Written for an agent that knows nothing about this project. Read this file, `docs/2026-11-17-HANDOFF.md`, and `AGENTS.md` at the repository root before changing anything.
 
 ## What Amun is
 

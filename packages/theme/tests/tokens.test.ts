@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { contrast, colorHex } from "../src/contrast.ts";
 const themes = [
-  "tamer-sabry-default",
+  "amun-default",
   "navy-gold",
   "navy-cyan",
   "amun-light",

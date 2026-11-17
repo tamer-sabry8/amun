@@ -205,6 +205,20 @@ describe("intake (F1) and linking (F2)", () => {
       step: "choose_work",
       type: "product",
     });
+    const prompt =
+      "Create a product called Product Test 1 This product is for Work and it is of high urgency and needs to be ready by Jan 15. connect to my azure devops to see the latesrt user stories and sprints";
+    const direct = send("intake", { text: prompt, groupId: employer });
+    expect(direct.step).toMatchObject({
+      step: "file_work",
+      name: "Product Test 1",
+    });
+    const createdArea = snap().areas.find((a) => a.name === "Product Test 1");
+    expect(createdArea).toMatchObject({
+      type: "product",
+      name: "Product Test 1",
+      groupId: employer,
+    });
+    expect(createdArea?.dueAt).toContain("-01-15");
     expect(
       send("create-area", {
         groupId: employer,
@@ -215,7 +229,7 @@ describe("intake (F1) and linking (F2)", () => {
       ref: id,
       message: "That already exists, so I opened it.",
     });
-    expect(snap().areas).toHaveLength(1);
+    expect(snap().areas).toHaveLength(2);
   });
   it("creates a product row so earlier PRD and backlog flows still apply", () => {
     const { employer } = setup();

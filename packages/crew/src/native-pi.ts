@@ -9,7 +9,10 @@ export interface NativePiSession {
   sessionName: string | undefined;
   thinkingLevel: string;
   model: Model | undefined;
-  modelRuntime: { getAvailableSnapshot(): readonly Model[] };
+  modelRuntime: {
+    getAvailableSnapshot(): readonly Model[];
+    getAvailable?(provider: string): Promise<readonly Model[]>;
+  };
   cycleThinkingLevel(): string | undefined;
   getAvailableThinkingLevels(): string[];
   setThinkingLevel(level: string): void;
@@ -45,8 +48,28 @@ export class NativePiActions {
     if (s.isStreaming && !["session", "copy"].includes(command))
       throw Error("Wait for the current turn or abort it first");
     if (command === "model") {
-      const catalog = s.modelRuntime.getAvailableSnapshot();
-      if (catalog.length > 2048) throw Error("Model catalog too large");
+      const snapshot = s.modelRuntime.getAvailableSnapshot();
+      const dynamic = s.modelRuntime.getAvailable
+        ? (
+            await Promise.all(
+              allowedProviders().map((id) =>
+                Promise.resolve(s.modelRuntime.getAvailable!(id)).catch(
+                  () => [] as readonly Model[],
+                ),
+              ),
+            )
+          ).flat()
+        : [];
+      const seen = new Set<string>();
+      const catalog: Model[] = [];
+      for (const m of [...snapshot, ...dynamic]) {
+        const key = `${m.provider}/${m.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          catalog.push(m);
+        }
+      }
+      if (catalog.length > 4096) throw Error("Model catalog too large");
       const models = catalog.filter((m) =>
         allowedProviders().includes(m.provider),
       );
@@ -54,7 +77,7 @@ export class NativePiActions {
         argument &&
         !allowedProviders().some((id) => argument.startsWith(id + "/"))
       )
-        throw Error("Amun uses GitHub Copilot models only.");
+        throw Error("Unsupported model provider.");
       const choices = models.map((m) => ({
         id: bounded(m.provider, 128) + "/" + bounded(m.id, 256),
         label: bounded(m.name ?? m.id, 256),

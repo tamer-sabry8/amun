@@ -18,10 +18,14 @@ import {
   type WorkSnapshot,
 } from "../../contracts/src/work.ts";
 import {
+  explicitWorkCreation,
   groupMentioned,
+  hasStatedWorkName,
   intake,
   linkRecord,
   nameFromRequest,
+  rfpDetails,
+  workDeadlineFrom,
   type WorkArea,
 } from "../../domain/src/work/model.ts";
 import {
@@ -158,7 +162,16 @@ export class WorkStore {
     const row = this.get(
       "SELECT value_json FROM workspace_settings WHERE id='work_setup'",
     );
-    return setupState.parse(row ? JSON.parse(String(row.value_json)) : {});
+    const raw = row
+      ? (JSON.parse(String(row.value_json)) as Record<string, unknown>)
+      : {};
+    if (
+      typeof raw.theme === "string" &&
+      raw.theme !== "system" &&
+      !setupState.safeParse({ theme: raw.theme }).success
+    )
+      raw.theme = "amun-default";
+    return setupState.parse(raw);
   }
   private saveSetup(value: SetupState) {
     this.run(
@@ -609,6 +622,14 @@ export class WorkStore {
     ref?: string | null;
     options?: string[];
   }) {
+    const now = this.stamp();
+    if (input.kind === "question" && input.workAreaId && !input.ref) {
+      this.run(
+        "UPDATE work_attention SET state='done',resolved_at=? WHERE kind='question' AND state='open' AND work_area_id=? AND ref IS NULL",
+        now,
+        input.workAreaId,
+      );
+    }
     const id = randomUUID();
     this.run(
       "INSERT INTO work_attention(id,kind,group_id,work_area_id,title,detail,state,ref,options_json,created_at) VALUES (?,?,?,?,?,?,'open',?,?,?)",
@@ -620,7 +641,7 @@ export class WorkStore {
       this.clean(input.detail ?? ""),
       input.ref ?? null,
       JSON.stringify(input.options ?? []),
-      this.stamp(),
+      now,
     );
     return id;
   }
@@ -2304,7 +2325,39 @@ export class WorkStore {
         step: { step: "file_work", areaId: step.area.id, name: step.area.name },
       };
     }
-    if (step.step === "choose_work")
+    if (step.step === "choose_work") {
+      if (
+        resolvedGroup &&
+        explicitWorkCreation(command.text) === step.type &&
+        hasStatedWorkName(command.text)
+      ) {
+        const dueAt = workDeadlineFrom(command.text) ?? undefined;
+        const facts = rfpDetails(command.text);
+        const created = this.createArea({
+          groupId: resolvedGroup,
+          type: step.type,
+          name: title,
+          ...(dueAt ? { dueAt } : {}),
+          ...(step.type === "project" && facts.client
+            ? { client: facts.client }
+            : {}),
+        });
+        if (step.type === "rfp") {
+          this.run(
+            "INSERT INTO rfps(work_area_id,client,stage,deadline,response_owner,account_owner,presales) VALUES (?,?,'received',?,?,?,?) ON CONFLICT(work_area_id) DO UPDATE SET client=excluded.client,deadline=coalesce(excluded.deadline,rfps.deadline),response_owner=coalesce(excluded.response_owner,rfps.response_owner),account_owner=coalesce(excluded.account_owner,rfps.account_owner),presales=coalesce(excluded.presales,rfps.presales)",
+            created.id,
+            facts.client ? this.clean(facts.client) : "",
+            facts.deadline ?? dueAt ?? null,
+            facts.responseOwner ? this.clean(facts.responseOwner) : null,
+            facts.accountOwner ? this.clean(facts.accountOwner) : null,
+            facts.presales ? this.clean(facts.presales) : null,
+          );
+        }
+        return {
+          ref: created.id,
+          step: { step: "file_work", areaId: created.id, name: title },
+        };
+      }
       return {
         step: {
           step: "choose_work",
@@ -2317,6 +2370,7 @@ export class WorkStore {
           })),
         },
       };
+    }
     if (step.step === "reminder")
       return { ...this.reminders.request(command.text, null), step };
     if (step.step === "unreadable")
@@ -2457,6 +2511,20 @@ export class WorkStore {
    * again.
    */
   private resolveSuperseded() {
+    try {
+      this.run(
+        `UPDATE work_attention SET state='done',resolved_at=coalesce(resolved_at,?)
+         WHERE kind='question' AND state='open' AND ref IS NULL AND work_area_id IS NOT NULL
+         AND rowid NOT IN (
+           SELECT max(rowid) FROM work_attention
+           WHERE kind='question' AND state='open' AND ref IS NULL AND work_area_id IS NOT NULL
+           GROUP BY work_area_id
+         )`,
+        this.stamp(),
+      );
+    } catch {
+      // Ignore if table not yet migrated.
+    }
     let plans: Record<string, unknown>[];
     try {
       plans = this.all(

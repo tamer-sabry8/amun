@@ -1683,9 +1683,9 @@ describe("code changes with no connected repository", () => {
       id: "c1",
       product: "p1",
       repo: {
-        owner: "tamer-sabry8",
+        owner: "amun-app",
         name: "amun-qa-sandbox",
-        url: "https://github.com/tamer-sabry8/amun-qa-sandbox",
+        url: "https://github.com/amun-app/amun-qa-sandbox",
       },
       base: "main",
       branch: "amun/readme",
@@ -1708,10 +1708,8 @@ describe("code changes with no connected repository", () => {
       }),
     );
     expect(html).toContain("Code changes");
-    expect(html).toContain("Code change for tamer-sabry8/amun-qa-sandbox");
-    expect(html).toContain(
-      "Connect tamer-sabry8/amun-qa-sandbox to this project",
-    );
+    expect(html).toContain("Code change for amun-app/amun-qa-sandbox");
+    expect(html).toContain("Connect amun-app/amun-qa-sandbox to this project");
     expect(html).toContain("Approve and open pull request");
   });
 });

@@ -181,15 +181,14 @@ test("setup, Home, first work conversation, destinations, rail and Settings", as
       })
       .click();
     await expect(page.getByText("Reminder: review the QA PRD")).toHaveCount(0);
-    await composer.fill("Create a product called Agentic Platform");
+    await composer.fill("start a new product");
     await composer.press("Enter");
     await expect(
       page.getByRole("group", { name: "Choose where this belongs" }),
     ).toBeVisible();
     await shot(page, "06-intake-card");
-    await page
-      .getByRole("button", { name: "New product", exact: true })
-      .click();
+    await composer.fill("Create a product called Agentic Platform");
+    await composer.press("Enter");
 
     // Work session: straight into the conversation, with the group breadcrumb
     await expect(

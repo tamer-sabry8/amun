@@ -35,9 +35,14 @@ export function buildDate(info: BuildInfo): string {
 }
 
 export function versionDetails(info: BuildInfo, system: SystemInfo): string {
+  const showCommit =
+    info.commit && info.commit !== "release" && info.commit !== "unknown";
+  const buildLine = showCommit
+    ? `Build ${info.commit}${info.builtAt ? `, ${info.builtAt.slice(0, 10)}` : ""}`
+    : `Build ${info.builtAt ? info.builtAt.slice(0, 10) : "release"}`;
   return [
     `Amun ${info.displayVersion} (${info.version})`,
-    `Build ${info.commit}${info.builtAt ? `, ${info.builtAt.slice(0, 10)}` : ""}`,
+    buildLine,
     `macOS ${system.macos}`,
     `Chip ${system.arch}`,
   ].join("\n");

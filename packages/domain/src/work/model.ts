@@ -51,6 +51,40 @@ export type MaterialKind =
 const has = (text: string, ...words: string[]) =>
   words.some((word) => new RegExp(`\\b${word}`, "i").test(text));
 
+export function explicitWorkCreation(text: string): WorkType | null {
+  const match =
+    /^\s*(?:please\s+)?(?:create|start|track|add|open|begin|set up|make)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(product|delivery project|client project|project|task|rfp)\b/i.exec(
+      text,
+    );
+  if (!match) return null;
+  const word = match[1]!.toLowerCase();
+  if (word === "product") return "product";
+  if (word === "rfp") return "rfp";
+  if (word === "task") return "task";
+  return "project";
+}
+
+export function hasStatedWorkName(text: string): boolean {
+  const type = explicitWorkCreation(text);
+  if (!type) return false;
+  const line = text.trim().split("\n")[0]?.trim() ?? "";
+  const stripped = line
+    .replace(
+      /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|delivery project|client project|project|task|rfp)\b\s*(?:called|named|for|from|about|on|to|:|-|–)?\s*/i,
+      "",
+    )
+    .trim();
+  if (!stripped) return false;
+  const name = nameFromRequest(text, "");
+  return (
+    Boolean(name) &&
+    name.toLowerCase() !== line.toLowerCase() &&
+    !/^(?:product|project|task|rfp|new\s+(?:product|project|task|rfp))$/i.test(
+      name,
+    )
+  );
+}
+
 /**
  * Decision table from §3 ("which concept to use"). A deterministic first pass
  * so intake works without a model; Firstmate may override the suggestion.
@@ -64,6 +98,8 @@ export function classifyMaterial(input: {
   const text = input.text.trim();
   const files = input.fileNames ?? [];
   if (!text && !files.length) return { kind: "unreadable" };
+  const explicit = explicitWorkCreation(text);
+  if (explicit) return { kind: "work", type: explicit };
   if (has(text, "rfp", "tender", "request for proposal"))
     return { kind: "work", type: "rfp" };
   if (
@@ -286,7 +322,7 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
   // Only the name: what follows it ("it is for work and has a deadline…")
   // describes the work and is not part of what it is called.
   const afterName =
-    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|due\s|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a|testing|tests?|qa|demo)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are)\b)/i;
+    /\s*(?:[,;:.!?](?:\s|$)|\s+[-–—]\s+|\s+(?:this\s+(?:product|project|task|rfp|work|item)\b|this\s+is\b|it\s+is|it['’]s|it\s+has|and\s+it|and\s+has|that\s+is|that\s+has|which|with\s+an?|needs\s+to\b|has\s+to\b|must\b|should\b|will\b|due\s|ready\s+by\b|by\s+(?:next|the|end)|for\s+(?:work|my|the|our|a|testing|tests?|qa|demo)\b|in\s+(?:my|the|our)\b|there\s+is|there\s+are|connect\s+to\b|use\s+only\b)\b)/i;
   // An identifier-like name ("QA-20261114-RFP for testing") ends at its token.
   const identifier =
     /^([^\s"“”]*[-_\d][^\s"“”]*?)[,;:.!?]?\s+(?:for|in|to|as|on|so|because|that|which|with|and|where|when|it|the)\b/i;
@@ -386,8 +422,12 @@ function utcDay(year: number, month: number, day: number) {
     : null;
 }
 
+export function workDeadlineFrom(text: string, now: Date = new Date()) {
+  return deadlineFrom(text, now)?.toISOString() ?? null;
+}
+
 function deadlineFrom(text: string, now: Date) {
-  const lead = String.raw`\b(?:deadline|due)(?:\s+date)?\s*(?:is|:|on|by)?\s*`;
+  const lead = String.raw`\b(?:deadline|due(?:\s+date)?|ready\s+by|needed\s+by|target\s+date)\s*(?:is|:|on|by)?\s*`;
   const after = (pattern: string) => new RegExp(lead + pattern, "i").exec(text);
   const today = Date.UTC(
     now.getUTCFullYear(),

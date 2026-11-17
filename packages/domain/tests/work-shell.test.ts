@@ -321,7 +321,7 @@ describe("wizard (handoff §5)", () => {
       "amun-light",
     );
     expect(resolveTheme({ choice: "system", systemDark: true })).toBe(
-      "tamer-sabry-default",
+      "amun-default",
     );
     expect(
       resolveTheme({

@@ -614,6 +614,10 @@ describe("nameFromRequest", () => {
       "Create a product QA-20261114-MoCA for testing the BRD. Do not publish.",
       "QA-20261114-MoCA",
     ],
+    [
+      "Create a product called Product Test 1 This product is for Work and it is of high urgency and needs to be ready by Jan 15. connect to my azure devops to see the latesrt user stories and sprints",
+      "Product Test 1",
+    ],
     ["Create a product MoCA Cabinet. Use only Azure DevOps.", "MoCA Cabinet"],
   ])("takes the stated name: %s", (text, expected) => {
     expect(nameFromRequest(text)).toBe(expected);

@@ -1,6 +1,6 @@
 import { workerProfileName } from "./worker-profile.ts";
 import { join } from "node:path";
-import { lstat, realpath } from "node:fs/promises";
+import { chmod, lstat, realpath } from "node:fs/promises";
 import { workerEnvironment } from "./worker-environment.ts";
 import { runClosedInput } from "./closed-input.ts";
 async function validateProfile(root: string) {
@@ -10,7 +10,17 @@ async function validateProfile(root: string) {
     join(root, "work"),
     join(root, "home"),
   ]) {
-    const stat = await lstat(path);
+    let stat = await lstat(path);
+    if (
+      stat.isDirectory() &&
+      !stat.isSymbolicLink() &&
+      stat.uid === process.getuid?.() &&
+      (stat.mode & 0o077) !== 0 &&
+      (await realpath(path)) === path
+    ) {
+      await chmod(path, 0o700);
+      stat = await lstat(path);
+    }
     if (
       !stat.isDirectory() ||
       stat.isSymbolicLink() ||

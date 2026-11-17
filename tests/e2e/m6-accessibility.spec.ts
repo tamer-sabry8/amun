@@ -9,7 +9,7 @@ import { openWorkspace } from "../../packages/data/src/workspace.ts";
 import { launchMacWorkspace } from "../support/mac-workspace.ts";
 
 import { reach } from "../support/keyboard.ts";
-for (const theme of ["tamer-sabry-default", "navy-gold", "navy-cyan"]) {
+for (const theme of ["amun-default", "navy-gold", "navy-cyan"]) {
   test(
     "keyboard navigation and primary screen accessibility in " + theme,
     async () => {

@@ -121,7 +121,7 @@ async function readManifest(client: Client, stage: (s: string) => void) {
       params: {
         name: "get_file_contents",
         arguments: {
-          owner: "tamer-sabry8",
+          owner: "amun-app",
           repo: "amun",
           path: "package.json",
           ref: "refs/heads/main",

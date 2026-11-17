@@ -255,6 +255,11 @@ const providerNames: Record<string, string> = {
   openrouter: "OpenRouter",
   google: "Google",
   xai: "xAI",
+  "kimi-coding": "Kimi Code",
+  meta: "Meta",
+  groq: "Groq",
+  mistral: "Mistral",
+  deepseek: "DeepSeek",
 };
 const modelWords: Record<string, string> = {
   gpt: "GPT",
@@ -441,7 +446,7 @@ export const welcomeCards = [
 ] as const;
 
 export const themeIds = [
-  "tamer-sabry-default",
+  "amun-default",
   "navy-gold",
   "navy-cyan",
   "amun-light",
@@ -473,7 +478,5 @@ export function resolveTheme(input: {
   lastDark?: ThemeId;
 }): ThemeId {
   if (input.choice !== "system") return input.choice;
-  return input.systemDark
-    ? (input.lastDark ?? "tamer-sabry-default")
-    : "amun-light";
+  return input.systemDark ? (input.lastDark ?? "amun-default") : "amun-light";
 }

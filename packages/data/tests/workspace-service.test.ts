@@ -12,7 +12,7 @@ it("persists theme/preferences and returns only validated shared records after r
   );
   const service = new WorkspaceService(db);
   const first = service.snapshot();
-  expect(first.preferences.theme).toBe("tamer-sabry-default");
+  expect(first.preferences.theme).toBe("amun-default");
   const response = service.handle({
     version: 1,
     kind: "workspace",

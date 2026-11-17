@@ -1116,12 +1116,444 @@ export function OutputDoc({
   );
 }
 
+interface UnconnectedTool {
+  kind: "ado" | "notion" | "github" | "obsidian" | "other";
+  name: string;
+  defaultUrl: string;
+  placeholder: string;
+}
+
+function detectUnconnectedTool(
+  text: string,
+  connected: readonly string[],
+): UnconnectedTool | null {
+  if (/\b(?:azure\s*devops|ado)\b/i.test(text) && !connected.includes("ado"))
+    return {
+      kind: "ado",
+      name: "Azure DevOps",
+      defaultUrl: "",
+      placeholder: "https://dev.azure.com/your-organisation",
+    };
+  if (/\bnotion\b/i.test(text) && !connected.includes("notion"))
+    return {
+      kind: "notion",
+      name: "Notion",
+      defaultUrl: "https://api.notion.com",
+      placeholder: "https://api.notion.com",
+    };
+  if (
+    /\bgithub\b/i.test(text) &&
+    !/github\s+copilot/i.test(text) &&
+    !connected.includes("github")
+  )
+    return {
+      kind: "github",
+      name: "GitHub",
+      defaultUrl: "https://github.com",
+      placeholder: "https://github.com",
+    };
+  if (/\bobsidian\b/i.test(text) && !connected.includes("obsidian"))
+    return {
+      kind: "obsidian",
+      name: "Obsidian",
+      defaultUrl: "https://127.0.0.1:27124/mcp/",
+      placeholder: "https://127.0.0.1:27124/mcp/",
+    };
+  const other = /\b(jira|linear|asana|clickup|monday|trello)\b/i.exec(text);
+  if (other) {
+    const raw = other[1]!.toLowerCase();
+    const name =
+      raw === "jira"
+        ? "Jira"
+        : raw === "linear"
+          ? "Linear"
+          : raw.charAt(0).toUpperCase() + raw.slice(1);
+    return {
+      kind: "other",
+      name,
+      defaultUrl: "",
+      placeholder: `https://your-workspace.${raw}.com`,
+    };
+  }
+  return null;
+}
+
+function QuestionCard({
+  question,
+  connected,
+  onAnswer,
+  onSkip,
+  onToolsSettings,
+}: {
+  question: {
+    id: string;
+    workAreaId: string | null;
+    title: string;
+    detail: string;
+    options: string[];
+    ref?: string | null;
+  };
+  connected: readonly string[];
+  onAnswer(answer: string): void;
+  onSkip(): void;
+  onToolsSettings(): void;
+}) {
+  const unconnected = detectUnconnectedTool(
+    `${question.title} ${question.detail}`,
+    connected,
+  );
+  const [connecting, setConnecting] = useState(false);
+  const [baseUrl, setBaseUrl] = useState(unconnected?.defaultUrl ?? "");
+  const [browser, setBrowser] = useState<"edge" | "dia">("edge");
+  const [custom, setCustom] = useState("");
+  const [listening, setListening] = useState(false);
+  const tokenRef = useRef<HTMLInputElement>(null);
+  const customRef = useRef<HTMLInputElement>(null);
+
+  const displayTitle = unconnected
+    ? `${unconnected.name} is not connected. Would you like to connect to it?`
+    : question.detail && question.detail !== question.title
+      ? question.title
+      : question.title;
+  const displayDetail = unconnected
+    ? `Connect ${unconnected.name} so Firstmate can read and work with your latest items.`
+    : question.detail && question.detail !== question.title
+      ? question.detail
+      : "";
+
+  const displayOptions = unconnected
+    ? [
+        `Connect to ${unconnected.name} now`,
+        "Open Tools in Settings",
+        "Skip for now",
+      ]
+    : question.options.length > 0
+      ? question.options
+      : [
+          "Use what I already shared in the chat and delegate to the agent now",
+          "Start a first draft with reasonable placeholders and refine after",
+          "Have the Product Manager agent propose options",
+        ];
+
+  const handleOption = (option: string) => {
+    if (unconnected && /^connect to .+ now$/i.test(option.trim())) {
+      setConnecting(true);
+      return;
+    }
+    if (/^open tools in settings$/i.test(option.trim())) {
+      onToolsSettings();
+      return;
+    }
+    if (/^skip for now$/i.test(option.trim())) {
+      onSkip();
+      return;
+    }
+    onAnswer(option);
+  };
+
+  const toggleMic = () => {
+    const Speech =
+      (
+        window as unknown as {
+          SpeechRecognition?: new () => {
+            lang: string;
+            onresult:
+              | ((e: {
+                  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+                }) => void)
+              | null;
+            onend: (() => void) | null;
+            onerror: (() => void) | null;
+            start(): void;
+          };
+          webkitSpeechRecognition?: new () => {
+            lang: string;
+            onresult:
+              | ((e: {
+                  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+                }) => void)
+              | null;
+            onend: (() => void) | null;
+            onerror: (() => void) | null;
+            start(): void;
+          };
+        }
+      ).SpeechRecognition ??
+      (
+        window as unknown as {
+          webkitSpeechRecognition?: new () => {
+            lang: string;
+            onresult:
+              | ((e: {
+                  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+                }) => void)
+              | null;
+            onend: (() => void) | null;
+            onerror: (() => void) | null;
+            start(): void;
+          };
+        }
+      ).webkitSpeechRecognition;
+    if (!Speech || listening) {
+      customRef.current?.focus();
+      return;
+    }
+    try {
+      const rec = new Speech();
+      rec.lang = "en-US";
+      setListening(true);
+      rec.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript ?? "";
+        if (transcript)
+          setCustom((prev) =>
+            [prev.trimEnd(), transcript.trim()].filter(Boolean).join(" "),
+          );
+      };
+      rec.onend = () => setListening(false);
+      rec.onerror = () => setListening(false);
+      rec.start();
+    } catch {
+      setListening(false);
+      customRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="rb-qcard" role="group" aria-label="Question from Firstmate">
+      <div className="rb-q-head">
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+          <circle cx="12" cy="17" r="0.6" fill="currentColor" />
+        </svg>
+        <span>Question</span>
+        <button
+          type="button"
+          className="rb-q-close"
+          aria-label="Dismiss question"
+          onClick={onSkip}
+        >
+          <Icon name="close" width={14} height={14} />
+        </button>
+      </div>
+      <div className="rb-q-prompt">
+        <strong>{displayTitle}</strong>
+        {displayDetail && <span>{displayDetail}</span>}
+      </div>
+      {connecting && unconnected ? (
+        unconnected.kind === "notion" ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            <label className="field">
+              Sign-in browser
+              <select
+                value={browser}
+                onChange={(e) => setBrowser(e.target.value as "edge" | "dia")}
+              >
+                <option value="edge">Microsoft Edge</option>
+                <option value="dia">Dia</option>
+              </select>
+            </label>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  bridge.send({
+                    version: 1,
+                    kind: "auth",
+                    action: "notion-connect",
+                    browser,
+                  });
+                  onAnswer("Connecting Notion in browser.");
+                }}
+              >
+                Connect Notion in browser
+              </button>
+              <button
+                type="button"
+                className="btn quiet"
+                onClick={onToolsSettings}
+              >
+                Open Tools in Settings
+              </button>
+              <button
+                type="button"
+                className="btn quiet"
+                onClick={() => setConnecting(false)}
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form
+            style={{ display: "grid", gap: 10 }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const url = baseUrl.trim();
+              if (!url) return;
+              if (unconnected.kind !== "other") {
+                const secret = tokenRef.current?.value ?? "";
+                if (!secret) return;
+                if (tokenRef.current) tokenRef.current.value = "";
+                bridge.send({
+                  version: 1,
+                  kind: "auth",
+                  action: "save",
+                  connection: { kind: unconnected.kind, baseUrl: url },
+                  secret,
+                });
+              }
+              onAnswer(`Connected ${unconnected.name} (${url}).`);
+            }}
+          >
+            <label className="field">
+              {unconnected.kind === "ado"
+                ? "Organisation or collection address (Server URL)"
+                : `${unconnected.name} server URL`}
+              <input
+                type="url"
+                required
+                autoFocus
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder={unconnected.placeholder}
+              />
+            </label>
+            {unconnected.kind !== "other" && (
+              <label className="field">
+                {unconnected.kind === "obsidian"
+                  ? "Obsidian plugin key"
+                  : "Access token"}
+                <input
+                  type="password"
+                  required
+                  autoComplete="off"
+                  ref={tokenRef}
+                  maxLength={65536}
+                  placeholder={`Paste your ${unconnected.name} access token`}
+                />
+              </label>
+            )}
+            <div className="row wrap">
+              <button type="submit" className="btn primary">
+                Connect {unconnected.name}
+              </button>
+              <button
+                type="button"
+                className="btn quiet"
+                onClick={onToolsSettings}
+              >
+                Open Tools in Settings
+              </button>
+              <button
+                type="button"
+                className="btn quiet"
+                onClick={() => setConnecting(false)}
+              >
+                Back
+              </button>
+            </div>
+          </form>
+        )
+      ) : (
+        <div className="rb-q-options">
+          {displayOptions.map((option, index) => (
+            <button
+              key={option}
+              type="button"
+              className={"rb-q-option" + (index === 0 ? " recommended" : "")}
+              onClick={() => handleOption(option)}
+            >
+              <span className="rb-q-num" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="rb-q-label">{option}</span>
+              {index === 0 && displayOptions.length > 1 && (
+                <>
+                  <span className="rb-q-rec">Recommended</span>
+                  <span className="rb-q-arrow" aria-hidden="true">
+                    →
+                  </span>
+                </>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      <form
+        className="rb-q-custom"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const text = custom.trim();
+          if (!text) {
+            customRef.current?.focus();
+            return;
+          }
+          setCustom("");
+          onAnswer(text);
+        }}
+      >
+        <svg
+          className="rb-q-pencil"
+          width={15}
+          height={15}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        <input
+          ref={customRef}
+          type="text"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="Or write your own response"
+          aria-label="Write my own response"
+        />
+        <button
+          type="button"
+          className={"icon-btn rb-mic" + (listening ? " active" : "")}
+          aria-label="Dictate response"
+          aria-pressed={listening}
+          onClick={toggleMic}
+        >
+          <Icon name="mic" width={16} height={16} />
+        </button>
+        <button type="button" className="rb-q-btn" onClick={onSkip}>
+          Skip
+        </button>
+        <button type="submit" className="rb-q-btn send">
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function WorkSession({
   snapshot,
   workspace,
   areaId,
   now,
   model,
+  connected = [],
   pane,
   ratio,
   expanded,
@@ -1131,12 +1563,14 @@ export function WorkSession({
   onExpand,
   onGroupNeeded,
   onSettings,
+  onToolsSettings,
 }: {
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
   areaId: string;
   now: number;
   model: string | null;
+  connected?: string[];
   pane: PaneTarget;
   ratio: number;
   expanded: boolean;
@@ -1147,6 +1581,7 @@ export function WorkSession({
   onExpand(): void;
   onGroupNeeded(): void;
   onSettings(): void;
+  onToolsSettings?(): void;
 }) {
   const context = workContext(snapshot, areaId, now);
   // The failure's own details are its plan's per-item reasons.
@@ -1260,16 +1695,46 @@ export function WorkSession({
             card: { kind: "plan-refused" },
           });
       })();
-    else if (proposed.do === "question" || proposed.do === "offer")
+    else if (proposed.do === "question" || proposed.do === "offer") {
+      if (proposed.do === "question") {
+        const unconnected = detectUnconnectedTool(
+          `${proposed.title} ${proposed.detail}`,
+          connected,
+        );
+        if (unconnected) {
+          work("attention", {
+            attentionKind: "question",
+            groupId: null,
+            workAreaId: areaId,
+            title: `${unconnected.name} is not connected`,
+            detail: `${unconnected.name} is not connected. Would you like to connect to it?`,
+            options: [
+              `Connect to ${unconnected.name} now`,
+              "Open Tools in Settings",
+              "Skip for now",
+            ],
+          });
+          return;
+        }
+      }
       work("attention", {
         attentionKind: proposed.do,
         groupId: null,
         workAreaId: areaId,
         title: proposed.title,
         detail: proposed.detail,
-        options: proposed.do === "question" ? proposed.options : [],
+        options:
+          proposed.do === "question"
+            ? proposed.options.length > 0
+              ? proposed.options
+              : [
+                  "Use what I already shared in the chat and delegate to the agent now",
+                  "Start a first draft with reasonable placeholders and refine after",
+                  "Have the Product Manager agent propose options",
+                ]
+            : [],
       });
-    else if (proposed.do === "scope")
+    } else if (proposed.do === "scope")
       work("message", {
         workAreaId: areaId,
         role: "card",
@@ -1573,15 +2038,35 @@ export function WorkSession({
                       : "Done. I have corrected that."
                     : // Handing work over is always said, even from a silent reply.
                       handed.join(" "));
-      if (said)
+      const switchedNote = turn.switchedFrom
+        ? `I switched from ${modelDisplay(turn.switchedFrom) ?? turn.switchedFrom} to ${modelDisplay(turn.model) ?? turn.model} because ${modelDisplay(turn.switchedFrom) ?? turn.switchedFrom} encountered an issue.\n\n`
+        : "";
+      if (said || switchedNote)
         work("message", {
           workAreaId: areaId,
           role: "firstmate",
-          text: said,
+          text: `${switchedNote}${said}`.trim(),
           model: turn.model,
         });
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
+      if (!parsed.actions.some((item) => item.do === "question")) {
+        const unconnected = detectUnconnectedTool(text, connected);
+        if (unconnected && /\bconnect\b/i.test(text)) {
+          work("attention", {
+            attentionKind: "question",
+            groupId: null,
+            workAreaId: areaId,
+            title: `${unconnected.name} is not connected`,
+            detail: `${unconnected.name} is not connected. Would you like to connect to it?`,
+            options: [
+              `Connect to ${unconnected.name} now`,
+              "Open Tools in Settings",
+              "Skip for now",
+            ],
+          });
+        }
+      }
       // Only the message this turn carried leaves the wait; a newer one stays.
       if (heldMessage(areaId)?.scoped === scoped) {
         releaseMessage(areaId);
@@ -1730,6 +2215,16 @@ export function WorkSession({
         .map((item) => item.name),
       notionPageLines(snapshot, areaId),
       failedPublicationLines(snapshot, areaId, reasons),
+      snapshot.attention
+        .filter(
+          (item) =>
+            item.workAreaId === areaId &&
+            item.kind === "question" &&
+            item.state === "done" &&
+            item.answer,
+        )
+        .map((item) => `${item.title}: ${item.answer}`),
+      connected,
     );
     const scoped = briefing
       ? `${amunProtocol}\n\n${header}${text}`
@@ -2457,36 +2952,19 @@ export function WorkSession({
                   </button>
                 ))}
               {questions.map((question) => (
-                <div
-                  className="rb-inline"
+                <QuestionCard
                   key={question.id}
-                  role="group"
-                  aria-label="Question from Firstmate"
-                >
-                  <strong>{question.title}</strong>
-                  {question.detail && <span>{question.detail}</span>}
-                  <div className="row wrap">
-                    {question.options.map((option) => (
-                      <button
-                        key={option}
-                        className="btn"
-                        onClick={() => answerQuestion(question, option)}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                    <button
-                      className="btn quiet"
-                      onClick={() => setSeed({ text: "", nonce: Date.now() })}
-                    >
-                      Write my own response
-                    </button>
-                  </div>
-                  <span className="note">
-                    Only the work that depends on this waits. Nothing is
-                    assumed.
-                  </span>
-                </div>
+                  question={question}
+                  connected={connected}
+                  onAnswer={(option) => answerQuestion(question, option)}
+                  onSkip={() =>
+                    work("resolve-attention", {
+                      attentionId: question.id,
+                      resolution: "done",
+                    })
+                  }
+                  onToolsSettings={() => (onToolsSettings ?? onSettings)()}
+                />
               ))}
               {context.conversion && (
                 <div
@@ -2661,13 +3139,14 @@ export function WorkSession({
             if (item === "screenshot") attachments.screenshot();
           }}
           onSend={(text) => {
-            const question = questions[0];
-            if (question && seed)
-              work("resolve-attention", {
-                attentionId: question.id,
-                resolution: "answer",
-                answer: text,
-              });
+            for (const q of questions) {
+              if (!q.ref?.startsWith("crew-trust:"))
+                work("resolve-attention", {
+                  attentionId: q.id,
+                  resolution: "answer",
+                  answer: text,
+                });
+            }
             setSeed(null);
             void send(text);
           }}

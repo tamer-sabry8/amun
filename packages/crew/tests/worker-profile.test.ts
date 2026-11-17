@@ -43,6 +43,10 @@ it("refuses foreign links, unsafe permissions and invalid tool selection", async
       prepareWorkerProfile(base, "other" as never),
     ).rejects.toThrow();
     await mkdir(join(base, "m0-claude"), { mode: 0o755 });
+    await prepareWorkerProfile(base, "claude");
+    expect((await stat(join(base, "m0-claude"))).mode & 0o777).toBe(0o700);
+    await rm(join(base, "m0-claude"), { recursive: true, force: true });
+    await writeFile(join(base, "m0-claude"), "not-a-directory");
     await expect(prepareWorkerProfile(base, "claude")).rejects.toThrow();
   } finally {
     await rm(root, { recursive: true, force: true });

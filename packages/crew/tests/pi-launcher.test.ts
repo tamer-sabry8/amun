@@ -76,7 +76,7 @@ describe("Copilot model choice", () => {
     { provider: "github-copilot", id: "gpt-x" },
     { provider: "openai", id: "gpt-x" },
   ];
-  it("prefers the saved Copilot model, else the pinned default", () => {
+  it("prefers the saved model across connected providers, else the pinned default", () => {
     expect(
       chooseCopilotModel(models, {
         provider: "github-copilot",
@@ -85,21 +85,28 @@ describe("Copilot model choice", () => {
     ).toBe(models[1]);
     expect(
       chooseCopilotModel(models, { provider: "openai", model: "gpt-x" }),
-    ).toBe(models[0]);
+    ).toBe(models[2]);
     expect(chooseCopilotModel(models, {})).toBe(models[0]);
   });
-  it("fails clearly instead of using another provider", () => {
+  it("fails clearly instead of using an unsupported provider", () => {
     expect(() =>
-      chooseCopilotModel([models[2]!], { provider: "openai", model: "gpt-x" }),
+      chooseCopilotModel([{ provider: "foreign-provider", id: "gpt-x" }], {
+        provider: "foreign-provider",
+        model: "gpt-x",
+      }),
     ).toThrow("GitHub Copilot is not connected");
   });
 });
 describe("native session start", () => {
-  it("asks the SDK runtime for Copilot models only and uses its saved default", async () => {
-    const getAvailable = vi.fn(async () => [
-      { provider: "github-copilot", id: "claude-sonnet-5.5" },
-      { provider: "github-copilot", id: "gpt-x" },
-    ]);
+  it("asks the SDK runtime for supported models and uses its saved default", async () => {
+    const getAvailable = vi.fn(async (provider: string) =>
+      provider === "github-copilot"
+        ? [
+            { provider: "github-copilot", id: "claude-sonnet-5.5" },
+            { provider: "github-copilot", id: "gpt-x" },
+          ]
+        : [],
+    );
     const model = await selectCopilotModel(
       { getAvailable },
       {
@@ -107,7 +114,7 @@ describe("native session start", () => {
         getDefaultModel: () => "gpt-x",
       },
     );
-    expect(getAvailable.mock.calls.length).toBe(1);
+    expect(getAvailable).toHaveBeenCalledWith("github-copilot");
     expect(model?.id).toBe("gpt-x");
     await expect(
       selectCopilotModel(

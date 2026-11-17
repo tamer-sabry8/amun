@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   access,
+  chmod,
   mkdir,
   symlink,
   readlink,
@@ -28,13 +29,27 @@ import {
 } from "./endpoint-receipt.ts";
 import { parseFirstmateRecord, queryTmuxEndpoint } from "./tmux-observer.ts";
 import { endpointPresence, observeOwnedTmux } from "./observe-owned-tmux.ts";
-import { copilotModelSelector } from "./copilot-routing.ts";
+import {
+  allowedProviders,
+  copilotModelSelector,
+  copilotProvider,
+} from "./copilot-routing.ts";
 import { writePiLauncher, type PiLauncherSource } from "./pi-launcher.ts";
 
 const run = promisify(execFile);
 async function privateDir(path: string) {
   await mkdir(path, { mode: 0o700, recursive: true });
-  const stat = await lstat(path);
+  let stat = await lstat(path);
+  if (
+    stat.isDirectory() &&
+    !stat.isSymbolicLink() &&
+    stat.uid === process.getuid?.() &&
+    (stat.mode & 0o077) !== 0 &&
+    (await realpath(path)) === path
+  ) {
+    await chmod(path, 0o700);
+    stat = await lstat(path);
+  }
   if (
     (await realpath(path)) !== path ||
     !stat.isDirectory() ||
@@ -269,14 +284,38 @@ export async function dispatchFirstmate(
   const binDir = join(owner, "launchers");
   await privateDir(binDir);
   let launcher: string;
+  let piModel = copilotModelSelector;
   if (harness === "pi") {
     const source = pi ?? {
       binary: process.env.AMUN_PI_BINARY ?? "",
       entry: process.env.AMUN_PI_ENTRY ?? "",
       authRoot: process.env.AMUN_AUTH_ROOT ?? "",
     };
+    let provider = source.provider;
+    try {
+      const saved = JSON.parse(
+        await readBoundedPrivateFile(
+          join(source.authRoot, "settings.json"),
+          65536,
+        ),
+      ) as { defaultProvider?: unknown; defaultModel?: unknown };
+      if (
+        typeof saved.defaultProvider === "string" &&
+        allowedProviders().includes(saved.defaultProvider) &&
+        typeof saved.defaultModel === "string" &&
+        /^[\w./:-]{1,128}$/.test(saved.defaultModel)
+      ) {
+        provider ??= saved.defaultProvider;
+        piModel = `${saved.defaultProvider}/${saved.defaultModel}`;
+      }
+    } catch {
+      // Fall back to default provider/model when settings.json is absent.
+    }
     // Pi runs from Amun's bundled runtime and credentials, never a personal install.
-    launcher = await writePiLauncher(binDir, source);
+    launcher = await writePiLauncher(binDir, {
+      ...source,
+      ...(provider ? { provider } : { provider: copilotProvider }),
+    });
     await Promise.all([
       access(source.binary, constants.X_OK),
       access(source.entry),
@@ -345,8 +384,8 @@ export async function dispatchFirstmate(
       ...(harness === "pi"
         ? {
             "crew-harness": "pi",
-            "secondmate-harness": "pi " + copilotModelSelector,
-            "supervision-branch-model": copilotModelSelector,
+            "secondmate-harness": "pi " + piModel,
+            "supervision-branch-model": piModel,
           }
         : {}),
     }))
@@ -416,7 +455,7 @@ export async function dispatchFirstmate(
                 worker,
                 "--harness",
                 harness,
-                ...(harness === "pi" ? ["--model", copilotModelSelector] : []),
+                ...(harness === "pi" ? ["--model", piModel] : []),
                 "--backend",
                 "tmux",
                 "--secondmate",

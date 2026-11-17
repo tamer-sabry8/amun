@@ -2,20 +2,11 @@ import { defineConfig } from "vite";
 import { readdir, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 );
-const commit = (() => {
-  try {
-    return execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
-  } catch {
-    return "unknown";
-  }
-})();
+const commit = "release";
 const rendererDirectory = fileURLToPath(
   new URL("./renderer/", import.meta.url),
 );

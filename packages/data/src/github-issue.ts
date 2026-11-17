@@ -4,7 +4,7 @@ import { bindAction } from "../../domain/src/governance.ts";
 import { ActionStore, dispatchOne } from "./outbox.ts";
 import { workspaceIdentity } from "./identity.ts";
 export const issueFixture = {
-  owner: "tamer-sabry8",
+  owner: "amun-app",
   repo: "amun",
   title: "Test: GitHub MCP write acceptance",
   body: "This test issue verifies that Amun creates a GitHub issue through the hosted MCP server after the workspace owner reviews and approves the exact content.",

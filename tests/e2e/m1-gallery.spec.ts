@@ -24,7 +24,7 @@ test("development gallery renders every attention type, size and theme accessibl
       page.getByRole("heading", { name: "Component gallery", exact: true }),
     ).toBeVisible();
     await expect(page.locator("[data-gallery-case]")).toHaveCount(132);
-    for (const theme of ["tamer-sabry-default", "navy-gold", "navy-cyan"]) {
+    for (const theme of ["amun-default", "navy-gold", "navy-cyan"]) {
       await page.getByLabel("Gallery theme").selectOption(theme);
       await expect(page.getByTestId("control-gallery")).toHaveScreenshot(
         `controls-${theme}.png`,

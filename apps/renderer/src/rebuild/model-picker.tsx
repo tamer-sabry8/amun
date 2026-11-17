@@ -28,15 +28,21 @@ export function ModelPicker({ label }: { label: string }) {
       (model) =>
         !wanted ||
         model.label.toLowerCase().includes(wanted) ||
-        model.id.toLowerCase().includes(wanted),
+        model.id.toLowerCase().includes(wanted) ||
+        (modelDisplay(model.id)?.toLowerCase().includes(wanted) ?? false),
     )
-    // The provider in use first, then by name.
+    // The provider in use first, then by provider and name.
     .sort((a, b) => {
-      const mine = (id: string) =>
-        current && id.split("/")[0] === current.split("/")[0] ? 0 : 1;
-      return mine(a.id) - mine(b.id) || a.label.localeCompare(b.label);
-    })
-    .slice(0, 60);
+      const provA = a.id.split("/")[0] ?? "";
+      const provB = b.id.split("/")[0] ?? "";
+      const curProv = current?.split("/")[0] ?? "";
+      const mine = (p: string) => (curProv && p === curProv ? 0 : 1);
+      return (
+        mine(provA) - mine(provB) ||
+        provA.localeCompare(provB) ||
+        a.label.localeCompare(b.label)
+      );
+    });
   return (
     <span className="rb-model" ref={root}>
       {open && (

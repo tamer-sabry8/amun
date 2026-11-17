@@ -6,7 +6,7 @@ const reply = z.object({
 const file = z.object({
   type: z.literal("resource"),
   resource: z.object({
-    uri: z.string().regex(/^repo:\/\/tamer-sabry8\/amun\/[^?#]*package\.json$/),
+    uri: z.string().regex(/^repo:\/\/amun-app\/amun\/[^?#]*package\.json$/),
     text: z.string().max(131072),
   }),
 });

@@ -111,9 +111,7 @@ export function App() {
   const [systemDark, setSystemDark] = useState(
     () => matchMedia("(prefers-color-scheme: dark)").matches,
   );
-  const lastDark = useRef<Exclude<ThemeId, "amun-light">>(
-    "tamer-sabry-default",
-  );
+  const lastDark = useRef<Exclude<ThemeId, "amun-light">>("amun-default");
   const model = useFirstmateModel();
   const connected = bridgeState.connections
     .filter((connection) => /connected|ready|verified/i.test(connection.status))
@@ -538,6 +536,7 @@ export function App() {
             areaId={layout.workAreaId}
             now={now}
             model={model}
+            connected={connected}
             pane={pane}
             ratio={
               layout.artifact.ratio === 1
@@ -555,6 +554,10 @@ export function App() {
             }}
             onSettings={() => {
               setSection("models");
+              go("settings");
+            }}
+            onToolsSettings={() => {
+              setSection("tools");
               go("settings");
             }}
           />

@@ -4,12 +4,14 @@ import {
   chooseCopilotModel,
   CopilotUnavailable,
   savedModelLabel,
+  supportedProviders,
   testProviders,
 } from "../src/copilot-routing.ts";
 
 const message =
   "GitHub Copilot is not connected or its model is unavailable. Sign in to GitHub Copilot under Settings › Accounts and models.";
 const copilot = { provider: "github-copilot", id: "claude-sonnet-5.5" };
+const codex = { provider: "openai-codex", id: "gpt-5" };
 const first = { provider: "amun-queue", id: "a" };
 const second = { provider: "amun-local", id: "b" };
 
@@ -23,15 +25,15 @@ describe("testProviders", () => {
       testProviders(env(" amun-queue , Bad/Id,amun-local,-x,a b")),
     ).toEqual(["amun-queue", "amun-local"]);
     expect(allowedProviders(env("amun-queue"))).toEqual([
-      "github-copilot",
+      ...supportedProviders,
       "amun-queue",
     ]);
-    expect(allowedProviders({})).toEqual(["github-copilot"]);
+    expect(allowedProviders({})).toEqual([...supportedProviders]);
   });
 });
 
 describe("chooseCopilotModel", () => {
-  it("requires Copilot when no test providers are declared", () => {
+  it("requires a connected provider when no test providers are declared", () => {
     for (const available of [[], [first]]) {
       expect(() => chooseCopilotModel(available, {})).toThrow(
         CopilotUnavailable,
@@ -39,10 +41,16 @@ describe("chooseCopilotModel", () => {
       expect(() => chooseCopilotModel(available, {})).toThrow(message);
     }
   });
-  it("prefers a Copilot model over fixtures", () => {
+  it("prefers a supported provider model over fixtures and honours saved choices", () => {
     expect(chooseCopilotModel([first, copilot], {}, ["amun-queue"])).toBe(
       copilot,
     );
+    expect(
+      chooseCopilotModel([copilot, codex], {
+        provider: "openai-codex",
+        model: "gpt-5",
+      }),
+    ).toBe(codex);
   });
   it("uses the saved fixture, else the first fixture, else nothing", () => {
     const declared = ["amun-queue", "amun-local"];
@@ -62,14 +70,32 @@ describe("chooseCopilotModel", () => {
 });
 
 describe("savedModelLabel", () => {
-  const signedIn = ["github-copilot"];
-  it("uses the saved Copilot model, else the pinned default", () => {
+  const signedIn = ["github-copilot", "openai-codex", "openrouter"];
+  it("uses the saved model from any signed-in provider, else the pinned default", () => {
     expect(
       savedModelLabel(
         { defaultProvider: "github-copilot", defaultModel: "gpt-5" },
         signedIn,
       ),
     ).toEqual({ model: "github-copilot/gpt-5", needsConversation: false });
+    expect(
+      savedModelLabel(
+        { defaultProvider: "openai-codex", defaultModel: "gpt-5" },
+        signedIn,
+      ),
+    ).toEqual({ model: "openai-codex/gpt-5", needsConversation: false });
+    expect(
+      savedModelLabel(
+        {
+          defaultProvider: "openrouter",
+          defaultModel: "anthropic/claude-3.5-sonnet",
+        },
+        signedIn,
+      ),
+    ).toEqual({
+      model: "openrouter/anthropic/claude-3.5-sonnet",
+      needsConversation: false,
+    });
     expect(savedModelLabel({}, signedIn).model).toBe(
       "github-copilot/claude-sonnet-5.5",
     );
@@ -78,7 +104,7 @@ describe("savedModelLabel", () => {
         .model,
     ).toBe("github-copilot/claude-sonnet-5.5");
   });
-  it("shows no model before Copilot is signed in, even with a saved choice", () => {
+  it("shows no model before a provider is signed in, even with a saved choice", () => {
     expect(
       savedModelLabel(
         { defaultProvider: "github-copilot", defaultModel: "gpt-5" },

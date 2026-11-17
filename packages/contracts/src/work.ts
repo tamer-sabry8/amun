@@ -29,7 +29,7 @@ export const rfpStage = z.enum([
 ]);
 const themeChoice = z.enum([
   "system",
-  "tamer-sabry-default",
+  "amun-default",
   "navy-gold",
   "navy-cyan",
   "amun-light",

@@ -1347,8 +1347,14 @@ process.parentPort?.on("message", (event) => {
       submit: (id, summary) => codeChanges.submit(id, summary),
     },
     harness() {
-      // All delegated work runs on Pi with GitHub Copilot; there is no Claude or Codex fallback.
       return "pi";
+    },
+    fallbackHarnesses() {
+      const registry = new ToolRegistry(workspace);
+      const list: ("claude" | "codex")[] = [];
+      if (registry.enabled("claude_code")) list.push("claude");
+      if (registry.enabled("codex")) list.push("codex");
+      return list;
     },
     async ready(harness, allow) {
       const releases = await FirstmateReleases.open(
@@ -3312,7 +3318,7 @@ process.parentPort?.on("message", (event) => {
               kind: "message",
               text:
                 outcome === "succeeded"
-                  ? "GitHub issue created: https://github.com/tamer-sabry8/amun/issues/" +
+                  ? "GitHub issue created: https://github.com/amun-app/amun/issues/" +
                     review.receipt(approval.reviewId)
                   : "Issue creation is unconfirmed. Check GitHub before any further write.",
             });
@@ -3382,7 +3388,7 @@ process.parentPort?.on("message", (event) => {
               sendNative(cmd.id, {
                 kind: "message",
                 text:
-                  "Previously created GitHub issue: https://github.com/tamer-sabry8/amun/issues/" +
+                  "Previously created GitHub issue: https://github.com/amun-app/amun/issues/" +
                   receipt,
               });
               return;
@@ -3427,7 +3433,7 @@ process.parentPort?.on("message", (event) => {
           await checkGithubMcp(token.access_token);
           sendNative(cmd.id, {
             kind: "message",
-            text: "GitHub MCP connected. Read package.json from tamer-sabry8/amun.",
+            text: "GitHub MCP connected. Read package.json from amun-app/amun.",
           });
         })().catch((error: unknown) => {
           if (!closed)

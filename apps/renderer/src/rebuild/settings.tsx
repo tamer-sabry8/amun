@@ -55,7 +55,7 @@ export type SettingsSection = (typeof settingsSections)[number][0];
 
 const themeNames: Record<string, string> = {
   system: "Match macOS",
-  "tamer-sabry-default": "Amun dark",
+  "amun-default": "Amun dark",
   "navy-gold": "Navy Gold",
   "navy-cyan": "Navy Cyan",
   "amun-light": "Amun light",
@@ -715,9 +715,7 @@ export function Settings({
                   <span>
                     <span className="name">Build</span>
                     <br />
-                    <span className="muted small">
-                      {buildInfo.commit} · {buildDate(buildInfo)}
-                    </span>
+                    <span className="muted small">{buildDate(buildInfo)}</span>
                   </span>
                 </div>
               </div>

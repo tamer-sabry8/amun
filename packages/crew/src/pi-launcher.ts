@@ -9,6 +9,8 @@ export interface PiLauncherSource {
   entry: string;
   /** Amun's Pi credential and settings root. */
   authRoot: string;
+  /** Optional provider override; defaults to GitHub Copilot. */
+  provider?: string;
 }
 const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 function absolute(path: unknown, label: string): string {
@@ -26,12 +28,17 @@ export function piLauncherScript(source: PiLauncherSource): string {
   const binary = absolute(source.binary, "binary"),
     entry = absolute(source.entry, "entry"),
     root = absolute(source.authRoot, "credential root");
+  const provider =
+    typeof source.provider === "string" &&
+    /^[a-z0-9][a-z0-9-]{0,63}$/.test(source.provider)
+      ? source.provider
+      : copilotProvider;
   return [
     "#!/bin/bash",
     "export ELECTRON_RUN_AS_NODE=1",
     "export PI_SKIP_VERSION_CHECK=1",
     "export PI_CODING_AGENT_DIR=" + quote(root),
-    `exec ${quote(binary)} ${quote(entry)} --provider ${copilotProvider} "$@"`,
+    `exec ${quote(binary)} ${quote(entry)} --provider ${provider} "$@"`,
     "",
   ].join("\n");
 }

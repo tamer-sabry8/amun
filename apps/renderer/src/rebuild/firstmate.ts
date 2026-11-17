@@ -111,7 +111,12 @@ function runOnce(command: string, argument: string) {
 }
 
 export type Turn =
-  | { ok: true; reply: string; model: string | null }
+  | {
+      ok: true;
+      reply: string;
+      model: string | null;
+      switchedFrom?: string | null;
+    }
   | {
       ok: false;
       reason: string;
@@ -251,7 +256,7 @@ export async function askFirstmate(
       reason:
         "This message and its attachments are too large for one turn. Send the image and documents separately.",
     };
-  const result = await run("conversation-send", argument);
+  let result = await run("conversation-send", argument);
   // The turn may or may not have run before the switch: never replace the new
   // conversation with it, and never send it again on the user's behalf.
   if (generation !== contextGeneration)
@@ -261,6 +266,44 @@ export async function askFirstmate(
       reason:
         "The conversation changed while this message was being sent. Read the conversation before sending it again.",
     };
+  let switchedFrom: string | null = null;
+  if (
+    result.kind !== "conversation" &&
+    !/turn outcome could not be verified|turn stopped|read the conversation before sending/i.test(
+      String(result.text ?? ""),
+    )
+  ) {
+    const previousModel = session.model;
+    const choices = await listModels().catch(() => []);
+    const fallback =
+      choices.find(
+        (m) =>
+          m.id !== previousModel &&
+          m.id.split("/")[0] !== previousModel?.split("/")[0],
+      ) ?? choices.find((m) => m.id !== previousModel);
+    if (
+      fallback &&
+      generation === contextGeneration &&
+      (await chooseModel(fallback.id)) &&
+      session
+    ) {
+      switchedFrom = previousModel;
+      const retryArg = JSON.stringify({
+        sessionId: session.sessionId,
+        model: session.model,
+        text,
+        ...(image ? { image } : {}),
+      });
+      result = await run("conversation-send", retryArg);
+      if (generation !== contextGeneration)
+        return {
+          ok: false,
+          needsProvider: false,
+          reason:
+            "The conversation changed while this message was being sent. Read the conversation before sending it again.",
+        };
+    }
+  }
   if (result.kind !== "conversation") {
     const reason =
       typeof result.text === "string" && result.text
@@ -286,7 +329,12 @@ export async function askFirstmate(
         : null
       : replyFromTranscript(before, session.text, text);
   return reply
-    ? { ok: true, reply, model: session.model }
+    ? {
+        ok: true,
+        reply,
+        model: session.model,
+        ...(switchedFrom ? { switchedFrom } : {}),
+      }
     : {
         ok: false,
         needsProvider: false,

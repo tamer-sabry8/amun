@@ -2691,3 +2691,148 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Question card (Options.png layout) */
+.rb-qcard {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 18px 20px;
+  display: grid;
+  gap: 14px;
+  max-width: 72ch;
+}
+.rb-q-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.rb-q-head .rb-q-close {
+  margin-left: auto;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: 6px;
+}
+.rb-q-head .rb-q-close:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.rb-q-prompt {
+  display: grid;
+  gap: 4px;
+}
+.rb-q-prompt strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.rb-q-prompt span {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.rb-q-options {
+  display: grid;
+  gap: 6px;
+}
+.rb-q-option {
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 12px;
+  padding: 9px 12px !important;
+  border-radius: 10px !important;
+  border: 1px solid transparent;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: transparent;
+  transition:
+    background-color 120ms,
+    border-color 120ms;
+}
+.rb-q-option.recommended,
+.rb-q-option:hover {
+  background: color-mix(in srgb, var(--ink) 6%, var(--card));
+  border-color: var(--line);
+}
+.rb-q-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.rb-q-label {
+  flex: 1;
+  min-width: 0;
+}
+.rb-q-rec {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  flex: none;
+}
+.rb-q-arrow {
+  color: var(--muted);
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+}
+.rb-q-custom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+}
+.rb-q-custom .rb-q-pencil {
+  color: var(--muted);
+  flex: none;
+}
+.rb-q-custom input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 6px 2px !important;
+  font-size: 14px;
+  color: var(--ink);
+  box-shadow: none !important;
+}
+.rb-q-custom input[type="text"]:focus-visible {
+  outline: none !important;
+}
+.rb-q-btn {
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--control) !important;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.rb-q-btn:hover {
+  background: var(--hover);
+}
+.rb-q-btn.send {
+  background: color-mix(in srgb, var(--ink) 14%, var(--card));
+  border-color: transparent !important;
+}
+.rb-q-btn.send:hover {
+  background: color-mix(in srgb, var(--ink) 20%, var(--card));
+}

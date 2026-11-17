@@ -134,7 +134,7 @@ test("shared request queue persists navigation, supports search, Focus restore a
     await page.getByLabel("State", { exact: true }).selectOption("resolved");
     await expect(page.locator(".request-row")).toHaveCount(2);
     await page.getByRole("button", { name: "Close inspector" }).click();
-    for (const theme of ["tamer-sabry-default", "navy-gold", "navy-cyan"]) {
+    for (const theme of ["amun-default", "navy-gold", "navy-cyan"]) {
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page.getByRole("tab", { name: "Appearance" }).click();
       await page.getByLabel("Theme").selectOption(theme);

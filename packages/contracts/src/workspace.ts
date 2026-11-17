@@ -3,13 +3,9 @@ import { modelRoute, routingReview, difficulty } from "./model-routing.ts";
 import { z } from "zod";
 import { attentionItem, notification, statusActivity } from "./entities.ts";
 const id = z.string().min(1).max(256);
-export const themeName = z.enum([
-  "tamer-sabry-default",
-  "navy-gold",
-  "navy-cyan",
-]);
+export const themeName = z.enum(["amun-default", "navy-gold", "navy-cyan"]);
 export const uiPreferences = z.strictObject({
-  theme: themeName.default("tamer-sabry-default"),
+  theme: themeName.default("amun-default"),
   productId: id.nullable().default(null),
   islandSize: z.enum(["pill", "card", "expanded"]).default("card"),
   pinnedTabs: z

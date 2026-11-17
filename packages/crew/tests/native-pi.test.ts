@@ -109,15 +109,24 @@ it("does not claim a persisted default when writing settings fails", async () =>
   );
 });
 
-it("offers and accepts only GitHub Copilot models", async () => {
+it("offers and accepts supported provider models and rejects unknown providers", async () => {
   const { session, actions } = fixture();
-  const other = { provider: "openai", id: "gpt-other", name: "Other" };
-  session.modelRuntime.getAvailableSnapshot = () => [session.model, other];
+  const codex = { provider: "openai-codex", id: "gpt-5", name: "GPT-5" };
+  const other = {
+    provider: "foreign-provider",
+    id: "gpt-other",
+    name: "Other",
+  };
+  session.modelRuntime.getAvailableSnapshot = () => [
+    session.model,
+    codex,
+    other,
+  ];
   const result = await actions.run("model", "");
   expect(result).toMatchObject({
-    choices: [{ id: "github-copilot/gpt-test" }],
+    choices: [{ id: "github-copilot/gpt-test" }, { id: "openai-codex/gpt-5" }],
   });
-  await expect(actions.run("model", "openai/gpt-other")).rejects.toThrow(
-    "GitHub Copilot models only",
-  );
+  await expect(
+    actions.run("model", "foreign-provider/gpt-other"),
+  ).rejects.toThrow("Unsupported model provider");
 });

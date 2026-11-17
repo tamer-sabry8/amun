@@ -1,11 +1,27 @@
 export const copilotProvider = "github-copilot";
 export const copilotDefaultModel = "claude-sonnet-5.5";
-/** The one provider-qualified model Amun routes crew and supervision work to by default. */
+/** The provider-qualified model Amun routes crew and supervision work to by default. */
 export const copilotModelSelector = `${copilotProvider}/${copilotDefaultModel}`;
+
+/** All AI providers supported by Amun's Accounts and models settings. */
+export const supportedProviders = [
+  "github-copilot",
+  "openai-codex",
+  "openrouter",
+  "xai",
+  "kimi-coding",
+  "meta",
+  "openai",
+  "anthropic",
+  "google",
+  "groq",
+  "mistral",
+  "deepseek",
+] as const;
 
 /**
  * Test-only declaration. The e2e launcher lists the fixture providers its specs
- * register; production, packaged and unset runs get none, so Copilot alone applies.
+ * register; production, packaged and unset runs get none.
  */
 export const testProvidersVariable = "AMUN_E2E_TEST_PROVIDERS";
 export function testProviders(
@@ -16,30 +32,41 @@ export function testProviders(
     .map((id) => id.trim())
     .filter((id) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(id));
 }
-/** Providers whose models may be listed and chosen: Copilot, plus declared test fixtures. */
+/** Providers whose models may be listed and chosen: all supported providers, plus declared test fixtures. */
 export function allowedProviders(
   env: Record<string, string | undefined> = process.env,
 ): string[] {
-  return [copilotProvider, ...testProviders(env)];
+  return [...supportedProviders, ...testProviders(env)];
 }
-/** Copilot is not signed in or lacks the model; the owner can fix it by signing in. */
+/** No supported provider is signed in or has an available model; the owner can fix it by signing in. */
 export class CopilotUnavailable extends Error {}
 
 /**
- * Picks the GitHub Copilot model for a native Pi session: the owner's saved
- * Copilot choice when it is available, otherwise the pinned default. Another
- * provider is never used; an unavailable Copilot connection is an error.
+ * Picks the model for a native Pi session: the owner's saved choice when it is
+ * available, otherwise the pinned Copilot default or the first available
+ * authenticated model across connected providers.
  */
 export function chooseCopilotModel<T extends { provider: string; id: string }>(
   available: readonly T[],
   saved: { provider?: string | undefined; model?: string | undefined },
   declaredTest: readonly string[] = [],
 ): T | undefined {
-  const copilot = available.filter((m) => m.provider === copilotProvider);
+  const supported = new Set<string>(supportedProviders);
+  const candidates = available.filter((m) => supported.has(m.provider));
   const pick =
-    (saved.provider === copilotProvider
-      ? copilot.find((m) => m.id === saved.model)
-      : undefined) ?? copilot.find((m) => m.id === copilotDefaultModel);
+    (saved.provider && saved.model
+      ? candidates.find(
+          (m) => m.provider === saved.provider && m.id === saved.model,
+        )
+      : undefined) ??
+    candidates.find(
+      (m) => m.provider === copilotProvider && m.id === copilotDefaultModel,
+    ) ??
+    (saved.provider
+      ? candidates.find((m) => m.provider === saved.provider)
+      : undefined) ??
+    candidates.find((m) => m.provider === copilotProvider) ??
+    candidates[0];
   if (!pick && declaredTest.length) {
     // The e2e harness declared its fixtures: use one it registered, or start with no model.
     const fixture = available.filter((m) => declaredTest.includes(m.provider));
@@ -69,12 +96,14 @@ export async function selectCopilotModel(
   },
   declaredTest: readonly string[] = [],
 ) {
-  const available = [
-    ...(await runtime.getAvailable(copilotProvider)),
-    ...(
-      await Promise.all(declaredTest.map((id) => runtime.getAvailable(id)))
-    ).flat(),
-  ];
+  const providers = [...new Set([...supportedProviders, ...declaredTest])];
+  const available = (
+    await Promise.all(
+      providers.map((id) =>
+        Promise.resolve(runtime.getAvailable(id)).catch(() => []),
+      ),
+    )
+  ).flat();
   return chooseCopilotModel(
     available,
     {
@@ -87,7 +116,7 @@ export async function selectCopilotModel(
 
 /**
  * The model the prompt box can show without starting the conversation worker:
- * the saved Copilot choice (or the pinned default) once Copilot is signed in.
+ * the saved model choice (or the pinned Copilot default) once a provider is signed in.
  * Declared test fixtures pick their own model, so only the conversation knows it.
  */
 export function savedModelLabel(
@@ -96,17 +125,28 @@ export function savedModelLabel(
   declaredTest: readonly string[] = [],
 ): { model: string | null; needsConversation: boolean } {
   if (declaredTest.length) return { model: null, needsConversation: true };
-  if (!credentialProviders.includes(copilotProvider))
-    return { model: null, needsConversation: false };
+  const supported = new Set<string>(supportedProviders);
+  const signedIn = credentialProviders.filter((id) => supported.has(id));
+  if (!signedIn.length) return { model: null, needsConversation: false };
   const saved =
     settings && typeof settings === "object"
       ? (settings as Record<string, unknown>)
       : {};
-  const model =
-    saved.defaultProvider === copilotProvider &&
+  if (
+    typeof saved.defaultProvider === "string" &&
+    signedIn.includes(saved.defaultProvider) &&
     typeof saved.defaultModel === "string" &&
-    /^[\w.:-]{1,128}$/.test(saved.defaultModel)
-      ? saved.defaultModel
-      : copilotDefaultModel;
-  return { model: `${copilotProvider}/${model}`, needsConversation: false };
+    /^[\w./:-]{1,128}$/.test(saved.defaultModel)
+  ) {
+    return {
+      model: `${saved.defaultProvider}/${saved.defaultModel}`,
+      needsConversation: false,
+    };
+  }
+  if (signedIn.includes(copilotProvider))
+    return {
+      model: `${copilotProvider}/${copilotDefaultModel}`,
+      needsConversation: false,
+    };
+  return { model: null, needsConversation: true };
 }

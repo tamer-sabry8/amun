@@ -3,7 +3,7 @@ import { verifyAmunManifest } from "../src/github-manifest.ts";
 const resource = {
   type: "resource",
   resource: {
-    uri: "repo://tamer-sabry8/amun/refs/heads/main/contents/package.json",
+    uri: "repo://amun-app/amun/refs/heads/main/contents/package.json",
     text: JSON.stringify({ name: "amun", packageManager: "pnpm@11.25.0" }),
   },
 };

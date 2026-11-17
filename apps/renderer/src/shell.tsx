@@ -79,12 +79,12 @@ const drawers: [Drawer, string, string][] = [
   ["skills", "Skills and extensions", "skills"],
 ];
 const themes = [
-  ["tamer-sabry-default", "Tamer Sabry default"],
+  ["amun-default", "Amun default"],
   ["navy-gold", "Navy Gold"],
   ["navy-cyan", "Navy Cyan"],
 ] as const;
 const emptyPreferences: UiPreferences = {
-  theme: "tamer-sabry-default",
+  theme: "amun-default",
   productId: null,
   islandSize: "card",
   pinnedTabs: [],

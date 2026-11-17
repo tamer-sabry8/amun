@@ -61,7 +61,15 @@ export class WorkspaceService {
         "SELECT value_json FROM workspace_settings WHERE id='ui_preferences'",
       )
       .get() as { value_json: string } | undefined;
-    return uiPreferences.parse(row ? JSON.parse(row.value_json) : {});
+    const raw = row
+      ? (JSON.parse(row.value_json) as Record<string, unknown>)
+      : {};
+    if (
+      typeof raw.theme === "string" &&
+      !["amun-default", "navy-gold", "navy-cyan"].includes(raw.theme)
+    )
+      raw.theme = "amun-default";
+    return uiPreferences.parse(raw);
   }
   private savePreferences(preferences: WorkspaceSnapshot["preferences"]) {
     this.db

@@ -25,7 +25,6 @@ const run = (file: string, args: string[]) =>
   execFileSync(file, args, { encoding: "utf8", maxBuffer: 4_000_000 });
 run("git", ["diff", "--quiet"]);
 run("git", ["diff", "--cached", "--quiet"]);
-const sourceCommit = run("git", ["rev-parse", "HEAD"]).trim();
 const { version } = JSON.parse(
   readFileSync(
     new URL("../apps/desktop/package.json", import.meta.url),
@@ -66,9 +65,7 @@ run("/usr/bin/codesign", [
   app,
 ]);
 const stage = mkdtempSync(join(tmpdir(), "amun-release-"));
-const dmg = resolve(
-  `apps/desktop/out/Amun-${version}-${process.arch}-${sourceCommit.slice(0, 7)}.dmg`,
-);
+const dmg = resolve(`apps/desktop/out/Amun-${version}-${process.arch}.dmg`);
 try {
   run("/usr/bin/ditto", [app, join(stage, "Amun.app")]);
   symlinkSync("/Applications", join(stage, "Applications"));
@@ -113,7 +110,6 @@ try {
     artifact: dmg,
     sha256: createHash("sha256").update(readFileSync(dmg)).digest("hex"),
     bundleId: "ai.amun.desktop",
-    sourceCommit,
     team,
     notarization: { id: result.id, status: result.status },
     cleanAccountInstall: "pending physical acceptance",

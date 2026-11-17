@@ -71,17 +71,17 @@ it("restores the persisted scope before cycling and rejects invalid directions",
   await expect(actions.cycle("bad")).rejects.toThrow();
 });
 
-it("never cycles or lists models from another provider", async () => {
+it("never cycles or lists models from an unsupported provider", async () => {
   const { session, actions } = fixture();
   session.modelRuntime.getAvailableSnapshot = () => [
     { provider: "github-copilot", id: "one" },
-    { provider: "openai", id: "other" },
+    { provider: "foreign-provider", id: "other" },
   ];
   await actions.cycle("forward");
   expect(session.setScopedModels).toHaveBeenCalledWith([
     { model: { provider: "github-copilot", id: "one" } },
   ]);
-  await expect(actions.run("scoped-models", "openai/other")).rejects.toThrow(
-    "Model unavailable",
-  );
+  await expect(
+    actions.run("scoped-models", "foreign-provider/other"),
+  ).rejects.toThrow("Model unavailable");
 });
