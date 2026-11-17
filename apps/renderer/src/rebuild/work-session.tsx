@@ -1178,6 +1178,84 @@ function detectUnconnectedTool(
   return null;
 }
 
+function contextualQuestionOptions(title: string, detail: string): string[] {
+  const combined = `${title} ${detail}`.toLowerCase();
+  if (/\b(?:problem|pain|solve|why)\b/.test(combined))
+    return [
+      "Save users time on repetitive daily tasks with one agentic workflow",
+      "Replace fragmented, complicated tools with a simple AI-guided experience",
+      "Automate end-to-end execution with explicit user approval before actions",
+    ];
+  if (
+    /\b(?:target|user|audience|segment|customer|who|market|geography|language)\b/.test(
+      combined,
+    )
+  )
+    return [
+      "B2C busy adults and households (English first, mobile-first)",
+      "B2B product managers and teams tired of complex non-agentic tools",
+      "Prosumers and knowledge workers across North America, Europe & MENA",
+    ];
+  if (
+    /\b(?:platform|channel|device|mobile|web|voice|integration|partner|retailer|biller)\b/.test(
+      combined,
+    )
+  )
+    return [
+      "iOS and Android mobile app with voice + text and 1 anchor partner per category",
+      "Web and mobile app starting with top local retailers, billers, and messaging",
+      "Cross-platform assistant using official APIs and user-connected accounts",
+    ];
+  if (
+    /\b(?:trust|safety|consent|approval|security|payment|biometric|privacy|limit)\b/.test(
+      combined,
+    )
+  )
+    return [
+      "Per-action approval for every message or payment, plus biometric auth and spending caps",
+      "Read-back confirmation before any action, with a kill switch and full audit log",
+      "Strict human-in-the-loop in MVP with opt-in rules for trusted recurring tasks later",
+    ];
+  if (
+    /\b(?:price|pricing|business model|monetiz|revenue|metric|success|kpi|goal)\b/.test(
+      combined,
+    )
+  )
+    return [
+      "Freemium with a monthly subscription tier; measured by weekly active completed tasks",
+      "Monthly subscription ($10–$20/mo); measured by task completion rate and retention",
+      "Free consumer app with partner commissions; measured by approved transactions per user",
+    ];
+  return [
+    "Use what I already shared in the chat and delegate to the agent now",
+    "Start a first draft with reasonable placeholders and refine after",
+    "Have the Product Manager agent propose options",
+  ];
+}
+
+function extractTrailingQuestion(text: string): {
+  title: string;
+  detail: string;
+} | null {
+  const cleaned = text.trim();
+  if (!cleaned.endsWith("?")) return null;
+  const lines = cleaned
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const lastLine = lines.at(-1) ?? "";
+  if (!lastLine.endsWith("?")) return null;
+  const sentences = lastLine.match(/[^.!?]+[.!?]+/g) ?? [lastLine];
+  const questionSentence = (sentences.at(-1) ?? lastLine).trim();
+  if (!questionSentence.endsWith("?") || questionSentence.length < 8)
+    return null;
+  const title =
+    questionSentence.length > 90
+      ? questionSentence.slice(0, 87).trimEnd() + "…"
+      : questionSentence;
+  return { title, detail: cleaned };
+}
+
 function QuestionCard({
   question,
   connected,
@@ -1229,11 +1307,7 @@ function QuestionCard({
       ]
     : question.options.length > 0
       ? question.options
-      : [
-          "Use what I already shared in the chat and delegate to the agent now",
-          "Start a first draft with reasonable placeholders and refine after",
-          "Have the Product Manager agent propose options",
-        ];
+      : contextualQuestionOptions(question.title, question.detail);
 
   const handleOption = (option: string) => {
     if (unconnected && /^connect to .+ now$/i.test(option.trim())) {
@@ -1727,11 +1801,7 @@ export function WorkSession({
           proposed.do === "question"
             ? proposed.options.length > 0
               ? proposed.options
-              : [
-                  "Use what I already shared in the chat and delegate to the agent now",
-                  "Start a first draft with reasonable placeholders and refine after",
-                  "Have the Product Manager agent propose options",
-                ]
+              : contextualQuestionOptions(proposed.title, proposed.detail)
             : [],
       });
     } else if (proposed.do === "scope")
@@ -2065,6 +2135,25 @@ export function WorkSession({
               "Skip for now",
             ],
           });
+        } else if (
+          !parsed.actions.some(
+            (item) => item.do === "delegate" || item.do === "plan",
+          )
+        ) {
+          const trailing = extractTrailingQuestion(said);
+          if (trailing) {
+            work("attention", {
+              attentionKind: "question",
+              groupId: null,
+              workAreaId: areaId,
+              title: trailing.title,
+              detail: trailing.detail,
+              options: contextualQuestionOptions(
+                trailing.title,
+                trailing.detail,
+              ),
+            });
+          }
         }
       }
       // Only the message this turn carried leaves the wait; a newer one stays.

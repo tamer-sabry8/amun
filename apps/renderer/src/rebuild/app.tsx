@@ -55,7 +55,7 @@ import {
   workAsync,
   workStore,
 } from "./store.ts";
-import { acceptOffer } from "./accept-offer.ts";
+import { acceptOffer, answerQuestion } from "./accept-offer.ts";
 import { areaOf, homeModel, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
@@ -451,12 +451,10 @@ export function App() {
                   });
                 openAttention(item);
               },
-              onAnswer: (item, answer) =>
-                work("resolve-attention", {
-                  attentionId: item.id,
-                  resolution: "answer",
-                  answer,
-                }),
+              onAnswer: (item, answer) => {
+                answerQuestion(item, answer);
+                if (item.workAreaId) openWork(item.workAreaId);
+              },
             }}
           />
         }

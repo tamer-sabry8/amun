@@ -437,6 +437,12 @@
 .rb-island .btn {
   width: 100%;
 }
+.rb-island .row .btn {
+  width: auto;
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+}
 .rb-island textarea {
   width: 100%;
   resize: none;

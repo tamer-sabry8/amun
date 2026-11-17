@@ -69,7 +69,6 @@ export const agentCatalog: readonly AgentProfile[] = [
         "https://www.producttalk.org/opportunity-solution-tree/",
       ],
       ["RICE", "https://www.intercom.com/blog/rice-scoring-prioritization/"],
-      ["MoSCoW", "https://www.agilealliance.org/glossary/moscow/"],
       ["INVEST", "https://www.agilealliance.org/glossary/invest/"],
       [
         "Given-When-Then (Gherkin)",

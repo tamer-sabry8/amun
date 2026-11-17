@@ -25,7 +25,7 @@ export const changesRequest = (summary: string, note = "") =>
 
 /** The owner chose an answer on one of Firstmate's question cards. */
 export const answerRequest = (title: string, answer: string) =>
-  `My answer to your question "${title}": ${answer}. Carry it out: confirm it briefly, record any risk or decision it implies, or hand the work to the right agent, as that answer calls for. Do not publish or approve anything.`;
+  `My answer to your question "${title}": ${answer}. Confirm it briefly, record any risk or decision it implies, and if you are interviewing me for a PRD or brief and still need key inputs (target users/markets, platform/integrations, trust & approval rules, or pricing & success metrics), ask the next multiple-choice question card now; once all key inputs are gathered (or if I asked to draft now), hand the work to the right agent. Do not publish or approve anything.`;
 
 export type ScopeAnswer = "add_anyway" | "link_cr" | "keep_out";
 

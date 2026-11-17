@@ -185,6 +185,7 @@ export function agentBrief(input: {
           "- Produce the deliverable only. Do not write to Azure DevOps, Notion, GitHub or any repository, and do not change any other file.",
         ]),
     "- If something you need is missing, say what is missing in the result instead of guessing.",
+    "- Do not use MoSCoW (Must/Should/Could/Won't) in PRDs or scope sections.",
     ...(input.acceptance
       ? [
           '- This is an acceptance checklist. Write one task line per item, "- [ ] what must be true", and end each line with "Evidence:" and where it comes from: a test result, a pull request, a document, or "unknown".',
