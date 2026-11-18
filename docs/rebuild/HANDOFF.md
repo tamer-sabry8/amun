@@ -206,7 +206,8 @@ Each decision lists:
 - **Options:**
   - After your Mac test passes ★
   - When my cloud work is done
-- **Answer:** pending.
+- **Answer:** When my cloud work is done. The Pi test runs later on main.
+- **Why:** Tamer chose to land the cloud work without waiting for the Mac test. Until that test passes, the First Mate chat on main has not run against real Pi.
 
 ## Standing rules from Tamer
 
