@@ -1,6 +1,15 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { BlockerRow } from "./blocker-row.tsx";
+import {
+  AzureConnectCard,
+  QuestionCard,
+  useAzureConnected,
+} from "./question-card.tsx";
+import {
+  mentionsAzureDevOps,
+  parseQuestion,
+} from "../../../../packages/domain/src/work/question-choices.ts";
 import { useEffect, useRef, useState } from "react";
 import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
@@ -1179,6 +1188,9 @@ export function WorkSession({
     setDecisionProblem("");
   }, [openDocument]);
   const [dragging, setDragging] = useState(false);
+  // Reply cards the owner already answered or set aside.
+  const [closedAsks, setClosedAsks] = useState<string[]>([]);
+  const azureConnected = useAzureConnected();
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
     null,
   );
@@ -1851,12 +1863,26 @@ export function WorkSession({
   const { area } = context;
   const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
+  // The First Mate's held questions (no work area) belong in every chat with it.
   const questions = snapshot.attention.filter(
     (item) =>
       item.kind === "question" &&
       item.state === "open" &&
-      item.workAreaId === areaId,
+      (item.workAreaId === areaId ||
+        (item.workAreaId === null && item.id.startsWith("hold:"))),
   );
+  const lastMessage = context.messages.at(-1);
+  const lastAsk =
+    lastMessage?.role === "firstmate" &&
+    questions.length === 0 &&
+    !closedAsks.includes(lastMessage.id)
+      ? lastMessage
+      : null;
+  const askAzure =
+    lastAsk !== null && !azureConnected && mentionsAzureDevOps(lastAsk.text);
+  const asked = lastAsk && !askAzure ? parseQuestion(lastAsk.text) : null;
+  const closeAsk = () =>
+    lastAsk && setClosedAsks((ids) => [...ids, lastAsk.id]);
   const plans = snapshot.plans.filter(
     (plan) => plan.workAreaId === areaId && plan.state === "proposed",
   );
@@ -2456,38 +2482,47 @@ export function WorkSession({
                     </span>
                   </button>
                 ))}
-              {questions.map((question) => (
-                <div
-                  className="rb-inline"
-                  key={question.id}
-                  role="group"
-                  aria-label="Question from Firstmate"
-                >
-                  <strong>{question.title}</strong>
-                  {question.detail && <span>{question.detail}</span>}
-                  <div className="row wrap">
-                    {question.options.map((option) => (
-                      <button
-                        key={option}
-                        className="btn"
-                        onClick={() => answerQuestion(question, option)}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                    <button
-                      className="btn quiet"
-                      onClick={() => setSeed({ text: "", nonce: Date.now() })}
-                    >
-                      Write my own response
-                    </button>
-                  </div>
-                  <span className="note">
-                    Only the work that depends on this waits. Nothing is
-                    assumed.
-                  </span>
-                </div>
-              ))}
+              {questions.map((question) => {
+                const parsed =
+                  question.options.length > 0
+                    ? null
+                    : parseQuestion(
+                        question.title + "\n" + (question.detail ?? ""),
+                      );
+                return (
+                  <QuestionCard
+                    key={question.id}
+                    title={parsed?.question ?? question.title}
+                    detail={parsed ? null : question.detail}
+                    options={parsed?.options ?? question.options}
+                    recommended={parsed?.recommended ?? null}
+                    why={parsed?.why ?? null}
+                    onAnswer={(text) => answerQuestion(question, text)}
+                  />
+                );
+              })}
+              {askAzure && (
+                <AzureConnectCard
+                  product={area.name}
+                  onDismiss={closeAsk}
+                  onAnswer={(text) => {
+                    closeAsk();
+                    void send(text);
+                  }}
+                />
+              )}
+              {asked && (
+                <QuestionCard
+                  title={asked.question}
+                  options={asked.options}
+                  recommended={asked.recommended}
+                  why={asked.why}
+                  onAnswer={(text) => {
+                    closeAsk();
+                    void send(text);
+                  }}
+                />
+              )}
               {context.conversion && (
                 <div
                   className="rb-inline"
