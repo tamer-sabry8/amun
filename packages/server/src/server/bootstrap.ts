@@ -1049,6 +1049,12 @@ export async function createPaseoDaemon(
     logger: rootLogger.child({ module: "amun" }),
     daemonLog: path.join(config.paseoHome, "daemon.log"),
     allowedOrigins: () => allowedOrigins,
+    listPiModels: async () =>
+      (await providerSnapshotManager.listModels({ provider: "pi", wait: true })).map((model) => ({
+        id: model.id,
+        label: model.label,
+        isDefault: model.isDefault === true,
+      })),
   });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(

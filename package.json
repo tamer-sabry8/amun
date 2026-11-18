@@ -18,6 +18,7 @@
     "packages/cli",
     "packages/contracts",
     "packages/domain",
+    "packages/notion",
     "packages/work-store",
     "packages/theme",
     "packages/amun-ui",
@@ -32,8 +33,9 @@
     "test": "vitest run",
     "test:server": "npm run test:unit -w @getpaseo/server",
     "start": "npm run start -w @getpaseo/server",
-    "lint": "eslint packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store",
-    "format:check": "prettier --check docs packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store",
+    "lint": "eslint packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store packages/council packages/notion",
+    "format:check": "prettier --check docs packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store packages/council packages/notion",
+    "council:stage": "node --experimental-strip-types scripts/stage-roast-room.ts",
     "tokens:build": "node --experimental-strip-types scripts/build-tokens.ts"
   },
   "devDependencies": {

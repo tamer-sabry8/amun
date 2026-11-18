@@ -8,6 +8,7 @@ log.transports.console.level = "info";
 log.initialize({ spyRendererConsole: true });
 
 import { inheritLoginShellEnv } from "./login-shell-env.js";
+import { inheritLoginShellEnvWithCache, startShellEnvRefresh } from "./amun-shell-env-cache.js";
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -30,6 +31,7 @@ import {
   webContents,
 } from "electron";
 import { registerDaemonManager } from "./daemon/daemon-manager.js";
+import { installBrowser as installAmunBrowser } from "./features/amun-browser/browser.js";
 import { parsePassthroughCliArgsFromArgv, runPassthroughCli } from "./daemon/cli/passthrough.js";
 import { closeAllTransportSessions } from "./daemon/local-transport.js";
 import {
@@ -94,6 +96,7 @@ import { getDesktopSettingsStore } from "./settings/desktop-settings-electron.js
 import { clampWindowStateToWorkAreas, createWindowStateStore } from "./settings/window-state.js";
 import {
   isDesktopManagedDaemonRunningSync,
+  startDesktopDaemonOnLaunch,
   stopDesktopDaemonViaCli,
 } from "./daemon/daemon-manager.js";
 import {
@@ -116,7 +119,12 @@ const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseo";
 const PASEO_DEBUG = process.env.PASEO_DEBUG === "1";
 const DISABLE_SINGLE_INSTANCE_LOCK = process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK === "1";
-const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "Paseo";
+// Amun: the name people see (menus, "Quit Amun", notifications, logs).
+const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "Amun";
+// The settings folder keeps the name the rebuilt app first shipped with, so an
+// install keeps its window layout and settings, and so it never mixes with the
+// earlier Amun app's leftover browser data in "Application Support/Amun".
+const USER_DATA_DIR_NAME = "Paseo";
 const DESKTOP_WINDOW_CHROME_MODE = resolveDesktopWindowChromeMode({
   platform: process.platform,
   override: process.env.PASEO_DESKTOP_WINDOW_CONTROLS,
@@ -305,7 +313,9 @@ const forcedUserDataDir = process.env.PASEO_ELECTRON_USER_DATA_DIR?.trim();
 if (forcedUserDataDir) {
   app.setPath("userData", forcedUserDataDir);
   log.info("[dev-user-data] forced userData dir:", forcedUserDataDir);
-} else if (!app.isPackaged) {
+} else if (app.isPackaged) {
+  app.setPath("userData", path.join(app.getPath("appData"), USER_DATA_DIR_NAME));
+} else {
   try {
     const topLevel = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       encoding: "utf-8",
@@ -742,6 +752,8 @@ async function createWindow(
   }
   setupDefaultContextMenu(mainWindow);
   setupDragDropPrevention(mainWindow);
+  // Amun: the isolated in-app browser panel (the Council's room, previews).
+  installAmunBrowser(mainWindow, "amun");
   mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     if (!isPaseoBrowserWebviewAttach(params)) {
       event.preventDefault();
@@ -968,6 +980,11 @@ async function bootstrap(): Promise<void> {
   });
   ensureNotificationCenterRegistration();
   registerDaemonManager();
+  // Amun's UI connects straight to the daemon's /amun socket and retries until
+  // it answers, so start the daemon here without holding up the first window.
+  void startDesktopDaemonOnLaunch().catch((error) => {
+    log.error("[desktop daemon] failed to start the built-in daemon at launch", error);
+  });
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();
@@ -1015,10 +1032,30 @@ async function bootstrap(): Promise<void> {
   });
 }
 
+// Amun: a slow shell profile used to hold the window back on every launch;
+// the saved copy is applied at once and read again in its own process.
+function inheritLoginShellEnvFast(): void {
+  const cacheFile = path.join(app.getPath("userData"), "login-shell-env.json");
+  const baseEnv = { ...process.env };
+  inheritLoginShellEnvWithCache({
+    cacheFile,
+    env: process.env,
+    inherit: inheritLoginShellEnv,
+    logger: log,
+    refresh: () =>
+      startShellEnvRefresh({
+        execPath: process.execPath,
+        script: path.join(__dirname, "amun-shell-env-refresh.js"),
+        cacheFile,
+        baseEnv,
+      }),
+  });
+}
+
 void runDesktopStartup({
   hasPendingGuiLaunchRequest: Boolean(pendingOpenProjectPath || pendingAgentNavigation),
   runCliPassthroughIfRequested,
-  inheritLoginShellEnv,
+  inheritLoginShellEnv: inheritLoginShellEnvFast,
   bootstrapGui: bootstrap,
 }).catch((error) => {
   const message = error instanceof Error ? (error.stack ?? error.message) : String(error);

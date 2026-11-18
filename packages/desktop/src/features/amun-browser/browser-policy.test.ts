@@ -1,0 +1,113 @@
+import { describe, it, expect } from "vitest";
+import {
+  browserURL,
+  browserPartition,
+  browserCommand,
+} from "./browser-policy.js";
+describe("isolated browser policy", () => {
+  it("accepts HTTPS and loopback HTTP prototypes", () => {
+    expect(browserURL("https://example.com/login")).toBe(
+      "https://example.com/login",
+    );
+    expect(browserURL("http://127.0.0.1:8080/")).toBe("http://127.0.0.1:8080/");
+    expect(browserURL("http://[::1]:8080/")).toBe("http://[::1]:8080/");
+  });
+  it.each([
+    "javascript:alert(1)",
+    "file:///etc/passwd",
+    "data:text/html,hi",
+    "http://example.com",
+    "https://user:secret@example.com",
+    "http://127.0.0.1.evil.test",
+    "https://example.com/\\n",
+    "x".repeat(8193),
+    null,
+    {},
+  ])("refuses unsafe navigation %j", (value) => {
+    expect(browserURL(value)).toBeNull();
+  });
+  it("separates validated product partitions", () => {
+    expect(browserPartition("m0")).toBe("persist:amun-browser-m0");
+    expect(browserPartition("other")).not.toBe(browserPartition("m0"));
+    for (const value of ["../personal", "", "a/b", "A B"])
+      expect(() => browserPartition(value)).toThrow();
+  });
+  it("accepts only narrow browser commands", () => {
+    expect(
+      browserCommand({ action: "navigate", url: "https://example.com" }),
+    ).toEqual({ action: "navigate", url: "https://example.com/" });
+    expect(browserCommand({ action: "close" })).toEqual({ action: "close" });
+    for (const value of [
+      { action: "exec", code: "x" },
+      { action: "back", url: "x" },
+      { action: "navigate", url: "file:///x" },
+      null,
+    ])
+      expect(browserCommand(value)).toBeNull();
+  });
+});
+
+it("validates native preview bounds and visibility without permitting out-of-window overlays", async () => {
+  const { browserLayout } = await import("./browser-policy.js");
+  expect(
+    browserLayout(
+      {
+        action: "layout",
+        visible: true,
+        bounds: { x: 400, y: 150, width: 300, height: 400 },
+      },
+      1200,
+      800,
+    ),
+  ).toEqual({
+    visible: true,
+    bounds: { x: 400, y: 150, width: 300, height: 400 },
+  });
+  const fits = { x: 0, y: 0, width: 100, height: 100 };
+  expect(
+    browserLayout(
+      { action: "layout", visible: true, bounds: fits, zoom: 0.7 },
+      1200,
+      800,
+    ),
+  ).toEqual({ visible: true, bounds: fits, zoom: 0.7 });
+  for (const zoom of [0.1, 1.5, NaN, "0.7"])
+    expect(
+      browserLayout(
+        { action: "layout", visible: true, bounds: fits, zoom },
+        1200,
+        800,
+      ),
+    ).toBeNull();
+  for (const bounds of [
+    { x: -1, y: 0, width: 100, height: 100 },
+    { x: 1100, y: 0, width: 300, height: 100 },
+    { x: 0, y: 0, width: NaN, height: 100 },
+  ])
+    expect(
+      browserLayout({ action: "layout", visible: true, bounds }, 1200, 800),
+    ).toBeNull();
+  expect(
+    browserLayout(
+      {
+        action: "layout",
+        visible: "yes",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+      },
+      1200,
+      800,
+    ),
+  ).toBeNull();
+});
+it("accepts only bounded explicit scope changes, rejecting renderer session names and extra fields", () => {
+  expect(browserCommand({ action: "scope", product: "product-1" })).toEqual({
+    action: "scope",
+    product: "product-1",
+  });
+  for (const value of [
+    { action: "scope", product: "" },
+    { action: "scope", product: "x".repeat(257) },
+    { action: "scope", product: "p", partition: "persist:personal" },
+  ])
+    expect(browserCommand(value)).toBeNull();
+});

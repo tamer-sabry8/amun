@@ -69,10 +69,110 @@ async function script(
   }
 }
 
+const FLEET_SNAPSHOT_TIMEOUT_MS = 5 * 60_000;
+
 /** bin/fm-fleet-snapshot.sh --json (schema fm-fleet-snapshot.v1). Read-only by contract. */
 export async function readFleetSnapshot(home: FirstmateHome): Promise<FleetSnapshot> {
-  const stdout = await script(home, "fm-fleet-snapshot.sh", ["--json"]);
+  // A busy home takes minutes; callers share one run (shareFleetSnapshots).
+  const stdout = await script(home, "fm-fleet-snapshot.sh", ["--json"], FLEET_SNAPSHOT_TIMEOUT_MS);
   return fleetSnapshotSchema.parse(JSON.parse(stdout));
+}
+
+export interface SharedFleetSnapshots {
+  /**
+   * The last snapshot at once when there is one (refreshed behind it). With
+   * none yet, waits only briefly for the read that is running: the screen is
+   * never held for a slow home.
+   */
+  read(fmHome: string): Promise<FleetSnapshot>;
+  /** A fresh snapshot, sharing any read already running. */
+  readFresh(fmHome: string): Promise<FleetSnapshot>;
+}
+
+/** The first snapshot of a busy home is still being read. */
+export class FleetSnapshotNotReadyError extends Error {
+  constructor() {
+    super("Firstmate is still reading the fleet. It will show here in a moment.");
+    this.name = "FleetSnapshotNotReadyError";
+  }
+}
+
+export interface ShareFleetSnapshotsOptions {
+  /** A snapshot is reused for at least this long. */
+  freshMs?: number;
+  /** How long `read` waits for the very first snapshot before giving way. */
+  firstWaitMs?: number;
+  now?: () => number;
+}
+
+interface SharedFleetSnapshotEntry {
+  inFlight: Promise<FleetSnapshot> | null;
+  value: FleetSnapshot | null;
+  /** The value is reused until this time. */
+  freshUntil: number;
+}
+
+/**
+ * One fm-fleet-snapshot.sh run per home at a time. On a busy home the script
+ * takes minutes, and the 5 s poll plus every UI refresh each used to start
+ * their own copy: runs piled up, starved each other past the timeout and none
+ * ever finished, while the screen waited on them. Now callers share the
+ * running read and the last good snapshot; a read is followed by a rest at
+ * least as long as it took, so a slow home is not read back to back; and
+ * nothing on screen waits for the first one.
+ */
+export function shareFleetSnapshots(
+  readOnce: (fmHome: string) => Promise<FleetSnapshot>,
+  options: ShareFleetSnapshotsOptions = {},
+): SharedFleetSnapshots {
+  const freshMs = options.freshMs ?? 5_000;
+  const firstWaitMs = options.firstWaitMs ?? 2_000;
+  const now = options.now ?? Date.now;
+  const entries = new Map<string, SharedFleetSnapshotEntry>();
+  function entryFor(fmHome: string): SharedFleetSnapshotEntry {
+    let entry = entries.get(fmHome);
+    if (!entry) {
+      entry = { inFlight: null, value: null, freshUntil: 0 };
+      entries.set(fmHome, entry);
+    }
+    return entry;
+  }
+  function readFresh(fmHome: string): Promise<FleetSnapshot> {
+    const entry = entryFor(fmHome);
+    if (entry.inFlight) return entry.inFlight;
+    if (entry.value && now() < entry.freshUntil) return Promise.resolve(entry.value);
+    const started = now();
+    const running = readOnce(fmHome)
+      .then((snapshot) => {
+        entry.value = snapshot;
+        entry.freshUntil = now() + Math.max(freshMs, now() - started);
+        return snapshot;
+      })
+      .finally(() => {
+        entry.inFlight = null;
+      });
+    entry.inFlight = running;
+    return running;
+  }
+  return {
+    readFresh,
+    read(fmHome) {
+      const entry = entryFor(fmHome);
+      const running = readFresh(fmHome);
+      if (entry.value) {
+        // Answer now; a stale snapshot is refreshed behind the caller.
+        void running.catch(() => {});
+        return Promise.resolve(entry.value);
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const giveWay = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new FleetSnapshotNotReadyError()), firstWaitMs);
+      });
+      // The read carries on behind a caller that gave way.
+      void running.catch(() => {});
+      return Promise.race([running, giveWay]).finally(() => clearTimeout(timer));
+    },
+  };
 }
 
 /**

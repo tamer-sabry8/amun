@@ -27,6 +27,8 @@ export interface PrimaryLaunch {
   cwd: string;
   env: Record<string, string>;
   title: string;
+  /** The captain's saved model choice; the host applies it once the agent is up. */
+  model?: string;
 }
 
 export interface BuildLaunchInput {
@@ -102,6 +104,8 @@ export class PrimarySessions {
   constructor(
     private readonly host: PrimaryHost,
     private readonly firstmateRoot: string,
+    /** The captain's saved model for the First Mate, when there is one. */
+    private readonly preferredModel: () => string | null = () => null,
   ) {}
 
   agentFor(fmHome: string): string | null {
@@ -118,8 +122,9 @@ export class PrimarySessions {
       firstmateRoot: this.firstmateRoot,
       ...(harness ? { harness } : {}),
     });
+    const model = this.preferredModel();
     const started = this.host
-      .createAgent(launch)
+      .createAgent(model ? { ...launch, model } : launch)
       .then(({ agentId }) => {
         this.agents.set(space.fmHome, agentId);
         return { agentId };

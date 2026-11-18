@@ -263,6 +263,27 @@ interface Conversation {
 }
 
 type Message = Record<string, unknown>;
+const NOTION_AUTH = new Set([
+  "notion-connect",
+  "notion-check",
+  "notion-cancel",
+  "notion-disconnect",
+  "notion-target",
+  "notion-status",
+]);
+const MEMORY_SYNC = new Set([
+  "link-memory",
+  "edit-memory-field",
+  "sync-memory-field",
+]);
+/** Notion sign-in actions and linked-memory commands. */
+function isNotionMessage(message: Message): boolean {
+  const action = String(message.action);
+  return (
+    (message.kind === "auth" && NOTION_AUTH.has(action)) ||
+    (message.kind === "workspace" && MEMORY_SYNC.has(action))
+  );
+}
 const UNAVAILABLE = "Not available in this Amun build yet.";
 
 /** Turns one renderer message into the replies the renderer expects. */
@@ -273,6 +294,8 @@ export class ContractAdapter {
   private view: DaemonView = { spaces: [], fleet: [], holds: [], work: null };
   /** One First Mate per home, so one conversation for every product. */
   private conversation: Conversation | null = null;
+  /** The First Mate's model as the daemon last reported it. */
+  private model: string | null = null;
 
   constructor(
     private readonly daemon: AmunTransport,
@@ -399,6 +422,18 @@ export class ContractAdapter {
   async handle(message: Message): Promise<unknown[]> {
     if (message.method === "health")
       return [{ version: 1, id: message.id, status: "ready" }];
+    if (isNotionMessage(message)) {
+      // Notion runs in the daemon. What it knows at once comes back here;
+      // a finished sign-in arrives later as a renderer event.
+      const events = await this.daemon
+        .request<unknown[]>("notion.request", { message })
+        .catch(() => null);
+      return (
+        events ?? [
+          this.notice("Amun could not reach Notion. Try again in a moment."),
+        ]
+      );
+    }
     if (message.kind === "workspace" && message.action === "snapshot") {
       await this.refresh();
       return [this.workspace()];
@@ -409,6 +444,26 @@ export class ContractAdapter {
         .request<unknown>("ado.request", { message })
         .catch(() => null);
       return reply ? [reply] : [];
+    }
+    if (message.kind === "council") {
+      // The Council runs in the daemon; its replies are already in the
+      // renderer's own shapes (a result, the work snapshot, the status).
+      const events = await this.daemon
+        .request<Record<string, unknown>[]>("council.request", { message })
+        .catch(() => null);
+      if (!events) return [];
+      return events.map((event) => {
+        if (event.kind !== "work-snapshot") return event;
+        this.view = { ...this.view, work: event as unknown as WorkSnapshot };
+        return this.work();
+      });
+    }
+    if (message.kind === "tools") {
+      // Looking for command-line tools happens in the daemon, on this Mac.
+      const report = await this.daemon
+        .request<unknown>("tools.request", { message })
+        .catch(() => null);
+      return report ? [report] : [];
     }
     if (message.kind === "auth") return this.handleAuth(message);
     if (message.kind === "work") return this.handleWork(message);
@@ -548,6 +603,44 @@ export class ContractAdapter {
     };
   }
 
+  /**
+   * Model sign-ins live in Pi. Amun asks Pi whether a provider is ready and
+   * reports it the way the sign-in cards expect: "checking" then "configured"
+   * for a stored sign-in (shown as "Signed in"), never the credential.
+   */
+  private async accountStatus(provider: string): Promise<unknown[]> {
+    const status = (value: string) => ({
+      version: 1,
+      kind: "auth-status",
+      id: provider,
+      status: value,
+    });
+    const check = await this.daemon
+      .request<{ status: "ready" | "missing" | "error" }>("accounts.check", {
+        provider,
+      })
+      .catch(() => null);
+    if (!check) return [status("unknown")];
+    if (check.status === "ready")
+      return [status("checking"), status("configured")];
+    return [status(check.status)];
+  }
+
+  /** The model the First Mate is on and the ones Pi offers, from the daemon. */
+  private async models(): Promise<{
+    current: string | null;
+    models: { id: string; label: string }[];
+  }> {
+    if (this.view.spaces.length === 0) await this.refresh();
+    const space = await this.ensureSpace();
+    const listed = await this.daemon.request<{
+      current: string | null;
+      models: { id: string; label: string }[];
+    }>("models.list", { space });
+    this.model = listed.current;
+    return listed;
+  }
+
   private notice(text: string) {
     return { version: 1, kind: "auth-notice", message: text.slice(0, 4096) };
   }
@@ -556,6 +649,15 @@ export class ContractAdapter {
   private async handleAuth(message: Message): Promise<unknown[]> {
     const action = String(message.action);
     if (action === "list") return [await this.authConnections()];
+    if (action === "readiness")
+      return this.accountStatus(String(message.provider));
+    if (action === "login")
+      return [
+        this.notice(
+          "Signing in from Amun is not ready yet. Sign in to this provider in Pi, then open this page again.",
+        ),
+        ...(await this.accountStatus(String(message.provider))),
+      ];
     if (action !== "save" && action !== "check" && action !== "forget")
       return [this.notice(UNAVAILABLE)];
     const connection = message.connection as
@@ -692,9 +794,9 @@ export class ContractAdapter {
     return {
       kind: "conversation",
       calm: true,
-      // Pi runs the First Mate and picks its own model; the UI only needs to
-      // know one is there before it sends.
-      model: FIRST_MATE_MODEL,
+      // The model Pi is on; "pi" until the daemon has said which, because the
+      // UI only sends once it knows a model is there.
+      model: this.model ?? FIRST_MATE_MODEL,
       sessionId: conversation.sessionId,
       title: "First Mate",
       text: conversation.text,
@@ -715,6 +817,42 @@ export class ContractAdapter {
     });
     const fail = (text: string) => reply({ kind: "message", text });
     const command = String(message.command);
+    if (command === "default-model" || command === "model") {
+      try {
+        const argument = String(message.argument ?? "").trim();
+        if (command === "default-model")
+          return reply({
+            kind: "message",
+            text: JSON.stringify({ model: (await this.models()).current }),
+          });
+        if (!argument)
+          return reply({
+            kind: "choices",
+            title: "Choose a model",
+            choices: (await this.models()).models.slice(0, 2048),
+          });
+        const space = await this.ensureSpace();
+        const chosen = await this.daemon.request<{ model: string }>(
+          "primary.setModel",
+          { space, model: argument },
+        );
+        this.model = chosen.model;
+        // The picker looks for the id it asked for in this line.
+        return reply({
+          kind: "message",
+          text: `Firstmate now uses ${argument}.`,
+        });
+      } catch (error) {
+        // The picker reads a reply without the model id as "not selected".
+        return fail(
+          command === "model" && String(message.argument ?? "").trim()
+            ? "That model could not be selected."
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        );
+      }
+    }
     if (command !== "conversation" && command !== "conversation-send")
       return fail(UNAVAILABLE);
     try {
@@ -723,6 +861,7 @@ export class ContractAdapter {
       let conversation = this.conversation;
       if (!conversation) {
         await this.daemon.request("primary.start", { space });
+        await this.models().catch(() => undefined);
         conversation = {
           sessionId: crypto.randomUUID(),
           text: "",

@@ -29,6 +29,20 @@ interface AttachedBrowserRegistration {
   webContentsId: number;
 }
 
+// Amun: the in-app browser panel (the Council's room, previews). The page asks
+// with a window message; only the main process decides what may load.
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data?.kind === "amun-browser-command")
+    ipcRenderer.send("amun-browser", event.data.command);
+});
+ipcRenderer.on("amun-browser-status", (_event, message: unknown) => {
+  if (typeof message === "string")
+    window.postMessage({ kind: "amun-browser-status", message }, "*");
+});
+ipcRenderer.on("amun-browser-handoff", (_event, handoff: unknown) => {
+  window.postMessage({ kind: "amun-browser-handoff", handoff }, "*");
+});
+
 contextBridge.exposeInMainWorld("paseoDesktop", {
   platform: process.platform,
   windowChromeMode: readWindowChromeMode(),

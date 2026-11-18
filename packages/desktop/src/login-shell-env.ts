@@ -7,7 +7,7 @@ import { spawnSync as defaultSpawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { userInfo as defaultUserInfo } from "node:os";
 import { basename } from "node:path";
-import defaultLog from "electron-log/main";
+import type defaultLog from "electron-log/main";
 
 const DEFAULT_RESOLVE_TIMEOUT_MS = 30_000;
 const TIMEOUT_ENV_KEY = "PASEO_SHELL_ENV_TIMEOUT_MS";
@@ -289,6 +289,9 @@ function shellEnvForAttempt({
     argv0: attempt.argv0,
     encoding: "utf8",
     timeout: timeoutMs,
+    // Amun: an interactive shell ignores the default SIGTERM and kept the
+    // launch waiting well past its timeout.
+    killSignal: "SIGKILL",
     windowsHide: true,
     env: {
       ...shellEnv,
@@ -497,9 +500,19 @@ function resolveShellEnv({ deps, timeoutMs }: ResolveShellEnvInput): ResolvedShe
  * Approach borrowed from VS Code (src/vs/platform/shell/node/shellEnv.ts).
  */
 export function inheritLoginShellEnv(input: LoginShellEnvDependencies = {}): void {
+  resolveLoginShellEnvInto(input);
+}
+
+/**
+ * Amun: the same lookup, saying whether the shell answered. The logger is
+ * loaded only when none is given, so the out-of-process refresh
+ * (amun-shell-env-refresh.ts), which has no Electron app, can pass its own.
+ */
+export function resolveLoginShellEnvInto(input: LoginShellEnvDependencies = {}): boolean {
   const deps: Required<LoginShellEnvDependencies> = {
     env: input.env ?? process.env,
-    logger: input.logger ?? defaultLog,
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    logger: input.logger ?? (require("electron-log/main") as typeof defaultLog),
     now: input.now ?? Date.now,
     platform: input.platform ?? process.platform,
     spawnSync: input.spawnSync ?? defaultSpawnSync,
@@ -521,6 +534,7 @@ export function inheritLoginShellEnv(input: LoginShellEnvDependencies = {}): voi
       pathChanged: beforePath !== pathEnv(deps.env),
       shell: deps.env.SHELL ?? null,
     });
+    return true;
   } catch (error) {
     const details: ShellEnvErrorDetails =
       error instanceof ShellEnvError
@@ -539,5 +553,6 @@ export function inheritLoginShellEnv(input: LoginShellEnvDependencies = {}): voi
       pathChanged: beforePath !== pathEnv(deps.env),
     });
     // Keep inherited environment if shell lookup fails.
+    return false;
   }
 }

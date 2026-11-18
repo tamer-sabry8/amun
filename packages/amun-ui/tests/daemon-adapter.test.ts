@@ -4,7 +4,7 @@ import {
   nativePiEvent,
   workspaceSnapshot,
 } from "@amun/contracts";
-import { workEvent } from "../../contracts/src/work.ts";
+import { councilStatus, workEvent } from "../../contracts/src/work.ts";
 import { authEvent } from "../../contracts/src/auth.ts";
 import {
   traceBundle,
@@ -23,6 +23,12 @@ import { openWorkStore } from "../../work-store/src/index.ts";
 class FakeDaemon implements AmunTransport {
   calls: { method: string; params: Record<string, unknown> }[] = [];
   traceFails = false;
+  /** What Pi offers; null stands for a daemon that cannot say. */
+  models: {
+    current: string | null;
+    models: { id: string; label: string }[];
+  } | null = null;
+  signedIn = ["github-copilot"];
   spaces = [{ slug: "alpha", name: "Alpha" }];
   // The daemon's real work store, in memory.
   work = openWorkStore(":memory:").store;
@@ -92,6 +98,62 @@ class FakeDaemon implements AmunTransport {
         base64: "UEsF",
       },
     };
+    if (method === "models.list") {
+      if (!this.models) throw new Error("no models");
+      return this.models as T;
+    }
+    if (method === "primary.setModel") {
+      if (!this.models?.models.some((model) => model.id === params.model))
+        throw new Error("Pi does not offer that model.");
+      this.models = { ...this.models, current: String(params.model) };
+      return { model: params.model } as T;
+    }
+    if (method === "notion.request")
+      return [
+        {
+          version: 1,
+          kind: "auth-status",
+          id: "notion-mcp",
+          status: "checking",
+        },
+      ] as T;
+    if (method === "council.request") {
+      const message = params.message as { action: string };
+      const status = {
+        version: 1,
+        kind: "council-status",
+        installed: true,
+        commit: "e40f40652d5690c4d9f928c4794c673a99f2cd0e",
+        previous: null,
+        repo: null,
+        claude: true,
+        seats: [{ key: "skeptic", name: "The Skeptic", disabled: false }],
+        roomUrl: null,
+        message: "",
+      };
+      if (message.action !== "run") return [status] as T;
+      return [
+        {
+          version: 1,
+          kind: "work-result",
+          action: "council-run",
+          ok: true,
+          message: "",
+          ref: "session-1",
+          step: null,
+        },
+        this.work.snapshot(),
+        status,
+      ] as T;
+    }
+    if (method === "accounts.check")
+      return {
+        provider: params.provider,
+        status: this.signedIn.includes(String(params.provider))
+          ? "ready"
+          : "missing",
+        reason: null,
+      } as T;
     if (method === "trace.export" && this.traceFails)
       throw new Error("disk full");
     if (method === "connections.save" && params.secret === "bad")
@@ -264,6 +326,161 @@ describe("daemon contract adapter", () => {
       argument: "",
     });
     expect(nativePiEvent.parse(other).result.kind).toBe("message");
+  });
+
+  it("lists the models Pi offers and switches the First Mate to the one chosen", async () => {
+    const { adapter, daemon } = make();
+    daemon.models = {
+      current: "github-copilot/claude-sonnet-5",
+      models: [
+        { id: "github-copilot/claude-sonnet-5", label: "Claude Sonnet 5" },
+        { id: "openai-codex/gpt-5", label: "GPT-5" },
+      ],
+    };
+    const run = async (command: string, argument: string) => {
+      const [event] = await adapter.handle({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id: command,
+        command,
+        argument,
+      });
+      return nativePiEvent.parse(event).result;
+    };
+
+    // The prompt box reads the model before any conversation is open.
+    const saved = await run("default-model", "");
+    expect(saved.kind === "message" && JSON.parse(saved.text)).toEqual({
+      model: "github-copilot/claude-sonnet-5",
+    });
+    expect(daemon.calls.some((c) => c.method === "primary.start")).toBe(false);
+
+    const listed = await run("model", "");
+    expect(listed).toMatchObject({
+      kind: "choices",
+      choices: daemon.models.models,
+    });
+
+    // The picker looks for the chosen id in the reply.
+    const chosen = await run("model", "openai-codex/gpt-5");
+    expect(chosen.kind === "message" && chosen.text).toContain(
+      "openai-codex/gpt-5",
+    );
+    expect(
+      daemon.calls.find((c) => c.method === "primary.setModel")?.params,
+    ).toEqual({ space: "alpha", model: "openai-codex/gpt-5" });
+    const open = await run("conversation", "");
+    expect(open.kind === "conversation" && open.model).toBe(
+      "openai-codex/gpt-5",
+    );
+
+    const refused = await run("model", "nope/unknown");
+    expect(refused.kind === "message" && refused.text).not.toContain(
+      "nope/unknown",
+    );
+  });
+
+  it("reports each model sign-in as Pi sees it, and never claims a sign-in it cannot do", async () => {
+    const { adapter } = make();
+    const ask = async (action: string, provider: string) =>
+      (
+        await adapter.handle({
+          version: 1,
+          kind: "auth",
+          action,
+          provider,
+          ...(action === "login" ? { type: "oauth" } : {}),
+        })
+      ).map((event) => authEvent.parse(event));
+
+    // A stored sign-in walks "checking" then "configured": shown as Signed in.
+    expect(await ask("readiness", "github-copilot")).toEqual([
+      {
+        version: 1,
+        kind: "auth-status",
+        id: "github-copilot",
+        status: "checking",
+      },
+      {
+        version: 1,
+        kind: "auth-status",
+        id: "github-copilot",
+        status: "configured",
+      },
+    ]);
+    expect(await ask("readiness", "xai")).toEqual([
+      { version: 1, kind: "auth-status", id: "xai", status: "missing" },
+    ]);
+    const [notice, status] = await ask("login", "xai");
+    expect(notice).toMatchObject({ kind: "auth-notice" });
+    expect(status).toMatchObject({ id: "xai", status: "missing" });
+  });
+
+  it("passes the Council to the daemon and keeps the First Mate over its work snapshot", async () => {
+    const { adapter, daemon } = make();
+    const [status] = await adapter.handle({
+      version: 1,
+      kind: "council",
+      action: "status",
+    });
+    expect(councilStatus.parse(status).seats).toEqual([
+      { key: "skeptic", name: "The Skeptic", disabled: false },
+    ]);
+
+    const [result, snapshot, after] = await adapter.handle({
+      version: 1,
+      kind: "council",
+      action: "run",
+      text: "/council Should we ship in June?",
+      workAreaId: null,
+      groupId: null,
+    });
+    expect(result).toMatchObject({ action: "council-run", ok: true });
+    // The snapshot is the adapter's own: Firstmate stays the lead on it.
+    const parsed = workEvent.parse(snapshot);
+    expect(
+      parsed.kind === "work-snapshot" &&
+        parsed.agents.some((agent) => agent.kind === "lead"),
+    ).toBe(true);
+    expect(councilStatus.parse(after).installed).toBe(true);
+    expect(
+      daemon.calls.filter((c) => c.method === "council.request"),
+    ).toHaveLength(2);
+  });
+
+  it("sends Notion sign-in and linked-memory commands to the daemon, and nothing else", async () => {
+    const { adapter, daemon } = make();
+    const [status] = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "notion-connect",
+      browser: "edge",
+    });
+    expect(authEvent.parse(status)).toMatchObject({
+      id: "notion-mcp",
+      status: "checking",
+    });
+    await adapter.handle({
+      version: 1,
+      kind: "workspace",
+      productId: "p",
+      action: "sync-memory-field",
+      link: "l",
+      choice: "refresh",
+      review: {},
+    });
+    expect(
+      daemon.calls
+        .filter((c) => c.method === "notion.request")
+        .map((c) => (c.params.message as { action: string }).action),
+    ).toEqual(["notion-connect", "sync-memory-field"]);
+
+    // Other workspace commands keep going to the workspace service.
+    await adapter.handle({ version: 1, kind: "workspace", action: "snapshot" });
+    expect(
+      daemon.calls.filter((c) => c.method === "notion.request"),
+    ).toHaveLength(2);
   });
 
   it("connects Azure DevOps through the daemon and reports what it can read", async () => {

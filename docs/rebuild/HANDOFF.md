@@ -13,7 +13,7 @@
   - Showing First Mate turns Amun didn't ask for (heartbeats, wakes) in the chat.
   - The Paseo features Tamer asked for, and the remaining ports (see "Still to do").
 
-This file is final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here.
+This file was final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here; the first of those is under "Changes after the PR #33 merge".
 
 ## Read this first: Firstmate is the only path
 
@@ -400,6 +400,67 @@ Each decision lists:
   - Finish the Paseo wishlist
 - **Answer:** Merge now.
 - **Why:** The Pi test needs `main` on Tamer's Mac. Smaller follow-up PRs are easier to review than a bigger PR #33.
+
+### 21. How the Council's Chair runs
+
+- **Question:** The old Council started its Chair directly on Claude Code, outside Firstmate. How should the restored Council run its Chair?
+- **Options:**
+  - Directly, as before ★
+  - Through the First Mate
+  - Settings only for now
+- **Answer:** Directly, as before (18 November 2026).
+- **Why:** The Council follows upstream Roast Room, and `AGENTS.md` says not to change that flow. It is a review tool: it starts no crew and no worktrees.
+- **How it works:** The daemon starts the Chair on this Mac's Claude Code from the pinned, checksum-verified Roast Room (`runtime/roast-room/manifest.json`, staged by `npm run council:stage`). The Chair's questions reach the captain as question cards. This is the one place Amun starts an agent without the First Mate.
+
+## Changes after the PR #33 merge (18 November 2026)
+
+Tamer tested `main` on his Mac the same day. These came out of that test.
+
+### Fixed
+
+- **The packaged app never started its daemon**, so the window stayed on "Opening Amun…". The Amun UI never sends `start_desktop_daemon` (Paseo's own UI did). The main process now starts it at launch (`startDesktopDaemonOnLaunch` in `packages/desktop/src/daemon/daemon-manager.ts`).
+- **Slow launch, cause one: the login shell.** Reading the shell environment held the window back for 20 seconds or more when the shell profile is slow. A copy is now kept in the app's settings folder (`login-shell-env.json`, readable by the owner only), applied at once and refreshed in a separate process (`packages/desktop/src/amun-shell-env-cache.ts`).
+- **Slow launch, cause two: the fleet snapshot.** `fm-fleet-snapshot.sh` takes about two minutes on Tamer's home. Every poll and screen refresh used to start its own copy, each timed out at 60 seconds, and the screen waited on them. Now one run happens at a time, callers share it and the last good result, it has five minutes to finish, it rests after a slow run, and the screen never waits for the first one (`shareFleetSnapshots` in `packages/server/src/server/amun/firstmate-cli.ts`). The script itself is Firstmate's and is not changed.
+- **Chat asked "Where does this belong?" and never reached the First Mate.** A keyword filter on Home filed every message as a task, product, project or RFP before any model saw it. A question or request now goes straight to the First Mate, in one standing conversation per group named "Chat with Firstmate". The card only shows when the message itself asks for new work of a named kind (`asksForNewWork` in `packages/domain/src/work/model.ts`).
+- **Names and size.** The app is called Amun everywhere it shows (it said "Quit Paseo"); the settings folder keeps the name `Paseo` so an install keeps its settings. The app icon is the ram logo. The packaging step that strips unused files looked for `Paseo.app` and never ran; the app is now about 530 MB installed, down from 906 MB.
+
+### Wired
+
+| Area                      | State                                                                                                                                                                                                                                                                                                  | Where                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Model picker              | Lists the models Pi offers and switches the First Mate; the choice is kept in `~/.amun/first-mate-model.json`. Tested in an isolated instance; no message was sent on a switched model.                                                                                                                | RPC `models.list`, `primary.setModel`; `first-mate-models.ts`                                        |
+| Accounts and models       | Shows each provider's status as Pi reports it (`pi auth check --json`). Amun never sees a credential. The Sign in buttons only show a note: Pi offers sign-in only in its terminal screen, and the old in-app sign-in stays removed (decision 14) until Tamer decides.                                 | RPC `accounts.check`                                                                                 |
+| Tools already on this Mac | The detection inspired by Emdash, restored from Beta 0.9 with its tests. The on/off switch is remembered but does not reach Firstmate's dispatch.                                                                                                                                                      | `packages/work-store/src/tool-probe.ts`, `tool-registry.ts`, `tools-service.ts`; RPC `tools.request` |
+| Council                   | Restored from Beta 0.9 with its tests (decision 21). The page, seats and the live room work in the packaged app. A real council has not run: Claude Code on Tamer's Mac was signed out. A failed run now shows Claude Code's own reason.                                                               | `packages/council`; RPC `council.request`                                                            |
+| In-app browser panel      | Restored from Beta 0.9 with its navigation rules. The Council's room is shown in it; other uses are untested.                                                                                                                                                                                          | `packages/desktop/src/features/amun-browser`                                                         |
+| Notion                    | Sign-in through Notion's hosted MCP server in Edge or Dia, test, destination check, disconnect and linked memory fields, restored from Beta 0.9 with its tests. The grant is kept in the Keychain. Confirmed against Notion's live service up to the browser step only. Publishing pages is not wired. | `packages/notion`; RPC `notion.request`; event `renderer.event`                                      |
+
+`packages/notion` pins its own `@modelcontextprotocol/sdk` (1.32.2); the rest of the app stays on 1.29.0. The daemon loads the Council and Notion through the `@amun/work-store` bundle (`packages/work-store/build.mjs`).
+
+### Building a test DMG
+
+The `build` script in `packages/desktop` calls a root script that does not exist. Until that is fixed, build by hand from the repository root:
+
+```sh
+npm ci
+npm run council:stage
+npm run build:server
+(cd packages/amun-ui && npx vite build)
+cd packages/desktop && npm run build:main
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config electron-builder.yml \
+  --mac dmg --arm64 --publish never \
+  -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false
+```
+
+This is the ad-hoc-signed trusted-tester build (`AGENTS.md`). Hardened runtime must be off for it: macOS refuses to load Electron in an ad-hoc-signed app with hardened runtime on.
+
+### Open after this work
+
+- The first-run wizard exists (`packages/amun-ui/src/rebuild/wizard.tsx`) and is still switched off. Its Agents step would mark all 20 suggested agents as on the team without asking the First Mate. Tamer has not yet decided how that step should behave.
+- "Chat with Firstmate" shows under Your work labelled as a Task. A separate conversation type is a visible change that needs Tamer's approval.
+- Two lines on the Tools list are no longer true: "A tool you turn off is never handed work" and "Amun bundles its own Pi".
+- Not wired yet: prototype and output preview, attachments and screenshots, publishing to Notion, pull requests and code changes, backup, GitHub and Obsidian connections, the Firstmate slash commands, and hosted connectors such as Gmail and Jira.
+- Research only, nothing built: whether to use Vercel's UI SDK for prototypes. Tamer asked that any work on it be a separate branch and PR.
 
 ## Standing rules from Tamer
 

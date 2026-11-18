@@ -785,3 +785,25 @@ describe("permissionChanges", () => {
     expect(kept[0]!.id).toBe("p29");
   });
 });
+
+describe("messages that are for Firstmate, not work to file", () => {
+  it("only a message that asks for new work of a named kind is asked about", async () => {
+    const { asksForNewWork } = await import("../src/work/model.ts");
+    for (const text of [
+      "Create a product called Atlas",
+      "please start a new project for Acme",
+      "Track an RFP for the ministry",
+      "Add a task: renew the domain",
+    ])
+      expect(asksForNewWork(text), text).toBe(true);
+    for (const text of [
+      "What are all the 2ndmates we have available?",
+      "Are you able to connect to Azure devops for me?",
+      "Help me respond to this email",
+      "Connect to Jira",
+      "Build me a wireframe for onboarding",
+      "The product team asked to create a task list later",
+    ])
+      expect(asksForNewWork(text), text).toBe(false);
+  });
+});
