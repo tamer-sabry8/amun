@@ -12,6 +12,7 @@ import { PmStore } from "./pm-store.js";
 import { openWorkStore } from "@amun/work-store";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { TraceLog } from "./trace/trace-log.js";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
 import { ProductSpaceStore } from "./product-spaces.js";
 
@@ -28,6 +29,8 @@ export interface AttachAmunInput {
   agentManager: AgentManager;
   logger: AmunLogger;
   env?: NodeJS.ProcessEnv;
+  /** $PASEO_HOME/daemon.log, copied into trace bundles. */
+  daemonLog?: string;
 }
 
 export interface AmunAttachment {
@@ -80,6 +83,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const spaces = new ProductSpaceStore(paths);
   mkdirSync(paths.amunHome, { recursive: true });
   const work = openWorkStore(path.join(paths.amunHome, "work.db"));
+  const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: work.redactor });
   const primary = new PrimarySessions(agentManagerHost(input.agentManager), paths.firstmateRoot);
   const handler = new AmunRpcHandler({
     spaces,
@@ -89,7 +93,12 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+    trace,
+    redactor: work.redactor,
+    daemonLog: input.daemonLog ?? null,
+    fmHome: paths.fmHome,
   });
+  trace.record({ source: "amun", kind: "daemon-start", fmHome: paths.fmHome });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   const watched = new Map<WebSocket, Set<string>>();
   const lastSent = new Map<string, string>();

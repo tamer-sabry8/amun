@@ -11,6 +11,9 @@ import { resolveAmunPaths, type AmunPaths } from "./amun-paths.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { openWorkStore } from "@amun/work-store";
 import { attachAmun } from "./attach-amun.js";
+import { HISTORY_REQUEST } from "./amun-rpc-handler.js";
+import { TraceLog } from "./trace/trace-log.js";
+import { unzipSync, strFromU8 } from "fflate";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { memorySecretStore } from "./connections/secret-store.js";
 import {
@@ -193,14 +196,19 @@ describe("Amun RPC", () => {
   it("answers spaces, backlog and holds; refuses bad requests", async () => {
     const host = new RecordingHost();
     const spaces = new ProductSpaceStore(paths);
+    const opened = openWorkStore(":memory:");
+    const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: opened.redactor });
     const handler = new AmunRpcHandler({
       spaces,
       primary: new PrimarySessions(host, paths.firstmateRoot),
       connections: new ConnectionStore(paths.amunHome, memorySecretStore()),
-      work: openWorkStore(":memory:").store,
+      work: opened.store,
       amunHome: paths.amunHome,
       firstmateRoot: paths.firstmateRoot,
       readSnapshot: async () => snapshotFixture(),
+      trace,
+      redactor: opened.redactor,
+      fmHome: paths.fmHome,
     });
     const created = await handler.handleRaw({ id: "1", method: "spaces.create", name: "Gamma" });
     expect(created).toMatchObject({ id: "1", ok: true, result: { slug: "gamma" } });
@@ -249,6 +257,43 @@ describe("Amun RPC", () => {
     expect(initiative).toMatchObject({ ok: true, result: { missing: ["why", "when", "cost"] } });
     expect(existsSync(path.join(fmHome, "data", "amun-pm.db"))).toBe(false);
     expect(existsSync(path.join(tmp, "pm"))).toBe(true);
+
+    // The trace says who said what to whom, and the bundle carries it.
+    const traced = trace
+      .files()
+      .map((file) => readFileSync(path.join(trace.dir, file), "utf8"))
+      .join("")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(traced).toContainEqual(
+      expect.objectContaining({ source: "chat", from: "captain", to: "first-mate", text: "Pro tier" }),
+    );
+    expect(traced).toContainEqual(
+      expect.objectContaining({ source: "chat", from: "first-mate", text: "Aye, Captain." }),
+    );
+    const before = homeFiles();
+    opened.redactor.register("s3cr3t-token-value");
+    trace.record({ source: "test", kind: "leak", text: "token s3cr3t-token-value" });
+    const exported = await handler.handleRaw({ id: "t", method: "trace.export" });
+    expect(exported.ok).toBe(true);
+    const bundle = exported.ok ? (exported.result as { base64: string; path: string }) : null;
+    const entries = unzipSync(new Uint8Array(Buffer.from(bundle!.base64, "base64")));
+    expect(Object.keys(entries)).toEqual(
+      expect.arrayContaining(["manifest.json", "firstmate/config-flags.txt", "git/worktrees.txt"]),
+    );
+    const everything = Object.values(entries).map((bytes) => strFromU8(bytes)).join("\n");
+    expect(everything).toContain("Pro tier");
+    expect(everything).not.toContain("s3cr3t-token-value");
+    expect(bundle!.path.startsWith(paths.amunHome)).toBe(true);
+
+    // History is requested from the First Mate once; Amun writes nothing in the home.
+    const asked = await handler.handleRaw({ id: "h1", method: "trace.history", space: "gamma" });
+    expect(asked).toMatchObject({ ok: true, result: { asked: true } });
+    expect(host.prompts).toContain(HISTORY_REQUEST);
+    const again = await handler.handleRaw({ id: "h2", method: "trace.history", space: "gamma" });
+    expect(again).toMatchObject({ ok: true, result: { asked: false } });
+    expect(homeFiles()).toEqual(before);
 
     expect(await handler.handleRaw({ id: "4", method: "nope" })).toMatchObject({
       ok: false,

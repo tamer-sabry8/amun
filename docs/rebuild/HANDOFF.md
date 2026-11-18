@@ -219,17 +219,18 @@ Each decision lists:
 
 ## Built so far
 
-| Area                                                                                     | State                                                | Where                                                                                            |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Firstmate as a pristine subtree, with a CI guard                                         | Done                                                 | `vendor/firstmate`, `scripts/check-firstmate-pristine.sh`                                        |
-| One home, no writes into it                                                              | Done                                                 | `packages/server/src/server/amun/amun-paths.ts`, `product-spaces.ts`                             |
-| Azure DevOps token in Keychain, checked before saving                                    | Done                                                 | `packages/server/src/server/amun/connections/`                                                   |
-| Old work store ported, product chat wired to the daemon                                  | Done                                                 | `packages/work-store`, `packages/amun-ui/src/daemon/contract-adapter.ts`                         |
-| Question cards: choices, recommendation, "Write my own response", "Connect to Azure now" | Done; self-tested in the cloud, not yet with real Pi | `packages/amun-ui/src/rebuild/question-card.tsx`, `packages/domain/src/work/question-choices.ts` |
+| Area                                                                                                                                     | State                                                | Where                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Firstmate as a pristine subtree, with a CI guard                                                                                         | Done                                                 | `vendor/firstmate`, `scripts/check-firstmate-pristine.sh`                                        |
+| One home, no writes into it                                                                                                              | Done                                                 | `packages/server/src/server/amun/amun-paths.ts`, `product-spaces.ts`                             |
+| Azure DevOps token in Keychain, checked before saving                                                                                    | Done                                                 | `packages/server/src/server/amun/connections/`                                                   |
+| Old work store ported, product chat wired to the daemon                                                                                  | Done                                                 | `packages/work-store`, `packages/amun-ui/src/daemon/contract-adapter.ts`                         |
+| Question cards: choices, recommendation, "Write my own response", "Connect to Azure now"                                                 | Done; self-tested in the cloud, not yet with real Pi | `packages/amun-ui/src/rebuild/question-card.tsx`, `packages/domain/src/work/question-choices.ts` |
+| Trace bundle back end: Amun trace log (chats, calls, failures; secrets redacted), zip export, one-time history request to the First Mate | Done; the export button is not on screen yet         | `packages/server/src/server/amun/trace/`, RPC `trace.export`, `trace.history`                    |
 
 ## Still to do
 
-- Trace bundle (download for debugging). The location of the export button needs approval.
+- Trace bundle: the export button on screen (location needs approval), and Pi step-by-step timeline from the Paseo agent record.
 - The rest of Azure DevOps: backlog, sprints, and approved writes. Then Notion, PRs, Council, prototype, PRD and backup.
 - Agents screen (pool and live team) and right-rail avatars. Also fix the island Send button.
 - The Pi RPC test on Tamer's Mac.

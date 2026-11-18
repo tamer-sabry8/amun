@@ -216,6 +216,11 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // command is the renderer's own work contract, validated by the work store.
   z.object({ id: z.string(), method: z.literal("work.snapshot") }),
   z.object({ id: z.string(), method: z.literal("work.command"), command: z.record(z.string(), z.unknown()) }),
+  // Trace bundle: a redacted zip of what happened, for the captain to share
+  // when something goes wrong; and a one-time request that the First Mate
+  // keep agent history (fleet ledger, status archive) in its home.
+  z.object({ id: z.string(), method: z.literal("trace.export"), space: slug.optional() }),
+  z.object({ id: z.string(), method: z.literal("trace.history"), space: slug }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

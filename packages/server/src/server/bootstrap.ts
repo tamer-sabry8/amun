@@ -1036,7 +1036,12 @@ export async function createPaseoDaemon(
     logger,
   });
   // Amun: Product Spaces, Firstmate bridge and PM RPC on /amun (loopback only).
-  const amun = attachAmun({ httpServer, agentManager, logger: rootLogger.child({ module: "amun" }) });
+  const amun = attachAmun({
+    httpServer,
+    agentManager,
+    logger: rootLogger.child({ module: "amun" }),
+    daemonLog: path.join(config.paseoHome, "daemon.log"),
+  });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(
       providerSnapshotManager.replacePluginProviders(pluginRuntime.getProviderRegistrations()),
