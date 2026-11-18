@@ -69,7 +69,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   try {
     paths = resolveAmunPaths(env);
   } catch (error) {
-    input.logger.warn({ err: error }, "Amun RPC not mounted: vendored Firstmate not found");
+    input.logger.warn({ err: error }, "Amun RPC not mounted: Firstmate not found");
     return null;
   }
   const spaces = new ProductSpaceStore(paths);
@@ -77,6 +77,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const handler = new AmunRpcHandler({
     spaces,
     primary,
+    amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
   });
@@ -133,7 +134,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
           if (lastSent.get(slug) === digest) return;
           lastSent.set(slug, digest);
           // Keep the board in step with Firstmate's own backlog transitions.
-          const store = PmStore.forHome(snapshot.fm_home);
+          const store = PmStore.forHome(snapshot.fm_home, paths.amunHome);
           try {
             store.projectBacklog(snapshot.backlog.records);
           } finally {
@@ -150,7 +151,10 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   }, FLEET_POLL_MS);
   timer.unref();
 
-  input.logger.info({ path: AMUN_WS_PATH, firstmateRoot: paths.firstmateRoot }, "Amun RPC mounted");
+  input.logger.info(
+    { path: AMUN_WS_PATH, fmHome: paths.fmHome, firstmateRoot: paths.firstmateRoot },
+    "Amun RPC mounted",
+  );
   return {
     handler,
     close() {

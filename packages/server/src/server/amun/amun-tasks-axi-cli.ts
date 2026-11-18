@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
-import { resolveFirstmateRoot } from "./amun-paths.js";
+import { isFirstmateCheckout, resolveFirstmateRoot } from "./amun-paths.js";
 import { firstmateEnv, readFleetSnapshot, type FirstmateHome } from "./firstmate-cli.js";
 import { PmStore, type Initiative } from "./pm-store.js";
 
@@ -11,7 +11,7 @@ export const USAGE = `usage: amun-tasks-axi <command> [args] [flags]
 Amun's PM layer over Firstmate's tasks-axi backlog. Backlog changes always go
 through the real tasks-axi (via vendor/firstmate/bin/fm-tasks-axi.sh); Amun-only
 fields (initiatives, 4-Question answers, sprints, board) live in
-$FM_HOME/data/amun-pm.db.
+~/.amun/pm/ (never inside the Firstmate home).
 commands:
   sync                                   mirror data/backlog.md onto the board
   board                                  print the six-column board as JSON
@@ -21,7 +21,7 @@ commands:
                                          set an initiative and its 4-Question answers
   initiatives                            list initiatives with unanswered questions
 flags:
-  --home <dir>   Product Space home (default: $FM_HOME)
+  --home <dir>   Firstmate home (default: $FM_HOME)
   --help`;
 
 export interface CliIo {
@@ -70,8 +70,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
   }
   const fmHome = values.home ?? io.env.FM_HOME;
   if (!fmHome) throw new UsageError("FM_HOME is not set; pass --home <dir>");
-  const home: FirstmateHome = { root: resolveFirstmateRoot(io.env), fmHome: path.resolve(fmHome) };
-  const store = PmStore.forHome(home.fmHome);
+  const resolved = path.resolve(fmHome);
+  const home: FirstmateHome = {
+    root: isFirstmateCheckout(resolved) ? resolved : resolveFirstmateRoot(io.env),
+    fmHome: resolved,
+  };
+  const store = PmStore.forHome(home.fmHome, io.env.AMUN_HOME);
   const print = (value: unknown) => io.out(JSON.stringify(value, null, 2));
   try {
     switch (command) {

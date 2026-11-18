@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,7 +32,15 @@ let tmp: string;
 let paths: AmunPaths;
 beforeEach(() => {
   tmp = mkdtempSync(path.join(os.tmpdir(), "amun-pm-"));
-  paths = resolveAmunPaths({ ...process.env, AMUN_HOME: tmp });
+  // Stands in for the captain's existing Firstmate home, laid out as Firstmate does.
+  const fmHome = path.join(tmp, "captain-home");
+  mkdirSync(path.join(fmHome, "data"), { recursive: true });
+  writeFileSync(path.join(fmHome, "data", "backlog.md"), "# Backlog\n\n## In flight\n\n## Queued\n\n## Done\n");
+  writeFileSync(
+    path.join(fmHome, ".tasks.toml"),
+    'backend = "markdown"\n\n[markdown]\npath = "data/backlog.md"\narchive = "data/done-archive.md"\n',
+  );
+  paths = resolveAmunPaths({ ...process.env, AMUN_HOME: tmp, AMUN_FIRSTMATE_HOME: fmHome });
 });
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
@@ -86,9 +94,9 @@ describe("PM store", () => {
 
 describe.skipIf(!hasTasksAxi)("amun-tasks-axi against a real Firstmate home", () => {
   it("files through real tasks-axi, then the board moves when Firstmate starts the task", async () => {
-    const space = await new ProductSpaceStore(paths).create({ name: "Board", backend: "tmux" });
+    const space = await new ProductSpaceStore(paths).create({ name: "Board" });
     const out: string[] = [];
-    const io = { out: (t: string) => out.push(t), env: { ...process.env, FM_HOME: space.fmHome } };
+    const io = { out: (t: string) => out.push(t), env: { ...process.env, AMUN_HOME: tmp, FM_HOME: space.fmHome } };
 
     expect(await runCli(["add", "proto-1", "Checkout wireframe", "--kind", "prototype"], io)).toBe(0);
     expect(JSON.parse(out.pop()!)).toMatchObject({ added: "proto-1", created: ["proto-1"] });

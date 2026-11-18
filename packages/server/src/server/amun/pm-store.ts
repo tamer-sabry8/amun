@@ -1,12 +1,21 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { BacklogRecord, BoardColumn } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor } from "./firstmate-cli.js";
 
-/** $FM_HOME/data/amun-pm.db: Amun-only PM records. data/backlog.md stays Firstmate's. */
-export function pmDatabasePath(fmHome: string): string {
-  return path.join(fmHome, "data", "amun-pm.db");
+/**
+ * Amun-only PM records live under Amun's own folder, never inside the captain's
+ * Firstmate home: ~/.amun/pm/<home-hash>.db. data/backlog.md stays Firstmate's.
+ */
+export function pmDatabasePath(
+  fmHome: string,
+  amunHome: string = process.env.AMUN_HOME ?? path.join(os.homedir(), ".amun"),
+): string {
+  const key = createHash("sha256").update(path.resolve(fmHome)).digest("hex").slice(0, 16);
+  return path.join(amunHome, "pm", `${key}.db`);
 }
 
 const SCHEMA_VERSION = 1;
@@ -187,8 +196,8 @@ export class PmStore {
     if (!meta) this.db.prepare("INSERT INTO schema_meta (version) VALUES (?)").run(SCHEMA_VERSION);
   }
 
-  static forHome(fmHome: string): PmStore {
-    return new PmStore(pmDatabasePath(fmHome));
+  static forHome(fmHome: string, amunHome?: string): PmStore {
+    return new PmStore(pmDatabasePath(fmHome, amunHome));
   }
 
   close(): void {

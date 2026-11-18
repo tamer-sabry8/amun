@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
@@ -23,7 +23,7 @@ import {
   type PrimaryHost,
   type PrimaryLaunch,
 } from "./primary-session.js";
-import { detectRuntimeBackend, ProductSpaceStore, slugify } from "./product-spaces.js";
+import { detectRuntimeBackend, homeRuntimeBackend, ProductSpaceStore, slugify } from "./product-spaces.js";
 
 const fixture = (name: string) => path.join(import.meta.dirname, "fixtures", name);
 const snapshotFixture = (): FleetSnapshot =>
@@ -43,37 +43,52 @@ class RecordingHost implements PrimaryHost {
 }
 
 let tmp: string;
+let fmHome: string;
 let paths: AmunPaths;
+const testEnv = () => ({ ...process.env, AMUN_HOME: tmp, AMUN_FIRSTMATE_HOME: fmHome });
 beforeEach(() => {
   tmp = mkdtempSync(path.join(os.tmpdir(), "amun-test-"));
-  paths = resolveAmunPaths({ ...process.env, AMUN_HOME: tmp });
+  // Stands in for the captain's existing home (not a Firstmate checkout).
+  fmHome = path.join(tmp, "captain-home");
+  mkdirSync(path.join(fmHome, "data"), { recursive: true });
+  writeFileSync(path.join(fmHome, "data", "backlog.md"), "# Backlog\n\n## In flight\n\n## Queued\n\n## Done\n");
+  paths = resolveAmunPaths(testEnv());
 });
+
+/** Every file under the captain's home, so tests can prove Amun wrote nothing there. */
+function homeFiles(): string[] {
+  return execFileSync("find", [fmHome, "-type", "f"], { encoding: "utf8" }).trim().split("\n").sort();
+}
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe("Product Spaces", () => {
-  it("creates a Firstmate home as a real git worktree with the defaults", async () => {
-    const store = new ProductSpaceStore(paths, () => new Date("2026-11-18T00:00:00Z"));
-    const space = await store.create({ name: "Payments Platform", backend: "tmux" });
+  it("stores products in Amun's folder and points them all at the one home", async () => {
+    const before = homeFiles();
+    let tick = 0;
+    const store = new ProductSpaceStore(paths, () => new Date(Date.UTC(2026, 10, 18, 0, 0, tick++)));
+    const space = await store.create({ name: "Payments Platform" });
+    const other = await store.create({ name: "ICV" });
 
     expect(space.slug).toBe("payments-platform");
-    expect(space.fmHome).toBe(path.join(tmp, "homes", "payments-platform"));
-    for (const dir of ["state", "data", "config", "projects"]) {
-      expect(existsSync(path.join(space.fmHome, dir))).toBe(true);
-    }
-    expect(readFileSync(path.join(space.fmHome, "config", "calm"), "utf8")).toBe("on\n");
-    expect(readFileSync(path.join(space.fmHome, "config", "backend"), "utf8")).toBe("tmux\n");
-    expect(readFileSync(path.join(space.fmHome, "config", "supervision-branch-effort"), "utf8")).toBe(
-      "low\n",
-    );
-    expect(readFileSync(path.join(space.fmHome, ".tasks.toml"), "utf8")).toContain(
-      'path = "data/backlog.md"',
-    );
-    const gitDir = execFileSync("git", ["-C", space.fmHome, "rev-parse", "--git-common-dir"], {
-      encoding: "utf8",
-    }).trim();
-    expect(path.resolve(space.fmHome, gitDir)).toBe(paths.homesRepo);
-    expect(await store.list()).toEqual([space]);
+    expect(space.fmHome).toBe(fmHome);
+    expect(other.fmHome).toBe(fmHome);
+    expect(existsSync(path.join(tmp, "products", "payments-platform.json"))).toBe(true);
+    expect(homeFiles()).toEqual(before);
+    expect((await store.list()).map((s) => s.slug)).toEqual(["payments-platform", "icv"]);
     await expect(store.create({ name: "Payments Platform" })).rejects.toThrow("already exists");
+  });
+
+  it("reads the home's own config/backend and never writes it", () => {
+    mkdirSync(path.join(fmHome, "config"));
+    writeFileSync(path.join(fmHome, "config", "backend"), "hc\n");
+    expect(homeRuntimeBackend(fmHome, "")).toBe("hc");
+  });
+
+  it("uses the home as the code root when the home is a Firstmate checkout", () => {
+    mkdirSync(path.join(fmHome, "bin"));
+    writeFileSync(path.join(fmHome, "AGENTS.md"), "# Firstmate\n");
+    writeFileSync(path.join(fmHome, "bin", "fm-send.sh"), "#!/bin/sh\n");
+    expect(resolveAmunPaths(testEnv()).firstmateRoot).toBe(fmHome);
   });
 
   it("picks hc only when herdr-core or hc is on PATH", () => {
@@ -130,7 +145,7 @@ describe("Firstmate snapshot mapping", () => {
   });
 
   it("reads a live snapshot from the vendored fm-fleet-snapshot.sh", async () => {
-    const space = await new ProductSpaceStore(paths).create({ name: "Live", backend: "tmux" });
+    const space = await new ProductSpaceStore(paths).create({ name: "Live" });
     const snapshot = await readFleetSnapshot({ root: paths.firstmateRoot, fmHome: space.fmHome });
     expect(snapshot.schema).toBe("fm-fleet-snapshot.v1");
     expect(snapshot.fm_home).toBe(space.fmHome);
@@ -140,30 +155,31 @@ describe("Firstmate snapshot mapping", () => {
 });
 
 describe("Primary session", () => {
-  it("launches inside vendor/firstmate with FM_HOME, FM_ROOT_OVERRIDE and bin on PATH", async () => {
-    const space = await new ProductSpaceStore(paths).create({ name: "Alpha", backend: "tmux" });
+  it("launches headless at the code root with FM_HOME, FM_ROOT_OVERRIDE and bin on PATH", async () => {
+    const space = await new ProductSpaceStore(paths).create({ name: "Alpha" });
     const launch = buildPrimaryLaunch({
       space,
       firstmateRoot: paths.firstmateRoot,
       baseEnv: { PATH: "/usr/bin" },
     });
-    expect(launch).toMatchObject({ provider: "pi", cwd: paths.firstmateRoot, title: "First Mate · Alpha" });
+    expect(launch).toMatchObject({ provider: "pi", cwd: paths.firstmateRoot, title: "First Mate" });
     expect(launch.env).toMatchObject({
       FM_HOME: space.fmHome,
       FM_ROOT_OVERRIDE: paths.firstmateRoot,
       PATH: `${path.join(paths.firstmateRoot, "bin")}:/usr/bin`,
-      AMUN_SPACE: "alpha",
     });
     expect(() => buildPrimaryLaunch({ space, firstmateRoot: "/x", harness: "agy" })).toThrow(
       UnsupportedHarnessError,
     );
   });
 
-  it("starts one First Mate per space and reuses it", async () => {
-    const space = await new ProductSpaceStore(paths).create({ name: "Beta", backend: "tmux" });
+  it("starts one First Mate for the home, shared by every product", async () => {
+    const store = new ProductSpaceStore(paths);
+    const space = await store.create({ name: "Beta" });
+    const other = await store.create({ name: "Delta" });
     const host = new RecordingHost();
     const sessions = new PrimarySessions(host, paths.firstmateRoot);
-    await sessions.start(space);
+    await Promise.all([sessions.start(space), sessions.start(other)]);
     await sessions.send(space, "Status?");
     expect(host.launches).toHaveLength(1);
     expect(host.prompts).toEqual(["Status?"]);
@@ -177,6 +193,7 @@ describe("Amun RPC", () => {
     const handler = new AmunRpcHandler({
       spaces,
       primary: new PrimarySessions(host, paths.firstmateRoot),
+      amunHome: paths.amunHome,
       firstmateRoot: paths.firstmateRoot,
       readSnapshot: async () => snapshotFixture(),
     });
@@ -211,6 +228,8 @@ describe("Amun RPC", () => {
       initiative: { id: "billing", title: "Usage billing", what: "Metered plans" },
     });
     expect(initiative).toMatchObject({ ok: true, result: { missing: ["why", "when", "cost"] } });
+    expect(existsSync(path.join(fmHome, "data", "amun-pm.db"))).toBe(false);
+    expect(existsSync(path.join(tmp, "pm"))).toBe(true);
 
     expect(await handler.handleRaw({ id: "4", method: "nope" })).toMatchObject({
       ok: false,
@@ -238,7 +257,7 @@ describe("Amun RPC", () => {
           runAgent: async (_id: string, text: string) => host.runAgent(_id, text),
         } as never,
         logger,
-        env: { ...process.env, AMUN_HOME: tmp },
+        env: testEnv(),
       });
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
       const { port } = server.address() as AddressInfo;

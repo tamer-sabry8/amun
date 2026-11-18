@@ -101,12 +101,12 @@ describe("daemon contract adapter", () => {
       { id: "alpha", name: "Alpha", position: 0 },
     ]);
     expect(parsed.agents.map((a) => [a.id, a.kind, a.state])).toEqual([
-      ["firstmate:alpha", "lead", "waiting"],
-      ["crew:alpha:proto-w1", "temporary", "waiting"],
-      ["crew:alpha:scout-1", "temporary", "working"],
+      ["firstmate", "lead", "waiting"],
+      ["crew:proto-w1", "temporary", "waiting"],
+      ["crew:scout-1", "temporary", "working"],
     ]);
     expect(parsed.attention).toMatchObject([
-      { kind: "question", title: "One page?", groupId: "alpha" },
+      { kind: "question", title: "One page?", groupId: null },
     ]);
   });
 
@@ -117,7 +117,7 @@ describe("daemon contract adapter", () => {
       version: 1,
       kind: "work",
       action: "resolve-attention",
-      attentionId: "hold:alpha:proto-w1:layout",
+      attentionId: "hold:proto-w1:layout",
       resolution: "answer",
       answer: "One page",
     });

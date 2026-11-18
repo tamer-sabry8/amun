@@ -37,10 +37,11 @@ export interface BuildLaunchInput {
 }
 
 /**
- * One primary session per Product Space: the First Mate. Pi auto-loads the
- * vendored .pi/extensions (supervision branch, calm, watcher) once project trust
- * is approved for vendor/firstmate; Claude runs Firstmate's SessionStart hook
- * from .claude/settings.json, which executes bin/fm-session-start.sh.
+ * One primary session per Firstmate home: the First Mate. It runs headless
+ * (Paseo's Pi provider uses `pi --mode rpc`), so the captain never sees a
+ * terminal. cwd is the code root (the home itself when home = repo), so Pi
+ * auto-loads the home's .pi/extensions once project trust is approved; Claude
+ * runs Firstmate's SessionStart hook, which executes bin/fm-session-start.sh.
  */
 export function buildPrimaryLaunch(input: BuildLaunchInput): PrimaryLaunch {
   const harness = input.harness ?? input.space.harness;
@@ -50,12 +51,11 @@ export function buildPrimaryLaunch(input: BuildLaunchInput): PrimaryLaunch {
     { root: input.firstmateRoot, fmHome: input.space.fmHome },
     input.baseEnv ?? process.env,
   );
-  env.AMUN_SPACE = input.space.slug;
   return {
     provider,
     cwd: input.firstmateRoot,
     env,
-    title: `First Mate · ${input.space.name}`,
+    title: "First Mate",
   };
 }
 
@@ -91,29 +91,42 @@ export interface PrimaryHost {
   runAgent(agentId: string, text: string): Promise<{ finalText: string }>;
 }
 
+/**
+ * Firstmate allows one live primary per home (session lock), and every product
+ * shares the captain's home, so sessions are keyed by home, not by product.
+ */
 export class PrimarySessions {
   private readonly agents = new Map<string, string>();
+  private readonly starting = new Map<string, Promise<{ agentId: string }>>();
 
   constructor(
     private readonly host: PrimaryHost,
     private readonly firstmateRoot: string,
   ) {}
 
-  agentFor(slug: string): string | null {
-    return this.agents.get(slug) ?? null;
+  agentFor(fmHome: string): string | null {
+    return this.agents.get(fmHome) ?? null;
   }
 
   async start(space: ProductSpace, harness?: PrimaryHarness): Promise<{ agentId: string }> {
-    const existing = this.agents.get(space.slug);
+    const existing = this.agents.get(space.fmHome);
     if (existing) return { agentId: existing };
+    const pending = this.starting.get(space.fmHome);
+    if (pending) return pending;
     const launch = buildPrimaryLaunch({
       space,
       firstmateRoot: this.firstmateRoot,
       ...(harness ? { harness } : {}),
     });
-    const { agentId } = await this.host.createAgent(launch);
-    this.agents.set(space.slug, agentId);
-    return { agentId };
+    const started = this.host
+      .createAgent(launch)
+      .then(({ agentId }) => {
+        this.agents.set(space.fmHome, agentId);
+        return { agentId };
+      })
+      .finally(() => this.starting.delete(space.fmHome));
+    this.starting.set(space.fmHome, started);
+    return started;
   }
 
   async send(space: ProductSpace, text: string): Promise<{ agentId: string; reply: string }> {

@@ -1,7 +1,8 @@
 // Answers the renderer's existing port contracts (@amun/contracts) from the
-// daemon's /amun RPC, so every screen keeps its current shape. Product Spaces
-// become products and groups, the Firstmate fleet becomes agents, captain
-// holds become attention items, and chat goes to the space's First Mate.
+// daemon's /amun RPC, so every screen keeps its current shape. Products become
+// products and groups. Every product shares the captain's one Firstmate home,
+// so the fleet (agents), captain holds (attention) and the First Mate chat are
+// home-wide and appear once, not once per product.
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   setupState,
@@ -38,8 +39,8 @@ export interface DaemonFleetTask {
 }
 export interface DaemonView {
   spaces: DaemonSpace[];
-  fleet: Record<string, DaemonFleetTask[]>;
-  holds: Record<string, DaemonHold[]>;
+  fleet: DaemonFleetTask[];
+  holds: DaemonHold[];
 }
 
 export interface SetupStore {
@@ -72,11 +73,13 @@ export function localSetupStore(
   };
 }
 
-export function holdId(space: string, hold: DaemonHold): string {
+export function holdId(hold: DaemonHold): string {
   return hold.source === "crew"
-    ? `hold:${space}:${hold.taskId}:${hold.key}`
-    : `hold:${space}:${hold.taskId}`;
+    ? `hold:${hold.taskId}:${hold.key}`
+    : `hold:${hold.taskId}`;
 }
+
+export const FIRST_MATE_ID = "firstmate";
 
 export function agentState(
   task: DaemonFleetTask,
@@ -125,47 +128,47 @@ export function toWorkSnapshot(
 ): WorkSnapshot {
   const agents: WorkSnapshot["agents"] = [];
   const attention: WorkSnapshot["attention"] = [];
-  for (const space of view.spaces) {
+  if (view.spaces.length > 0) {
     agents.push({
-      id: `firstmate:${space.slug}`,
-      role: `First Mate · ${space.name}`,
+      id: FIRST_MATE_ID,
+      role: "First Mate",
       kind: "lead",
       launcherId: null,
-      state: (view.holds[space.slug]?.length ?? 0) > 0 ? "waiting" : "idle",
+      state: view.holds.length > 0 ? "waiting" : "idle",
       nowDoing: null,
       output: "",
       enabled: true,
     });
-    for (const task of view.fleet[space.slug] ?? []) {
-      agents.push({
-        id: `crew:${space.slug}:${task.id}`,
-        role: task.kind ? `${task.kind} · ${task.id}` : task.id,
-        kind: "temporary",
-        launcherId: `firstmate:${space.slug}`,
-        state: agentState(task),
-        nowDoing: task.current_state?.detail || null,
-        output: task.hints?.last_event_text ?? "",
-        enabled: true,
-      });
-    }
-    for (const hold of view.holds[space.slug] ?? []) {
-      attention.push({
-        id: holdId(space.slug, hold),
-        kind: "question",
-        groupId: space.slug,
-        workAreaId: null,
-        title: hold.source === "crew" ? hold.summary : hold.title,
-        detail:
-          hold.source === "crew"
-            ? `${hold.taskId} · ${hold.verb}`
-            : `${hold.taskId} · ${hold.reason}`,
-        state: "open",
-        ref: hold.taskId,
-        options: [],
-        answer: null,
-        createdAt: now,
-      });
-    }
+  }
+  for (const task of view.fleet) {
+    agents.push({
+      id: `crew:${task.id}`,
+      role: task.kind ? `${task.kind} · ${task.id}` : task.id,
+      kind: "temporary",
+      launcherId: FIRST_MATE_ID,
+      state: agentState(task),
+      nowDoing: task.current_state?.detail || null,
+      output: task.hints?.last_event_text ?? "",
+      enabled: true,
+    });
+  }
+  for (const hold of view.holds) {
+    attention.push({
+      id: holdId(hold),
+      kind: "question",
+      groupId: null,
+      workAreaId: null,
+      title: hold.source === "crew" ? hold.summary : hold.title,
+      detail:
+        hold.source === "crew"
+          ? `${hold.taskId} · ${hold.verb}`
+          : `${hold.taskId} · ${hold.reason}`,
+      state: "open",
+      ref: hold.taskId,
+      options: [],
+      answer: null,
+      createdAt: now,
+    });
   }
   return workSnapshot.parse({
     version: 1,
@@ -216,8 +219,9 @@ const UNAVAILABLE = "Not available in this Amun build yet.";
 
 /** Turns one renderer message into the replies the renderer expects. */
 export class ContractAdapter {
-  private view: DaemonView = { spaces: [], fleet: {}, holds: {} };
-  private conversations = new Map<string, Conversation>();
+  private view: DaemonView = { spaces: [], fleet: [], holds: [] };
+  /** One First Mate per home, so one conversation for every product. */
+  private conversation: Conversation | null = null;
 
   constructor(
     private readonly daemon: AmunTransport,
@@ -227,25 +231,21 @@ export class ContractAdapter {
 
   async refresh(): Promise<void> {
     const spaces = await this.daemon.request<DaemonSpace[]>("spaces.list");
-    const fleet: DaemonView["fleet"] = {};
-    const holds: DaemonView["holds"] = {};
-    await Promise.all(
-      spaces.map(async (space) => {
-        const [snapshot, spaceHolds] = await Promise.all([
+    // Any product reaches the shared home; ask once.
+    const via = spaces[0]?.slug;
+    const [snapshot, holds] = via
+      ? await Promise.all([
           this.daemon
             .request<{ tasks: DaemonFleetTask[] }>("fleet.snapshot", {
-              space: space.slug,
+              space: via,
             })
-            .catch(() => ({ tasks: [] })),
+            .catch(() => ({ tasks: [] as DaemonFleetTask[] })),
           this.daemon
-            .request<DaemonHold[]>("holds.list", { space: space.slug })
+            .request<DaemonHold[]>("holds.list", { space: via })
             .catch(() => [] as DaemonHold[]),
-        ]);
-        fleet[space.slug] = snapshot.tasks;
-        holds[space.slug] = spaceHolds;
-      }),
-    );
-    this.view = { spaces, fleet, holds };
+        ])
+      : [{ tasks: [] as DaemonFleetTask[] }, [] as DaemonHold[]];
+    this.view = { spaces, fleet: snapshot.tasks, holds };
   }
 
   workspace(): WorkspaceSnapshot {
@@ -334,9 +334,12 @@ export class ContractAdapter {
                 "Answer the First Mate to clear this hold.",
               ),
             ];
+          const space = activeSpace(this.view, this.setup.load());
+          if (!space)
+            return [this.result(action, false, "Create a product first.")];
           await this.daemon.request("holds.answer", {
-            space: found.space,
-            hold: found.hold,
+            space,
+            hold: found,
             answer: message.answer,
           });
           await this.refresh();
@@ -359,26 +362,20 @@ export class ContractAdapter {
     }
   }
 
-  private findHold(attentionId: string) {
-    for (const [space, holds] of Object.entries(this.view.holds)) {
-      const hold = holds.find(
-        (candidate) => holdId(space, candidate) === attentionId,
-      );
-      if (hold) return { space, hold };
-    }
-    return null;
+  private findHold(attentionId: string): DaemonHold | null {
+    return (
+      this.view.holds.find((candidate) => holdId(candidate) === attentionId) ??
+      null
+    );
   }
 
-  private conversationResult(space: string, conversation: Conversation) {
-    const name =
-      this.view.spaces.find((candidate) => candidate.slug === space)?.name ??
-      space;
+  private conversationResult(conversation: Conversation) {
     return {
       kind: "conversation",
       calm: true,
       model: null,
       sessionId: conversation.sessionId,
-      title: `First Mate · ${name}`,
+      title: "First Mate",
       text: conversation.text,
       omittedItems: 0,
       replyCount: conversation.replyCount,
@@ -404,9 +401,9 @@ export class ContractAdapter {
       const space = activeSpace(this.view, this.setup.load());
       if (!space)
         return fail(
-          "Create a Product Space first. The First Mate lives inside one.",
+          "Create a product first, then talk to the First Mate here.",
         );
-      let conversation = this.conversations.get(space);
+      let conversation = this.conversation;
       if (!conversation) {
         await this.daemon.request("primary.start", { space });
         conversation = {
@@ -414,7 +411,7 @@ export class ContractAdapter {
           text: "",
           replyCount: 0,
         };
-        this.conversations.set(space, conversation);
+        this.conversation = conversation;
       }
       if (command === "conversation-send") {
         const argument = JSON.parse(String(message.argument)) as {
@@ -431,7 +428,7 @@ export class ContractAdapter {
         conversation.replyCount += 1;
         conversation.latestReply = latest;
       }
-      return reply(this.conversationResult(space, conversation));
+      return reply(this.conversationResult(conversation));
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }

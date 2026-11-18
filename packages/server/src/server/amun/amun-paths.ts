@@ -4,19 +4,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface AmunPaths {
-  /** ~/.amun, or AMUN_HOME. */
+  /** ~/.amun, or AMUN_HOME. Amun's own files only. */
   amunHome: string;
-  /** Amun-owned bare repository backing every Product Space home. */
-  homesRepo: string;
-  /** Parent of the per-space FM_HOME worktrees. */
-  homesRoot: string;
-  /** Absolute path of the vendored Firstmate code root (FM_ROOT_OVERRIDE). */
+  /** Amun's product list (one JSON file per product). */
+  productsRoot: string;
+  /**
+   * The captain's single existing Firstmate home (FM_HOME), shared by every
+   * product. AMUN_FIRSTMATE_HOME, default ~/Projects/firstmate. Amun reads it
+   * and acts only through Firstmate's own scripts; it never writes into it.
+   */
+  fmHome: string;
+  /**
+   * Firstmate code root (FM_ROOT_OVERRIDE). The home itself when it is a
+   * Firstmate checkout (Firstmate's default: home = repo), else vendor/firstmate.
+   */
   firstmateRoot: string;
 }
 
 export class FirstmateRootNotFoundError extends Error {
   constructor(public readonly candidates: string[]) {
-    super(`Vendored Firstmate not found. Looked in: ${candidates.join(", ")}`);
+    super(`Firstmate not found. Looked in: ${candidates.join(", ")}`);
     this.name = "FirstmateRootNotFoundError";
   }
 }
@@ -27,32 +34,58 @@ function expandHome(input: string): string {
   return input;
 }
 
+/** A directory is a Firstmate code root when it has the contract and the scripts. */
+export function isFirstmateCheckout(dir: string): boolean {
+  return (
+    existsSync(path.join(dir, "AGENTS.md")) &&
+    existsSync(path.join(dir, "bin", "fm-send.sh"))
+  );
+}
+
 /**
- * Finds vendor/firstmate. AMUN_FIRSTMATE_ROOT wins (the Electron bundle sets it);
- * otherwise walk up from this module to the repository root.
+ * Finds the vendored Firstmate. AMUN_FIRSTMATE_ROOT wins (the Electron bundle
+ * sets it); otherwise walk up from this module to the repository root.
  */
 export function resolveFirstmateRoot(
   env: NodeJS.ProcessEnv = process.env,
   moduleUrl: string = import.meta.url,
 ): string {
   const candidates: string[] = [];
-  if (env.AMUN_FIRSTMATE_ROOT) candidates.push(path.resolve(expandHome(env.AMUN_FIRSTMATE_ROOT)));
+  if (env.AMUN_FIRSTMATE_ROOT)
+    candidates.push(path.resolve(expandHome(env.AMUN_FIRSTMATE_ROOT)));
   let dir = path.dirname(fileURLToPath(moduleUrl));
   for (let depth = 0; depth < 8; depth += 1) {
     candidates.push(path.join(dir, "vendor", "firstmate"));
     dir = path.dirname(dir);
   }
-  const found = candidates.find((candidate) => existsSync(path.join(candidate, "AGENTS.md")));
+  const found = candidates.find((candidate) =>
+    existsSync(path.join(candidate, "AGENTS.md")),
+  );
   if (!found) throw new FirstmateRootNotFoundError(candidates);
   return found;
 }
 
-export function resolveAmunPaths(env: NodeJS.ProcessEnv = process.env): AmunPaths {
+export function resolveFirstmateHome(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return path.resolve(
+    expandHome(
+      env.AMUN_FIRSTMATE_HOME ?? env.FM_HOME ?? "~/Projects/firstmate",
+    ),
+  );
+}
+
+export function resolveAmunPaths(
+  env: NodeJS.ProcessEnv = process.env,
+): AmunPaths {
   const amunHome = path.resolve(expandHome(env.AMUN_HOME ?? "~/.amun"));
+  const fmHome = resolveFirstmateHome(env);
   return {
     amunHome,
-    homesRepo: path.join(amunHome, "homes.git"),
-    homesRoot: path.join(amunHome, "homes"),
-    firstmateRoot: resolveFirstmateRoot(env),
+    productsRoot: path.join(amunHome, "products"),
+    fmHome,
+    firstmateRoot: isFirstmateCheckout(fmHome)
+      ? fmHome
+      : resolveFirstmateRoot(env),
   };
 }

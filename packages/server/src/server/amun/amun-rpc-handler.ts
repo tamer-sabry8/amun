@@ -12,6 +12,7 @@ import type { ProductSpaceStore } from "./product-spaces.js";
 export interface AmunRpcDeps {
   spaces: ProductSpaceStore;
   primary: PrimarySessions;
+  amunHome: string;
   firstmateRoot: string;
   readSnapshot: (fmHome: string) => Promise<FleetSnapshot>;
 }
@@ -46,7 +47,7 @@ export class AmunRpcHandler {
 
   private async withStore<T>(slug: string, use: (store: PmStore) => T): Promise<T> {
     const space = await this.deps.spaces.get(slug);
-    const store = PmStore.forHome(space.fmHome);
+    const store = PmStore.forHome(space.fmHome, this.deps.amunHome);
     try {
       return use(store);
     } finally {
