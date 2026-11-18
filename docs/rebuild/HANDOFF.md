@@ -7,13 +7,86 @@
   - Underneath it sit the Paseo daemon and Tamer's own Firstmate.
 - **Who decides what.** Every product decision below came from Tamer, answered one question at a time on 18 November 2026. Each question had multiple choices and one recommended option.
 - **Firstmate is never changed.** `vendor/firstmate` is a pristine copy of upstream, and CI checks this on every push. Amun only reads Firstmate's files, and only acts through the First Mate.
-- **Still open after the merge:**
-  - A Mac test of Pi running headless, on `main`.
-  - A test of Azure DevOps against Tamer's real server.
-  - Showing First Mate turns Amun didn't ask for (heartbeats, wakes) in the chat.
-  - The Paseo features Tamer asked for, and the remaining ports (see "Still to do").
+- **Where it stands now.** PR #33 (the rebuild), PR #35 and PR #36 are merged into `main`. Tamer tested `main` on his Mac on 18 November 2026; what that found, what was fixed and what to do next are in the next section.
 
-This file was final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here; the first of those is under "Changes after the PR #33 merge".
+This file was first written for the PR #33 merge. Later work adds to it; nothing in it is historical unless it says so.
+
+## Where things stand and what to do next
+
+Written at the end of 18 November 2026, after PR #36. Read this section before anything else, then "Read this first: Firstmate is the only path".
+
+### The number one rule
+
+**Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).
+
+### What happened on 18 November 2026
+
+| Pull request | What it did                                                                                                                                                                                                                                   | State  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| #33          | The rebuild on the Paseo daemon and Tamer's Firstmate                                                                                                                                                                                         | Merged |
+| #35          | The app starts its daemon; launch no longer waits on the login shell or the fleet snapshot; chat goes straight to the First Mate; the Amun name, icon and smaller app; model picker, account status, tool detection, Council and Notion wired | Merged |
+| #36          | Messages queue instead of failing; slash commands work; answered questions show under Done; the fleet list is kept for launch; Portfolio has the message box; Council review fixes                                                            | Merged |
+
+The detail is under "Changes after the PR #33 merge".
+
+What Tamer's own tests confirmed on his Mac:
+
+- The First Mate answers through Pi with no terminal (first trace, 14:25 UTC). This is the reply part of the Pi test in decision 11.
+- Notion signs in: his screen showed "Notion MCP connected to Tamer's Space".
+
+Not yet confirmed on his Mac with a build that has every fix: that the watcher and turn-end guard run in RPC mode, that a question from the First Mate shows as a question card, that five minutes is enough for Pi to acknowledge a first message on his home, a real council, and a Notion destination check and memory sync.
+
+### Do next, in this order
+
+1. **Rebuild the test DMG from `main`.** The DMG Tamer last had was built before the last two fixes in PR #36: it still sent `/stow` to the First Mate and could show a task held again as already answered. Steps are under "Building a test DMG".
+2. **Settle the Portfolio message box.** It was added in PR #36 because Tamer asked for chat on that screen, on a screenshot of it. It reuses the existing message box unchanged, but it did not go through the before/after preview and the impeccable skill that `AGENTS.md` requires, and the Codex review on PR #36 flagged that. The thread is still open on the pull request. Ask Tamer: keep it and do the preview now, or take it out until the preview is approved. Other screens (Settings, Search) have no message box; do not add one without the same preview.
+3. **The four features Tamer asked to wire** (next heading).
+4. **The open items** (the heading after that).
+
+### The four features to wire next
+
+Tamer's instruction, 18 November 2026: check whether each of these exists; if it does, wire it; use the impeccable skill to design any page, UX or UI; and make sure everything starts and goes through Firstmate.
+
+All four exist in part. They were built on 11 to 12 November 2026 as "R2 foundations" (PRs #13 to #15 on the old app): rules, storage, views and tests, with nothing calling them. `docs/HANDOFF-R2-FOUNDATIONS.md` and ADR-012 to ADR-015 in `docs/decisions/` describe them. The rebuild carried over the rules and the database tables but not the storage classes, so each one needs its storage class restored from git history (commit `c0130a4`, under `packages/data/src/`) the same way tool detection, the Council and Notion were in PR #35.
+
+| Feature                         | Reference Tamer gave                       | In `main` today                                                                                                                                                                  | Only in git history (`c0130a4`)                                                                                                          | Check against Firstmate before building                                                                                                                                                                                                                                                                                           |
+| ------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resume, fork, search and replay | https://deepseek.com/harness/en/           | Rules in `packages/domain/src/trajectory.ts`; the table `trajectory_events`; the view `packages/amun-ui/src/trajectory-view.tsx`, reachable only from the test-only legacy shell | `packages/data/src/trajectory.ts` and its tests                                                                                          | Nothing records events yet. Pi already keeps its own session tree, and Firstmate allows one live primary per home. Resume and fork must be a request to the First Mate, never a second Pi session started by Amun. Search and replay that only read are safe to do first.                                                         |
+| Bring your own agent org chart  | https://paperclip.ing/product/open-source/ | Rules in `packages/domain/src/agent-org.ts`; the tables `agent_assignments` and `goals`; the view `packages/amun-ui/src/org-goals-view.tsx`, legacy shell only                   | `packages/data/src/agent-org.ts`, `goals.ts` and their tests                                                                             | Firstmate owns the crew: `secondmates.md`, `config/crew-dispatch.json` and the briefs. The chart must show Firstmate's real fleet (from `fm-fleet-snapshot.sh`) and send every change as a request to the First Mate, as the Agents screen does (decision 9). Amun must not keep a second, competing list of who reports to whom. |
+| Atomic task checkout            | (named by Tamer; see ADR-014)              | The table `task_claims`; no rules file was found for it in `packages/domain/src`                                                                                                 | `packages/data/src/task-checkout.ts` and its tests                                                                                       | Firstmate already decides which crewmate takes a task, through `fm-spawn` and tasks-axi. A checkout in Amun must not become a second way to assign work. ADR-014 says Firstmate dispatch should take the checkout; that is a change to how Firstmate dispatches, so ask Tamer how far it should go.                               |
+| Chat-to-CLI continuity          | https://www.onorca.dev/docs/cli/overview   | Rules in `packages/domain/src/session-ref.ts` (an `amun://session/<id>` reference)                                                                                               | `packages/data/src/session-surface.ts` and its tests. Its table `session_surfaces` is not in the current migrations and has to be added. | Tamer built Amun because he does not want the terminal (decision 11), so ask what he wants this for before building. Opening the same work from a terminal must attach to the First Mate's session, never start another primary for the home.                                                                                     |
+
+Tamer also pointed to the OpenChamber roadmap, https://openchamber.dev/roadmap/, as a source of ideas. Nothing from it has been assessed yet.
+
+How to do each one:
+
+1. Read the ADR and the old code, and confirm the table and rules above by looking, since this list was made by search.
+2. Ask Tamer one question at a time, with choices and a recommended option, wherever the Firstmate column raises a doubt.
+3. Restore the storage class and its tests into `packages/work-store`, add one request to `packages/protocol/src/amun-rpc.ts` and `amun-rpc-handler.ts`, and answer it from `contract-adapter.ts`.
+4. For anything visible, show Tamer the current screen beside the proposed one, run it through the impeccable skill, and wait for his approval. The two old views were never approved for the rebuilt shell.
+5. Test in the packaged app, in isolation, and say what was not tested.
+
+### Open items
+
+Decisions waiting on Tamer:
+
+- **First-run wizard.** It exists (`packages/amun-ui/src/rebuild/wizard.tsx`) and is switched off. Its Agents step would mark all 20 suggested agents as on the team without asking the First Mate. Asked on 18 November 2026: turn it on without the Agents step, or send the picks to the First Mate. Not answered yet.
+- **Signing in to a model provider from inside Amun.** The buttons only show a note. Pi offers sign-in only in its terminal screen, and the old in-app sign-in was removed on purpose (decision 14).
+- **"Chat with Firstmate" is labelled a Task.** A separate conversation type is a visible change.
+- **Two lines on the Tools list are no longer true:** "A tool you turn off is never handed work" and "Amun bundles its own Pi". Changing wording needs his approval.
+- **Whether to use Vercel's UI SDK for prototypes.** Research only; nothing was built. The advice given was not to adopt it as the foundation yet, because it is a days-old beta and the one independent test found it several times slower and costlier with no clear gain, and to try it side by side on a separate branch first. Tamer asked that any work on it be its own branch and pull request.
+
+Known problems:
+
+- **A new First Mate is started each time the daemon starts.** The earlier agents stay in Paseo's registry and their conversation is not resumed.
+- **`/stow` is refused.** `AGENTS.md` requires it to run on the Mac only, with each change to a pinned entry reviewed. That local path is only in git history.
+- **`/calm` and `/supervision-model`** say they are not available inside Amun.
+- **Firstmate's fleet snapshot takes about two minutes on Tamer's home.** Amun copes with it but cannot make it faster; the script is Firstmate's.
+- **Two restored Notion tests failed once** in one full run and passed in every run after, including under load. Not reproduced.
+- **The desktop `build` script** calls a root script that does not exist.
+- **`README.md`** still describes the old pnpm setup.
+
+Not wired yet (the screens exist; nothing answers them): prototype and output preview, attachments and screenshots, publishing to Notion, pull requests and code changes, backup, GitHub and Obsidian connections, global search, skills from a Git link, publishing approved plans to trackers, reminders delivery, PRD and story authoring, Jira and Linear, and hosted connectors such as Gmail. Tamer chose Notion first of prototype preview, attachments and Notion; the other two are next when he says so.
 
 ## Read this first: Firstmate is the only path
 
@@ -454,7 +527,7 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config electron-builder
 
 This is the ad-hoc-signed trusted-tester build (`AGENTS.md`). Hardened runtime must be off for it: macOS refuses to load Electron in an ad-hoc-signed app with hardened runtime on.
 
-### Second round, same day (the follow-up PR)
+### Second round, same day (PR #36)
 
 Found in Tamer's next test of the merged build.
 
@@ -469,16 +542,13 @@ Found in Tamer's next test of the merged build.
 
 Still open from this round: a new First Mate agent is created each time the daemon starts (the earlier ones stay in Paseo's registry and their conversation is not resumed).
 
-### Open after this work
+Two more fixes went into PR #36 after its review: a task that Firstmate holds again after it was answered is shown as a new question, not as already answered (`settleHoldAnswers` in `packages/amun-ui/src/daemon/contract-adapter.ts`), and `/stow` is refused (see "Open items").
 
-- The first-run wizard exists (`packages/amun-ui/src/rebuild/wizard.tsx`) and is still switched off. Its Agents step would mark all 20 suggested agents as on the team without asking the First Mate. Tamer has not yet decided how that step should behave.
-- "Chat with Firstmate" shows under Your work labelled as a Task. A separate conversation type is a visible change that needs Tamer's approval.
-- Two lines on the Tools list are no longer true: "A tool you turn off is never handed work" and "Amun bundles its own Pi".
-- Not wired yet: prototype and output preview, attachments and screenshots, publishing to Notion, pull requests and code changes, backup, GitHub and Obsidian connections, the Firstmate slash commands, and hosted connectors such as Gmail and Jira.
-- Research only, nothing built: whether to use Vercel's UI SDK for prototypes. Tamer asked that any work on it be a separate branch and PR.
+What is still open is listed once, under "Where things stand and what to do next".
 
 ## Standing rules from Tamer
 
+- Everything starts with Firstmate and goes through Firstmate, no matter what. This is the number one rule (restated 18 November 2026).
 - Ask one question at a time, with multiple choices and a recommended option, before any code or workflow change.
 - Never modify Firstmate. It must stay updatable from upstream.
 - Any UI or UX change uses the impeccable skill and needs approval of a before/after preview.
@@ -504,14 +574,18 @@ Still open from this round: a new First Mate agent is created each time the daem
 
 ## Still to do
 
+This is the list from the PR #33 merge, brought up to date. The ordered list of what to do next is under "Where things stand and what to do next".
+
 - Trace bundle: add the Pi step-by-step timeline from the Paseo agent record.
-- A test of Azure DevOps against your real server. Then Notion (memory sync, publishing, and the Notion progress test held back from the workspace port), PRs, Council, prototype, PRD authoring and backup.
+- A test of Azure DevOps against Tamer's real server.
+- Notion: publishing approved documents, and the Notion progress test held back from the workspace port. Sign-in and memory sync are wired (PR #35).
+- PRs, prototype, PRD authoring and backup. The Council is wired (PR #35).
 - Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat. The `primary.output` event is defined but nothing sends it yet.
-- The Pi RPC test on Tamer's Mac.
+- The rest of the Pi RPC test on Tamer's Mac: the reply arrives (confirmed 18 November 2026); the watcher, the turn-end guard and a question card are not confirmed.
 - Paseo features Tamer wants:
   - parallel development (Firstmate already gives each crewmate its own worktree);
   - MCPs;
   - every CLI running headless;
-  - the browser and browser tools.
+  - the browser and browser tools (the in-app browser panel is restored, PR #35).
 
   Each one is checked against Firstmate first. Reference links are in project memory.
