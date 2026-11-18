@@ -252,6 +252,7 @@ import { DaemonExecutions } from "./hub/daemon-executions.js";
 import { PluginService } from "./plugins/index.js";
 import { BuiltinPluginLoader } from "./plugins/builtin/index.js";
 import { attachAmun } from "./amun/attach-amun.js";
+import { firstMateRoot, paseoToolPolicyFor } from "./amun/first-mate-tools.js";
 import { ManagedPluginSources } from "./plugins/managed-source.js";
 
 const MCP_DEBUG_BATCH_LIMIT = 10;
@@ -1020,6 +1021,7 @@ export async function createPaseoDaemon(
     if (git) configureGitProcessPolicy(git);
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
+  const amunFirstMateRoot = firstMateRoot();
   const agentManager = new AgentManager({
     pluginLifecycle: pluginRuntime,
     pluginAgentTools: pluginRuntime,
@@ -1031,8 +1033,13 @@ export async function createPaseoDaemon(
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
     },
     mcpAuthToken: agentMcpAuthToken,
-    resolvePaseoToolPolicy: (provider) =>
-      resolvePaseoToolPolicy(provider, daemonConfigStore.get().providers),
+    // Amun: the First Mate gets read-only Paseo tools plus heartbeats.
+    resolvePaseoToolPolicy: (provider, agentConfig) =>
+      paseoToolPolicyFor(
+        amunFirstMateRoot,
+        agentConfig?.cwd,
+        resolvePaseoToolPolicy(provider, daemonConfigStore.get().providers),
+      ),
     logger,
   });
   // Amun: Product Spaces, Firstmate bridge and PM RPC on /amun (loopback only).

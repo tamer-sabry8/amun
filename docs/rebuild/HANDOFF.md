@@ -219,6 +219,18 @@ Each decision lists:
 - **Answer:** Also add a rail button.
 - **Why:** One click from any screen makes it faster to grab a trace while a problem is happening. Settings keeps the review-before-save path.
 
+### 19. Which Paseo tools the First Mate keeps
+
+- **Question:** Which Paseo tools should the First Mate keep?
+- **Context:** Paseo gives every agent it runs 41 tools of its own, including `create_agent`, `create_workspace` (a new worktree) and `create_schedule`. Crew started that way would bypass `fm-spawn`, so Firstmate's watcher, status files and treehouse worktrees would never see them. Worktrees and agent profiles themselves do not conflict: Paseo keeps its worktrees under `~/.paseo/worktrees` and refuses to delete ones it did not create, and its profiles live in its own config.
+- **Options:**
+  - Read-only plus heartbeats ★
+  - Read-only Paseo tools
+  - No Paseo tools
+  - Keep all 41 tools
+- **Answer:** Read-only plus heartbeats.
+- **Why:** Firstmate has condition-based checks (watcher checks, `fm-procevent-when.sh`) but no clock-based schedule such as "every Monday at 9 AM". A heartbeat is a timed prompt to the First Mate itself, which then works through Firstmate, so it adds that without a second way to start crew. The 22 blocked tools are listed in `packages/server/src/server/amun/first-mate-tools.ts`. A test fails when Paseo adds a new built-in tool, so each new tool has to be put on one list or the other on purpose. Plugin tools, such as browser tools, are not affected.
+
 ## Standing rules from Tamer
 
 - Ask one question at a time, with multiple choices and a recommended option, before any code or workflow change.
@@ -241,15 +253,16 @@ Each decision lists:
 | Agents screen: Create Agent, Edit Agent (picture and a brief change), Retire Agent (save work first), Working/Blocked badges; every team change is a request to the First Mate; pool secondmates show on their cards | Done; self-tested. Requests fail here because Pi isn't installed.                               | `packages/amun-ui/src/rebuild/screens.tsx`, `avatar-choice.ts`, `daemon/contract-adapter.ts`     |
 | Right-rail avatars of working (green ring) and blocked (red ring) agents; click opens that agent on the Agents screen                                                                                                | Done; self-tested                                                                               | `packages/amun-ui/src/rebuild/rail.tsx`, `app.tsx`                                               |
 | Island Send button: full width, label stays readable on hover (the plain button hover was hiding it on every primary button)                                                                                         | Done; self-tested, answer reaches the work store                                                | `packages/amun-ui/src/rebuild/rebuild.css`                                                       |
+| First Mate gets read-only Paseo tools plus heartbeats (decision 19); applies to the agent Amun runs in the Firstmate checkout                                                                                        | Done; unit-tested. Not tested live here because Pi is not installed.                            | `packages/server/src/server/amun/first-mate-tools.ts`, `bootstrap.ts`, `agent/agent-manager.ts`  |
 
 ## Still to do
 
 - Trace bundle: add the Pi step-by-step timeline from the Paseo agent record.
 - A test of Azure DevOps against your real server. Then Notion (memory sync, publishing, and the Notion progress test held back from the workspace port), PRs, Council, prototype, PRD authoring and backup.
-- Right-rail avatars for working and blocked agents. Also fix the island Send button.
+- Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat. The `primary.output` event is defined but nothing sends it yet.
 - The Pi RPC test on Tamer's Mac.
 - Paseo features Tamer wants:
-  - parallel development;
+  - parallel development (Firstmate already gives each crewmate its own worktree);
   - MCPs;
   - every CLI running headless;
   - the browser and browser tools.

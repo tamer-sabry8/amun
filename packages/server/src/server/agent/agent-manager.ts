@@ -383,7 +383,10 @@ export interface AgentManagerOptions {
   pluginAgentTools?: PluginAgentToolsRuntime;
   paseoToolsEnabled?: boolean;
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
-  resolvePaseoToolPolicy?: (provider: AgentProvider) => ProviderPaseoToolsPolicy | undefined;
+  resolvePaseoToolPolicy?: (
+    provider: AgentProvider,
+    config?: AgentSessionConfig,
+  ) => ProviderPaseoToolsPolicy | undefined;
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
@@ -881,6 +884,7 @@ export class AgentManager {
   private readonly paseoToolPolicies = new Map<string, ProviderPaseoToolsPolicy | undefined>();
   private readonly resolvePaseoToolPolicy: (
     provider: AgentProvider,
+    config?: AgentSessionConfig,
   ) => ProviderPaseoToolsPolicy | undefined;
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
@@ -6183,7 +6187,7 @@ export class AgentManager {
       resolveDefaultModel: options.resolveDefaultModel,
     });
     const paseoToolPolicy = this.paseoToolsEnabled
-      ? this.resolvePaseoToolPolicy(storedConfig.provider)
+      ? this.resolvePaseoToolPolicy(storedConfig.provider, storedConfig)
       : { enabled: false };
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
