@@ -5,6 +5,7 @@ import {
   type FleetSnapshot,
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
+import { PmStore } from "./pm-store.js";
 import type { PrimarySessions } from "./primary-session.js";
 import type { ProductSpaceStore } from "./product-spaces.js";
 
@@ -43,6 +44,16 @@ export class AmunRpcHandler {
     }
   }
 
+  private async withStore<T>(slug: string, use: (store: PmStore) => T): Promise<T> {
+    const space = await this.deps.spaces.get(slug);
+    const store = PmStore.forHome(space.fmHome);
+    try {
+      return use(store);
+    } finally {
+      store.close();
+    }
+  }
+
   private async snapshot(slug: string): Promise<FleetSnapshot> {
     const space = await this.deps.spaces.get(slug);
     return this.deps.readSnapshot(space.fmHome);
@@ -67,6 +78,33 @@ export class AmunRpcHandler {
         return snapshot.backlog.records
           .filter((record) => record.structured !== false && record.id)
           .map((record) => ({ ...record, column: boardColumnFor(record) }));
+      }
+      case "board.get": {
+        const snapshot = await this.snapshot(request.space);
+        return this.withStore(request.space, (store) => {
+          store.projectBacklog(snapshot.backlog.records);
+          return store.board();
+        });
+      }
+      case "initiatives.list":
+        return this.withStore(request.space, (store) =>
+          store.listInitiatives().map((i) => ({ ...i, missing: PmStore.missingQuestions(i) })),
+        );
+      case "initiative.upsert": {
+        const { initiative } = request;
+        return this.withStore(request.space, (store) => {
+          const saved = store.upsertInitiative({
+            id: initiative.id,
+            title: initiative.title,
+            ...(initiative.what !== undefined ? { what: initiative.what } : {}),
+            ...(initiative.why !== undefined ? { why: initiative.why } : {}),
+            ...(initiative.when !== undefined ? { when: initiative.when } : {}),
+            ...(initiative.cost !== undefined ? { cost: initiative.cost } : {}),
+            ...(initiative.status ? { status: initiative.status } : {}),
+            ...(initiative.roadmapId ? { roadmapId: initiative.roadmapId } : {}),
+          });
+          return { ...saved, missing: PmStore.missingQuestions(saved) };
+        });
       }
       case "holds.answer": {
         const space = await this.deps.spaces.get(request.space);

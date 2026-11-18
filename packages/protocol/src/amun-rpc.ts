@@ -177,6 +177,23 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
     text: z.string().min(1).max(32000),
   }),
   z.object({ id: z.string(), method: z.literal("backlog.list"), space: slug }),
+  z.object({ id: z.string(), method: z.literal("board.get"), space: slug }),
+  z.object({ id: z.string(), method: z.literal("initiatives.list"), space: slug }),
+  z.object({
+    id: z.string(),
+    method: z.literal("initiative.upsert"),
+    space: slug,
+    initiative: z.object({
+      id: z.string().min(1).max(128),
+      title: z.string().min(1).max(500),
+      what: z.string().max(8000).optional(),
+      why: z.string().max(8000).optional(),
+      when: z.string().max(8000).optional(),
+      cost: z.string().max(8000).optional(),
+      status: z.enum(["proposed", "approved", "in_delivery", "shipped", "dropped"]).optional(),
+      roadmapId: z.string().optional(),
+    }),
+  }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

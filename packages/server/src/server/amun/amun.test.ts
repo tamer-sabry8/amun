@@ -200,6 +200,18 @@ describe("Amun RPC", () => {
     expect(answer).toMatchObject({ ok: true, result: { reply: "Aye, Captain." } });
     expect(host.prompts[0]).toContain("bin/fm-captain-hold.sh answer");
 
+    const board = await handler.handleRaw({ id: "b", method: "board.get", space: "gamma" });
+    expect(board.ok && (board.result as Record<string, { id: string }[]>).spec!.map((s) => s.id)).toEqual([
+      "billing-p1",
+    ]);
+    const initiative = await handler.handleRaw({
+      id: "i",
+      method: "initiative.upsert",
+      space: "gamma",
+      initiative: { id: "billing", title: "Usage billing", what: "Metered plans" },
+    });
+    expect(initiative).toMatchObject({ ok: true, result: { missing: ["why", "when", "cost"] } });
+
     expect(await handler.handleRaw({ id: "4", method: "nope" })).toMatchObject({
       ok: false,
       error: { code: "InvalidRequest" },

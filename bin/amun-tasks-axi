@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# amun-tasks-axi: Amun's PM layer over Firstmate's tasks-axi backlog.
+# Uses the built server when present, otherwise runs the TypeScript source via tsx.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export AMUN_FIRSTMATE_ROOT="${AMUN_FIRSTMATE_ROOT:-$ROOT/vendor/firstmate}"
+BUILT="$ROOT/packages/server/dist/server/server/amun/amun-tasks-axi-main.js"
+if [ -f "$BUILT" ]; then
+  exec node --no-warnings=ExperimentalWarning "$BUILT" "$@"
+fi
+exec "$ROOT/node_modules/.bin/tsx" "$ROOT/packages/server/src/server/amun/amun-tasks-axi-main.ts" "$@"

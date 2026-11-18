@@ -6,6 +6,7 @@ import type { AgentManager } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
 import { holdsFromSnapshot, readFleetSnapshot } from "./firstmate-cli.js";
+import { PmStore } from "./pm-store.js";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
 import { ProductSpaceStore } from "./product-spaces.js";
 
@@ -131,6 +132,13 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
           const digest = JSON.stringify(stable);
           if (lastSent.get(slug) === digest) return;
           lastSent.set(slug, digest);
+          // Keep the board in step with Firstmate's own backlog transitions.
+          const store = PmStore.forHome(snapshot.fm_home);
+          try {
+            store.projectBacklog(snapshot.backlog.records);
+          } finally {
+            store.close();
+          }
           const events: AmunEvent[] = [
             { event: "fleet.updated", space: slug, snapshot },
             { event: "holds.updated", space: slug, holds: holdsFromSnapshot(snapshot) },
