@@ -3,6 +3,7 @@
 // the main workspace.
 import { useState } from "react";
 import { requestTrace, saveTrace } from "./trace-download.ts";
+import { AgentAvatar } from "./agent-avatar.tsx";
 import {
   railItems,
   type RailItem,
@@ -46,12 +47,17 @@ export function Rail({
   waiting,
   downloads,
   onOpen,
+  agents = [],
+  onAgent,
 }: {
   open: RailItem | null;
   running: number;
   waiting: number;
   downloads: number;
   onOpen(item: RailItem): void;
+  /** Agents working or blocked right now; up to 15 show as avatars. */
+  agents?: Snapshot["agents"];
+  onAgent?(id: string): void;
 }) {
   const counts: Record<RailItem, number> = {
     activity: running,
@@ -82,6 +88,24 @@ export function Rail({
           )}
         </button>
       ))}
+      {agents.length > 0 && (
+        <div className="rb-rail-team" role="group" aria-label="Agents at work">
+          {agents.slice(0, 15).map((agent) => {
+            const state = agent.state === "waiting" ? "Blocked" : "Working";
+            return (
+              <button
+                key={agent.id}
+                className={"rb-rail-agent " + state.toLowerCase()}
+                aria-label={`${agent.role}, ${state.toLowerCase()}`}
+                title={`${agent.role} · ${state}${agent.nowDoing ? " · " + agent.nowDoing : ""}`}
+                onClick={() => onAgent?.(agent.id)}
+              >
+                <AgentAvatar role={agent.role} size={28} />
+              </button>
+            );
+          })}
+        </div>
+      )}
       <TraceButton />
     </aside>
   );

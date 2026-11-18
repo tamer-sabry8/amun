@@ -589,13 +589,16 @@ export function Agents({
   snapshot,
   model,
   onLink,
+  initialAgent = null,
 }: {
   snapshot: Snapshot;
   model: string | null;
+  /** The agent to open first, e.g. from its avatar in the right rail. */
+  initialAgent?: string | null;
   /** Opens a link from an agent's output; without it links stay plain text. */
   onLink?(url: string): void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialAgent);
   const [problem, setProblem] = useState("");
   const [creating, setCreating] = useState(false);
   const lead = snapshot.agents.find((item) => item.kind === "lead");

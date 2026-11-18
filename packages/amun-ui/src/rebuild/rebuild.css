@@ -854,6 +854,34 @@
   background: var(--selected);
   color: var(--ink);
 }
+.rb-rail-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  overflow-y: auto;
+  min-height: 0;
+}
+.rb-rail .rb-rail-agent {
+  width: 34px;
+  height: 34px;
+  padding: 1px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.rb-rail .rb-rail-agent.working {
+  border-color: var(--amun-status-connected);
+}
+.rb-rail .rb-rail-agent.blocked {
+  border-color: var(--amun-status-error);
+}
+.rb-rail-agent .rb-avatar {
+  border-radius: 50%;
+  overflow: hidden;
+}
 .rb-rail .rb-rail-trace {
   margin-top: auto;
   margin-bottom: 14px;

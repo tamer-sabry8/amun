@@ -102,6 +102,7 @@ export function App() {
   const snapshot = state.snapshot;
   const [layout, dispatch] = useReducer(shellReducer, initialShell);
   const [pane, setPane] = useState<PaneTarget>(null);
+  const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
   const [first, setFirst] = useState<string | null>(null);
@@ -560,7 +561,9 @@ export function App() {
           />
         ) : layout.route === "agents" ? (
           <Agents
+            key={focusAgent ?? "agents"}
             snapshot={snapshot}
+            initialAgent={focusAgent}
             model={model}
             {...(recentArea && {
               onLink: (url: string) =>
@@ -680,6 +683,15 @@ export function App() {
         running={running}
         waiting={waiting}
         downloads={downloads.length}
+        agents={(snapshot?.agents ?? []).filter(
+          (agent) =>
+            agent.kind !== "lead" &&
+            (agent.state === "working" || agent.state === "waiting"),
+        )}
+        onAgent={(id) => {
+          setFocusAgent(id);
+          go("agents");
+        }}
         onOpen={(item) => {
           if (item !== "library") setLibraryType(null);
           dispatch({ type: "rail", item });
