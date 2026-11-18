@@ -57,6 +57,10 @@ class FakeDaemon implements AmunTransport {
             id: "scout-1",
             current_state: { state: "working", detail: "reading interviews" },
           },
+          {
+            id: "product-manager",
+            current_state: { state: "blocked", detail: "needs pricing tier" },
+          },
         ],
       },
       "holds.list": [
@@ -135,6 +139,7 @@ describe("daemon contract adapter", () => {
       ["firstmate", "lead", "waiting"],
       ["crew:proto-w1", "temporary", "waiting"],
       ["crew:scout-1", "temporary", "working"],
+      ["crew:product-manager", "temporary", "waiting"],
     ]);
     expect(parsed.attention).toMatchObject([
       { kind: "question", title: "One page?", groupId: null },
@@ -317,5 +322,43 @@ describe("daemon contract adapter", () => {
       id: "d2",
       message: "disk full",
     });
+  });
+
+  it("shows pool secondmates on their cards and asks the First Mate to change the team", async () => {
+    const { daemon, adapter } = make();
+    const [snapshot] = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "snapshot",
+    });
+    const parsed = workEvent.parse(snapshot);
+    if (parsed.kind !== "work-snapshot") throw new Error("expected a snapshot");
+    const pm = parsed.agents.find((agent) => agent.role === "Product Manager");
+    expect(pm).toMatchObject({ id: "crew:product-manager", state: "waiting" });
+    await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "toggle-agent",
+      agentId: "crew:product-manager",
+      enabled: false,
+    });
+    const asked = daemon.calls.filter((call) => call.method === "primary.send");
+    expect(String(asked.at(-1)?.params.text)).toContain(
+      'retire the "Product Manager" secondmate. First save its open work',
+    );
+    const edited = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "edit-agent",
+      agentId: "crew:product-manager",
+      change: "cite sources",
+    });
+    expect(edited[0]).toMatchObject({ kind: "work-result", ok: true });
+    expect(
+      String(
+        daemon.calls.filter((c) => c.method === "primary.send").at(-1)?.params
+          .text,
+      ),
+    ).toContain("cite sources");
   });
 });

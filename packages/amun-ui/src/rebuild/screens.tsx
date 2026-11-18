@@ -1,6 +1,7 @@
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
+import { AVATARS, chooseAvatar, useChosenAvatar } from "./avatar-choice.ts";
 import {
   agentCatalog,
   agentProfile,
@@ -196,7 +197,15 @@ function SpecialistCard({
     : (profile?.summary ?? agent.nowDoing ?? "");
   return (
     <button
-      className={"rb-spec" + (agent.enabled ? "" : " off")}
+      className={
+        "rb-spec" +
+        (agent.enabled ? "" : " off") +
+        (agent.state === "working"
+          ? " working"
+          : agent.state === "waiting"
+            ? " blocked"
+            : "")
+      }
       aria-pressed={selected}
       onClick={() => onSelect(agent.id)}
     >
@@ -204,7 +213,12 @@ function SpecialistCard({
       <span className="text">
         <strong title={agent.role}>
           <span>{agent.role}</span>
-          {live(agent) && <span className="rb-live working" title="Working" />}
+          {agent.state === "working" && (
+            <span className="rb-badge working">Working</span>
+          )}
+          {agent.state === "waiting" && (
+            <span className="rb-badge blocked">Blocked</span>
+          )}
         </strong>
         {line && <span title={line}>{line}</span>}
       </span>
@@ -292,6 +306,198 @@ function SpecialistPanel({
     </section>
   );
 }
+/** A new agent from scratch: Firstmate provisions it; Amun keeps its card. */
+function CreateAgent({
+  onCancel,
+  onCreated,
+}: {
+  onCancel(): void;
+  onCreated(id: string | null): void;
+}) {
+  const [name, setName] = useState("");
+  const [what, setWhat] = useState("");
+  const [problem, setProblem] = useState("");
+  return (
+    <section className="rb-spec-panel" aria-label="Create Agent">
+      <header>
+        <div>
+          <p className="kicker">New specialist · Provisioned by Firstmate</p>
+          <h2>Create Agent</h2>
+          <p className="summary">
+            Name it and say what it should own. Firstmate briefs and starts it;
+            its card joins your pool so you can add it again later.
+          </p>
+        </div>
+      </header>
+      <form
+        className="rb-inline-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!name.trim()) return;
+          void workAsync("add-agent", {
+            description: what.trim()
+              ? `${name.trim()}: ${what.trim()}`
+              : name.trim(),
+          }).then((result) => {
+            if (!result.ok) return setProblem(result.message);
+            onCreated(result.ref ?? null);
+          });
+        }}
+      >
+        <label className="field">
+          Name
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. Pricing Analyst"
+            required
+          />
+        </label>
+        <label className="field">
+          What it owns for you
+          <textarea
+            rows={4}
+            value={what}
+            onChange={(event) => setWhat(event.target.value)}
+            placeholder="e.g. reads competitor pricing pages weekly and flags changes"
+          />
+        </label>
+        {problem && (
+          <p className="rb-notice error" role="alert">
+            {problem}
+          </p>
+        )}
+        <div className="row wrap">
+          <button className="btn primary" type="submit" disabled={!name.trim()}>
+            Create Agent
+          </button>
+          <button className="btn quiet" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+/**
+ * Edit and retire go to the First Mate, which changes its secondmates its own
+ * way. The picture is Amun's and changes here at once.
+ */
+function TeamActions({
+  agent,
+  editable,
+}: {
+  agent: AgentRow;
+  editable: boolean;
+}) {
+  const [mode, setMode] = useState<"none" | "edit" | "retire">("none");
+  const [change, setChange] = useState("");
+  const [note, setNote] = useState("");
+  const avatar = useChosenAvatar(agent.role);
+  return (
+    <div className="rb-team-actions">
+      {mode === "none" && (
+        <div className="row wrap">
+          <button className="btn" onClick={() => setMode("edit")}>
+            Edit Agent
+          </button>
+          <button className="btn quiet" onClick={() => setMode("retire")}>
+            Retire Agent
+          </button>
+        </div>
+      )}
+      {mode === "edit" && (
+        <form
+          className="rb-inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (editable && change.trim())
+              void workAsync("edit-agent", {
+                agentId: agent.id,
+                change: change.trim(),
+              }).then((result) =>
+                setNote(result.ok ? "Sent to Firstmate." : result.message),
+              );
+            setChange("");
+            setMode("none");
+          }}
+        >
+          <fieldset className="rb-avatar-pick">
+            <legend>Picture</legend>
+            {AVATARS.map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-label={name}
+                aria-pressed={avatar === name}
+                onClick={() => chooseAvatar(agent.role, name)}
+              >
+                <img
+                  src={`./avatars/${name}.webp`}
+                  alt=""
+                  width={36}
+                  height={36}
+                />
+              </button>
+            ))}
+          </fieldset>
+          {editable && (
+            <label className="field">
+              What should change? Firstmate updates its brief.
+              <textarea
+                rows={3}
+                value={change}
+                onChange={(event) => setChange(event.target.value)}
+                placeholder="e.g. focus on enterprise buyers and cite sources"
+              />
+            </label>
+          )}
+          <div className="row wrap">
+            <button className="btn primary" type="submit">
+              {editable && change.trim() ? "Send to Firstmate" : "Done"}
+            </button>
+            <button
+              className="btn quiet"
+              type="button"
+              onClick={() => setMode("none")}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {mode === "retire" && (
+        <div className="rb-inline amber" role="group" aria-label="Retire agent">
+          <strong>Retire {agent.role}?</strong>
+          <span>
+            Firstmate saves its open work and notes first, then retires it. Its
+            card goes back to the pool, ready to add again.
+          </span>
+          <div className="row wrap">
+            <button
+              className="btn primary"
+              onClick={() => {
+                work("toggle-agent", { agentId: agent.id, enabled: false });
+                setMode("none");
+                setNote("Asked Firstmate to save its work and retire it.");
+              }}
+            >
+              Retire Agent
+            </button>
+            <button className="btn quiet" onClick={() => setMode("none")}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+      {note && (
+        <p className="muted small" role="status">
+          {note}
+        </p>
+      )}
+    </div>
+  );
+}
 function AgentControls({
   agent,
   watch,
@@ -327,9 +533,9 @@ function AgentControls({
             Watch
           </button>
         )}
-        {member && (
+        {member && !agent.enabled && (
           <button
-            className={agent.enabled ? "btn quiet" : "btn"}
+            className="btn"
             onClick={() => {
               if (notCreated) {
                 void workAsync("add-agent", { description: agent.role }).then(
@@ -339,16 +545,16 @@ function AgentControls({
                 );
                 return;
               }
-              work("toggle-agent", {
-                agentId: agent.id,
-                enabled: !agent.enabled,
-              });
+              work("toggle-agent", { agentId: agent.id, enabled: true });
             }}
           >
-            {agent.enabled ? "Remove from team" : "Add to team"}
+            Add to team
           </button>
         )}
       </div>
+      {member && agent.enabled && (
+        <TeamActions agent={agent} editable={!notCreated} />
+      )}
       <AgentOutput output={agent.output} {...(onLink && { onLink })} />
       {watch && (
         <AgentWatch
@@ -391,6 +597,7 @@ export function Agents({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
+  const [creating, setCreating] = useState(false);
   const lead = snapshot.agents.find((item) => item.kind === "lead");
   const members = snapshot.agents.filter((item) => item.kind !== "lead");
   // Every catalog specialist in catalog order (a placeholder when it is not in
@@ -429,6 +636,12 @@ export function Agents({
     <Page
       title="Agents"
       fixed
+      actions={
+        <button className="btn primary" onClick={() => setCreating(true)}>
+          <Icon name="plus" width={16} height={16} />
+          Create Agent
+        </button>
+      }
       footer={
         <>
           {problem && (
@@ -491,7 +704,16 @@ export function Agents({
               ))}
             </div>
           </div>
-          {chosen &&
+          {creating ? (
+            <CreateAgent
+              onCancel={() => setCreating(false)}
+              onCreated={(id) => {
+                setCreating(false);
+                if (id) setSelected(id);
+              }}
+            />
+          ) : (
+            chosen &&
             (chosen.kind === "lead" ? (
               <section
                 key={chosen.id}
@@ -526,7 +748,8 @@ export function Agents({
                 onAdded={setSelected}
                 {...(onLink && { onLink })}
               />
-            ))}
+            ))
+          )}
         </div>
       ) : (
         <p className="muted">Finish setup to meet Firstmate and your agents.</p>

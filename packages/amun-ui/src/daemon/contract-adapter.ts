@@ -9,6 +9,49 @@ import {
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
 import type { AmunTransport } from "./amun-client.ts";
+import { agentCatalog } from "../../../domain/src/work/agents.ts";
+
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/** A secondmate whose id names a pool specialist shows on that card. */
+export function poolRole(taskId: string): string | null {
+  const id = slug(taskId);
+  const found = agentCatalog.find((profile) => {
+    const name = slug(profile.name);
+    return id === name || id.startsWith(name + "-");
+  });
+  return found?.name ?? null;
+}
+
+/**
+ * What Amun asks the First Mate when the captain changes the team. Amun never
+ * provisions or tears down agents itself; Firstmate does, its own way.
+ */
+export function teamRequest(
+  action: "add" | "retire" | "edit",
+  role: string,
+  detail = "",
+): string {
+  if (action === "add")
+    return (
+      `The captain asks you to add "${role}" to the team as a secondmate` +
+      (detail ? ` (${detail})` : "") +
+      ". Please brief it, seed its home and spawn it your usual way " +
+      "(fm-brief, fm-home-seed, fm-spawn --secondmate)."
+    );
+  if (action === "retire")
+    return (
+      `The captain asks you to retire the "${role}" secondmate. First save its ` +
+      "open work and notes into data/<id>/ and archive its status history, " +
+      "then tear it down with fm-teardown. Amun puts its card back in the pool."
+    );
+  return `The captain wants this change to the "${role}" secondmate: ${detail}`;
+}
 
 export interface DaemonSpace {
   slug: string;
@@ -157,7 +200,9 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   for (const task of view.fleet) {
     agents.push({
       id: `crew:${task.id}`,
-      role: task.kind ? `${task.kind} · ${task.id}` : task.id,
+      role:
+        poolRole(task.id) ??
+        (task.kind ? `${task.kind} · ${task.id}` : task.id),
       kind: "temporary",
       launcherId: FIRST_MATE_ID,
       state: agentState(task),
@@ -488,6 +533,13 @@ export class ContractAdapter {
         String(message.attentionId).startsWith("hold:")
       )
         return await this.answerHold(message);
+      // Team changes are requests to the First Mate; the pool card is Amun's.
+      const ask = this.teamAsk(message);
+      if (action === "edit-agent") {
+        if (!ask) return [this.result(action, false, "That agent is gone.")];
+        await this.askFirstMate(ask);
+        return [this.result(action, true, "Sent to Firstmate.")];
+      }
       // Everything else is Amun's own work model, kept by the daemon.
       const command = { ...message };
       delete command.version;
@@ -496,6 +548,7 @@ export class ContractAdapter {
         "work.command",
         { command },
       );
+      if (ask) await this.askFirstMate(ask).catch(() => undefined);
       return events.map((event) => {
         if (event.kind !== "work-snapshot") return event;
         this.view = { ...this.view, work: event as unknown as WorkSnapshot };
@@ -510,6 +563,34 @@ export class ContractAdapter {
         ),
       ];
     }
+  }
+
+  private agentRole(agentId: string): string | null {
+    if (agentId.startsWith("catalog:")) return agentId.slice(8);
+    const agents = [
+      ...fleetAgents(this.view),
+      ...(this.view.work?.agents ?? []),
+    ];
+    return agents.find((agent) => agent.id === agentId)?.role ?? null;
+  }
+
+  private teamAsk(message: Message): string | null {
+    const action = String(message.action);
+    if (action === "add-agent" && typeof message.description === "string")
+      return teamRequest("add", message.description.trim());
+    if (action === "toggle-agent" || action === "edit-agent") {
+      const role = this.agentRole(String(message.agentId));
+      if (!role) return null;
+      if (action === "edit-agent")
+        return teamRequest("edit", role, String(message.change ?? ""));
+      return teamRequest(message.enabled ? "add" : "retire", role);
+    }
+    return null;
+  }
+
+  private async askFirstMate(text: string): Promise<void> {
+    const space = await this.ensureSpace();
+    await this.daemon.request("primary.send", { space, text });
   }
 
   private async answerHold(message: Message): Promise<unknown[]> {

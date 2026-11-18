@@ -1582,6 +1582,71 @@
   background: color-mix(in srgb, var(--accent) 12%, var(--card));
   opacity: 1;
 }
+.rb-spec.working {
+  border-color: color-mix(
+    in srgb,
+    var(--amun-status-connected) 60%,
+    var(--line)
+  );
+}
+.rb-spec.blocked {
+  border-color: color-mix(in srgb, var(--amun-status-error) 60%, var(--line));
+  background: color-mix(in srgb, var(--amun-status-error) 7%, var(--card));
+}
+.rb-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.rb-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.rb-badge.working {
+  color: var(--amun-status-connected);
+}
+.rb-badge.blocked {
+  color: var(--amun-status-error);
+}
+.rb-team-actions {
+  display: grid;
+  gap: 10px;
+}
+.rb-avatar-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.rb-avatar-pick legend {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.rb .rb-avatar-pick button {
+  padding: 2px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: none;
+}
+.rb .rb-avatar-pick button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.rb-avatar-pick img {
+  display: block;
+  border-radius: 8px;
+}
 .rb-spec .text {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

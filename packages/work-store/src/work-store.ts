@@ -1779,6 +1779,9 @@ export class WorkStore {
           command.agentId,
         );
         return {};
+      case "edit-agent":
+        // The First Mate edits its agents; Amun stores nothing for this.
+        return {};
       case "activity": {
         const groupId = command.workAreaId
           ? this.groupOf(command.workAreaId)
