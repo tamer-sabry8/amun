@@ -214,8 +214,37 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   return agents;
 }
 
+/** What one hold says, so the same task held again is seen as a new hold. */
+export function holdSignature(hold: DaemonHold): string {
+  return JSON.stringify(hold);
+}
+
+/**
+ * Forgets an answer once its hold is a different one: Firstmate cleared the
+ * hold and the task was held again, or the hold now says something else.
+ * A fresh question on the same task is never shown as already answered.
+ */
+export function settleHoldAnswers(
+  answers: Map<string, HoldAnswer>,
+  holds: readonly DaemonHold[],
+): void {
+  const present = new Map(holds.map((hold) => [holdId(hold), hold]));
+  for (const [id, answered] of answers) {
+    const hold = present.get(id);
+    if (!hold) {
+      if (answered.status === "recorded" && !answered.cleared)
+        answers.set(id, { ...answered, cleared: true });
+    } else if (answered.cleared || holdSignature(hold) !== answered.signature)
+      answers.delete(id);
+  }
+}
+
 /** What the owner answered to a held question, and how far it got. */
 export interface HoldAnswer {
+  /** What the hold said when it was answered: a later hold differs. */
+  signature: string;
+  /** Firstmate cleared the hold after the answer was recorded. */
+  cleared?: boolean;
   title: string;
   answer: string;
   at: string;
@@ -311,7 +340,7 @@ interface Conversation {
 
 type Message = Record<string, unknown>;
 /** Firstmate skills the First Mate runs when asked by name. */
-const FIRSTMATE_SKILLS = new Set(["afk", "quiet", "ahoy", "bearings", "stow"]);
+const FIRSTMATE_SKILLS = new Set(["afk", "quiet", "ahoy", "bearings"]);
 const NOTION_AUTH = new Set([
   "notion-connect",
   "notion-check",
@@ -393,6 +422,7 @@ export class ContractAdapter {
       work,
       workspace: await this.readWorkspace(),
     };
+    settleHoldAnswers(this.holdAnswers, holds);
     await this.ensureGroup();
   }
 
@@ -828,6 +858,7 @@ export class ContractAdapter {
       ];
     const id = holdId(found);
     const answered: HoldAnswer = {
+      signature: holdSignature(found),
       title: found.source === "crew" ? found.summary : found.title,
       answer: message.answer,
       at: this.now(),
@@ -960,6 +991,14 @@ export class ContractAdapter {
     if (command === "updatefirstmate")
       return fail(
         "Updating Firstmate from inside Amun is switched off. An update is tested as a separate candidate first, and only then approved by you.",
+      );
+    // /stow must run entirely on this Mac, with each change to a pinned entry
+    // reviewed one by one (AGENTS.md, "Local Firstmate memory"). Sending it to
+    // the First Mate would run it on a hosted model, so it waits for that
+    // local path to be restored.
+    if (command === "stow")
+      return fail(
+        "Saving what this session learned is not available inside Amun yet. It has to run on this Mac only, and that part is not restored.",
       );
     if (command === "calm" || command === "supervision-model")
       return fail(

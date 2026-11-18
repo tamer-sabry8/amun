@@ -17,7 +17,13 @@ import {
   crewSessionText,
 } from "../../contracts/src/crew.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
-import { ContractAdapter } from "../src/daemon/contract-adapter.ts";
+import {
+  ContractAdapter,
+  holdId,
+  holdSignature,
+  settleHoldAnswers,
+  type HoldAnswer,
+} from "../src/daemon/contract-adapter.ts";
 import { openWorkStore } from "../../work-store/src/index.ts";
 
 class FakeDaemon implements AmunTransport {
@@ -502,6 +508,8 @@ describe("daemon contract adapter", () => {
       daemon.calls.find((c) => c.method === "primary.send")?.params,
     ).toEqual({ space: "alpha", text: "/skill:bearings include PRs" });
 
+    // /stow must run on this Mac only, so it is never sent to the First Mate.
+    expect(await run("stow")).toMatch(/not available inside Amun yet/);
     // An update is never run on the working home from here.
     expect(await run("updatefirstmate")).toMatch(/switched off/);
     expect(await run("calm")).toMatch(/not available inside Amun yet/);
@@ -552,6 +560,48 @@ describe("daemon contract adapter", () => {
     const after = adapter.work().attention.find((item) => item.id === open.id)!;
     expect(after.state).toBe("open");
     expect(after.detail).toContain("did not reach Firstmate");
+  });
+
+  it("never shows a task held again as already answered", () => {
+    const hold = {
+      source: "backlog" as const,
+      taskId: "moca-pilot-group",
+      title: "Decide who is in the pilot group",
+      reason: "Captain reminder",
+      until: "2026-11-07",
+    };
+    const id = holdId(hold);
+    const answered = (): HoldAnswer => ({
+      signature: holdSignature(hold),
+      title: hold.title,
+      answer: "Ministers only",
+      at: "2026-11-18T00:00:00Z",
+      status: "recorded",
+    });
+
+    // Still held, same question: the answer stands.
+    const same = new Map([[id, answered()]]);
+    settleHoldAnswers(same, [hold]);
+    expect(same.get(id)?.answer).toBe("Ministers only");
+
+    // Firstmate cleared it; it stays under Done for this run.
+    settleHoldAnswers(same, []);
+    expect(same.get(id)?.cleared).toBe(true);
+    // The same task is held again: a fresh question, not an answered one.
+    settleHoldAnswers(same, [hold]);
+    expect(same.has(id)).toBe(false);
+
+    // Held again with different words, without ever being seen cleared.
+    const changed = new Map([[id, answered()]]);
+    settleHoldAnswers(changed, [{ ...hold, reason: "Now needs a date" }]);
+    expect(changed.has(id)).toBe(false);
+
+    // An answer still on its way is never dropped by a hold that is missing.
+    const sending = new Map([
+      [id, { ...answered(), status: "sending" as const }],
+    ]);
+    settleHoldAnswers(sending, []);
+    expect(sending.get(id)?.cleared).toBeUndefined();
   });
 
   it("connects Azure DevOps through the daemon and reports what it can read", async () => {
