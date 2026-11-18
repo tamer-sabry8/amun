@@ -19,6 +19,7 @@ This file is updated with each commit. It is final when PR #33 merges.
 ## How to read the decisions
 
 Each decision lists:
+
 - the question;
 - the options offered (★ marks the recommended one);
 - Tamer's answer;
@@ -27,6 +28,7 @@ Each decision lists:
 ## Decisions
 
 ### 1. Brand palette
+
 - **Question:** Apply the brand palette to Amun?
 - **Options:**
   - Add as a new optional theme ★
@@ -36,6 +38,7 @@ Each decision lists:
 - **Why:** It uses the brand colors without touching the themes in use today, which fits "keep the UI as is".
 
 ### 2. Bringing back lost features
+
 - **Question:** How should we bring back the features the rebuild lost?
 - **Options:**
   - Port the old backend into the daemon ★
@@ -45,6 +48,7 @@ Each decision lists:
 - **Why:** It keeps the rebuild's direction and reuses code that already works, instead of rewriting it.
 
 ### 3. How Firstmate is included
+
 - **Question:** How should Amun include Firstmate so upstream updates stay clean?
 - **Options:**
   - Pristine git subtree plus an Amun layer ★
@@ -55,6 +59,7 @@ Each decision lists:
 - **Rule:** Tamer's rule is "never change Firstmate". `scripts/check-firstmate-pristine.sh` enforces it in CI.
 
 ### 4. Delivery tools
+
 - **Question:** Which delivery tools should Amun sync stories and sprints with?
 - **Options:**
   - Azure DevOps first, keep Linear and Jira ★
@@ -65,6 +70,7 @@ Each decision lists:
 - **Limit:** They make no live calls without credentials Tamer provides.
 
 ### 5. Desktop shell
+
 - **Question:** Which desktop shell should Amun ship in?
 - **Options:**
   - Keep Electron for now ★
@@ -74,6 +80,7 @@ Each decision lists:
 - **Why:** Both the old app and the rebuild already run on Electron. Switching now would delay the features.
 
 ### 6. Firstmate home
+
 - **Question:** Which Firstmate home should each product use?
 - **Options:**
   - Pick per product ★
@@ -87,6 +94,7 @@ Each decision lists:
   - Amun's own data lives in `~/.amun`, never in the home.
 
 ### 7. Question cards: format
+
 - **Question:** How should the First Mate's question cards offer multiple choices?
 - **Options:**
   - 2–4 choices, one recommended ★
@@ -96,6 +104,7 @@ Each decision lists:
 - **Why:** It is the same one-question, multiple-choice, recommended-option pattern used for these decisions.
 
 ### 8. Where Amun's PM rules live
+
 - **Question:** Where should Amun's PM rules live in the shared home? This was asked twice, with options for a marked section in the captain files, rules given at session start, or no rules.
 - **Answer:** Neither option as offered. Tamer explained that the First Mate decides where a rule goes (captain.md, captain-shared.md, secondmates.md, crew-dispatch.json, ai-memory) based on who it applies to.
 - **Result:**
@@ -104,6 +113,7 @@ Each decision lists:
   - Amun acts only through `fm-send`, `fm-captain-hold` and `tasks-axi`.
 
 ### 9. Agents screen
+
 - **Question:** What should the Agents screen show?
 - **Options:**
   - Your real Firstmate fleet ★
@@ -117,6 +127,7 @@ Each decision lists:
 - **Why:** The screen shows who is really working, and it keeps the existing catalog. The First Mate still does the provisioning (`fm-brief` → `fm-home-seed` → `fm-spawn --secondmate`).
 
 ### 10. Retiring an agent
+
 - **Question:** When you retire an agent, what should happen to its work?
 - **Options:**
   - Save its work, then retire ★
@@ -126,6 +137,7 @@ Each decision lists:
 - **Why:** Retired agents go back to the pool. Saving first means a re-added agent doesn't start from zero.
 
 ### 11. How Pi runs
+
 - **Question:** How should Amun run the First Mate's Pi session?
 - **Options:**
   - Pi RPC, proven by a Mac test first ★
@@ -136,6 +148,7 @@ Each decision lists:
 - **Open risk:** Upstream documents only interactive `pi`, so the watcher, turn-end guard and wakes in RPC mode must be tested on the Mac. If they fail, the fallback is the Pi SDK, and Tamer is told first.
 
 ### 12. Right-rail avatars
+
 - **Question:** What should each agent's avatar in the right rail look like?
 - **Options:**
   - Built-in icon set ★
@@ -145,6 +158,7 @@ Each decision lists:
 - **Why:** That work already exists in the code.
 
 ### 13. Azure DevOps sign-in
+
 - **Question:** How should "Connect to Azure now" sign you in to Azure DevOps Server?
 - **Options:**
   - Personal access token in Keychain ★
@@ -158,6 +172,7 @@ Each decision lists:
   - It never appears in files, logs or the UI state.
 
 ### 14. Old app or new shell
+
 - **Question:** Which way should the old Amun features come back?
 - **Options:**
   - New shell, port features one by one ★ (this was re-asked)
@@ -167,6 +182,7 @@ Each decision lists:
 - **Note:** The first time this was asked, the recommendation was to restore the old app. Tamer pushed back, and the recommendation was corrected.
 
 ### 15. Question cards: build
+
 - **Question:** Approve the new question cards as shown in the preview?
 - **Options:**
   - Approve, build it ★
@@ -176,6 +192,7 @@ Each decision lists:
 - **Why:** Nothing is added to the First Mate's tools. Choices are read from the First Mate's own wording. When it asks in plain text, the card shows only the "Write my own response" box.
 
 ### 16. Trace bundle history
+
 - **Question:** Should the First Mate turn on Firstmate's activity ledger and status archive?
 - **Options:**
   - Yes, ask the First Mate to ★
@@ -184,6 +201,7 @@ Each decision lists:
 - **Why:** Without them, the trace bundle can't show what a finished or retired agent did. Amun sends one request and never writes those files itself.
 
 ### 17. When to merge
+
 - **Question:** When should PR #33 be merged into main?
 - **Options:**
   - After your Mac test passes ★
@@ -200,12 +218,12 @@ Each decision lists:
 
 ## Built so far
 
-| Area | State | Where |
-|---|---|---|
-| Firstmate as a pristine subtree, with a CI guard | Done | `vendor/firstmate`, `scripts/check-firstmate-pristine.sh` |
-| One home, no writes into it | Done | `packages/server/src/server/amun/amun-paths.ts`, `product-spaces.ts` |
-| Azure DevOps token in Keychain, checked before saving | Done | `packages/server/src/server/amun/connections/` |
-| Old work store ported, product chat wired to the daemon | Done | `packages/work-store`, `packages/amun-ui/src/daemon/contract-adapter.ts` |
+| Area                                                                                     | State                                                | Where                                                                                            |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Firstmate as a pristine subtree, with a CI guard                                         | Done                                                 | `vendor/firstmate`, `scripts/check-firstmate-pristine.sh`                                        |
+| One home, no writes into it                                                              | Done                                                 | `packages/server/src/server/amun/amun-paths.ts`, `product-spaces.ts`                             |
+| Azure DevOps token in Keychain, checked before saving                                    | Done                                                 | `packages/server/src/server/amun/connections/`                                                   |
+| Old work store ported, product chat wired to the daemon                                  | Done                                                 | `packages/work-store`, `packages/amun-ui/src/daemon/contract-adapter.ts`                         |
 | Question cards: choices, recommendation, "Write my own response", "Connect to Azure now" | Done; self-tested in the cloud, not yet with real Pi | `packages/amun-ui/src/rebuild/question-card.tsx`, `packages/domain/src/work/question-choices.ts` |
 
 ## Still to do
