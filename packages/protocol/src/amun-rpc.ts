@@ -144,6 +144,15 @@ export const boardColumnSchema = z.enum([
 ]);
 export type BoardColumn = z.infer<typeof boardColumnSchema>;
 
+// --- Connections (Azure DevOps first; secrets stay in the daemon's Keychain) --
+
+export const connectionKindSchema = z.enum(["ado", "github", "notion", "obsidian"]);
+export const connectionSchema = z.object({
+  kind: connectionKindSchema,
+  baseUrl: z.string().url().max(2048),
+});
+export type ConnectionRef = z.infer<typeof connectionSchema>;
+
 // --- Requests (UI -> daemon) --------------------------------------------------
 
 export const amunRequestSchema = z.discriminatedUnion("method", [
@@ -194,6 +203,15 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
       roadmapId: z.string().optional(),
     }),
   }),
+  z.object({ id: z.string(), method: z.literal("connections.list") }),
+  z.object({
+    id: z.string(),
+    method: z.literal("connections.save"),
+    connection: connectionSchema,
+    secret: z.string().min(1).max(65536),
+  }),
+  z.object({ id: z.string(), method: z.literal("connections.check"), connection: connectionSchema }),
+  z.object({ id: z.string(), method: z.literal("connections.forget"), connection: connectionSchema }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

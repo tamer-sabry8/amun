@@ -6,12 +6,14 @@ import {
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
 import { PmStore } from "./pm-store.js";
+import type { ConnectionStore } from "./connections/connection-store.js";
 import type { PrimarySessions } from "./primary-session.js";
 import type { ProductSpaceStore } from "./product-spaces.js";
 
 export interface AmunRpcDeps {
   spaces: ProductSpaceStore;
   primary: PrimarySessions;
+  connections: ConnectionStore;
   amunHome: string;
   firstmateRoot: string;
   readSnapshot: (fmHome: string) => Promise<FleetSnapshot>;
@@ -119,6 +121,15 @@ export class AmunRpcHandler {
         const space = await this.deps.spaces.get(request.space);
         return this.deps.primary.send(space, request.text);
       }
+      case "connections.list":
+        return this.deps.connections.list();
+      case "connections.save":
+        return this.deps.connections.save(request.connection, request.secret);
+      case "connections.check":
+        return this.deps.connections.check(request.connection);
+      case "connections.forget":
+        await this.deps.connections.forget(request.connection);
+        return this.deps.connections.list();
     }
   }
 }

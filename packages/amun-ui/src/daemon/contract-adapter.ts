@@ -43,6 +43,29 @@ export interface DaemonView {
   holds: DaemonHold[];
 }
 
+export interface DaemonConnection {
+  id: string;
+  kind: "ado" | "github" | "notion" | "obsidian";
+  baseUrl: string;
+  status: string;
+  user: string | null;
+  projects: { id: string; name: string }[];
+  message: string | null;
+}
+
+/** What a connection check found, in words the captain can act on. */
+export function describeAdo(view: DaemonConnection): string {
+  if (view.status !== "ready")
+    return view.message ?? "Azure DevOps is not connected.";
+  const who = view.user ? ` as ${view.user}` : "";
+  const names = view.projects.map((project) => project.name);
+  const shown = names.slice(0, 5).join(", ");
+  const more = names.length > 5 ? ` and ${names.length - 5} more` : "";
+  return names.length
+    ? `Connected to Azure DevOps${who}. It can read ${names.length} project${names.length === 1 ? "" : "s"}: ${shown}${more}. Write access is confirmed the first time you approve a change.`
+    : `Connected to Azure DevOps${who}, but the token can't see any projects yet.`;
+}
+
 export interface SetupStore {
   load(): SetupState;
   save(setup: SetupState): void;
@@ -280,12 +303,69 @@ export class ContractAdapter {
       await this.refresh();
       return [this.workspace()];
     }
-    if (message.kind === "auth" && message.action === "list")
-      return [{ version: 1, kind: "auth-connections", connections: [] }];
+    if (message.kind === "auth") return this.handleAuth(message);
     if (message.kind === "work") return this.handleWork(message);
     if (message.kind === "native-pi" && message.action === "run")
       return [await this.handleNativePi(message)];
     return [];
+  }
+
+  private async authConnections() {
+    const list = await this.daemon
+      .request<DaemonConnection[]>("connections.list")
+      .catch(() => [] as DaemonConnection[]);
+    return {
+      version: 1,
+      kind: "auth-connections",
+      connections: list.map(({ kind, baseUrl, id, status }) => ({
+        kind,
+        baseUrl,
+        id,
+        status,
+      })),
+    };
+  }
+
+  private notice(text: string) {
+    return { version: 1, kind: "auth-notice", message: text.slice(0, 4096) };
+  }
+
+  /** Connections: Azure DevOps through the daemon (token kept in Keychain). */
+  private async handleAuth(message: Message): Promise<unknown[]> {
+    const action = String(message.action);
+    if (action === "list") return [await this.authConnections()];
+    if (action !== "save" && action !== "check" && action !== "forget")
+      return [this.notice(UNAVAILABLE)];
+    const connection = message.connection as
+      { kind?: unknown; baseUrl?: unknown } | undefined;
+    if (connection?.kind !== "ado")
+      return [
+        this.notice(
+          "Only Azure DevOps connects in this Amun build so far. The others are coming one by one.",
+        ),
+        await this.authConnections(),
+      ];
+    try {
+      if (action === "forget") {
+        await this.daemon.request("connections.forget", { connection });
+        return [
+          this.notice("Azure DevOps disconnected and its token removed."),
+          await this.authConnections(),
+        ];
+      }
+      const view = await this.daemon.request<DaemonConnection>(
+        action === "save" ? "connections.save" : "connections.check",
+        action === "save"
+          ? { connection, secret: message.secret }
+          : { connection },
+      );
+      return [this.notice(describeAdo(view)), await this.authConnections()];
+    } catch (error) {
+      return [
+        this.notice(error instanceof Error ? error.message : String(error)),
+        await this.authConnections(),
+      ];
+    }
   }
 
   private async handleWork(message: Message): Promise<unknown[]> {

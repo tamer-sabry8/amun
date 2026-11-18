@@ -6,6 +6,8 @@ import type { AgentManager } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
 import { holdsFromSnapshot, readFleetSnapshot } from "./firstmate-cli.js";
+import { ConnectionStore } from "./connections/connection-store.js";
+import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
 import { ProductSpaceStore } from "./product-spaces.js";
@@ -77,6 +79,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const handler = new AmunRpcHandler({
     spaces,
     primary,
+    connections: new ConnectionStore(paths.amunHome, keychainSecretStore()),
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),

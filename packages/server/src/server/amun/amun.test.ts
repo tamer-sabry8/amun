@@ -10,6 +10,8 @@ import { fleetSnapshotSchema, type FleetSnapshot } from "@getpaseo/protocol/amun
 import { resolveAmunPaths, type AmunPaths } from "./amun-paths.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { attachAmun } from "./attach-amun.js";
+import { ConnectionStore } from "./connections/connection-store.js";
+import { memorySecretStore } from "./connections/secret-store.js";
 import {
   boardColumnFor,
   holdAnswerPrompt,
@@ -193,6 +195,7 @@ describe("Amun RPC", () => {
     const handler = new AmunRpcHandler({
       spaces,
       primary: new PrimarySessions(host, paths.firstmateRoot),
+      connections: new ConnectionStore(paths.amunHome, memorySecretStore()),
       amunHome: paths.amunHome,
       firstmateRoot: paths.firstmateRoot,
       readSnapshot: async () => snapshotFixture(),

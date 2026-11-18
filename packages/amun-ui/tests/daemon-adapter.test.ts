@@ -5,6 +5,7 @@ import {
   workspaceSnapshot,
 } from "@amun/contracts";
 import { workEvent } from "../../contracts/src/work.ts";
+import { authEvent } from "../../contracts/src/auth.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
 import {
   ContractAdapter,
@@ -14,6 +15,17 @@ import {
 class FakeDaemon implements AmunTransport {
   calls: { method: string; params: Record<string, unknown> }[] = [];
   spaces = [{ slug: "alpha", name: "Alpha" }];
+  connections = [
+    {
+      id: "ado-1",
+      kind: "ado",
+      baseUrl: "https://devops.example.com/Collection/",
+      status: "ready",
+      user: "Tamer",
+      projects: [{ id: "p", name: "ICV" }],
+      message: null,
+    },
+  ];
   async request<T>(
     method: string,
     params: Record<string, unknown> = {},
@@ -47,7 +59,11 @@ class FakeDaemon implements AmunTransport {
       "holds.answer": { reply: "Aye." },
       "primary.start": { agentId: "fm" },
       "primary.send": { reply: "Aye, Captain." },
+      "connections.list": this.connections,
+      "connections.save": this.connections[0],
     };
+    if (method === "connections.save" && params.secret === "bad")
+      throw new Error("Azure DevOps refused the token.");
     return results[method] as T;
   }
   onEvent(): () => void {
@@ -190,5 +206,45 @@ describe("daemon contract adapter", () => {
       argument: "",
     });
     expect(nativePiEvent.parse(other).result.kind).toBe("message");
+  });
+
+  it("connects Azure DevOps through the daemon and reports what it can read", async () => {
+    const { adapter, daemon } = make();
+    const connection = {
+      kind: "ado",
+      baseUrl: "https://devops.example.com/Collection",
+    };
+    const replies = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "save",
+      connection,
+      secret: "x".repeat(52),
+    });
+    for (const reply of replies) authEvent.parse(reply);
+    expect(replies[0]).toMatchObject({
+      kind: "auth-notice",
+      message: expect.stringContaining("as Tamer. It can read 1 project: ICV"),
+    });
+    expect(replies[1]).toMatchObject({
+      kind: "auth-connections",
+      connections: [{ id: "ado-1", status: "ready" }],
+    });
+    expect(daemon.calls.at(-2)).toMatchObject({
+      method: "connections.save",
+      params: { connection },
+    });
+
+    const refused = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "save",
+      connection,
+      secret: "bad",
+    });
+    expect(refused[0]).toMatchObject({
+      kind: "auth-notice",
+      message: "Azure DevOps refused the token.",
+    });
   });
 });
