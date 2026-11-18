@@ -15,6 +15,39 @@
 
 This file is final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here.
 
+## Work locally on your Mac
+
+1. **Get `main`.** `git clone https://github.com/tamer-sabry8/amun && cd amun`, or `git checkout main && git pull` in an existing clone.
+2. **Install.** Use Node 22.13 or later (`.node-version` pins the CI version; the work store uses `node:sqlite`). Run `npm ci`.
+3. **Firstmate's tools.** `vendor/firstmate` needs `tmux` or `herdr`, `treehouse`, `tasks-axi`, `jq` and `git` on your PATH. Amun checks for them and shows the install command for any missing tool (`checkHostTools` in `packages/server/src/server/amun/primary-session.ts`).
+4. **Your Firstmate home.** Amun uses `~/Projects/firstmate` by default. To use another folder, set `AMUN_FIRSTMATE_HOME`. Amun never writes rules into that folder.
+5. **Pi.** Install Pi and sign in once. The First Mate runs as `pi --mode rpc`, so no terminal window opens.
+6. **Build and run the daemon.** Run `npm run build:server`, then `npm start`. The daemon listens on `127.0.0.1:6767`, and Amun's RPC is at `ws://127.0.0.1:6767/amun`. Set `PASEO_LISTEN` to change the port.
+7. **Run the UI.** Run `cd packages/amun-ui && npx vite build && npx vite preview --port 6768`, then open `http://127.0.0.1:6768/index.html?daemon=ws://127.0.0.1:6767/amun`. For the desktop app, run `cd packages/desktop && npm run dev`.
+8. **Checks before a PR.** Run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npx vitest run`. CI runs the same checks plus `scripts/check-firstmate-pristine.sh`.
+
+### The Pi test (first thing to do on `main`)
+
+Open Amun, send the First Mate a message, and confirm three things:
+
+- The reply arrives.
+- Firstmate's watcher and turn-end guard run in RPC mode.
+- A question from the First Mate shows as a question card.
+
+If anything fails, use the rail's lifebuoy button to download a trace bundle and share it.
+
+### Heartbeats (decision 19)
+
+- **What it is.** The First Mate keeps Paseo's `create_heartbeat` and `delete_heartbeat`. A heartbeat is a timed prompt that Paseo sends to the First Mate itself. Ask it in chat, for example: "Set a heartbeat every weekday at 9 AM Cairo time: prepare my standup." It then does the work through Firstmate.
+- **Where the policy lives.** `packages/server/src/server/amun/first-mate-tools.ts` holds the policy. It applies only to the agent running in the Firstmate checkout. To check a heartbeat, ask the First Mate to "list my schedules".
+- **The gap to build next.** The First Mate acts on a heartbeat, but its reply does not appear in Amun's chat. Amun only shows replies to messages it sent itself (`primary.send`). The plan:
+  1. In `attach-amun.ts`, subscribe to the First Mate agent with `agentManager.subscribe(cb, { agentId })`.
+  2. When a turn finishes that Amun did not start, broadcast the `primary.output` event. It is already defined in `packages/protocol/src/amun-rpc.ts`, but nothing sends it yet.
+  3. In `packages/amun-ui/src/daemon/daemon-port.ts`, handle `primary.output` beside `fleet.updated`, and add the text to the First Mate chat in `contract-adapter.ts`.
+  4. Add a test in `amun.test.ts` with a fake agent turn.
+
+  This also covers Firstmate's own wakes and guard notices, which raise the same unprompted turns.
+
 ## How to read the decisions
 
 Each decision lists:
