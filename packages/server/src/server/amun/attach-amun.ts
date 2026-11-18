@@ -9,7 +9,7 @@ import { holdsFromSnapshot, readFleetSnapshot } from "./firstmate-cli.js";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
-import { openWorkStore } from "@amun/work-store";
+import { openAdo, openWorkStore } from "@amun/work-store";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { TraceLog } from "./trace/trace-log.js";
@@ -83,13 +83,20 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const spaces = new ProductSpaceStore(paths);
   mkdirSync(paths.amunHome, { recursive: true });
   const work = openWorkStore(path.join(paths.amunHome, "work.db"));
+  const connections = new ConnectionStore(paths.amunHome, keychainSecretStore());
   const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: work.redactor });
   const primary = new PrimarySessions(agentManagerHost(input.agentManager), paths.firstmateRoot);
   const handler = new AmunRpcHandler({
     spaces,
     primary,
-    connections: new ConnectionStore(paths.amunHome, keychainSecretStore()),
+    connections,
     work: work.store,
+    workspace: work.workspace,
+    ado: openAdo(work, {
+      connections: () => connections.list(),
+      secret: async (connection) =>
+        (await connections.token({ kind: "ado", baseUrl: connection.baseUrl })) ?? null,
+    }),
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),

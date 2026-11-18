@@ -9,7 +9,7 @@ import { WebSocket } from "ws";
 import { fleetSnapshotSchema, type FleetSnapshot } from "@getpaseo/protocol/amun-rpc";
 import { resolveAmunPaths, type AmunPaths } from "./amun-paths.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
-import { openWorkStore } from "@amun/work-store";
+import { openAdo, openWorkStore } from "@amun/work-store";
 import { attachAmun } from "./attach-amun.js";
 import { HISTORY_REQUEST } from "./amun-rpc-handler.js";
 import { TraceLog } from "./trace/trace-log.js";
@@ -197,12 +197,25 @@ describe("Amun RPC", () => {
     const host = new RecordingHost();
     const spaces = new ProductSpaceStore(paths);
     const opened = openWorkStore(":memory:");
+    const seen: string[] = [];
     const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: opened.redactor });
     const handler = new AmunRpcHandler({
       spaces,
       primary: new PrimarySessions(host, paths.firstmateRoot),
       connections: new ConnectionStore(paths.amunHome, memorySecretStore()),
       work: opened.store,
+      workspace: opened.workspace,
+      ado: openAdo(opened, {
+        connections: async () => [{ kind: "ado", baseUrl: "https://devops.example.com/Coll/" }],
+        secret: async () => "pat-for-tests-0123456789",
+        fetch: async (url) => {
+          seen.push(String(url));
+          return new Response(JSON.stringify({ value: [{ id: "t1", name: "Payments Team" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      }),
       amunHome: paths.amunHome,
       firstmateRoot: paths.firstmateRoot,
       readSnapshot: async () => snapshotFixture(),
@@ -257,6 +270,54 @@ describe("Amun RPC", () => {
     expect(initiative).toMatchObject({ ok: true, result: { missing: ["why", "when", "cost"] } });
     expect(existsSync(path.join(fmHome, "data", "amun-pm.db"))).toBe(false);
     expect(existsSync(path.join(tmp, "pm"))).toBe(true);
+
+    // A product maps an Azure DevOps project, then reads its teams through the daemon.
+    const created2 = await handler.handleRaw({
+      id: "p",
+      method: "workspace.command",
+      command: { action: "create-product", name: "Payments", allowedModels: [] },
+    });
+    expect(created2.ok).toBe(true);
+    const products = await handler.handleRaw({ id: "ps", method: "workspace.snapshot" });
+    const productId = products.ok
+      ? (products.result as { products: { id: string; name: string }[] }).products.find(
+          (p) => p.name === "Payments",
+        )!.id
+      : "";
+    await handler.handleRaw({
+      id: "m",
+      method: "workspace.command",
+      command: {
+        action: "map-source",
+        productId,
+        sourceKind: "ado",
+        title: "Payments",
+        reference: "https://devops.example.com/Coll/Payments",
+      },
+    });
+    const mapped = await handler.handleRaw({ id: "ps2", method: "workspace.snapshot" });
+    const source = mapped.ok
+      ? (mapped.result as { productContext: { sources: { id: string; reference: string }[] } | null })
+          .productContext?.sources[0]
+      : undefined;
+    expect(source?.reference).toBe("https://devops.example.com/Coll/Payments");
+    const teams = await handler.handleRaw({
+      id: "a",
+      method: "ado.request",
+      message: {
+        version: 1,
+        kind: "backlog-read",
+        requestId: "11111111-1111-4111-8111-111111111111",
+        productId,
+        sourceId: source!.id,
+        action: "teams",
+      },
+    });
+    expect(teams).toMatchObject({
+      ok: true,
+      result: { view: "teams", teams: [{ id: "t1", name: "Payments Team" }] },
+    });
+    expect(seen[0]).toContain("https://devops.example.com/Coll/_apis/projects/Payments/teams");
 
     // The trace says who said what to whom, and the bundle carries it.
     const traced = trace

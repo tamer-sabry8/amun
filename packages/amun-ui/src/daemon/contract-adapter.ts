@@ -37,6 +37,8 @@ export interface DaemonFleetTask {
 }
 export interface DaemonView {
   spaces: DaemonSpace[];
+  /** Products, mapped sources and product context, kept by the daemon. */
+  workspace?: WorkspaceSnapshot | null;
   fleet: DaemonFleetTask[];
   holds: DaemonHold[];
   /** Amun's own work model from the daemon's work store; null until read. */
@@ -260,7 +262,13 @@ export class ContractAdapter {
             .catch(() => [] as DaemonHold[]),
         ])
       : [{ tasks: [] as DaemonFleetTask[] }, [] as DaemonHold[]];
-    this.view = { spaces, fleet: snapshot.tasks, holds, work };
+    this.view = {
+      spaces,
+      fleet: snapshot.tasks,
+      holds,
+      work,
+      workspace: await this.readWorkspace(),
+    };
     await this.ensureGroup();
   }
 
@@ -283,7 +291,40 @@ export class ContractAdapter {
   }
 
   workspace(): WorkspaceSnapshot {
-    return toWorkspaceSnapshot(this.view);
+    return this.view.workspace ?? toWorkspaceSnapshot(this.view);
+  }
+
+  private async readWorkspace(): Promise<WorkspaceSnapshot | null> {
+    const raw = await this.daemon
+      .request<unknown>("workspace.snapshot")
+      .catch(() => null);
+    const parsed = workspaceSnapshot.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  }
+
+  /** Product commands go to the daemon's workspace; the reply is a fresh snapshot. */
+  private async handleWorkspace(message: Message): Promise<unknown[]> {
+    const command = { ...message };
+    delete command.version;
+    delete command.kind;
+    const result = await this.daemon
+      .request<unknown>("workspace.command", { command })
+      .catch((error: unknown) => ({
+        version: 1,
+        kind: "workspace-error",
+        message: error instanceof Error ? error.message : String(error),
+      }));
+    this.view = { ...this.view, workspace: await this.readWorkspace() };
+    const replies: unknown[] = [];
+    if (
+      result &&
+      typeof result === "object" &&
+      "kind" in result &&
+      result.kind !== "workspace-snapshot"
+    )
+      replies.push(result);
+    replies.push(this.workspace());
+    return replies;
   }
 
   work(): WorkSnapshot {
@@ -313,6 +354,13 @@ export class ContractAdapter {
     if (message.kind === "workspace" && message.action === "snapshot") {
       await this.refresh();
       return [this.workspace()];
+    }
+    if (message.kind === "workspace") return this.handleWorkspace(message);
+    if (message.kind === "backlog-read" || message.kind === "ado-operation") {
+      const reply = await this.daemon
+        .request<unknown>("ado.request", { message })
+        .catch(() => null);
+      return reply ? [reply] : [];
     }
     if (message.kind === "auth") return this.handleAuth(message);
     if (message.kind === "work") return this.handleWork(message);

@@ -6,7 +6,7 @@ import {
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
 import { PmStore } from "./pm-store.js";
-import type { Redactor, WorkStoreLike } from "@amun/work-store";
+import type { AdoServiceLike, Redactor, WorkspaceLike, WorkStoreLike } from "@amun/work-store";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { buildTraceBundle } from "./trace/trace-bundle.js";
@@ -20,6 +20,8 @@ export interface AmunRpcDeps {
   primary: PrimarySessions;
   connections: ConnectionStore;
   work: WorkStoreLike;
+  workspace: WorkspaceLike;
+  ado: AdoServiceLike;
   amunHome: string;
   firstmateRoot: string;
   readSnapshot: (fmHome: string) => Promise<FleetSnapshot>;
@@ -32,7 +34,14 @@ export interface AmunRpcDeps {
 }
 
 /** Methods polled every few seconds; traced only when they fail. */
-const QUIET = new Set(["spaces.list", "fleet.snapshot", "holds.list", "work.snapshot", "connections.list"]);
+const QUIET = new Set([
+  "spaces.list",
+  "fleet.snapshot",
+  "holds.list",
+  "work.snapshot",
+  "workspace.snapshot",
+  "connections.list",
+]);
 
 /** Sent once, in the captain's name, so the First Mate keeps agent history. */
 export const HISTORY_REQUEST =
@@ -236,6 +245,12 @@ export class AmunRpcHandler {
         return this.deps.work.snapshot();
       case "work.command":
         return this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
+      case "workspace.snapshot":
+        return this.deps.workspace.snapshot();
+      case "workspace.command":
+        return this.deps.workspace.handle({ ...request.command, version: 1, kind: "workspace" }) ?? null;
+      case "ado.request":
+        return this.deps.ado.handle(request.message);
       case "trace.export":
         return this.exportTrace();
       case "trace.history":

@@ -221,6 +221,12 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // keep agent history (fleet ledger, status archive) in its home.
   z.object({ id: z.string(), method: z.literal("trace.export"), space: slug.optional() }),
   z.object({ id: z.string(), method: z.literal("trace.history"), space: slug }),
+  // Products, their mapped sources, PRDs and priorities (Amun's workspace
+  // contract), and Azure DevOps backlog reads and governed writes, which use
+  // the saved connection's Keychain token inside the daemon only.
+  z.object({ id: z.string(), method: z.literal("workspace.snapshot") }),
+  z.object({ id: z.string(), method: z.literal("workspace.command"), command: z.record(z.string(), z.unknown()) }),
+  z.object({ id: z.string(), method: z.literal("ado.request"), message: z.record(z.string(), z.unknown()) }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

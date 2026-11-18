@@ -1,0 +1,179 @@
+// Azure DevOps backlog reads and governed writes for a product, ported from
+// Amun Beta 0.9's service (backlog-read and ado-operation messages). The
+// token comes from the daemon's Keychain store and is registered with the
+// redactor before any request, so it never reaches a message or log.
+import { createHash } from "node:crypto";
+import {
+  adoOperation,
+  backlogRead,
+  type AdoOperation,
+} from "../../contracts/src/backlog.ts";
+import { BoardDiscovery } from "./ado-board-discovery.ts";
+import { AdoWriteClient } from "./ado-governed-writes.ts";
+import { runAdoOperation } from "./ado-operations.ts";
+import { projectSource } from "./ado-project-source.ts";
+import { fetchTransport } from "./ado-transport.ts";
+import type { Redactor } from "./redaction.ts";
+import type { Database } from "./sqlite.ts";
+import type { WorkspaceService } from "./workspace-service.ts";
+
+export interface AdoConnectionRef {
+  kind: string;
+  baseUrl: string;
+}
+export interface AdoAccess {
+  /** Saved connections (addresses only). */
+  connections(): Promise<AdoConnectionRef[]>;
+  /** The token for a connection, from Keychain; null when none is saved. */
+  secret(connection: AdoConnectionRef): Promise<string | null>;
+  fetch?: typeof fetch;
+}
+
+export const NO_AZURE_PROJECT =
+  "Connect an Azure DevOps project to this product first.";
+const NO_TOKEN = "Connect the mapped Azure collection in Settings.";
+
+function readFailure(raw: string): string {
+  if (raw === "request_rejected_403")
+    return "Azure denied read access to this board.";
+  if (raw === "request_rejected_401")
+    return "Azure sign-in expired. Check the connection in Settings.";
+  if (raw === "unknown_team")
+    return "I couldn’t find that team in this project.";
+  if (raw === NO_TOKEN || raw === NO_AZURE_PROJECT) return raw;
+  return "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
+}
+
+export class AdoService {
+  private last: { scope: string; reader: BoardDiscovery } | undefined;
+
+  constructor(
+    private readonly db: Database,
+    private readonly workspace: WorkspaceService,
+    private readonly access: AdoAccess,
+    private readonly redactor: Redactor,
+  ) {}
+
+  /** Answers a backlog-read or ado-operation message; null if it is neither. */
+  async handle(message: unknown): Promise<Record<string, unknown> | null> {
+    const kind =
+      message && typeof message === "object" && "kind" in message
+        ? (message as { kind: unknown }).kind
+        : null;
+    if (kind !== "backlog-read" && kind !== "ado-operation") return null;
+    const parsed =
+      kind === "ado-operation"
+        ? adoOperation.safeParse(message)
+        : backlogRead.safeParse(message);
+    if (!parsed.success) return null;
+    const request = parsed.data;
+    const meta = {
+      kind: "backlog-result",
+      productId: request.productId,
+      requestId: request.requestId,
+    };
+    try {
+      return await this.run(request, meta);
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : "";
+      if (request.kind === "ado-operation")
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          message:
+            raw === "revision_conflict"
+              ? "The Azure item changed. Your edits are retained. Reload its revision before saving."
+              : this.redactor.text(raw || "Azure operation failed."),
+        };
+      return { ...meta, view: "error", message: readFailure(raw) };
+    }
+  }
+
+  private async run(
+    request: AdoOperation | ReturnType<typeof backlogRead.parse>,
+    meta: { kind: string; productId: string; requestId: string },
+  ): Promise<Record<string, unknown>> {
+    const sources = this.workspace.productSources(request.productId);
+    const readOnlySprints =
+      request.kind === "backlog-read" &&
+      (request.action === "sprints" || request.action === "sprint-items");
+    const source =
+      sources.find((s) => s.id === request.sourceId && s.kind === "ado") ??
+      (readOnlySprints
+        ? sources.find((s) => s.kind === "ado" && s.reference)
+        : undefined);
+    if (!source?.reference) throw new Error(NO_AZURE_PROJECT);
+    const { connection, collection, project } = projectSource(
+      source.reference,
+      await this.access.connections(),
+    );
+    const secret = await this.access.secret(connection);
+    if (!secret) throw new Error(NO_TOKEN);
+    this.redactor.register(secret);
+    const scope = JSON.stringify([
+      request.productId,
+      source.id,
+      collection,
+      project,
+      createHash("sha256").update(secret).digest("hex"),
+    ]);
+    const transport = () =>
+      fetchTransport(collection, secret, this.access.fetch ?? fetch);
+    if (this.last?.scope !== scope)
+      this.last = {
+        scope,
+        reader: new BoardDiscovery(collection, project, transport()),
+      };
+    const d = this.last.reader;
+    if (request.kind === "ado-operation")
+      return runAdoOperation(
+        this.db,
+        request,
+        { collection, project, team: request.team },
+        d,
+        new AdoWriteClient(collection, project, transport()),
+        () => this.workspace.productSources(request.productId).length > 0,
+      );
+    if (request.action === "schema")
+      return { ...meta, view: "schema", schema: await d.processSchema() };
+    if (request.action === "teams")
+      return { ...meta, view: "teams", teams: await d.teams() };
+    if (request.action === "sprints" || request.action === "sprint-items") {
+      const wanted = request.team.toLowerCase();
+      const team = (await d.teams()).find(
+        (t) => t.id.toLowerCase() === wanted || t.name.toLowerCase() === wanted,
+      );
+      if (!team) throw new Error("unknown_team");
+      if (request.action === "sprints")
+        return {
+          ...meta,
+          view: "sprints",
+          team,
+          sprints: await d.sprints(team.id),
+        };
+      return {
+        ...meta,
+        view: "sprint-items",
+        sprint: request.sprint,
+        ...(await d.iterationItems(team.id, request.sprint)),
+      };
+    }
+    if (request.action === "options")
+      return { ...meta, view: "options", levels: await d.levels(request.team) };
+    const level = (await d.levels(request.team)).find(
+      (x) => x.id === request.level,
+    );
+    if (!level) throw new Error("Unknown backlog level");
+    const [settings, columns] = await Promise.all([
+      d.boardSettings(request.team, level.name),
+      d.columns(request.team, level.name),
+    ]);
+    return {
+      ...meta,
+      view: "cards",
+      columns,
+      cards: await d.cards(request.team, request.level, settings.columnField),
+      canEditBoard: settings.canEdit,
+    };
+  }
+}
