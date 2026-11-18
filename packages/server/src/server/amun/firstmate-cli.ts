@@ -169,3 +169,8 @@ export async function answerHoldDirect(
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+/** The tail of a crewmate's session, read-only, through Firstmate's fm-peek.sh. */
+export async function peekCrew(home: FirstmateHome, taskId: string, lines = 80): Promise<string> {
+  return script(home, "fm-peek.sh", [taskId, String(lines)], 15_000);
+}

@@ -25,6 +25,8 @@ export interface AmunRpcDeps {
   amunHome: string;
   firstmateRoot: string;
   readSnapshot: (fmHome: string) => Promise<FleetSnapshot>;
+  /** Read-only tail of a crewmate's session (fm-peek.sh). */
+  peekCrew?: (fmHome: string, taskId: string) => Promise<string>;
   trace: TraceLog;
   redactor: Redactor;
   /** The Paseo daemon log, included in trace bundles when known. */
@@ -38,6 +40,7 @@ const QUIET = new Set([
   "spaces.list",
   "fleet.snapshot",
   "holds.list",
+  "crew.peek",
   "work.snapshot",
   "workspace.snapshot",
   "connections.list",
@@ -187,6 +190,16 @@ export class AmunRpcHandler {
         return this.snapshot(request.space);
       case "holds.list":
         return holdsFromSnapshot(await this.snapshot(request.space));
+      case "crew.peek": {
+        const space = await this.deps.spaces.get(request.space);
+        if (!this.deps.peekCrew) return { live: false, text: "" };
+        try {
+          const text = await this.deps.peekCrew(space.fmHome, request.taskId);
+          return { live: true, text: this.deps.redactor.text(text).slice(-32_768) };
+        } catch {
+          return { live: false, text: "" };
+        }
+      }
       case "backlog.list": {
         const snapshot = await this.snapshot(request.space);
         return snapshot.backlog.records

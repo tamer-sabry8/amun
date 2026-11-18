@@ -168,6 +168,12 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   z.object({ id: z.string(), method: z.literal("holds.list"), space: slug }),
   z.object({
     id: z.string(),
+    method: z.literal("crew.peek"),
+    space: slug,
+    taskId: z.string().regex(/^[-a-zA-Z0-9_]{1,64}$/),
+  }),
+  z.object({
+    id: z.string(),
     method: z.literal("holds.answer"),
     space: slug,
     hold: captainHoldSchema,

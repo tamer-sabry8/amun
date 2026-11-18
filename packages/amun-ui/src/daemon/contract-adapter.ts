@@ -266,6 +266,9 @@ type Message = Record<string, unknown>;
 const UNAVAILABLE = "Not available in this Amun build yet.";
 
 /** Turns one renderer message into the replies the renderer expects. */
+/** The First Mate's provider, shown where the UI expects a model id. */
+export const FIRST_MATE_MODEL = "pi";
+
 export class ContractAdapter {
   private view: DaemonView = { spaces: [], fleet: [], holds: [], work: null };
   /** One First Mate per home, so one conversation for every product. */
@@ -413,7 +416,73 @@ export class ContractAdapter {
       return [await this.handleNativePi(message)];
     if (message.kind === "diagnostics" && typeof message.id === "string")
       return [await this.traceBundle(message.id)];
+    if (
+      message.kind === "crew-list" ||
+      message.kind === "refresh-crew" ||
+      message.kind === "crew-observe" ||
+      message.kind === "crew-session-read"
+    )
+      return this.handleCrew(message);
     return [];
+  }
+
+  /**
+   * Watching a crewmate is read-only: the roster comes from Firstmate's fleet
+   * snapshot and the live session from fm-peek.sh, through the daemon.
+   */
+  private async handleCrew(message: Message): Promise<unknown[]> {
+    if (message.kind === "crew-list" || message.kind === "refresh-crew") {
+      const ok = await this.refresh().then(
+        () => true,
+        () => false,
+      );
+      const members = ok
+        ? this.view.fleet.map((task) => ({
+            id: task.id,
+            state: task.current_state?.state ?? "unknown",
+            current: task.current_state?.detail || null,
+            endpoint: "unknown" as const,
+            access: null,
+            decisions: [],
+            next: [],
+            history: task.hints?.last_event_text
+              ? [task.hints.last_event_text]
+              : [],
+          }))
+        : null;
+      return [
+        { kind: "crew-roster", members },
+        {
+          version: 1,
+          kind: "crew-inventory",
+          tasks: members ? members.map((member) => member.id) : null,
+        },
+      ];
+    }
+    const taskId = String(message.taskId ?? "");
+    if (message.kind === "crew-observe")
+      return [
+        {
+          version: 1,
+          kind: "crew-observation",
+          taskId,
+          endpoint: "unknown",
+          worker: "unknown",
+        },
+      ];
+    const space = await this.ensureSpace();
+    const peek = await this.daemon
+      .request<{ live: boolean; text: string }>("crew.peek", { space, taskId })
+      .catch(() => ({ live: false, text: "" }));
+    return [
+      {
+        version: 1,
+        kind: "crew-session-text",
+        taskId,
+        live: peek.live,
+        text: peek.text.slice(-32768),
+      },
+    ];
   }
 
   /**
@@ -623,7 +692,9 @@ export class ContractAdapter {
     return {
       kind: "conversation",
       calm: true,
-      model: null,
+      // Pi runs the First Mate and picks its own model; the UI only needs to
+      // know one is there before it sends.
+      model: FIRST_MATE_MODEL,
       sessionId: conversation.sessionId,
       title: "First Mate",
       text: conversation.text,

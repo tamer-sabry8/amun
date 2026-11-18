@@ -42,7 +42,9 @@ export class AmunClient implements AmunTransport {
     string,
     { resolve: (v: unknown) => void; reject: (e: Error) => void }
   >();
-  private queue: string[] = [];
+  private queue: { id: string; frame: string }[] = [];
+  /** Requests written to the current socket and not answered yet. */
+  private sent = new Set<string>();
   private events = new Set<(event: AmunEventMessage) => void>();
   private statuses = new Set<(connected: boolean) => void>();
   private retry = 0;
@@ -63,7 +65,10 @@ export class AmunClient implements AmunTransport {
     socket.onopen = () => {
       this.retry = 0;
       for (const listener of this.statuses) listener(true);
-      for (const frame of this.queue.splice(0)) socket.send(frame);
+      for (const { id, frame } of this.queue.splice(0)) {
+        this.sent.add(id);
+        socket.send(frame);
+      }
     };
     socket.onmessage = (message) => {
       let data: Record<string, unknown>;
@@ -80,10 +85,12 @@ export class AmunClient implements AmunTransport {
         typeof data.id === "string" ? this.pending.get(data.id) : undefined;
       if (!waiter) return;
       this.pending.delete(data.id as string);
+      this.sent.delete(data.id as string);
       if (data.ok === true) waiter.resolve(data.result);
       else waiter.reject(new AmunRequestError(data.error as AmunRpcError));
     };
     socket.onclose = () => {
+      this.interruptSent();
       for (const listener of this.statuses) listener(false);
       if (this.closed) return;
       const delay = Math.min(10_000, 500 * 2 ** this.retry++);
@@ -102,9 +109,29 @@ export class AmunClient implements AmunTransport {
         resolve: resolve as (v: unknown) => void,
         reject,
       });
-      if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(frame);
-      else this.queue.push(frame);
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        this.sent.add(id);
+        this.socket.send(frame);
+      } else this.queue.push({ id, frame });
     });
+  }
+
+  /**
+   * A request already on the wire when the socket drops may or may not have
+   * run, so it fails instead of being sent again (it could change something).
+   */
+  private interruptSent() {
+    for (const id of this.sent) {
+      this.pending.get(id)?.reject(
+        new AmunRequestError({
+          code: "interrupted",
+          message:
+            "The connection to Amun's service dropped before it answered. Check whether it went through before trying again.",
+        }),
+      );
+      this.pending.delete(id);
+    }
+    this.sent.clear();
   }
 
   onEvent(listener: (event: AmunEventMessage) => void) {

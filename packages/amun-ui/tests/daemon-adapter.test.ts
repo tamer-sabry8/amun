@@ -10,6 +10,12 @@ import {
   traceBundle,
   traceBundleFailed,
 } from "../../contracts/src/diagnostics.ts";
+import {
+  crewInventory,
+  crewObservation,
+  crewRoster,
+  crewSessionText,
+} from "../../contracts/src/crew.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
 import { ContractAdapter } from "../src/daemon/contract-adapter.ts";
 import { openWorkStore } from "../../work-store/src/index.ts";
@@ -78,6 +84,7 @@ class FakeDaemon implements AmunTransport {
       "connections.list": this.connections,
       "connections.save": this.connections[0],
       "trace.history": { asked: true, ledger: false, archive: false },
+      "crew.peek": { live: true, text: "running tests\n12 passed" },
       "trace.export": {
         fileName: "amun-trace-1.zip",
         size: 3,
@@ -234,6 +241,8 @@ describe("daemon contract adapter", () => {
       }),
     });
     const reply = nativePiEvent.parse(sent).result;
+    // The UI refuses to send without a model, so one is always reported.
+    expect(open.model).toBe("pi");
     expect(reply).toMatchObject({
       kind: "conversation",
       replyCount: 1,
@@ -360,5 +369,40 @@ describe("daemon contract adapter", () => {
           .text,
       ),
     ).toContain("cite sources");
+  });
+
+  it("lets the captain watch a crewmate, read-only", async () => {
+    const { daemon, adapter } = make();
+    const [roster, inventory] = await adapter.handle({
+      version: 1,
+      kind: "crew-list",
+    });
+    expect(
+      crewRoster.parse(roster).members?.map((m) => [m.id, m.state]),
+    ).toEqual([
+      ["proto-w1", "needs-decision"],
+      ["scout-1", "working"],
+      ["product-manager", "blocked"],
+    ]);
+    expect(crewInventory.parse(inventory).tasks).toContain("scout-1");
+    const [observed] = await adapter.handle({
+      version: 1,
+      kind: "crew-observe",
+      taskId: "scout-1",
+    });
+    expect(crewObservation.parse(observed).taskId).toBe("scout-1");
+    const [session] = await adapter.handle({
+      version: 1,
+      kind: "crew-session-read",
+      taskId: "scout-1",
+    });
+    expect(crewSessionText.parse(session)).toMatchObject({
+      live: true,
+      text: "running tests\n12 passed",
+    });
+    expect(daemon.calls.find((c) => c.method === "crew.peek")?.params).toEqual({
+      space: "alpha",
+      taskId: "scout-1",
+    });
   });
 });

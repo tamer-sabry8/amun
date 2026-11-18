@@ -5,7 +5,7 @@ import type { AmunEvent } from "@getpaseo/protocol/amun-rpc";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
-import { holdsFromSnapshot, readFleetSnapshot } from "./firstmate-cli.js";
+import { holdsFromSnapshot, peekCrew, readFleetSnapshot } from "./firstmate-cli.js";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
@@ -31,6 +31,8 @@ export interface AttachAmunInput {
   env?: NodeJS.ProcessEnv;
   /** $PASEO_HOME/daemon.log, copied into trace bundles. */
   daemonLog?: string;
+  /** The daemon's trusted browser origins (CORS config plus the desktop app). */
+  allowedOrigins?: () => ReadonlySet<string>;
 }
 
 export interface AmunAttachment {
@@ -41,6 +43,28 @@ export interface AmunAttachment {
 function isLoopback(request: IncomingMessage): boolean {
   const address = request.socket.remoteAddress ?? "";
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * Browsers send an Origin header; a page from any website would otherwise
+ * reach /amun because the browser itself is on loopback. Allow non-browser
+ * clients (no Origin), the daemon's trusted origins, and pages served from
+ * this machine over http (Amun's UI in development).
+ */
+export function isAmunOriginAllowed(
+  origin: string | undefined,
+  allowed: ReadonlySet<string> = new Set(),
+): boolean {
+  if (origin === undefined) return true;
+  if (allowed.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function pathOf(request: IncomingMessage): string {
@@ -100,6 +124,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+    peekCrew: (fmHome, taskId) => peekCrew({ root: paths.firstmateRoot, fmHome }, taskId),
     trace,
     redactor: work.redactor,
     daemonLog: input.daemonLog ?? null,
@@ -116,7 +141,9 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
 
   const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
     if (pathOf(request) !== AMUN_WS_PATH) return;
-    if (!isLoopback(request)) {
+    const origin = request.headers.origin;
+    if (!isLoopback(request) || !isAmunOriginAllowed(origin, input.allowedOrigins?.())) {
+      input.logger.warn({ origin }, "Rejected /amun connection");
       socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       socket.destroy();
       return;

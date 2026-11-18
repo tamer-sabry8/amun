@@ -1048,6 +1048,7 @@ export async function createPaseoDaemon(
     agentManager,
     logger: rootLogger.child({ module: "amun" }),
     daemonLog: path.join(config.paseoHome, "daemon.log"),
+    allowedOrigins: () => allowedOrigins,
   });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(
