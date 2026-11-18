@@ -5,10 +5,7 @@ import {
   workspaceSnapshot,
 } from "@amun/contracts";
 import { workEvent } from "../../contracts/src/work.ts";
-import type {
-  AmunEventMessage,
-  AmunTransport,
-} from "../src/daemon/amun-client.ts";
+import type { AmunTransport } from "../src/daemon/amun-client.ts";
 import {
   ContractAdapter,
   memorySetupStore,
@@ -53,10 +50,10 @@ class FakeDaemon implements AmunTransport {
     };
     return results[method] as T;
   }
-  onEvent(_listener: (event: AmunEventMessage) => void) {
+  onEvent(): () => void {
     return () => {};
   }
-  onStatus(_listener: (connected: boolean) => void) {
+  onStatus(): () => void {
     return () => {};
   }
 }

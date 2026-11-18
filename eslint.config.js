@@ -4,6 +4,7 @@ export default tseslint.config(
     ignores: [
       ".remember/**",
       "**/dist/**",
+      "packages/amun-ui/build/**",
       "**/.runtime/**",
       "**/out/**",
       "**/coverage/**",
