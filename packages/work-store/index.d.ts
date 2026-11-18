@@ -14,4 +14,7 @@ export interface OpenedWorkStore {
   redactor: Redactor;
   close(): void;
 }
-export declare function openWorkStore(file: string, redactor?: Redactor): OpenedWorkStore;
+export declare function openWorkStore(
+  file: string,
+  redactor?: Redactor,
+): OpenedWorkStore;
