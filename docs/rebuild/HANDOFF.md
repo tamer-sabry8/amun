@@ -7,14 +7,13 @@
   - Underneath it sit the Paseo daemon and Tamer's own Firstmate.
 - **Who decides what.** Every product decision below came from Tamer, answered one question at a time on 18 November 2026. Each question had multiple choices and one recommended option.
 - **Firstmate is never changed.** `vendor/firstmate` is a pristine copy of upstream, and CI checks this on every push. Amun only reads Firstmate's files, and only acts through the First Mate.
-- **Still open:**
-  - A Mac test of Pi running headless.
-  - The trace bundle.
-  - The rest of the Azure DevOps work.
-  - The Agents screen.
-  - The Paseo features Tamer asked for (see "Still to do").
+- **Still open after the merge:**
+  - A Mac test of Pi running headless, on `main`.
+  - A test of Azure DevOps against Tamer's real server.
+  - Showing First Mate turns Amun didn't ask for (heartbeats, wakes) in the chat.
+  - The Paseo features Tamer asked for, and the remaining ports (see "Still to do").
 
-This file is updated with each commit. It is final when PR #33 merges.
+This file is final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here.
 
 ## How to read the decisions
 
@@ -230,6 +229,16 @@ Each decision lists:
   - Keep all 41 tools
 - **Answer:** Read-only plus heartbeats.
 - **Why:** Firstmate has condition-based checks (watcher checks, `fm-procevent-when.sh`) but no clock-based schedule such as "every Monday at 9 AM". A heartbeat is a timed prompt to the First Mate itself, which then works through Firstmate, so it adds that without a second way to start crew. The 22 blocked tools are listed in `packages/server/src/server/amun/first-mate-tools.ts`. A test fails when Paseo adds a new built-in tool, so each new tool has to be put on one list or the other on purpose. Plugin tools, such as browser tools, are not affected.
+
+### 20. When to merge PR #33
+
+- **Question:** Merge PR #33 now, or finish more cloud work first?
+- **Options:**
+  - Merge now ★
+  - Add heartbeat chat first
+  - Finish the Paseo wishlist
+- **Answer:** Merge now.
+- **Why:** The Pi test needs `main` on Tamer's Mac. Smaller follow-up PRs are easier to review than a bigger PR #33.
 
 ## Standing rules from Tamer
 
