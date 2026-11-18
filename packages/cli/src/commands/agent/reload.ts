@@ -1,0 +1,107 @@
+import { Command } from "commander";
+import { connectToDaemon } from "../../utils/client.js";
+import { resolveAgentEntry, type AgentLookupClient } from "../../utils/agent-directory.js";
+import type {
+  CommandOptions,
+  SingleResult,
+  OutputSchema,
+  CommandError,
+} from "../../output/index.js";
+
+export interface AgentReloadResult {
+  agentId: string;
+  status: "reloaded";
+  timelineSize: number;
+}
+
+export const reloadSchema: OutputSchema<AgentReloadResult> = {
+  idField: "agentId",
+  columns: [
+    { header: "AGENT ID", field: "agentId" },
+    { header: "STATUS", field: "status" },
+    { header: "TIMELINE", field: "timelineSize" },
+  ],
+};
+
+export function addReloadOptions(cmd: Command): Command {
+  return cmd
+    .description("Reload an agent (restarts the underlying process)")
+    .argument("<id>", "Agent ID, prefix, or name");
+}
+
+export interface AgentReloadOptions extends CommandOptions {
+  host?: string;
+}
+
+export type AgentReloadCommandResult = SingleResult<AgentReloadResult>;
+
+export interface AgentReloadClient extends AgentLookupClient {
+  refreshAgent(agentId: string): Promise<{ agentId: string; timelineSize?: number }>;
+  close(): Promise<void>;
+}
+
+export async function runReloadCommand(
+  agentIdArg: string,
+  options: AgentReloadOptions,
+  _command: Command,
+): Promise<AgentReloadCommandResult> {
+  return reloadAgent(agentIdArg, options);
+}
+
+export async function reloadAgent(
+  agentIdArg: string,
+  options: AgentReloadOptions,
+  connect: (
+    options: Parameters<typeof connectToDaemon>[0],
+  ) => Promise<AgentReloadClient> = connectToDaemon,
+): Promise<AgentReloadCommandResult> {
+  if (!agentIdArg || agentIdArg.trim().length === 0) {
+    const error: CommandError = {
+      code: "MISSING_AGENT_ID",
+      message: "Agent ID is required",
+      details: "Usage: paseo agent reload <id-or-name>",
+    };
+    throw error;
+  }
+
+  const client = await connect({ target: options.daemonTarget });
+
+  try {
+    const agent = await resolveAgentEntry(client, agentIdArg);
+    if (!agent) {
+      const error: CommandError = {
+        code: "AGENT_NOT_FOUND",
+        message: `Agent not found: ${agentIdArg}`,
+        details: 'Use "paseo ls" to list available agents',
+      };
+      throw error;
+    }
+
+    const result = await client.refreshAgent(agent.id);
+
+    await client.close();
+
+    return {
+      type: "single",
+      data: {
+        agentId: result.agentId,
+        status: "reloaded",
+        timelineSize: result.timelineSize ?? 0,
+      },
+      schema: reloadSchema,
+    };
+  } catch (err) {
+    await client.close().catch(() => {});
+
+    if (err && typeof err === "object" && "code" in err) {
+      throw err;
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+    const error: CommandError = {
+      code: "RELOAD_FAILED",
+      message: `Failed to reload agent: ${message}`,
+    };
+    throw error;
+  }
+}

@@ -1,0 +1,317 @@
+{
+  "schema": "fm-fleet-snapshot.v1",
+  "generated": "2026-11-18T03:16:02Z",
+  "fm_home": "/tmp/tmp.zdmuFUV6fe",
+  "roots": {
+    "fm_root": "/home/user/src/amun/vendor/firstmate",
+    "state": "/tmp/tmp.zdmuFUV6fe/state",
+    "data": "/tmp/tmp.zdmuFUV6fe/data",
+    "config": "/tmp/tmp.zdmuFUV6fe/config",
+    "projects": "/tmp/tmp.zdmuFUV6fe/projects"
+  },
+  "backlog": {
+    "records": [
+      {
+        "requires_child_metadata": true,
+        "blocked_reason": null,
+        "raw": "- [ ] proto-w1 - Wireframe checkout (kind: prototype) (since 2026-11-18)",
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "body_excerpt": null,
+        "hold_until": null,
+        "report_path": null,
+        "merged": null,
+        "blocked_by_ids": [],
+        "repo": null,
+        "links": [],
+        "order": 1,
+        "captain_actionable": false,
+        "local_note": null,
+        "hold_kind": null,
+        "priority": null,
+        "current_role": "worker",
+        "hold_bucket": null,
+        "body_lines": [],
+        "kind": "prototype",
+        "hold_age_days": 0,
+        "hold_reason": null,
+        "completion": {
+          "date": null,
+          "verb": null
+        },
+        "structured": true,
+        "blocked_by": null,
+        "unresolved_blocker_ids": [],
+        "checked": false,
+        "hold_set": null,
+        "since": "2026-11-18",
+        "title": "Wireframe checkout",
+        "state": "in_flight",
+        "id": "proto-w1"
+      },
+      {
+        "checked": false,
+        "unresolved_blocker_ids": [],
+        "blocked_by": null,
+        "id": "onboard-d1",
+        "state": "queued",
+        "title": "Discovery on onboarding",
+        "since": "2026-11-18",
+        "hold_set": null,
+        "body_lines": [],
+        "hold_bucket": null,
+        "current_role": "queued",
+        "priority": null,
+        "hold_kind": null,
+        "completion": {
+          "verb": null,
+          "date": null
+        },
+        "structured": true,
+        "hold_reason": null,
+        "hold_age_days": 0,
+        "kind": "scout",
+        "links": [],
+        "repo": null,
+        "blocked_by_ids": [],
+        "merged": null,
+        "report_path": null,
+        "hold_until": null,
+        "local_note": null,
+        "captain_actionable": false,
+        "order": 2,
+        "done": null,
+        "reported": null,
+        "blocked_reason": null,
+        "raw": "- [ ] onboard-d1 - Discovery on onboarding (kind: scout) (since 2026-11-18)",
+        "requires_child_metadata": false,
+        "body_excerpt": null,
+        "pr_url": null
+      },
+      {
+        "requires_child_metadata": false,
+        "blocked_reason": null,
+        "raw": "- [ ] billing-p1 - PRD for billing (kind: prd) (since 2026-11-18) (hold: Pick pricing tier) (hold-kind: captain)",
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "body_excerpt": null,
+        "hold_until": null,
+        "report_path": null,
+        "blocked_by_ids": [],
+        "merged": null,
+        "links": [],
+        "repo": null,
+        "captain_actionable": true,
+        "order": 3,
+        "local_note": null,
+        "hold_kind": "captain",
+        "priority": null,
+        "current_role": "queued",
+        "body_lines": [],
+        "hold_bucket": "live",
+        "hold_age_days": 0,
+        "kind": "prd",
+        "completion": {
+          "date": null,
+          "verb": null
+        },
+        "structured": true,
+        "hold_reason": "Pick pricing tier",
+        "unresolved_blocker_ids": [],
+        "blocked_by": null,
+        "checked": false,
+        "title": "PRD for billing",
+        "since": "2026-11-18",
+        "hold_set": null,
+        "state": "queued",
+        "id": "billing-p1"
+      }
+    ],
+    "path": "/tmp/tmp.zdmuFUV6fe/data/backlog.md",
+    "present": true
+  },
+  "tasks": [
+    {
+      "id": "proto-w1",
+      "kind": "ship",
+      "harness": "claude",
+      "mode": "local-only",
+      "yolo": "off",
+      "branch": null,
+      "project": "acme",
+      "spawn_gen": null,
+      "backend": "tmux",
+      "remote": null,
+      "paths": {
+        "meta": {
+          "path": "/tmp/tmp.zdmuFUV6fe/state/proto-w1.meta",
+          "present": true
+        },
+        "status_log": {
+          "path": "/tmp/tmp.zdmuFUV6fe/state/proto-w1.status",
+          "present": true,
+          "kind": "event_history",
+          "last_event": {
+            "state": "needs-decision",
+            "note": "one-page or two-step checkout?",
+            "raw": "needs-decision[layout]: one-page or two-step checkout?",
+            "age_seconds": null
+          }
+        },
+        "worktree": {
+          "path": "/root/.treehouse/acme/1/acme",
+          "present": false
+        },
+        "home": {
+          "path": null,
+          "present": false
+        },
+        "report": {
+          "path": "/tmp/tmp.zdmuFUV6fe/data/proto-w1/report.md",
+          "present": false
+        }
+      },
+      "secondmate_projects": [],
+      "current_state": {
+        "state": "unknown",
+        "source": "none",
+        "detail": "worktree gone (torn down?)",
+        "raw": "state: unknown · source: none · worktree gone (torn down?)",
+        "observed_at": "2026-11-18T03:16:02Z",
+        "freshness": "fresh"
+      },
+      "endpoint": {
+        "target": "firstmate:fm-proto-w1",
+        "exists": false,
+        "agent_alive": "not_checked",
+        "status": "absent",
+        "observed_at": "2026-11-18T03:16:02Z",
+        "freshness": "fresh"
+      },
+      "pr": {
+        "url": null,
+        "source": "absent",
+        "head": null
+      },
+      "hints": {
+        "pending_decision": true,
+        "blocked_event": false,
+        "open_decisions": [
+          {
+            "key": "default",
+            "verb": "needs-decision",
+            "summary": "one-page or two-step checkout?"
+          }
+        ],
+        "scout_report_present": false,
+        "last_event_text": "needs-decision[layout]: one-page or two-step checkout?"
+      },
+      "actions": {
+        "watch": "bin/fm-peek.sh fm-proto-w1",
+        "steer": "bin/fm-send.sh fm-proto-w1 '<instruction>'",
+        "return_channel_note": null
+      },
+      "backlog": {
+        "requires_child_metadata": true,
+        "blocked_reason": null,
+        "raw": "- [ ] proto-w1 - Wireframe checkout (kind: prototype) (since 2026-11-18)",
+        "reported": null,
+        "done": null,
+        "pr_url": null,
+        "body_excerpt": null,
+        "hold_until": null,
+        "report_path": null,
+        "merged": null,
+        "blocked_by_ids": [],
+        "repo": null,
+        "links": [],
+        "order": 1,
+        "captain_actionable": false,
+        "local_note": null,
+        "hold_kind": null,
+        "priority": null,
+        "current_role": "worker",
+        "hold_bucket": null,
+        "body_lines": [],
+        "kind": "prototype",
+        "hold_age_days": 0,
+        "hold_reason": null,
+        "completion": {
+          "date": null,
+          "verb": null
+        },
+        "structured": true,
+        "blocked_by": null,
+        "unresolved_blocker_ids": [],
+        "checked": false,
+        "hold_set": null,
+        "since": "2026-11-18",
+        "title": "Wireframe checkout",
+        "state": "in_flight",
+        "id": "proto-w1"
+      }
+    }
+  ],
+  "main_inventory": {
+    "valid": true,
+    "reason": null,
+    "orphan_in_flight": [],
+    "unstructured_current_count": 0
+  },
+  "contributions": {
+    "known": 0,
+    "checked": 0,
+    "counts": {
+      "captain": 0,
+      "fleet": 0,
+      "maintainer": 0,
+      "nobody": 0
+    },
+    "unmeasured": 0,
+    "complete": true,
+    "proven_clear": true,
+    "stale_verdicts": 0,
+    "missing_verdicts": 0,
+    "unreadable_records": 0,
+    "valid_until": 900,
+    "captain": [],
+    "captain_omitted": 0
+  },
+  "scout_reports": [],
+  "secondmate_current": {
+    "registry": {
+      "present": false,
+      "available": true,
+      "complete": true,
+      "reason": null,
+      "provenance": "registered-table",
+      "path": "/tmp/tmp.zdmuFUV6fe/data/secondmates.md",
+      "freshness": {
+        "status": "fresh",
+        "observed_at": "2026-11-18T03:16:02Z"
+      },
+      "records": [],
+      "input_truncated": false,
+      "records_truncated": false,
+      "reasons": [],
+      "lines_in_window": 0,
+      "records_in_window": 0
+    },
+    "records": [],
+    "total_registered": 0,
+    "total": 0,
+    "shown": 0,
+    "truncated": 0
+  },
+  "secondmate_landed": {
+    "records": [],
+    "truncated": [],
+    "unreadable": [],
+    "partial": []
+  },
+  "secondmate_guidance": {
+    "note": "For kind=secondmate, bearings selects validated structured state from that registered home; parent events and bounded terminal evidence are fallback-only supplements and never current-state authority."
+  }
+}

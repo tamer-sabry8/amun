@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { bridgeTools } from "../../pi-bridge/src/gate.ts";
+import { bridgeTools } from "./pi-bridge-gate.ts";
 
 const requestSchema = z.discriminatedUnion("op", [
   z.strictObject({
