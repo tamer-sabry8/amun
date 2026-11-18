@@ -120,7 +120,15 @@
     var(--amun-color-button-end)
   );
 }
-.rb .btn.primary:hover:not(:disabled) {
+.rb .btn.primary:hover:not(:disabled),
+.rb .btn.primary:active:not(:disabled) {
+  /* Keep the fill: the plain .btn hover would turn the label invisible. */
+  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    var(--amun-color-button-start),
+    var(--amun-color-button-end)
+  );
   filter: brightness(1.12);
 }
 .rb .btn.quiet {
@@ -436,6 +444,13 @@
 }
 .rb-island .btn {
   width: 100%;
+}
+/* Send and Back share one row: Send takes the room, Back keeps its label. */
+.rb-island .row .btn {
+  width: auto;
+}
+.rb-island .row .btn.quiet {
+  flex: none;
 }
 .rb-island textarea {
   width: 100%;
