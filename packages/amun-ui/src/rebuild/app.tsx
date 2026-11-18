@@ -2,6 +2,10 @@
 // earlier shell at its mount point; see docs/UX-REBUILD.md for what was
 // switched off and how to restore it.
 import {
+  asksForNewWork,
+  generalConversationName,
+} from "../../../../packages/domain/src/work/model.ts";
+import {
   useEffect,
   useReducer,
   useRef,
@@ -326,6 +330,27 @@ export function App() {
       return openWork(step.areaId, text);
     if (!result.ok || step.step === "unreadable" || step.step === "reminder")
       return setNote(result.message);
+    // A question or a request for Firstmate is not work to file: it goes
+    // straight to Firstmate, who answers from what was said. Only a message
+    // that itself asks for a new product, project, task or RFP is asked about.
+    if (step.step === "choose_work" && !asksForNewWork(text)) {
+      const group = step.groupId ?? null;
+      const standing = snapshot.areas.find(
+        (area) =>
+          area.name === generalConversationName &&
+          (group === null || area.groupId === group),
+      );
+      const areaId =
+        standing?.id ??
+        (
+          await workAsync("create-area", {
+            groupId: group,
+            type: "task",
+            name: generalConversationName,
+          })
+        ).ref;
+      if (areaId) return openWork(areaId, text);
+    }
     setPending({ ...step, step: step.step ?? "", text, files });
   };
   const view = homeModel(

@@ -191,6 +191,21 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
     space: slug,
     text: z.string().min(1).max(32000),
   }),
+  // The First Mate's model: what Pi offers from its signed-in accounts, and a
+  // switch for the running First Mate. Model sign-ins stay inside Pi; Amun
+  // only asks Pi whether a provider is ready.
+  z.object({ id: z.string(), method: z.literal("models.list"), space: slug }),
+  z.object({
+    id: z.string(),
+    method: z.literal("primary.setModel"),
+    space: slug,
+    model: z.string().regex(/^[-a-zA-Z0-9_.]{1,64}\/[-a-zA-Z0-9_.:/@]{1,200}$/),
+  }),
+  z.object({
+    id: z.string(),
+    method: z.literal("accounts.check"),
+    provider: z.string().regex(/^[a-z0-9][-a-z0-9]{0,63}$/),
+  }),
   z.object({ id: z.string(), method: z.literal("backlog.list"), space: slug }),
   z.object({ id: z.string(), method: z.literal("board.get"), space: slug }),
   z.object({ id: z.string(), method: z.literal("initiatives.list"), space: slug }),
@@ -233,6 +248,17 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   z.object({ id: z.string(), method: z.literal("workspace.snapshot") }),
   z.object({ id: z.string(), method: z.literal("workspace.command"), command: z.record(z.string(), z.unknown()) }),
   z.object({ id: z.string(), method: z.literal("ado.request"), message: z.record(z.string(), z.unknown()) }),
+  // Agent command-line tools on this Mac (the renderer's "tools" contract):
+  // look for them, and remember which the captain turned off or added.
+  z.object({ id: z.string(), method: z.literal("tools.request"), message: z.record(z.string(), z.unknown()) }),
+  // The Council (Roast Room), in the renderer's "council" contract: status,
+  // a run, seats on or off, updates and the live room. The Chair runs on this
+  // Mac's Claude Code (the captain's decision, 18 November 2026).
+  z.object({ id: z.string(), method: z.literal("council.request"), message: z.record(z.string(), z.unknown()) }),
+  // Notion (the renderer's "auth" notion-* actions and linked-memory
+  // commands). Sign-in is Notion's hosted MCP server in an external browser;
+  // answers that need the browser or the network arrive as renderer.event.
+  z.object({ id: z.string(), method: z.literal("notion.request"), message: z.record(z.string(), z.unknown()) }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];
@@ -252,6 +278,12 @@ export type AmunResponse = z.infer<typeof amunResponseSchema>;
 export const amunEventSchema = z.discriminatedUnion("event", [
   z.object({ event: z.literal("fleet.updated"), space: slug, snapshot: fleetSnapshotSchema }),
   z.object({ event: z.literal("holds.updated"), space: slug, holds: z.array(captainHoldSchema) }),
+  // Amun's own work model changed outside a request (a Council question
+  // arrived, or a council ended); the UI reads the work snapshot again.
+  z.object({ event: z.literal("work.updated") }),
+  // A message for the renderer, already in its own contract, that arrives
+  // after the request that caused it has been answered (a finished sign-in).
+  z.object({ event: z.literal("renderer.event"), message: z.record(z.string(), z.unknown()) }),
   z.object({
     event: z.literal("primary.output"),
     space: slug,

@@ -6,7 +6,15 @@ import {
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
 import { PmStore } from "./pm-store.js";
-import type { AdoServiceLike, Redactor, WorkspaceLike, WorkStoreLike } from "@amun/work-store";
+import type {
+  AdoServiceLike,
+  CouncilLike,
+  NotionLike,
+  Redactor,
+  ToolsServiceLike,
+  WorkspaceLike,
+  WorkStoreLike,
+} from "@amun/work-store";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { buildTraceBundle } from "./trace/trace-bundle.js";
@@ -14,6 +22,13 @@ import type { TraceLog } from "./trace/trace-log.js";
 import type { ConnectionStore } from "./connections/connection-store.js";
 import type { PrimarySessions } from "./primary-session.js";
 import type { ProductSpaceStore } from "./product-spaces.js";
+import {
+  UnknownModelError,
+  type AccountCheck,
+  type FirstMateModelChoice,
+  type FirstMateModelList,
+  type ModelHost,
+} from "./first-mate-models.js";
 
 export interface AmunRpcDeps {
   spaces: ProductSpaceStore;
@@ -33,6 +48,20 @@ export interface AmunRpcDeps {
   daemonLog?: string | null;
   /** The captain's Firstmate home (one for every product). */
   fmHome: string;
+  /** Pi's models and the running First Mate's model, through Paseo. */
+  models?: ModelHost;
+  /** The captain's saved model choice (Amun's own home). */
+  modelChoice?: FirstMateModelChoice;
+  /** Notion: sign-in, destination, disconnect and linked memory. */
+  notion?: NotionLike;
+  /** Sends the renderer a message after its request was answered. */
+  emit?: (message: Record<string, unknown>) => void;
+  /** The Council (Roast Room). */
+  council?: CouncilLike;
+  /** Agent command-line tools on this Mac and the captain's choices. */
+  tools?: ToolsServiceLike;
+  /** Asks Pi whether a provider is signed in. */
+  checkAccount?: (provider: string) => Promise<AccountCheck>;
 }
 
 /** Methods polled every few seconds; traced only when they fail. */
@@ -44,6 +73,9 @@ const QUIET = new Set([
   "work.snapshot",
   "workspace.snapshot",
   "connections.list",
+  "models.list",
+  "accounts.check",
+  "tools.request",
 ]);
 
 /** Sent once, in the captain's name, so the First Mate keeps agent history. */
@@ -161,6 +193,19 @@ export class AmunRpcHandler {
     return { asked: true, ledger, archive };
   }
 
+  private async listModels(fmHome: string): Promise<FirstMateModelList> {
+    const host = this.deps.models;
+    if (!host) return { current: null, models: [] };
+    const offered = await host.listModels();
+    const agentId = this.deps.primary.agentFor(fmHome);
+    const current =
+      (agentId ? host.currentModel(agentId) : null) ??
+      this.deps.modelChoice?.read() ??
+      offered.find((model) => model.isDefault)?.id ??
+      null;
+    return { current, models: offered.map(({ id, label }) => ({ id, label })) };
+  }
+
   private async withStore<T>(slug: string, use: (store: PmStore) => T): Promise<T> {
     const space = await this.deps.spaces.get(slug);
     const store = PmStore.forHome(space.fmHome, this.deps.amunHome);
@@ -245,6 +290,26 @@ export class AmunRpcHandler {
         const space = await this.deps.spaces.get(request.space);
         return this.deps.primary.send(space, request.text);
       }
+      case "models.list": {
+        const space = await this.deps.spaces.get(request.space);
+        return this.listModels(space.fmHome);
+      }
+      case "primary.setModel": {
+        const models = this.deps.models;
+        if (!models) throw new Error("Models are not available in this daemon");
+        const offered = await models.listModels();
+        if (!offered.some((model) => model.id === request.model))
+          throw new UnknownModelError(request.model);
+        const space = await this.deps.spaces.get(request.space);
+        const { agentId } = await this.deps.primary.start(space);
+        const model = (await models.setModel(agentId, request.model)) ?? request.model;
+        this.deps.modelChoice?.write(model);
+        return { model };
+      }
+      case "accounts.check": {
+        if (!this.deps.checkAccount) throw new Error("Accounts are not available in this daemon");
+        return this.deps.checkAccount(request.provider);
+      }
       case "connections.list":
         return this.deps.connections.list();
       case "connections.save":
@@ -262,6 +327,21 @@ export class AmunRpcHandler {
         return this.deps.workspace.snapshot();
       case "workspace.command":
         return this.deps.workspace.handle({ ...request.command, version: 1, kind: "workspace" }) ?? null;
+      case "notion.request": {
+        if (!this.deps.notion) throw new Error("Notion is not available in this daemon");
+        return this.deps.notion.handle(
+          { ...request.message, version: 1 },
+          (message) => this.deps.emit?.(message),
+        );
+      }
+      case "council.request": {
+        if (!this.deps.council) throw new Error("The Council is not available in this daemon");
+        return this.deps.council.handle({ ...request.message, version: 1, kind: "council" });
+      }
+      case "tools.request": {
+        if (!this.deps.tools) throw new Error("Tools are not available in this daemon");
+        return this.deps.tools.handle({ ...request.message, version: 1, kind: "tools" });
+      }
       case "ado.request":
         return this.deps.ado.handle(request.message);
       case "trace.export":

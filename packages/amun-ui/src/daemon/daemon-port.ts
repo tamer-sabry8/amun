@@ -43,7 +43,17 @@ export function installDaemonPort(url: string = defaultDaemonUrl()) {
   });
   client.onEvent((event) => {
     if (!local) return;
-    if (event.event === "fleet.updated" || event.event === "holds.updated") {
+    // Already in the renderer's own contract (a finished Notion sign-in).
+    if (event.event === "renderer.event" && event.message) {
+      local.postMessage(event.message);
+      return;
+    }
+    if (
+      event.event === "fleet.updated" ||
+      event.event === "holds.updated" ||
+      // A Council question arrived, or a council ended.
+      event.event === "work.updated"
+    ) {
       void adapter.refresh().then(
         () => local?.postMessage(adapter.work()),
         () => {},

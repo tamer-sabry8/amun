@@ -5,19 +5,33 @@ import type { AmunEvent } from "@getpaseo/protocol/amun-rpc";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
-import { holdsFromSnapshot, peekCrew, readFleetSnapshot } from "./firstmate-cli.js";
+import {
+  holdsFromSnapshot,
+  peekCrew,
+  readFleetSnapshot,
+  shareFleetSnapshots,
+} from "./firstmate-cli.js";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
-import { openAdo, openWorkStore } from "@amun/work-store";
+import { openAdo, openCouncil, openNotion, openWorkStore } from "@amun/work-store";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { TraceLog } from "./trace/trace-log.js";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
+import {
+  checkPiAccount,
+  FirstMateModelChoice,
+  piOnPath,
+  type ListedModel,
+  type ModelHost,
+} from "./first-mate-models.js";
 import { ProductSpaceStore } from "./product-spaces.js";
 
 export const AMUN_WS_PATH = "/amun";
 const FLEET_POLL_MS = 5_000;
+const COUNCIL_POLL_MS = 1_500;
+const COUNCIL_UPDATE_CHECK_MS = 6 * 3_600_000;
 
 interface AmunLogger {
   info(obj: object, msg?: string): void;
@@ -33,6 +47,8 @@ export interface AttachAmunInput {
   daemonLog?: string;
   /** The daemon's trusted browser origins (CORS config plus the desktop app). */
   allowedOrigins?: () => ReadonlySet<string>;
+  /** The models Pi offers from its signed-in accounts (Paseo's Pi provider). */
+  listPiModels?: () => Promise<ListedModel[]>;
 }
 
 export interface AmunAttachment {
@@ -81,11 +97,33 @@ export function agentManagerHost(agentManager: AgentManager): PrimaryHost {
         undefined,
         { env: launch.env, initialTitle: launch.title, workspaceId: undefined },
       );
+      // A saved model that Pi no longer offers must not stop the First Mate.
+      if (launch.model)
+        await agentManager.setAgentModel(agent.id, launch.model).catch(() => undefined);
       return { agentId: agent.id };
     },
     async runAgent(agentId, text) {
       const result = await agentManager.runAgent(agentId, text);
       return { finalText: result.finalText };
+    },
+  };
+}
+
+/** The model picker's view of Paseo: Pi's catalog and the running agent's model. */
+export function agentManagerModelHost(
+  agentManager: AgentManager,
+  listPiModels: () => Promise<ListedModel[]>,
+): ModelHost {
+  function currentModel(agentId: string): string | null {
+    const agent = agentManager.getAgent(agentId);
+    return agent?.runtimeInfo?.model ?? agent?.config.model ?? null;
+  }
+  return {
+    listModels: listPiModels,
+    currentModel,
+    async setModel(agentId, model) {
+      await agentManager.setAgentModel(agentId, model);
+      return currentModel(agentId);
     },
   };
 }
@@ -109,13 +147,42 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const work = openWorkStore(path.join(paths.amunHome, "work.db"));
   const connections = new ConnectionStore(paths.amunHome, keychainSecretStore());
   const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: work.redactor });
-  const primary = new PrimarySessions(agentManagerHost(input.agentManager), paths.firstmateRoot);
+  const modelChoice = new FirstMateModelChoice(paths.amunHome);
+  const primary = new PrimarySessions(
+    agentManagerHost(input.agentManager),
+    paths.firstmateRoot,
+    () => modelChoice.read(),
+  );
+  const runPi = piOnPath(() => env.PATH ?? "");
+  // Notion signs in through its hosted MCP server; the grant lives in the
+  // Keychain under the same service as Amun's other connections.
+  const notion = openNotion(work, {
+    root: path.join(paths.amunHome, "notion"),
+    workspace: "amun",
+    secrets: keychainSecretStore(),
+  });
+  // The Council keeps its advisors, sessions and questions in Amun's own home.
+  const council = openCouncil(work, {
+    root: path.join(paths.amunHome, "roast-room"),
+    vendor: env.AMUN_COUNCIL_VENDOR ?? null,
+    path: () => env.PATH ?? "",
+  });
+  const snapshots = shareFleetSnapshots((fmHome) =>
+    readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+  );
   const handler = new AmunRpcHandler({
     spaces,
     primary,
     connections,
     work: work.store,
     workspace: work.workspace,
+    tools: work.tools,
+    council,
+    notion,
+    emit: (message) => {
+      const event: AmunEvent = { event: "renderer.event", message };
+      for (const ws of wss.clients) send(ws, event);
+    },
     ado: openAdo(work, {
       connections: () => connections.list(),
       secret: async (connection) =>
@@ -123,12 +190,15 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     }),
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
-    readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+    readSnapshot: (fmHome) => snapshots.read(fmHome),
     peekCrew: (fmHome, taskId) => peekCrew({ root: paths.firstmateRoot, fmHome }, taskId),
     trace,
     redactor: work.redactor,
     daemonLog: input.daemonLog ?? null,
     fmHome: paths.fmHome,
+    models: agentManagerModelHost(input.agentManager, input.listPiModels ?? (async () => [])),
+    modelChoice,
+    checkAccount: (provider) => checkPiAccount(provider, runPi),
   });
   trace.record({ source: "amun", kind: "daemon-start", fmHome: paths.fmHome });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
@@ -179,7 +249,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     for (const slug of slugs) {
       void spaces
         .get(slug)
-        .then((space) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome: space.fmHome }))
+        .then((space) => snapshots.readFresh(space.fmHome))
         .then((snapshot) => {
           const { generated: _generated, ...stable } = snapshot;
           const digest = JSON.stringify(stable);
@@ -203,6 +273,32 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   }, FLEET_POLL_MS);
   timer.unref();
 
+  // Chair questions reach the captain as attention items, and answers go
+  // back; connected UIs are told when that (or a finished council) shows.
+  let councilPolling = false;
+  const councilTimer = setInterval(() => {
+    if (councilPolling) return;
+    councilPolling = true;
+    void council
+      .poll()
+      .then((changed) => {
+        if (!changed) return;
+        const event: AmunEvent = { event: "work.updated" };
+        for (const ws of wss.clients) send(ws, event);
+      })
+      .catch((error: unknown) => input.logger.warn({ err: error }, "amun council poll failed"))
+      .finally(() => {
+        councilPolling = false;
+      });
+  }, COUNCIL_POLL_MS);
+  councilTimer.unref();
+  // Weekly, validated, automatic; the previous version is kept for going back.
+  const checkCouncilUpdate = () => void council.checkUpdate().catch(() => undefined);
+  const councilFirstCheck = setTimeout(checkCouncilUpdate, 60_000);
+  councilFirstCheck.unref();
+  const councilUpdateTimer = setInterval(checkCouncilUpdate, COUNCIL_UPDATE_CHECK_MS);
+  councilUpdateTimer.unref();
+
   input.logger.info(
     { path: AMUN_WS_PATH, fmHome: paths.fmHome, firstmateRoot: paths.firstmateRoot },
     "Amun RPC mounted",
@@ -211,6 +307,11 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     handler,
     close() {
       clearInterval(timer);
+      clearInterval(councilTimer);
+      clearInterval(councilUpdateTimer);
+      clearTimeout(councilFirstCheck);
+      council.stop();
+      notion.stop();
       work.close();
       input.httpServer.off("upgrade", onUpgrade);
       for (const ws of wss.clients) ws.close();

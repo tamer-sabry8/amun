@@ -27,9 +27,14 @@ export interface AdoAccess {
 export interface AdoServiceLike {
   handle(message: unknown): Promise<Record<string, unknown> | null>;
 }
+/** Agent command-line tools found on this Mac, and the owner's choices. */
+export interface ToolsServiceLike {
+  handle(message: unknown): Promise<Record<string, unknown>>;
+}
 export interface OpenedWorkStore {
   store: WorkStoreLike;
   workspace: WorkspaceLike;
+  tools: ToolsServiceLike;
   redactor: Redactor;
   close(): void;
 }
@@ -41,3 +46,34 @@ export declare function openAdo(
   opened: OpenedWorkStore,
   access: AdoAccess,
 ): AdoServiceLike;
+/** The Council (Roast Room): status, runs, seats, updates and the room. */
+export interface CouncilLike {
+  handle(message: unknown): Promise<unknown[]>;
+  /** True when something the UI shows changed (a question, or a council ended). */
+  poll(): Promise<boolean>;
+  checkUpdate(): Promise<void>;
+  stop(): void;
+}
+export declare function openCouncil(
+  opened: OpenedWorkStore,
+  options: { root: string; vendor?: string | null; path?: () => string },
+): CouncilLike;
+/** The Mac's credential store, as the daemon reaches it. */
+export interface NotionSecretStore {
+  get(account: string): Promise<string | undefined>;
+  set(account: string, secret: string): Promise<void>;
+  delete(account: string): Promise<void>;
+}
+/** Notion: browser sign-in, destination check, disconnect, memory sync. */
+export interface NotionLike {
+  /** What is known at once; the rest arrives later through `emit`. */
+  handle(
+    message: unknown,
+    emit: (event: Record<string, unknown>) => void,
+  ): Record<string, unknown>[];
+  stop(): void;
+}
+export declare function openNotion(
+  opened: OpenedWorkStore,
+  options: { root: string; workspace: string; secrets: NotionSecretStore },
+): NotionLike;

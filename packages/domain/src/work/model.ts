@@ -257,6 +257,20 @@ export function intake(input: {
   return { step: "choose_work", type: kind.type, options: inferred.options };
 }
 
+/**
+ * Where a message goes when it is a question or a request for Firstmate and
+ * not a piece of work to file: one standing conversation per group. The owner
+ * is never asked "where does this belong?" for it (owner, 18 November 2026).
+ */
+export const generalConversationName = "Chat with Firstmate";
+
+const newWorkRequest =
+  /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b/i;
+/** True only when the message itself asks for new work of a named kind. */
+export function asksForNewWork(text: string): boolean {
+  return newWorkRequest.test(text.trim().split("\n")[0]?.trim() ?? "");
+}
+
 /** Library › Needs linking and the single Home line when more than ten pile up (Q79). */
 export function needsLinking(records: SupportingRecord[]) {
   const pending = records.filter(

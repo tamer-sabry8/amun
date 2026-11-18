@@ -11,3 +11,4 @@ test-results/
 *.tsbuildinfo
 packages/*/dist/
 packages/amun-ui/build/
+packages/desktop/.runtime/

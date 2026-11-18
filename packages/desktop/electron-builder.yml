@@ -2,8 +2,13 @@ npmRebuild: false
 appId: ai.transfrm.amun
 productName: Amun
 executableName: Amun
+# Amun: ship only the interface languages Amun uses (saves about 40 MB of
+# Chromium locale files).
+electronLanguages:
+  - en
+  - ar
 protocols:
-  - name: Paseo agent link
+  - name: Amun agent link
     schemes:
       - paseo
 afterPack: ./scripts/after-pack.js
@@ -37,6 +42,10 @@ extraResources:
     to: app-dist
   - from: ../../vendor/firstmate
     to: firstmate
+  # Amun: the pinned, checksum-verified Roast Room for the Council
+  # (npm run council:stage at the repository root).
+  - from: .runtime/roast-room
+    to: roast-room
   - from: assets/editor-targets
     to: editor-target-icons
 publish:

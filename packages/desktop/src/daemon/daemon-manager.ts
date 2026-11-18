@@ -281,6 +281,17 @@ function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
   }
 }
 
+/**
+ * Amun: the Amun UI never sends `start_desktop_daemon` (Paseo's own UI did),
+ * so the main process starts the built-in daemon itself at launch. Without it
+ * the window stays on "Opening Amun…" because nothing listens on /amun.
+ */
+export async function startDesktopDaemonOnLaunch(): Promise<DesktopDaemonStatus | null> {
+  const settings = await getDesktopSettingsStore().get();
+  if (!settings.daemon.manageBuiltInDaemon) return null;
+  return startDaemon();
+}
+
 async function startDaemon(): Promise<DesktopDaemonStatus> {
   assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
 
@@ -322,6 +333,10 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
         PASEO_CLI: getBundledCliShimPath(),
         ...(app.isPackaged && !invocation.env.AMUN_FIRSTMATE_ROOT
           ? { AMUN_FIRSTMATE_ROOT: path.join(process.resourcesPath, "firstmate") }
+          : {}),
+        // Amun: the pinned Roast Room staged with this build (the Council).
+        ...(app.isPackaged && !invocation.env.AMUN_COUNCIL_VENDOR
+          ? { AMUN_COUNCIL_VENDOR: path.join(process.resourcesPath, "roast-room") }
           : {}),
       },
       mode: "managed",

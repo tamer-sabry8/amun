@@ -1,0 +1,11 @@
+{
+  "name": "@amun/notion",
+  "version": "0.10.0",
+  "private": true,
+  "type": "module",
+  "description": "Amun's Notion connection through Notion's hosted MCP server (from Amun Beta 0.9), bundled into the daemon by @amun/work-store.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "proper-lockfile": "4.1.2"
+  }
+}
