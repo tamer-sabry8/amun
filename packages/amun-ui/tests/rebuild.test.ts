@@ -766,7 +766,8 @@ describe("destinations", () => {
     expect(plain).toContain("PR/FAQ · OST · RICE · PRD");
     expect(html).toMatch(/aria-label="Product Manager"/);
     expect(plain).toContain("Amazon Working Backwards PR/FAQ");
-    expect(plain).toContain("Remove from team");
+    expect(plain).toContain("Edit Agent");
+    expect(plain).toContain("Retire Agent");
     expect(html).toMatch(/aria-pressed="true"[^>]*><span class="rb-avatar"/);
     expect(plain).not.toMatch(/terminal/i);
   });

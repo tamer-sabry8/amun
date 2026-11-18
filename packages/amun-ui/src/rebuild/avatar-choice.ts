@@ -53,5 +53,6 @@ export function useChosenAvatar(role: string): string | null {
       return () => listeners.delete(listener);
     },
     () => chosenAvatar(role),
+    () => null,
   );
 }
