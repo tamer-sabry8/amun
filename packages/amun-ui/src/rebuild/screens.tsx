@@ -1966,10 +1966,15 @@ export function Sprints({
 // ── Portfolio ────────────────────────────────────────────────────────────────
 export function Portfolio({
   snapshot,
+  model,
   onWork,
+  onAsk,
 }: {
   snapshot: Snapshot;
+  model: string | null;
   onWork(areaId: string): void;
+  /** Sends a message to Firstmate, the same way Home does. */
+  onAsk(text: string, files: string[]): void;
 }) {
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
@@ -1992,6 +1997,17 @@ export function Portfolio({
     <Page
       title="Portfolio"
       line="Every product, project, task and RFP. Open one to continue its conversation."
+      footer={
+        <Composer
+          placeholder="Ask Firstmate, or give it an objective"
+          model={model}
+          workAreas={snapshot.areas.map((area) => ({
+            id: area.id,
+            name: area.name,
+          }))}
+          onSend={onAsk}
+        />
+      }
       actions={
         <>
           {!snapshot.setup.activeGroupId && snapshot.groups.length > 1 && (

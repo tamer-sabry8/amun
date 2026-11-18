@@ -79,6 +79,7 @@ const send = (
 export class CouncilService {
   private readonly deps: CouncilDeps;
   private running: { sessionId: string; process: ChairProcess } | null = null;
+  private starting = false;
   private message = "";
   private roomUrl: string | null = null;
   private installing: Promise<void> | null = null;
@@ -244,8 +245,30 @@ export class CouncilService {
     if (!command)
       return { ok: false, reason: "That is not a Council command." };
     if (command.kind === "error") return { ok: false, reason: command.message };
-    if (this.running)
+    // Reserved before the first wait, so two requests arriving together
+    // cannot both start a Chair.
+    if (this.running || this.starting)
       return { ok: false, reason: "A council is already in session." };
+    this.starting = true;
+    try {
+      return await this.start(command, input);
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  private async start(
+    command: Exclude<
+      NonNullable<ReturnType<typeof parseCouncilCommand>>,
+      { kind: "error" }
+    >,
+    input: {
+      text: string;
+      workAreaId: string | null;
+      groupId: string | null;
+      context?: string;
+    },
+  ): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }> {
     await this.ensureInstalled();
     const manifest = await readManifest(this.deps.root);
     if (!manifest.current)
@@ -389,45 +412,55 @@ export class CouncilService {
     // Idle most of the time: do not build a snapshot unless the Chair asked.
     if (!waitingOn.length) return;
     const attention = this.deps.records.snapshot().attention;
+    const session = (state: "waiting_on_you" | "running") => {
+      if (this.running)
+        send(this.deps.records, "council-session", {
+          sessionId: this.running.sessionId,
+          decision: "-",
+          groupId: null,
+          workAreaId: null,
+          mode: "-",
+          state,
+        });
+    };
     for (const question of waitingOn) {
-      const ref = "council-question:" + question.id;
-      const item = attention.find((entry) => entry.ref === ref);
-      if (!item) {
+      // The Chair may ask up to four things at once. Each gets its own card,
+      // and the Chair only hears back once every one has been answered, in
+      // the order it asked.
+      const refs = question.questions.map(
+        (_, index) =>
+          "council-question:" + question.id + (index ? ":" + index : ""),
+      );
+      const items = refs.map((ref) =>
+        attention.find((entry) => entry.ref === ref),
+      );
+      let asked = false;
+      question.questions.forEach((entry, index) => {
+        if (items[index]) return;
+        asked = true;
         send(this.deps.records, "attention", {
           attentionKind: "question",
           groupId: null,
           workAreaId: null,
-          title: question.questions[0]!.question,
+          title: entry.question,
           detail:
             question.questions.length > 1
-              ? question.questions
-                  .slice(1)
-                  .map((entry) => entry.question)
-                  .join(" · ")
+              ? `The Council’s Chair needs this to continue (question ${index + 1} of ${question.questions.length}).`
               : "The Council’s Chair needs this to continue.",
-          ref,
-          options: question.questions[0]!.options,
+          ref: refs[index],
+          options: entry.options,
         });
-        if (this.running)
-          send(this.deps.records, "council-session", {
-            sessionId: this.running.sessionId,
-            decision: "-",
-            groupId: null,
-            workAreaId: null,
-            mode: "-",
-            state: "waiting_on_you",
-          });
-      } else if (item.state === "done" && item.answer !== null) {
-        await answer(this.bridge, question.id, [item.answer]);
-        if (this.running)
-          send(this.deps.records, "council-session", {
-            sessionId: this.running.sessionId,
-            decision: "-",
-            groupId: null,
-            workAreaId: null,
-            mode: "-",
-            state: "running",
-          });
+      });
+      if (asked) {
+        session("waiting_on_you");
+        continue;
+      }
+      const answers = items.map((item) =>
+        item?.state === "done" && item.answer !== null ? item.answer : null,
+      );
+      if (answers.every((value): value is string => value !== null)) {
+        await answer(this.bridge, question.id, answers);
+        session("running");
       }
     }
   }

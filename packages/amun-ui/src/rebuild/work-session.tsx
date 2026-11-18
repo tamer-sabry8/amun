@@ -1863,14 +1863,21 @@ export function WorkSession({
   const { area } = context;
   const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
-  // The First Mate's held questions (no work area) belong in every chat with it.
+  // Only this work's own questions. The First Mate's standing holds (often a
+  // dozen) used to be listed in every chat, below the messages, which pushed
+  // what the owner had just sent out of sight. They are answered from Needs
+  // your attention and from the Firstmate card, which is on every screen.
   const questions = snapshot.attention.filter(
     (item) =>
       item.kind === "question" &&
       item.state === "open" &&
-      (item.workAreaId === areaId ||
-        (item.workAreaId === null && item.id.startsWith("hold:"))),
+      item.workAreaId === areaId,
   );
+  // Firstmate hands work to its crew; name who is working while it is busy.
+  const crewAtWork = snapshot.agents
+    .filter((agent) => agent.kind !== "lead" && agent.state === "working")
+    .map((agent) => agent.role)
+    .slice(0, 6);
   const lastMessage = context.messages.at(-1);
   const lastAsk =
     lastMessage?.role === "firstmate" &&
@@ -2597,6 +2604,12 @@ export function WorkSession({
                 <p className="muted rb-working" role="status">
                   <FirstmateMark size={22} mood="working" />
                   Firstmate is working…
+                  {crewAtWork.length > 0 && (
+                    <span className="small">
+                      {" "}
+                      Crew at work: {crewAtWork.join(", ")}.
+                    </span>
+                  )}
                 </p>
               )}
               {attachments.problem && (

@@ -454,6 +454,21 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config electron-builder
 
 This is the ad-hoc-signed trusted-tester build (`AGENTS.md`). Hardened runtime must be off for it: macOS refuses to load Electron in an ad-hoc-signed app with hardened runtime on.
 
+### Second round, same day (the follow-up PR)
+
+Found in Tamer's next test of the merged build.
+
+- **One stuck message blocked every message after it.** A first message to a freshly started First Mate was not acknowledged by Pi within Paseo's one-minute limit. Paseo reported a failure but kept the turn open, so every later message failed with "Agent … already has an active run". Now messages for a home are answered one at a time in order (`PrimarySessions.send`), a failed turn is closed so the next one can run, Pi has five minutes to acknowledge, and failures are said in plain words with no agent id.
+- **Slash commands did nothing.** `/model` and `/theme` were only suggestions; nothing carried them out, and Enter erased any words typed after a command. Amun now carries out `/model` and `/theme` itself in every message box (`packages/amun-ui/src/rebuild/app-commands.ts`). The work commands (`/prd`, `/stories`, `/research`, `/sprint plan`, `/prioritize`, `/update`) reach Firstmate in plain words. Firstmate's own skills (`/ahoy`, `/bearings`, `/afk`, `/quiet`) are sent to the First Mate as `/skill:name`, which Pi expands; this is from Pi's documentation and was not run against the real home. `/stow` is not sent: `AGENTS.md` requires it to run on the Mac only with pinned changes reviewed one by one, and that local path is not restored yet. `/updatefirstmate` is refused here (`AGENTS.md`: never run the update skill on an operational home). `/calm` and `/supervision-model` say they are not available inside Amun yet.
+- **The owner's message was pushed out of sight.** Firstmate's standing holds (a dozen on Tamer's home) were listed in every conversation, below the messages. A conversation now shows only its own questions; standing holds are answered from Needs your attention and the Firstmate card.
+- **Answering a hold gave no sign.** The answer is now shown at once under Done ("You answered: …. Firstmate is reading it."), and the hold comes back open, saying why, if the answer did not reach Firstmate.
+- **Questions appeared minutes after launch.** The last fleet snapshot is kept in `~/.amun/fleet-snapshots/` and shown at launch until the home has been read again.
+- **Chat on other screens.** Portfolio has the message box; a message sent from there goes the same way as from Home.
+- **Who is working.** While Firstmate is busy, the conversation names the crew that are working, from the fleet snapshot.
+- **Council review findings (Codex, PR #35).** Each question in a batched Chair request gets its own card and the Chair hears back only when all are answered, in order; and two run requests arriving together start one Chair.
+
+Still open from this round: a new First Mate agent is created each time the daemon starts (the earlier ones stay in Paseo's registry and their conversation is not resumed).
+
 ### Open after this work
 
 - The first-run wizard exists (`packages/amun-ui/src/rebuild/wizard.tsx`) and is still switched off. Its Agents step would mark all 20 suggested agents as on the team without asking the First Mate. Tamer has not yet decided how that step should behave.

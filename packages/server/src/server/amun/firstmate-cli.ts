@@ -102,6 +102,10 @@ export interface ShareFleetSnapshotsOptions {
   freshMs?: number;
   /** How long `read` waits for the very first snapshot before giving way. */
   firstWaitMs?: number;
+  /** The snapshot kept from the last run of the app, shown until a new one is read. */
+  load?: (fmHome: string) => FleetSnapshot | null;
+  /** Keeps a snapshot for the next run of the app. */
+  save?: (fmHome: string, snapshot: FleetSnapshot) => void;
   now?: () => number;
 }
 
@@ -132,7 +136,9 @@ export function shareFleetSnapshots(
   function entryFor(fmHome: string): SharedFleetSnapshotEntry {
     let entry = entries.get(fmHome);
     if (!entry) {
-      entry = { inFlight: null, value: null, freshUntil: 0 };
+      // What was known when the app last ran is shown at once, and replaced
+      // as soon as the home has been read again.
+      entry = { inFlight: null, value: options.load?.(fmHome) ?? null, freshUntil: 0 };
       entries.set(fmHome, entry);
     }
     return entry;
@@ -146,6 +152,11 @@ export function shareFleetSnapshots(
       .then((snapshot) => {
         entry.value = snapshot;
         entry.freshUntil = now() + Math.max(freshMs, now() - started);
+        try {
+          options.save?.(fmHome, snapshot);
+        } catch {
+          // Keeping a copy is a convenience; the snapshot itself is good.
+        }
         return snapshot;
       })
       .finally(() => {

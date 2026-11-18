@@ -10,7 +10,11 @@ import {
 } from "react";
 import { bridge } from "../bridge.ts";
 import {
+  appCommandNames,
+  builtInCommand,
   builtInCommands,
+  commandAsRequest,
+  commandReadyToSend,
   composerTrigger,
   dictation,
   matchCommands,
@@ -25,6 +29,9 @@ import { ModelPicker } from "./model-picker.tsx";
 import { takeOff } from "./motion.ts";
 import { useDismiss } from "./use-dismiss.ts";
 import { firstmateCommands } from "../composer-command.ts";
+import { runAppCommand } from "./app-commands.ts";
+import { themeNames } from "./theme-names.ts";
+import { work, workStore } from "./store.ts";
 import {
   FirstmateCommandReply,
   useFirstmateCommands,
@@ -227,13 +234,33 @@ export function Composer({
     const text = draft.trim();
     if ((!text && !files.length) || busy) return;
     recognition.current?.stop();
-    if (skills && !files.length && commands.send(text)) {
+    // Amun's own commands work in every message box. /model and /theme are
+    // carried out here; the work commands reach Firstmate in plain words, never
+    // as a bare "/command" for the model to guess at.
+    const builtIn = files.length ? null : builtInCommand(text);
+    if (
+      builtIn &&
+      (appCommandNames as readonly string[]).includes(builtIn.name)
+    ) {
+      commands.answer(
+        runAppCommand(builtIn, {
+          themeNames,
+          currentTheme:
+            workStore.getSnapshot().snapshot?.setup.theme ?? "system",
+          setTheme: (id) => work("setup", { patch: { theme: id as never } }),
+        }),
+      );
+      setPlus(false);
+      setDraft("");
+      return;
+    }
+    if (!files.length && commands.send(text)) {
       setPlus(false);
       setDraft("");
       return;
     }
     takeOff(sendButton.current?.firstElementChild);
-    onSend(text, files);
+    onSend(commandAsRequest(text) ?? text, files);
     setPlus(false);
     setDraft("");
     setFiles([]);
@@ -249,8 +276,9 @@ export function Composer({
         );
         return;
       }
-      // A command already typed in full is sent, not completed again.
-      const complete = draft.trim() === options[index]!.insert.trim();
+      // A command already typed in full is sent, not completed again; so is
+      // one with words after it ("/model opus"), which completing would erase.
+      const complete = commandReadyToSend(draft, options[index]!.insert);
       if ((event.key === "Enter" && !complete) || event.key === "Tab") {
         event.preventDefault();
         choose(options[index]!.insert);
@@ -296,7 +324,7 @@ export function Composer({
 
   return (
     <div className="rb-composer-wrap">
-      {skills && <FirstmateCommandReply state={commands} onBoard={onBoard} />}
+      <FirstmateCommandReply state={commands} onBoard={onBoard} />
       {chips.length > 0 && (
         <div className="rb-chips">
           {chips.map((chip) => (

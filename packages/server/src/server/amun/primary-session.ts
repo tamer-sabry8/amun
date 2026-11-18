@@ -91,6 +91,35 @@ export function checkHostTools(
 export interface PrimaryHost {
   createAgent(launch: PrimaryLaunch): Promise<{ agentId: string }>;
   runAgent(agentId: string, text: string): Promise<{ finalText: string }>;
+  /** Ends a turn that is still open, so the next message can be sent. */
+  cancelRun?(agentId: string): Promise<void>;
+}
+
+/** The First Mate could not take or finish a message; said in plain words. */
+export class FirstMateTurnError extends Error {
+  constructor(
+    message: string,
+    public readonly detail: string,
+  ) {
+    super(message);
+    this.name = "FirstMateTurnError";
+  }
+}
+
+/** What to tell the captain when a turn fails, without Paseo's internals. */
+export function describeTurnFailure(error: unknown): FirstMateTurnError {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (/timed out/i.test(detail))
+    return new FirstMateTurnError(
+      "Firstmate took too long to answer and that message was stopped. Send it again.",
+      detail,
+    );
+  if (/already has an active run/i.test(detail))
+    return new FirstMateTurnError(
+      "Firstmate was still busy with an earlier message, which has now been stopped. Send this one again.",
+      detail,
+    );
+  return new FirstMateTurnError(`Firstmate could not answer: ${detail}`, detail);
 }
 
 /**
@@ -100,6 +129,9 @@ export interface PrimaryHost {
 export class PrimarySessions {
   private readonly agents = new Map<string, string>();
   private readonly starting = new Map<string, Promise<{ agentId: string }>>();
+  /** One message at a time per home: the First Mate takes a single turn. */
+  private readonly turns = new Map<string, Promise<unknown>>();
+  private readonly waiting = new Map<string, number>();
 
   constructor(
     private readonly host: PrimaryHost,
@@ -134,9 +166,42 @@ export class PrimarySessions {
     return started;
   }
 
-  async send(space: ProductSpace, text: string): Promise<{ agentId: string; reply: string }> {
+  /** Messages being answered or waiting their turn for this home. */
+  pending(fmHome: string): number {
+    return this.waiting.get(fmHome) ?? 0;
+  }
+
+  /**
+   * Messages for one home are answered in order. Paseo refuses a second turn
+   * while one is open, so a message sent while the First Mate is still
+   * working waits here instead of failing. A turn that fails is closed, so
+   * one stuck message can never block every message after it.
+   */
+  send(space: ProductSpace, text: string): Promise<{ agentId: string; reply: string }> {
+    const home = space.fmHome;
+    this.waiting.set(home, this.pending(home) + 1);
+    const before = this.turns.get(home) ?? Promise.resolve();
+    const turn = before
+      .catch(() => undefined)
+      .then(() => this.takeTurn(space, text))
+      .finally(() => {
+        this.waiting.set(home, Math.max(0, this.pending(home) - 1));
+      });
+    this.turns.set(home, turn);
+    return turn;
+  }
+
+  private async takeTurn(
+    space: ProductSpace,
+    text: string,
+  ): Promise<{ agentId: string; reply: string }> {
     const { agentId } = await this.start(space);
-    const { finalText } = await this.host.runAgent(agentId, text);
-    return { agentId, reply: finalText };
+    try {
+      const { finalText } = await this.host.runAgent(agentId, text);
+      return { agentId, reply: finalText };
+    } catch (error) {
+      await this.host.cancelRun?.(agentId).catch(() => undefined);
+      throw describeTurnFailure(error);
+    }
   }
 }

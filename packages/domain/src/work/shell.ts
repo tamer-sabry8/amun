@@ -213,6 +213,79 @@ export const builtInCommands: SlashCommand[] = [
   { name: "model", hint: "", description: "See or change the model in use" },
   { name: "theme", hint: "", description: "Change the theme" },
 ];
+/**
+ * A built-in command typed in full, e.g. "/model opus" or "/sprint plan".
+ * Every one of these is handled by Amun: carried out here, or put to
+ * Firstmate in plain words. None is sent on as a bare "/command".
+ */
+export function builtInCommand(
+  input: string,
+): { name: string; argument: string } | null {
+  const text = input.trim();
+  if (!text.startsWith("/") || text.includes("\n")) return null;
+  const typed = text.slice(1).toLowerCase();
+  // Longest name first, so "sprint plan" is not read as an unknown "sprint".
+  const names = builtInCommands
+    .map((command) => command.name)
+    .sort((a, b) => b.length - a.length);
+  const name = names.find(
+    (candidate) => typed === candidate || typed.startsWith(candidate + " "),
+  );
+  return name ? { name, argument: text.slice(1 + name.length).trim() } : null;
+}
+
+/**
+ * Whether Enter should send what is typed, given the menu entry it matches.
+ * A command typed in full is sent; so is one with words after it
+ * ("/model opus"), which completing again would erase.
+ */
+export function commandReadyToSend(draft: string, insert: string): boolean {
+  return (
+    draft.trim() === insert.trim() ||
+    (insert.startsWith("/") && draft.startsWith(insert))
+  );
+}
+
+/** The commands Amun carries out itself, without asking Firstmate. */
+export const appCommandNames = ["model", "theme"] as const;
+
+/**
+ * A work command in plain words for Firstmate: "/research pricing in the GCC"
+ * becomes "Research a question: pricing in the GCC". Null for anything else.
+ */
+export function commandAsRequest(input: string): string | null {
+  const parsed = builtInCommand(input);
+  if (!parsed) return null;
+  if ((appCommandNames as readonly string[]).includes(parsed.name)) return null;
+  const command = builtInCommands.find(({ name }) => name === parsed.name)!;
+  return parsed.argument
+    ? `${command.description}: ${parsed.argument}`
+    : `${command.description}.`;
+}
+
+/**
+ * Picks one item from what was typed after a command. An exact name wins;
+ * otherwise every word typed must appear in the name or the id.
+ */
+export function pickByName<T extends { id: string; label: string }>(
+  items: readonly T[],
+  query: string,
+): { one: T } | { several: T[] } | { none: true } {
+  const wanted = query.trim().toLowerCase();
+  const exact = items.filter(
+    (item) =>
+      item.label.toLowerCase() === wanted || item.id.toLowerCase() === wanted,
+  );
+  if (exact.length === 1) return { one: exact[0]! };
+  const words = wanted.split(/\s+/).filter(Boolean);
+  const hits = items.filter((item) => {
+    const text = (item.label + " " + item.id).toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
+  if (hits.length === 1) return { one: hits[0]! };
+  return hits.length ? { several: hits } : { none: true };
+}
+
 export type ComposerTrigger =
   { trigger: "/"; query: string } | { trigger: "@"; query: string } | null;
 /** Which menu the text at the caret opens. `/` only at the start; `@` anywhere. */

@@ -328,8 +328,15 @@ export function App() {
     };
     if (step.step === "file_work" && step.areaId)
       return openWork(step.areaId, text);
-    if (!result.ok || step.step === "unreadable" || step.step === "reminder")
+    // Anything Home has to show (a note, or a question about new work) is
+    // shown there, whichever screen the message was sent from.
+    const onHome = () => {
+      if (layout.route !== "home") dispatch({ type: "go", route: "home" });
+    };
+    if (!result.ok || step.step === "unreadable" || step.step === "reminder") {
+      onHome();
       return setNote(result.message);
+    }
     // A question or a request for Firstmate is not work to file: it goes
     // straight to Firstmate, who answers from what was said. Only a message
     // that itself asks for a new product, project, task or RFP is asked about.
@@ -351,6 +358,7 @@ export function App() {
         ).ref;
       if (areaId) return openWork(areaId, text);
     }
+    onHome();
     setPending({ ...step, step: step.step ?? "", text, files });
   };
   const view = homeModel(
@@ -635,7 +643,12 @@ export function App() {
             }
           />
         ) : layout.route === "portfolio" ? (
-          <Portfolio snapshot={snapshot} onWork={(id) => openWork(id)} />
+          <Portfolio
+            snapshot={snapshot}
+            model={model}
+            onWork={(id) => openWork(id)}
+            onAsk={(text, files) => void submit(text, files)}
+          />
         ) : layout.route === "rfps" ? (
           <Rfps
             snapshot={snapshot}

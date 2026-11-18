@@ -10,6 +10,7 @@ import {
 } from "../../../../packages/domain/src/work/permissions.ts";
 import { trackerName } from "../../../../packages/domain/src/work/flows.ts";
 import { themeIds } from "../../../../packages/domain/src/work/shell.ts";
+import { themeNames } from "./theme-names.ts";
 import { simulationLabel } from "../../../../packages/domain/src/work/council.ts";
 import type { CouncilStatus } from "../../../../packages/contracts/src/work.ts";
 import { Icon } from "../icons.tsx";
@@ -53,31 +54,6 @@ export const settingsSections = [
 ] as const;
 export type SettingsSection = (typeof settingsSections)[number][0];
 
-const themeNames: Record<string, string> = {
-  system: "Match macOS",
-  "tamer-sabry-default": "Amun dark",
-  "navy-gold": "Navy Gold",
-  "navy-cyan": "Navy Cyan",
-  "amun-light": "Amun light",
-  nimbus: "Nimbus",
-  "nimbus-maritime": "Maritime",
-  "nimbus-warm": "Warm",
-  "df-aurora": "Aurora",
-  "df-copper": "Copper",
-  "df-ember": "Ember",
-  "df-garnet": "Garnet",
-  "df-midnight": "Midnight",
-  "df-neumorph": "Neumorph",
-  "df-sage": "Sage",
-  "df-slate": "Slate",
-  "lg-slate": "Liquid Slate",
-  "lg-nous": "Nous",
-  "lg-midnight": "Liquid Midnight",
-  "lg-ember": "Liquid Ember",
-  "lg-mono": "Mono",
-  "lg-cyberpunk": "Cyberpunk",
-  "amun-brand": "Amun brand",
-};
 const conditions = [
   [null, "Everything else"],
   ["delivery", "Client delivery tickets"],
