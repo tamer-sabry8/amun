@@ -22,7 +22,7 @@ This file is final as of the PR #33 merge on 18 November 2026. Later work gets i
 ### Why
 
 - **Firstmate already does this job, and does it well.** Its watcher, status files, supervision ladder, captain holds and treehouse worktrees only know about crew that Firstmate started. Work started anywhere else is invisible to it, so nothing supervises it, nothing reports on it, and its decisions never reach the captain.
-- **Tamer wants to keep upgrading Firstmate from upstream.** So `vendor/firstmate` stays a pristine `git subtree` (decision 2, and `firstmate-layer/README.md`). CI fails if anything under it changes (`scripts/check-firstmate-pristine.sh`). Amun's additions live in `firstmate-layer/` and `packages/server/src/server/amun/`.
+- **Tamer wants to keep upgrading Firstmate from upstream.** So `vendor/firstmate` stays a pristine `git subtree` (decision 3, and `firstmate-layer/README.md`). CI fails if anything under it changes (`scripts/check-firstmate-pristine.sh`). Amun's additions live in `firstmate-layer/` and `packages/server/src/server/amun/`.
 - **The First Mate decides where rules and agents go, not Amun.** Amun never writes into the Firstmate home. That covers `captain.md`, `secondmates.md`, `config/crew-dispatch.json`, memory and backlog files. Amun relays the captain's words, and the First Mate files them.
 
 ### How the pieces fit
@@ -43,7 +43,7 @@ Pi (the First Mate) ──runs──▶ Firstmate scripts in the home (fm-spawn,
                        Crew and secondmates in tmux/herdr panes, each in its own treehouse worktree
 ```
 
-- **Pi** is the First Mate's brain. Paseo's Pi provider starts it headless (`pi --mode rpc`), so Tamer never sees a terminal (decision 9). Its working folder is the Firstmate checkout, so Pi loads Firstmate's extensions, watcher and turn-end guard there. That this all works in RPC mode is still to be proven by the Pi test on Tamer's Mac.
+- **Pi** is the First Mate's brain. Paseo's Pi provider starts it headless (`pi --mode rpc`), so Tamer never sees a terminal (decision 11). Its working folder is the Firstmate checkout, so Pi loads Firstmate's extensions, watcher and turn-end guard there. That this all works in RPC mode is still to be proven by the Pi test on Tamer's Mac.
 - **Paseo** starts Pi, sends it the captain's messages (`primary.send` → `agentManager.runAgent`), and returns the reply. Paseo also gives the First Mate a short list of read-only tools plus heartbeats (decision 19). The 22 Paseo tools that start crew, worktrees, terminals or agent schedules are blocked for it (`first-mate-tools.ts`).
 - **Firstmate** runs everything else. The First Mate spawns, steers, supervises and tears down crew with Firstmate's own scripts.
 
