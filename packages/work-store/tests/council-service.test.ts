@@ -277,7 +277,12 @@ describe("Council service", () => {
     const cards = store
       .snapshot()
       .attention.filter((item) => item.kind === "question");
-    expect(cards.map((item) => [item.title, item.options])).toEqual([
+    // Two cards made in the same instant have no set order in the list.
+    expect(
+      cards
+        .map((item) => [item.title, item.options])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    ).toEqual([
       ["What is the budget?", ["Under 1M", "Over 1M"]],
       ["Who decides?", ["The board", "The CEO"]],
     ]);
