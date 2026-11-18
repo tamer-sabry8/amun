@@ -6,6 +6,7 @@ import {
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
 import { PmStore } from "./pm-store.js";
+import type { WorkStoreLike } from "@amun/work-store";
 import type { ConnectionStore } from "./connections/connection-store.js";
 import type { PrimarySessions } from "./primary-session.js";
 import type { ProductSpaceStore } from "./product-spaces.js";
@@ -14,6 +15,7 @@ export interface AmunRpcDeps {
   spaces: ProductSpaceStore;
   primary: PrimarySessions;
   connections: ConnectionStore;
+  work: WorkStoreLike;
   amunHome: string;
   firstmateRoot: string;
   readSnapshot: (fmHome: string) => Promise<FleetSnapshot>;
@@ -130,6 +132,10 @@ export class AmunRpcHandler {
       case "connections.forget":
         await this.deps.connections.forget(request.connection);
         return this.deps.connections.list();
+      case "work.snapshot":
+        return this.deps.work.snapshot();
+      case "work.command":
+        return this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
     }
   }
 }

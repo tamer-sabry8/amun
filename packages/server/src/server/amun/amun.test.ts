@@ -9,6 +9,7 @@ import { WebSocket } from "ws";
 import { fleetSnapshotSchema, type FleetSnapshot } from "@getpaseo/protocol/amun-rpc";
 import { resolveAmunPaths, type AmunPaths } from "./amun-paths.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
+import { openWorkStore } from "@amun/work-store";
 import { attachAmun } from "./attach-amun.js";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { memorySecretStore } from "./connections/secret-store.js";
@@ -196,6 +197,7 @@ describe("Amun RPC", () => {
       spaces,
       primary: new PrimarySessions(host, paths.firstmateRoot),
       connections: new ConnectionStore(paths.amunHome, memorySecretStore()),
+      work: openWorkStore(":memory:").store,
       amunHome: paths.amunHome,
       firstmateRoot: paths.firstmateRoot,
       readSnapshot: async () => snapshotFixture(),
@@ -219,6 +221,20 @@ describe("Amun RPC", () => {
     });
     expect(answer).toMatchObject({ ok: true, result: { reply: "Aye, Captain." } });
     expect(host.prompts[0]).toContain("bin/fm-captain-hold.sh answer");
+
+    const group = await handler.handleRaw({
+      id: "w",
+      method: "work.command",
+      command: { action: "add-group", name: "Work" },
+    });
+    expect(group.ok && (group.result as { kind: string; ok?: boolean }[])[0]).toMatchObject({
+      kind: "work-result",
+      ok: true,
+    });
+    const work = await handler.handleRaw({ id: "ws", method: "work.snapshot" });
+    expect(work.ok && (work.result as { groups: { name: string }[] }).groups.map((g) => g.name)).toEqual([
+      "Work",
+    ]);
 
     const board = await handler.handleRaw({ id: "b", method: "board.get", space: "gamma" });
     expect(board.ok && (board.result as Record<string, { id: string }[]>).spec!.map((s) => s.id)).toEqual([

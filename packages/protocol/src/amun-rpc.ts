@@ -212,6 +212,10 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ id: z.string(), method: z.literal("connections.check"), connection: connectionSchema }),
   z.object({ id: z.string(), method: z.literal("connections.forget"), connection: connectionSchema }),
+  // Amun's local work model (areas, conversations, plans, reminders). The
+  // command is the renderer's own work contract, validated by the work store.
+  z.object({ id: z.string(), method: z.literal("work.snapshot") }),
+  z.object({ id: z.string(), method: z.literal("work.command"), command: z.record(z.string(), z.unknown()) }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

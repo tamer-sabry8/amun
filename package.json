@@ -18,21 +18,22 @@
     "packages/cli",
     "packages/contracts",
     "packages/domain",
+    "packages/work-store",
     "packages/theme",
     "packages/amun-ui",
     "packages/desktop"
   ],
   "scripts": {
     "build:paseo": "npm run build -w @getpaseo/highlight && npm run build -w @getpaseo/relay && npm run build -w @getpaseo/protocol && npm run build -w @getpaseo/client && npm run build -w @getpaseo/plugin",
-    "build:server": "npm run build:paseo && npm run build -w @getpaseo/server && npm run build -w @getpaseo/cli",
+    "build:server": "npm run build:paseo && npm run build -w @amun/work-store && npm run build -w @getpaseo/server && npm run build -w @getpaseo/cli",
     "typecheck": "npm run build:server && npm run typecheck:paseo && npm run typecheck:amun",
     "typecheck:paseo": "npm run typecheck -w @getpaseo/protocol -w @getpaseo/client -w @getpaseo/plugin -w @getpaseo/server -w @getpaseo/desktop",
     "typecheck:amun": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:server": "npm run test:unit -w @getpaseo/server",
     "start": "npm run start -w @getpaseo/server",
-    "lint": "eslint packages/contracts packages/domain packages/theme packages/amun-ui",
-    "format:check": "prettier --check docs packages/contracts packages/domain packages/theme packages/amun-ui",
+    "lint": "eslint packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store",
+    "format:check": "prettier --check docs packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store",
     "tokens:build": "node --experimental-strip-types scripts/build-tokens.ts"
   },
   "devDependencies": {

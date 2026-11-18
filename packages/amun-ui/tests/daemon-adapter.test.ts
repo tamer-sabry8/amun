@@ -7,14 +7,14 @@ import {
 import { workEvent } from "../../contracts/src/work.ts";
 import { authEvent } from "../../contracts/src/auth.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
-import {
-  ContractAdapter,
-  memorySetupStore,
-} from "../src/daemon/contract-adapter.ts";
+import { ContractAdapter } from "../src/daemon/contract-adapter.ts";
+import { openWorkStore } from "../../work-store/src/index.ts";
 
 class FakeDaemon implements AmunTransport {
   calls: { method: string; params: Record<string, unknown> }[] = [];
   spaces = [{ slug: "alpha", name: "Alpha" }];
+  // The daemon's real work store, in memory.
+  work = openWorkStore(":memory:").store;
   connections = [
     {
       id: "ado-1",
@@ -31,6 +31,13 @@ class FakeDaemon implements AmunTransport {
     params: Record<string, unknown> = {},
   ): Promise<T> {
     this.calls.push({ method, params });
+    if (method === "work.snapshot") return this.work.snapshot() as T;
+    if (method === "work.command")
+      return this.work.handle({
+        ...(params.command as object),
+        version: 1,
+        kind: "work",
+      }) as T;
     const results: Record<string, unknown> = {
       "spaces.list": this.spaces,
       "spaces.create": { slug: "beta", name: String(params.name) },
@@ -78,11 +85,7 @@ const make = () => {
   const daemon = new FakeDaemon();
   return {
     daemon,
-    adapter: new ContractAdapter(
-      daemon,
-      memorySetupStore(),
-      () => "2026-11-18T00:00:00Z",
-    ),
+    adapter: new ContractAdapter(daemon, () => "2026-11-18T00:00:00Z"),
   };
 };
 
@@ -113,9 +116,7 @@ describe("daemon contract adapter", () => {
     });
     const parsed = workEvent.parse(work);
     if (parsed.kind !== "work-snapshot") throw new Error("expected a snapshot");
-    expect(parsed.groups).toEqual([
-      { id: "alpha", name: "Alpha", position: 0 },
-    ]);
+    expect(parsed.setup.completed).toBe(true);
     expect(parsed.agents.map((a) => [a.id, a.kind, a.state])).toEqual([
       ["firstmate", "lead", "waiting"],
       ["crew:proto-w1", "temporary", "waiting"],
@@ -147,16 +148,45 @@ describe("daemon contract adapter", () => {
     });
   });
 
-  it("creates a Product Space for add-group", async () => {
-    const { adapter, daemon } = make();
-    const [result] = await adapter.handle({
+  it("keeps groups, work areas and conversations in the daemon's work store", async () => {
+    const { adapter } = make();
+    const [added, snap] = await adapter.handle({
       version: 1,
       kind: "work",
       action: "add-group",
-      name: "Beta",
+      name: "Work",
     });
-    expect(result).toMatchObject({ ok: true, ref: "beta" });
-    expect(daemon.calls.some((c) => c.method === "spaces.create")).toBe(true);
+    expect(added).toMatchObject({ kind: "work-result", ok: true });
+    const groupId = (added as { ref: string }).ref;
+    expect(workEvent.parse(snap)).toMatchObject({
+      kind: "work-snapshot",
+      groups: [{ id: groupId, name: "Work" }],
+    });
+    const [created] = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "create-area",
+      groupId,
+      type: "product",
+      name: "Product Test 1",
+    });
+    expect(created).toMatchObject({ ok: true });
+    const areaId = (created as { ref: string }).ref;
+    const said = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "message",
+      workAreaId: areaId,
+      role: "you",
+      text: "Connect to my Azure DevOps",
+    });
+    const snapshot = workEvent.parse(said.at(-1));
+    if (snapshot.kind !== "work-snapshot") throw new Error("expected snapshot");
+    expect(snapshot.messages.map((m) => m.text)).toEqual([
+      "Connect to my Azure DevOps",
+    ]);
+    // Firstmate's crew still sits on top of the stored agents.
+    expect(snapshot.agents[0]).toMatchObject({ id: "firstmate", kind: "lead" });
   });
 
   it("talks to the First Mate through the conversation contract", async () => {

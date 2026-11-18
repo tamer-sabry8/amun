@@ -5,6 +5,7 @@ export default defineConfig({
     include: [
       "packages/contracts/tests/**/*.test.ts",
       "packages/domain/tests/**/*.test.ts",
+      "packages/work-store/tests/**/*.test.ts",
       "packages/theme/tests/**/*.test.ts",
       "packages/amun-ui/tests/**/*.test.ts",
       "packages/server/src/server/amun/**/*.test.ts",

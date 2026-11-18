@@ -2,11 +2,11 @@
 // Electron main process. The renderer code is unchanged: it still waits for
 // {kind:"amun-port"} after posting "amun-renderer-ready".
 import { AmunClient, defaultDaemonUrl } from "./amun-client.ts";
-import { ContractAdapter, localSetupStore } from "./contract-adapter.ts";
+import { ContractAdapter } from "./contract-adapter.ts";
 
 export function installDaemonPort(url: string = defaultDaemonUrl()) {
   const client = new AmunClient(url);
-  const adapter = new ContractAdapter(client, localSetupStore());
+  const adapter = new ContractAdapter(client);
   let local: MessagePort | null = null;
 
   function offer() {

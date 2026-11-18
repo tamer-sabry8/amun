@@ -9,6 +9,9 @@ import { holdsFromSnapshot, readFleetSnapshot } from "./firstmate-cli.js";
 import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
+import { openWorkStore } from "@amun/work-store";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
 import { ProductSpaceStore } from "./product-spaces.js";
 
@@ -75,11 +78,14 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     return null;
   }
   const spaces = new ProductSpaceStore(paths);
+  mkdirSync(paths.amunHome, { recursive: true });
+  const work = openWorkStore(path.join(paths.amunHome, "work.db"));
   const primary = new PrimarySessions(agentManagerHost(input.agentManager), paths.firstmateRoot);
   const handler = new AmunRpcHandler({
     spaces,
     primary,
     connections: new ConnectionStore(paths.amunHome, keychainSecretStore()),
+    work: work.store,
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
@@ -162,6 +168,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     handler,
     close() {
       clearInterval(timer);
+      work.close();
       input.httpServer.off("upgrade", onUpgrade);
       for (const ws of wss.clients) ws.close();
       wss.close();

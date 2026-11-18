@@ -19,6 +19,7 @@
   "include": [
     "packages/contracts/**/*.ts",
     "packages/domain/**/*.ts",
+    "packages/work-store/**/*.ts",
     "packages/theme/**/*.ts",
     "packages/amun-ui/**/*.ts",
     "packages/amun-ui/**/*.tsx",
