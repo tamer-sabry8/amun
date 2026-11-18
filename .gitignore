@@ -7,8 +7,7 @@ test-results/
 .env.*
 !.env.example
 .DS_Store
-apps/desktop/renderer/*.js
-apps/desktop/.runtime/
-apps/desktop/out/
 
-apps/desktop/renderer/renderer.css
+*.tsbuildinfo
+packages/*/dist/
+packages/amun-ui/build/

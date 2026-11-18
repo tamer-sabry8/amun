@@ -1,0 +1,718 @@
+import { describe, expect, test, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
+import { createServer } from "node:http";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { once } from "node:events";
+
+import { AgentManager } from "../agent-manager.js";
+import { AgentStorage } from "../agent-storage.js";
+
+import { CodexAppServerAgentClient } from "./codex-app-server-agent.js";
+import { createTestLogger } from "../../../test-utils/test-logger.js";
+import type { AgentStreamEvent } from "../agent-sdk-types.js";
+
+function isCodexInstalled(): boolean {
+  try {
+    const out = execFileSync("which", ["codex"], { encoding: "utf8" }).trim();
+    return out.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function supportsInstructionSnapshots(): boolean {
+  try {
+    const match = execFileSync("codex", ["--version"], { encoding: "utf8" }).match(
+      /(\d+)\.(\d+)\.(\d+)/,
+    );
+    if (!match) return false;
+    return Number(match[1]) > 0 || Number(match[2]) >= 121;
+  } catch {
+    return false;
+  }
+}
+
+function sse(events: unknown[]): string {
+  return events
+    .map((event) => {
+      const type =
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        typeof (event as { type?: unknown }).type === "string"
+          ? (event as { type: string }).type
+          : "message";
+      return `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
+    })
+    .join("");
+}
+
+function responseCreated(id: string): Record<string, unknown> {
+  return {
+    type: "response.created",
+    response: { id },
+  };
+}
+
+function responseCompleted(id: string): Record<string, unknown> {
+  return {
+    type: "response.completed",
+    response: {
+      id,
+      usage: {
+        input_tokens: 0,
+        input_tokens_details: null,
+        output_tokens: 0,
+        output_tokens_details: null,
+        total_tokens: 0,
+      },
+    },
+  };
+}
+
+function functionCallEvent(
+  callId: string,
+  name: string,
+  argumentsJson: string,
+): Record<string, unknown> {
+  return {
+    type: "response.output_item.done",
+    item: {
+      type: "function_call",
+      call_id: callId,
+      name,
+      arguments: argumentsJson,
+    },
+  };
+}
+
+function assistantMessageEvent(id: string, text: string): Record<string, unknown> {
+  return {
+    type: "response.output_item.done",
+    item: {
+      type: "message",
+      role: "assistant",
+      id,
+      content: [{ type: "output_text", text }],
+    },
+  };
+}
+
+function requestUserInputSse(callId: string): string {
+  return sse([
+    responseCreated("resp-1"),
+    functionCallEvent(
+      callId,
+      "request_user_input",
+      JSON.stringify({
+        questions: [
+          {
+            id: "confirm_path",
+            header: "Confirm",
+            question: "Proceed with the plan?",
+            options: [
+              {
+                label: "Yes (Recommended)",
+                description: "Continue the current plan.",
+              },
+              {
+                label: "No",
+                description: "Stop and revisit the approach.",
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+    responseCompleted("resp-1"),
+  ]);
+}
+
+function assistantMessageSse(text: string): string {
+  return sse([
+    responseCreated("resp-2"),
+    assistantMessageEvent("msg-1", text),
+    responseCompleted("resp-2"),
+  ]);
+}
+
+async function startMockResponsesServer(sequence: string[]): Promise<{
+  url: string;
+  close: () => Promise<void>;
+  requestBodies: string[];
+}> {
+  const requestBodies: string[] = [];
+  let index = 0;
+  const server = createServer({ maxHeaderSize: 1024 * 1024 }, (req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on("end", () => {
+      requestBodies.push(Buffer.concat(chunks).toString("utf8"));
+      if (req.method !== "POST" || req.url !== "/v1/responses") {
+        res.statusCode = 404;
+        res.end("not found");
+        return;
+      }
+      const body = sequence[index] ?? assistantMessageSse("done");
+      index += 1;
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/event-stream");
+      res.setHeader("cache-control", "no-cache");
+      res.end(body);
+    });
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Expected TCP address for mock responses server");
+  }
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    requestBodies,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      }),
+  };
+}
+
+function writeMockCodexConfig(
+  codexHome: string,
+  serverUrl: string,
+  options: { streamMaxRetries?: number } = {},
+): void {
+  writeFileSync(
+    path.join(codexHome, "config.toml"),
+    `
+model = "mock-model"
+approval_policy = "on-request"
+sandbox_mode = "read-only"
+
+model_provider = "mock_provider"
+
+[model_providers.mock_provider]
+name = "Mock provider for test"
+base_url = "${serverUrl}/v1"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = ${options.streamMaxRetries ?? 0}
+`,
+  );
+}
+
+function waitForEvent<TEvent extends AgentStreamEvent>(params: {
+  session: {
+    subscribe(callback: (event: AgentStreamEvent) => void): () => void;
+  };
+  predicate: (event: AgentStreamEvent) => event is TEvent;
+  timeoutMs: number;
+  label: string;
+}): Promise<TEvent> {
+  return new Promise<TEvent>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(new Error(`Timed out waiting for ${params.label}`));
+    }, params.timeoutMs);
+
+    const unsubscribe = params.session.subscribe((event) => {
+      if (!params.predicate(event)) {
+        return;
+      }
+      clearTimeout(timeout);
+      unsubscribe();
+      resolve(event);
+    });
+  });
+}
+
+describe("Codex app-server provider (local e2e)", () => {
+  test.runIf(supportsInstructionSnapshots())(
+    "delivers changed and removed instructions to the model across process restarts",
+    async () => {
+      const artifactDir = path.resolve(process.cwd(), "../../.artifacts");
+      mkdirSync(artifactDir, { recursive: true });
+      const cwd = mkdtempSync(path.join(artifactDir, "codex-snapshot-cwd-"));
+      const codexHome = mkdtempSync(path.join(artifactDir, "codex-snapshot-home-"));
+      const server = await startMockResponsesServer([]);
+      const client = new CodexAppServerAgentClient(createTestLogger());
+      const base = { provider: "codex" as const, cwd, modeId: "auto", model: "mock-model" };
+      const launch = { env: { CODEX_HOME: codexHome } };
+      const run = async (session: Awaited<ReturnType<typeof client.createSession>>) => {
+        const finished = waitForEvent({
+          session,
+          timeoutMs: 20_000,
+          label: "turn completion",
+          predicate: (
+            event,
+          ): event is Extract<
+            AgentStreamEvent,
+            { type: "turn_completed" | "turn_failed" | "turn_canceled" }
+          > =>
+            event.type === "turn_completed" ||
+            event.type === "turn_failed" ||
+            event.type === "turn_canceled",
+        });
+        await session.startTurn("continue");
+        const result = await finished;
+        if (result.type !== "turn_completed") throw new Error(JSON.stringify(result));
+        const handle = session.describePersistence();
+        if (!handle) throw new Error("Expected persisted Codex thread");
+        await session.close();
+        return handle;
+      };
+      try {
+        writeMockCodexConfig(codexHome, server.url);
+        let handle = await run(
+          await client.createSession(
+            { ...base, pluginAppendSystemPrompt: ["old snapshot"] },
+            launch,
+          ),
+        );
+        expect(server.requestBodies.at(-1)).toContain("old snapshot");
+        expect(server.requestBodies.at(-1)).not.toContain("paseo_instruction_snapshot");
+        handle = await run(
+          await client.resumeSession(
+            handle,
+            { ...base, pluginAppendSystemPrompt: ["new snapshot"] },
+            launch,
+          ),
+        );
+        expect(server.requestBodies.at(-1)).toContain("new snapshot");
+        expect(server.requestBodies.at(-1)?.match(/paseo_instruction_snapshot/g)).toHaveLength(2);
+        handle = await run(
+          await client.resumeSession(
+            handle,
+            { ...base, pluginAppendSystemPrompt: ["new snapshot"] },
+            launch,
+          ),
+        );
+        expect(server.requestBodies.at(-1)?.match(/paseo_instruction_snapshot/g)).toHaveLength(2);
+        await run(
+          await client.resumeSession(
+            handle,
+            { ...base, pluginAppendSystemPrompt: undefined },
+            launch,
+          ),
+        );
+        expect(server.requestBodies.at(-1)).toContain('\\"instructions\\":\\"\\"');
+        expect(server.requestBodies.at(-1)?.match(/paseo_instruction_snapshot/g)).toHaveLength(4);
+      } finally {
+        await server.close();
+        rmSync(cwd, { recursive: true, force: true });
+        rmSync(codexHome, { recursive: true, force: true });
+      }
+    },
+    60_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "concurrent import scans initialize successfully in a fresh shared Codex home",
+    async () => {
+      const artifacts = path.resolve(".artifacts");
+      mkdirSync(artifacts, { recursive: true });
+      const root = mkdtempSync(path.join(artifacts, "codex-concurrent-startup-"));
+      try {
+        for (let round = 0; round < 4; round++) {
+          const codexHome = path.join(root, String(round));
+          mkdirSync(codexHome);
+          const provider = new CodexAppServerAgentClient(createTestLogger(), {
+            env: { CODEX_HOME: codexHome },
+          });
+          const results = await Promise.allSettled(
+            Array.from({ length: 24 }, () => provider.listImportableSessions({ limit: 1 })),
+          );
+          expect(results).toEqual(
+            Array.from({ length: 24 }, () => ({ status: "fulfilled", value: [] })),
+          );
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+    60_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "reloads a persisted idle thread repeatedly without overlapping writers",
+    async () => {
+      const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-reload-cwd-"));
+      const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-reload-home-"));
+      const mockServer = await startMockResponsesServer([assistantMessageSse("saved")]);
+      const logger = createTestLogger();
+      const storage = new AgentStorage(path.join(cwd, "agents"), logger);
+      const manager = new AgentManager({
+        clients: { codex: new CodexAppServerAgentClient(logger) },
+        registry: storage,
+        logger,
+      });
+      let agentId: string | undefined;
+      try {
+        writeMockCodexConfig(codexHome, mockServer.url);
+        vi.stubEnv("CODEX_HOME", codexHome);
+        const created = await manager.createAgent(
+          { provider: "codex", cwd, modeId: "auto", model: "mock-model" },
+          undefined,
+          { workspaceId: undefined },
+        );
+        agentId = created.id;
+        await manager.runAgent(agentId, "save this turn");
+        const threadId = manager.getAgent(agentId)?.persistence?.sessionId;
+        expect(threadId).toBeTruthy();
+        for (let i = 0; i < 3; i++) {
+          const reloaded = await manager.reloadAgentSession(agentId, undefined, {
+            rehydrateFromDisk: true,
+          });
+          expect(reloaded.persistence?.sessionId).toBe(threadId);
+          expect(reloaded.lifecycle).toBe("idle");
+        }
+        await manager.runAgent(agentId, "continue after reload");
+        expect(manager.getAgent(agentId)?.lifecycle).toBe("idle");
+      } finally {
+        if (agentId && manager.getAgent(agentId)) await manager.closeAgent(agentId);
+        await storage.flush();
+        vi.unstubAllEnvs();
+        await mockServer.close();
+        rmSync(cwd, { recursive: true, force: true });
+        rmSync(codexHome, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "reopens a promptless agent repeatedly before its first model request",
+    async () => {
+      const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-promptless-cwd-"));
+      const logger = createTestLogger();
+      const storage = new AgentStorage(path.join(cwd, "agents"), logger);
+      const manager = new AgentManager({
+        clients: { codex: new CodexAppServerAgentClient(logger) },
+        registry: storage,
+        logger,
+      });
+      let agentId: string | undefined;
+      try {
+        const created = await manager.createAgent(
+          { provider: "codex", cwd, modeId: "auto", model: "mock-model" },
+          undefined,
+          { workspaceId: undefined },
+        );
+        agentId = created.id;
+        // A real app-server rejects an unsaved thread on resume. No model request is
+        // needed to prove that reopening the agent remains safe before its first turn.
+        for (let i = 0; i < 2; i++) {
+          const reopened = await manager.reloadAgentSession(agentId);
+          expect(reopened.lifecycle).toBe("idle");
+          expect(reopened.persistence).toBeNull();
+        }
+        await storage.flush();
+        expect((await storage.get(agentId))?.persistence).toBeNull();
+      } finally {
+        if (agentId && manager.getAgent(agentId)) await manager.closeAgent(agentId);
+        await storage.flush();
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "reopens an agent that was never prompted without resuming its unsaved thread",
+    async () => {
+      const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-unprompted-cwd-"));
+      const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-unprompted-home-"));
+      const mockServer = await startMockResponsesServer([
+        assistantMessageSse("first"),
+        assistantMessageSse("second"),
+      ]);
+      const logger = createTestLogger();
+      const storage = new AgentStorage(path.join(cwd, "agents"), logger);
+      const manager = new AgentManager({
+        clients: { codex: new CodexAppServerAgentClient(logger) },
+        registry: storage,
+        logger,
+      });
+      let agentId: string | undefined;
+      try {
+        writeMockCodexConfig(codexHome, mockServer.url);
+        vi.stubEnv("CODEX_HOME", codexHome);
+        const created = await manager.createAgent(
+          { provider: "codex", cwd, modeId: "auto", model: "mock-model" },
+          undefined,
+          { workspaceId: undefined },
+        );
+        agentId = created.id;
+        // Codex writes a thread's rollout at its first turn, so there is nothing to resume yet.
+        expect(manager.getAgent(agentId)?.persistence).toBeNull();
+        await storage.flush();
+        expect((await storage.get(agentId))?.persistence).toBeNull();
+
+        await manager.reloadAgentSession(agentId);
+        await manager.runAgent(agentId, "first prompt after reopening");
+        const threadId = manager.getAgent(agentId)?.persistence?.sessionId;
+        expect(threadId).toEqual(expect.any(String));
+        await storage.flush();
+        expect((await storage.get(agentId))?.persistence?.sessionId).toBe(threadId);
+
+        const reloaded = await manager.reloadAgentSession(agentId);
+        expect(reloaded.persistence?.sessionId).toBe(threadId);
+        await manager.runAgent(agentId, "continue the saved thread");
+        expect(manager.getAgent(agentId)?.lifecycle).toBe("idle");
+        expect(mockServer.requestBodies.at(-1)).toContain("first prompt after reopening");
+      } finally {
+        if (agentId && manager.getAgent(agentId)) await manager.closeAgent(agentId);
+        await storage.flush();
+        vi.unstubAllEnvs();
+        await mockServer.close();
+        rmSync(cwd, { recursive: true, force: true });
+        rmSync(codexHome, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "surfaces request_user_input from the app-server as question permissions and timeline tool calls",
+    async () => {
+      const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-app-server-question-cwd-"));
+      const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-app-server-question-home-"));
+      const mockServer = await startMockResponsesServer([
+        requestUserInputSse("call1"),
+        assistantMessageSse("done"),
+      ]);
+
+      try {
+        writeMockCodexConfig(codexHome, mockServer.url);
+
+        const client = new CodexAppServerAgentClient(createTestLogger());
+        const session = await client.createSession(
+          {
+            provider: "codex",
+            cwd,
+            modeId: "auto",
+            model: "mock-model",
+            thinkingOptionId: "medium",
+          },
+          {
+            env: {
+              CODEX_HOME: codexHome,
+            },
+          },
+        );
+
+        try {
+          await session.applyOptions!({ plan_mode: true });
+
+          const events: AgentStreamEvent[] = [];
+          session.subscribe((event) => {
+            events.push(event);
+          });
+
+          const questionRequested = waitForEvent({
+            session,
+            timeoutMs: 15_000,
+            label: "question permission request",
+            predicate: (
+              event,
+            ): event is Extract<AgentStreamEvent, { type: "permission_requested" }> =>
+              event.type === "permission_requested" &&
+              event.request.provider === "codex" &&
+              event.request.kind === "question" &&
+              event.request.name === "request_user_input",
+          });
+
+          const turnFinished = waitForEvent({
+            session,
+            timeoutMs: 15_000,
+            label: "turn completion",
+            predicate: (
+              event,
+            ): event is Extract<
+              AgentStreamEvent,
+              { type: "turn_completed" | "turn_failed" | "turn_canceled" }
+            > =>
+              event.type === "turn_completed" ||
+              event.type === "turn_failed" ||
+              event.type === "turn_canceled",
+          });
+
+          await session.startTurn("ask something");
+
+          const permissionEvent = await questionRequested;
+          expect(permissionEvent.request.input).toEqual({
+            questions: [
+              {
+                id: "confirm_path",
+                header: "Confirm",
+                question: "Proceed with the plan?",
+                isOther: true,
+                options: [
+                  {
+                    label: "Yes (Recommended)",
+                    description: "Continue the current plan.",
+                  },
+                  {
+                    label: "No",
+                    description: "Stop and revisit the approach.",
+                  },
+                ],
+              },
+            ],
+          });
+
+          const runningQuestionCall = events.find(
+            (event) =>
+              event.type === "timeline" &&
+              event.provider === "codex" &&
+              event.item.type === "tool_call" &&
+              event.item.name === "request_user_input" &&
+              event.item.status === "running",
+          );
+          expect(runningQuestionCall).toBeDefined();
+
+          await session.respondToPermission(permissionEvent.request.id, {
+            behavior: "allow",
+            updatedInput: {
+              answers: {
+                Confirm: "Yes (Recommended)",
+              },
+            },
+          });
+
+          const terminalEvent = await turnFinished;
+          expect(terminalEvent.type).toBe("turn_completed");
+
+          const completedQuestionCall = events.find(
+            (event) =>
+              event.type === "timeline" &&
+              event.provider === "codex" &&
+              event.item.type === "tool_call" &&
+              event.item.name === "request_user_input" &&
+              event.item.status === "completed",
+          );
+          expect(completedQuestionCall).toBeDefined();
+          if (
+            !completedQuestionCall ||
+            completedQuestionCall.type !== "timeline" ||
+            completedQuestionCall.item.type !== "tool_call"
+          ) {
+            throw new Error("Expected completed request_user_input tool call");
+          }
+          expect(completedQuestionCall.item.metadata).toMatchObject({
+            answers: {
+              confirm_path: ["Yes (Recommended)"],
+            },
+          });
+          expect(
+            mockServer.requestBodies.some(
+              (body) =>
+                body.includes('"type":"function_call_output"') &&
+                body.includes('"call_id":"call1"'),
+            ),
+          ).toBe(true);
+
+          const finalAssistantMessage = [...events]
+            .toReversed()
+            .find((event) => event.type === "timeline" && event.item.type === "assistant_message");
+          expect(finalAssistantMessage).toBeDefined();
+          if (
+            !finalAssistantMessage ||
+            finalAssistantMessage.type !== "timeline" ||
+            finalAssistantMessage.item.type !== "assistant_message"
+          ) {
+            throw new Error("Expected final assistant message");
+          }
+          expect(finalAssistantMessage.item.text.trim()).toBe("done");
+        } finally {
+          await session.close();
+        }
+      } finally {
+        await mockServer.close();
+        rmSync(cwd, { recursive: true, force: true });
+        rmSync(codexHome, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  test.runIf(isCodexInstalled())(
+    "shows Codex reconnecting a dropped model stream until the reply arrives",
+    async () => {
+      const cwd = mkdtempSync(path.join(os.tmpdir(), "codex-reconnect-cwd-"));
+      const codexHome = mkdtempSync(path.join(os.tmpdir(), "codex-reconnect-home-"));
+      // A stream that ends before `response.completed` makes Codex reconnect.
+      const droppedStream = sse([responseCreated("resp-dropped")]);
+      const mockServer = await startMockResponsesServer([
+        droppedStream,
+        droppedStream,
+        assistantMessageSse("recovered"),
+      ]);
+
+      try {
+        writeMockCodexConfig(codexHome, mockServer.url, { streamMaxRetries: 2 });
+        const client = new CodexAppServerAgentClient(createTestLogger());
+        const session = await client.createSession(
+          { provider: "codex", cwd, modeId: "auto", model: "mock-model" },
+          { env: { CODEX_HOME: codexHome } },
+        );
+
+        try {
+          const events: AgentStreamEvent[] = [];
+          session.subscribe((event) => {
+            events.push(event);
+          });
+          const turnFinished = waitForEvent({
+            session,
+            timeoutMs: 20_000,
+            label: "turn completion",
+            predicate: (
+              event,
+            ): event is Extract<
+              AgentStreamEvent,
+              { type: "turn_completed" | "turn_failed" | "turn_canceled" }
+            > =>
+              event.type === "turn_completed" ||
+              event.type === "turn_failed" ||
+              event.type === "turn_canceled",
+          });
+
+          await session.startTurn("reply after reconnecting");
+          expect((await turnFinished).type).toBe("turn_completed");
+
+          const retryRows = events.flatMap((event) =>
+            event.type === "timeline" &&
+            event.item.type === "tool_call" &&
+            event.item.name === "codex_retry"
+              ? [event.item]
+              : [],
+          );
+          expect(
+            retryRows.map(
+              (row) => `${row.status}: ${row.detail.type === "plain_text" ? row.detail.label : ""}`,
+            ),
+          ).toEqual([
+            "running: Reconnecting... 1/2",
+            "running: Reconnecting... 2/2",
+            "completed: Reconnected",
+          ]);
+          expect(new Set(retryRows.map((row) => row.callId)).size).toBe(1);
+          expect(mockServer.requestBodies).toHaveLength(3);
+        } finally {
+          await session.close();
+        }
+      } finally {
+        await mockServer.close();
+        rmSync(cwd, { recursive: true, force: true });
+        rmSync(codexHome, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+});

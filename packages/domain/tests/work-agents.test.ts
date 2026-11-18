@@ -23,7 +23,7 @@ describe("day-one agents", () => {
     for (const agent of agentCatalog) {
       expect(
         existsSync(
-          join("apps/desktop/renderer/avatars", agent.avatar + ".webp"),
+          join("packages/amun-ui/public/avatars", agent.avatar + ".webp"),
         ),
         agent.avatar,
       ).toBe(true);

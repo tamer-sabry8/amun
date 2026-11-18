@@ -50,6 +50,7 @@ const themeChoice = z.enum([
   "lg-ember",
   "lg-mono",
   "lg-cyberpunk",
+  "amun-brand",
 ]);
 const planItem = z.strictObject({
   id,
@@ -766,6 +767,8 @@ export const workCommand = z.discriminatedUnion("action", [
     always: z.boolean().default(true),
   }),
   act("toggle-agent", { agentId: id, enabled: z.boolean() }),
+  // A change the captain wants to an agent's brief; the First Mate makes it.
+  act("edit-agent", { agentId: id, change: text.min(1) }),
   // What an agent is doing, reported by the service that started its worker.
   act("agent-status", {
     role: name,

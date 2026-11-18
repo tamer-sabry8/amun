@@ -5,6 +5,6 @@
   "type": "module",
   "exports": "./src/governance.ts",
   "dependencies": {
-    "@amun/contracts": "workspace:*"
+    "@amun/contracts": "*"
   }
 }

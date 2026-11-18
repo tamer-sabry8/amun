@@ -464,6 +464,7 @@ export const themeIds = [
   "lg-ember",
   "lg-mono",
   "lg-cyberpunk",
+  "amun-brand",
 ] as const;
 export type ThemeId = (typeof themeIds)[number];
 /** Default follows macOS appearance; a manual choice in Settings overrides it (Q69). */

@@ -23,6 +23,7 @@ const themes = [
   "lg-ember",
   "lg-mono",
   "lg-cyberpunk",
+  "amun-brand",
 ];
 it("meets text and interactive contrast in every theme and never overrides locked safety tokens", () => {
   const safety = JSON.parse(readFileSync("tokens/safety.json", "utf8"));

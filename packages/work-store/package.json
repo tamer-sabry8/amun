@@ -1,0 +1,12 @@
+{
+  "name": "@amun/work-store",
+  "version": "0.10.0",
+  "private": true,
+  "type": "module",
+  "description": "Amun's local work model (from Amun Beta 0.9) on node:sqlite, hosted by the daemon.",
+  "main": "dist/index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --external:node:*"
+  }
+}

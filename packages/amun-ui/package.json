@@ -1,0 +1,33 @@
+{
+  "name": "@amun/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@amun/contracts": "*",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@tiptap/core": "3.33.0",
+    "@tiptap/extension-list": "3.33.0",
+    "@tiptap/extension-table": "3.33.0",
+    "@tiptap/markdown": "3.33.0",
+    "@tiptap/react": "3.33.0",
+    "@tiptap/starter-kit": "3.33.0",
+    "@xterm/xterm": "6.0.0",
+    "monaco-editor": "0.57.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "serve": "vite preview --outDir build --port 6768 --strictPort"
+  }
+}
