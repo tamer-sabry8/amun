@@ -16,12 +16,12 @@ Nothing below needs a new script: use `bin/fm-brief.sh`, `bin/fm-spawn.sh`, `bin
 
 File every PM item through `bin/fm-tasks-axi.sh add <id> "<title>" --kind <kind>` before dispatch.
 
-| Kind | Board column while queued | Use for |
-| --- | --- | --- |
-| `scout` | Discovery | research, evidence, assumption checks |
-| `prd`, `spec`, `story` | Spec / Prototype | PRDs, user stories, initiative evaluations |
-| `prototype` | Spec / Prototype | clickable prototypes and wireframes |
-| `sync` | Backlog | delivery-system work routed to the delivery secondmate |
+| Kind                   | Board column while queued | Use for                                                |
+| ---------------------- | ------------------------- | ------------------------------------------------------ |
+| `scout`                | Discovery                 | research, evidence, assumption checks                  |
+| `prd`, `spec`, `story` | Spec / Prototype          | PRDs, user stories, initiative evaluations             |
+| `prototype`            | Spec / Prototype          | clickable prototypes and wireframes                    |
+| `sync`                 | Backlog                   | delivery-system work routed to the delivery secondmate |
 
 In flight shows as In Progress, In flight with a PR link or a captain hold shows as Review, and Done shows as Done.
 A decision for the captain is a task held with `bin/fm-captain-hold.sh hold <id> --reason "<question>"`; Amun shows it in its decision bar and relays the captain's answer to you as a message.

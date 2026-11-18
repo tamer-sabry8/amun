@@ -142,7 +142,7 @@ Adapters are built and unit-tested against recorded payloads. No live call is ma
 ## 6. Target layout (Phases 2 to 4)
 
 ```
-vendor/firstmate/        Firstmate @427056c, LICENSE kept, plus AMUN_PM_PLAYBOOK.md and one AGENTS.md pointer
+vendor/firstmate/        Firstmate @427056c, untouched git subtree (playbook moved to firstmate-layer/)
 vendor/VENDORED.md       pins, licenses, local patches
 packages/protocol/       Paseo, plus amun-rpc.ts (fleet, holds, backlog, spaces payloads)
 packages/client/         Paseo DaemonClient
