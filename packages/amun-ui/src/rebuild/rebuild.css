@@ -854,6 +854,13 @@
   background: var(--selected);
   color: var(--ink);
 }
+.rb-rail .rb-rail-trace {
+  margin-top: auto;
+  margin-bottom: 14px;
+}
+.rb-rail .rb-rail-trace[aria-busy="true"] svg {
+  animation: rb-spin 0.9s linear infinite;
+}
 .rb-rail .count {
   position: absolute;
   top: -3px;

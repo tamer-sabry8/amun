@@ -25,6 +25,8 @@ import {
   crewSessionText,
   codeChangeResult,
   diagnosticsResult,
+  traceBundle,
+  traceBundleFailed,
   type WorkspaceSnapshot,
   type AuthEvent,
 } from "@amun/contracts";
@@ -185,6 +187,13 @@ export function initializeBridge() {
       const roster = crewRoster.safeParse(message.data);
       if (roster.success) {
         for (const f of eventListeners) f(roster.data);
+        return;
+      }
+      const trace =
+        traceBundle.safeParse(message.data).data ??
+        traceBundleFailed.safeParse(message.data).data;
+      if (trace) {
+        for (const f of eventListeners) f(trace);
         return;
       }
       const diagnostics = diagnosticsResult.safeParse(message.data);

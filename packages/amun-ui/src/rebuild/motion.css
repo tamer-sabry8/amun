@@ -366,7 +366,16 @@ button.rb-tile {
   animation: rb-written 600ms ease-out;
 }
 
+@keyframes rb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .rb-rail .rb-rail-trace[aria-busy="true"] svg {
+    animation: none;
+  }
   .rb .ic path {
     animation: none !important;
     stroke-dasharray: none;

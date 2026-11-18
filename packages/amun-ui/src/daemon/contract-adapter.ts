@@ -318,7 +318,56 @@ export class ContractAdapter {
     if (message.kind === "work") return this.handleWork(message);
     if (message.kind === "native-pi" && message.action === "run")
       return [await this.handleNativePi(message)];
+    if (message.kind === "diagnostics" && typeof message.id === "string")
+      return [await this.traceBundle(message.id)];
     return [];
+  }
+
+  /**
+   * Diagnostics are the trace bundle. The first export also asks the First
+   * Mate, once, to keep agent history; Amun never writes those flags itself.
+   */
+  private async traceBundle(id: string) {
+    try {
+      const space = await this.ensureSpace();
+      const history = await this.daemon
+        .request<{ asked: boolean; ledger: boolean; archive: boolean }>(
+          "trace.history",
+          { space },
+        )
+        .catch(() => null);
+      const bundle = await this.daemon.request<{
+        fileName: string;
+        size: number;
+        files: string[];
+        base64: string;
+      }>("trace.export", { space });
+      return {
+        version: 1,
+        kind: "trace-bundle",
+        id,
+        fileName: bundle.fileName,
+        size: bundle.size,
+        files: bundle.files,
+        base64: bundle.base64,
+        history:
+          history?.ledger && history.archive
+            ? "on"
+            : history?.asked
+              ? "asked"
+              : "off",
+      };
+    } catch (error) {
+      return {
+        version: 1,
+        kind: "trace-bundle-failed",
+        id,
+        message: (error instanceof Error ? error.message : String(error)).slice(
+          0,
+          4096,
+        ),
+      };
+    }
   }
 
   private async authConnections() {

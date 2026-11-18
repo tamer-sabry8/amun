@@ -3,11 +3,17 @@
 // agents and Pi panels, with the same review and confirmation steps.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  diagnosticsResult,
   nativePiEvent,
   type NativePiEvent,
+  type TraceBundle,
 } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import {
+  HISTORY_NOTE,
+  requestTrace,
+  saveTrace,
+  traceSize,
+} from "./trace-download.ts";
 
 type Result = NativePiEvent["result"];
 
@@ -455,59 +461,17 @@ export function ConversationTools() {
 
 export function DiagnosticsTools() {
   const { connected } = useConnected();
-  const pending = useRef<string | null>(null);
-  const savePending = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [review, setReview] = useState<string | null>(null);
+  const [review, setReview] = useState<TraceBundle | null>(null);
   const [status, setStatus] = useState("");
-  useEffect(() => {
-    const off = bridge.onEvent((value) => {
-      const result = diagnosticsResult.safeParse(value);
-      if (result.success && result.data.id === pending.current) {
-        pending.current = null;
-        setBusy(false);
-        setReview(result.data.text);
-        setStatus("");
-      } else if (
-        value &&
-        typeof value === "object" &&
-        "kind" in value &&
-        value.kind === "service-lost" &&
-        pending.current
-      ) {
-        pending.current = null;
-        setBusy(false);
-        setStatus("The connection to Amun was lost. Try again in a moment.");
-      }
-    });
-    const listener = (event: MessageEvent) => {
-      if (
-        event.source !== window ||
-        event.data?.kind !== "amun-pi-export-status" ||
-        !savePending.current ||
-        event.data.result?.id !== savePending.current
-      )
-        return;
-      savePending.current = null;
-      setStatus(
-        event.data.result.status === "saved"
-          ? "Diagnostics saved"
-          : event.data.result.status === "cancelled"
-            ? "Export cancelled"
-            : "Diagnostics not saved. Choose a new file name; existing files are not overwritten.",
-      );
-    };
-    window.addEventListener("message", listener);
-    return () => {
-      off();
-      window.removeEventListener("message", listener);
-    };
-  }, []);
   return (
     <section aria-labelledby="rb-adv-diag">
       <h3 id="rb-adv-diag">Diagnostics</h3>
       <p className="muted">
-        Save recent Amun logs and version numbers to help find a problem.
+        Save a trace of what happened, to upload when something goes wrong: who
+        said what in each chat, what each agent did, which files and worktrees
+        it changed, which agents were blocked and why, and what the First Mate
+        and Pi did.
       </p>
       <div className="rb-inline">
         <span className="row wrap">
@@ -515,12 +479,23 @@ export function DiagnosticsTools() {
             className="btn quiet"
             disabled={!connected || busy}
             onClick={() => {
-              const id = crypto.randomUUID();
-              pending.current = id;
               setBusy(true);
               setReview(null);
               setStatus("");
-              bridge.send({ version: 1, kind: "diagnostics", id });
+              requestTrace().then(
+                (bundle) => {
+                  setBusy(false);
+                  setReview(bundle);
+                },
+                (error: unknown) => {
+                  setBusy(false);
+                  setStatus(
+                    error instanceof Error
+                      ? error.message
+                      : "The trace could not be built.",
+                  );
+                },
+              );
             }}
           >
             Export diagnostics
@@ -536,28 +511,23 @@ export function DiagnosticsTools() {
                 or share it. Nothing leaves this Mac.
               </p>
               <label className="field">
-                Diagnostics contents
+                {`Diagnostics contents (${review.files.length} files, ${traceSize(review.size)})`}
                 <textarea
                   readOnly
                   rows={10}
-                  value={review}
+                  value={review.files.join("\n")}
                   aria-label="Diagnostics contents to review"
                 />
               </label>
+              {HISTORY_NOTE[review.history] && (
+                <p className="note">{HISTORY_NOTE[review.history]}</p>
+              )}
               <span className="row wrap">
                 <button
                   className="btn"
                   onClick={() => {
-                    const id = crypto.randomUUID();
-                    savePending.current = id;
-                    setStatus("Choose where to save it…");
-                    window.postMessage(
-                      {
-                        kind: "amun-pi-export-command",
-                        command: { id, format: "txt", text: review },
-                      },
-                      "*",
-                    );
+                    saveTrace(review);
+                    setStatus(`Saved ${review.fileName} to your downloads.`);
                   }}
                 >
                   Save the reviewed diagnostics…

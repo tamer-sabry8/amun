@@ -2,6 +2,7 @@
 // Library and Decisions open scoped to the active work and can expand into
 // the main workspace.
 import { useState } from "react";
+import { requestTrace, saveTrace } from "./trace-download.ts";
 import {
   railItems,
   type RailItem,
@@ -81,7 +82,63 @@ export function Rail({
           )}
         </button>
       ))}
+      <TraceButton />
     </aside>
+  );
+}
+
+type TraceState = "idle" | "busy" | "saved" | "failed";
+const traceLabels: Record<TraceState, string> = {
+  idle: "Download a trace to share when something goes wrong",
+  busy: "Building the trace…",
+  saved: "Trace saved to your downloads",
+  failed: "The trace could not be built. Try Settings, Advanced, Diagnostics.",
+};
+
+/** One click: build the redacted trace bundle and save it. */
+function TraceButton() {
+  const [state, setState] = useState<TraceState>("idle");
+  const settle = (next: TraceState) => {
+    setState(next);
+    setTimeout(() => setState("idle"), 4000);
+  };
+  return (
+    <>
+      <button
+        className="rb-rail-trace"
+        aria-label={traceLabels[state]}
+        title={traceLabels[state]}
+        aria-busy={state === "busy"}
+        disabled={state === "busy"}
+        onClick={() => {
+          setState("busy");
+          requestTrace().then(
+            (bundle) => {
+              saveTrace(bundle);
+              settle("saved");
+            },
+            () => settle("failed"),
+          );
+        }}
+      >
+        <Icon
+          name={
+            state === "busy"
+              ? "checking"
+              : state === "saved"
+                ? "check"
+                : state === "failed"
+                  ? "warning"
+                  : "trace"
+          }
+          width={18}
+          height={18}
+        />
+      </button>
+      <span className="sr-only" aria-live="polite">
+        {state === "idle" ? "" : traceLabels[state]}
+      </span>
+    </>
   );
 }
 

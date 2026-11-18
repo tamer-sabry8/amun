@@ -6,12 +6,17 @@ import {
 } from "@amun/contracts";
 import { workEvent } from "../../contracts/src/work.ts";
 import { authEvent } from "../../contracts/src/auth.ts";
+import {
+  traceBundle,
+  traceBundleFailed,
+} from "../../contracts/src/diagnostics.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
 import { ContractAdapter } from "../src/daemon/contract-adapter.ts";
 import { openWorkStore } from "../../work-store/src/index.ts";
 
 class FakeDaemon implements AmunTransport {
   calls: { method: string; params: Record<string, unknown> }[] = [];
+  traceFails = false;
   spaces = [{ slug: "alpha", name: "Alpha" }];
   // The daemon's real work store, in memory.
   work = openWorkStore(":memory:").store;
@@ -68,7 +73,16 @@ class FakeDaemon implements AmunTransport {
       "primary.send": { reply: "Aye, Captain." },
       "connections.list": this.connections,
       "connections.save": this.connections[0],
+      "trace.history": { asked: true, ledger: false, archive: false },
+      "trace.export": {
+        fileName: "amun-trace-1.zip",
+        size: 3,
+        files: ["manifest.json"],
+        base64: "UEsF",
+      },
     };
+    if (method === "trace.export" && this.traceFails)
+      throw new Error("disk full");
     if (method === "connections.save" && params.secret === "bad")
       throw new Error("Azure DevOps refused the token.");
     return results[method] as T;
@@ -275,6 +289,33 @@ describe("daemon contract adapter", () => {
     expect(refused[0]).toMatchObject({
       kind: "auth-notice",
       message: "Azure DevOps refused the token.",
+    });
+  });
+
+  it("answers a diagnostics request with the daemon's trace bundle", async () => {
+    const { daemon, adapter } = make();
+    const [bundle] = await adapter.handle({
+      version: 1,
+      kind: "diagnostics",
+      id: "d1",
+    });
+    expect(traceBundle.parse(bundle)).toMatchObject({
+      id: "d1",
+      fileName: "amun-trace-1.zip",
+      history: "asked",
+    });
+    expect(daemon.calls.map((call) => call.method)).toEqual(
+      expect.arrayContaining(["trace.history", "trace.export"]),
+    );
+    daemon.traceFails = true;
+    const [failed] = await adapter.handle({
+      version: 1,
+      kind: "diagnostics",
+      id: "d2",
+    });
+    expect(traceBundleFailed.parse(failed)).toMatchObject({
+      id: "d2",
+      message: "disk full",
     });
   });
 });
