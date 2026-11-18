@@ -259,6 +259,67 @@ describe("Council service", () => {
     });
     expect(store.snapshot().council[0]!.state).toBe("running");
   });
+  it("asks every question the Chair sent at once, and answers only when all are answered, in order", async () => {
+    const council = await installed();
+    await council.run({
+      text: "/roast-room Raise prices",
+      workAreaId: null,
+      groupId: null,
+    });
+    await ask(join(root, "bridge"), "q2", {
+      questions: [
+        { question: "What is the budget?", options: ["Under 1M", "Over 1M"] },
+        { question: "Who decides?", options: ["The board", "The CEO"] },
+      ],
+    });
+    await council.poll();
+    await council.poll();
+    const cards = store
+      .snapshot()
+      .attention.filter((item) => item.kind === "question");
+    expect(cards.map((item) => [item.title, item.options])).toEqual([
+      ["What is the budget?", ["Under 1M", "Over 1M"]],
+      ["Who decides?", ["The board", "The CEO"]],
+    ]);
+    const answerCard = (title: string, answer: string) =>
+      store.handle({
+        version: 1,
+        kind: "work",
+        action: "resolve-attention",
+        attentionId: cards.find((item) => item.title === title)!.id,
+        resolution: "answer",
+        answer,
+      });
+    // The second is answered first: the Chair still waits for both.
+    answerCard("Who decides?", "The CEO");
+    await council.poll();
+    expect(await pending(join(root, "bridge"))).toHaveLength(1);
+    answerCard("What is the budget?", "Under 1M");
+    await council.poll();
+    expect(
+      JSON.parse(
+        await readFile(join(root, "bridge", "answer-q2.json"), "utf8"),
+      ),
+    ).toEqual({ id: "q2", answers: ["Under 1M", "The CEO"] });
+  });
+  it("starts one Chair when two requests arrive together", async () => {
+    const council = await installed();
+    const request = {
+      text: "/roast-room Raise prices",
+      workAreaId: null,
+      groupId: null,
+    };
+    const before = spawned.length;
+    const results = await Promise.all([
+      council.run(request),
+      council.run(request),
+    ]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.find((result) => !result.ok)).toMatchObject({
+      reason: "A council is already in session.",
+    });
+    expect(spawned.length - before).toBe(1);
+  });
   it("files the verdict: report to the Library, recommendation to Decisions", async () => {
     const council = await installed();
     await council.run({

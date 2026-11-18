@@ -61,7 +61,19 @@ export function useFirstmateCommands() {
     run(parsed.name, parsed.argument);
     return true;
   };
-  return { send, run, result, busy, clear: () => setResult(null) };
+  /** Shows the answer of a command Amun carried out itself (/model, /theme). */
+  const answer = (work: Promise<string>) => {
+    request.current = null;
+    setBusy(true);
+    setResult(null);
+    void work
+      .catch(() => "That did not work. Try again.")
+      .then((text) => {
+        setBusy(false);
+        setResult({ kind: "message", text });
+      });
+  };
+  return { send, run, answer, result, busy, clear: () => setResult(null) };
 }
 
 export function FirstmateCommandReply({

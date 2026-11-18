@@ -31,6 +31,8 @@ export function installDaemonPort(url: string = defaultDaemonUrl()) {
     if (event.source === window && event.data?.kind === "amun-renderer-ready")
       offer();
   });
+  // An answer to a held question lands (or fails) after its request returned.
+  adapter.onChange = () => local?.postMessage(adapter.work());
   let wasConnected = false;
   let everConnected = false;
   client.onStatus((connected) => {

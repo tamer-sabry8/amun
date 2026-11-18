@@ -685,7 +685,12 @@ describe("destinations", () => {
   it("Portfolio lists the active group's work only", () => {
     const html = text(
       renderToStaticMarkup(
-        createElement(Portfolio, { snapshot: active(), onWork: noop }),
+        createElement(Portfolio, {
+          snapshot: active(),
+          model: null,
+          onWork: noop,
+          onAsk: noop,
+        }),
       ),
     );
     expect(html).toContain("TICAO");
@@ -701,7 +706,12 @@ describe("destinations", () => {
     });
     const html = text(
       renderToStaticMarkup(
-        createElement(Portfolio, { snapshot: state, onWork: noop }),
+        createElement(Portfolio, {
+          snapshot: state,
+          model: null,
+          onWork: noop,
+          onAsk: noop,
+        }),
       ),
     );
     expect(html).not.toMatch(/\b(false|true|null|undefined)\b/);
@@ -960,7 +970,12 @@ describe("plain language", () => {
         onPendingDone: noop,
         onNote: noop,
       }),
-      createElement(Portfolio, { snapshot: state, onWork: noop }),
+      createElement(Portfolio, {
+        snapshot: state,
+        model: null,
+        onWork: noop,
+        onAsk: noop,
+      }),
       createElement(Rfps, { snapshot: state, now, model: null, onWork: noop }),
       createElement(Roadmap, { snapshot: state, model: null, onReview: noop }),
       createElement(Sprints, {

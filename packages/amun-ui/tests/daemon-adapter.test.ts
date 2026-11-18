@@ -483,6 +483,77 @@ describe("daemon contract adapter", () => {
     ).toHaveLength(2);
   });
 
+  it("passes Firstmate's own skills to the First Mate and refuses the ones Amun must not run", async () => {
+    const { adapter, daemon } = make();
+    const run = async (command: string, argument = "") => {
+      const [event] = await adapter.handle({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id: command,
+        command,
+        argument,
+      });
+      const result = nativePiEvent.parse(event).result;
+      return result.kind === "message" ? result.text : "";
+    };
+    expect(await run("bearings", "include PRs")).toBe("Aye, Captain.");
+    expect(
+      daemon.calls.find((c) => c.method === "primary.send")?.params,
+    ).toEqual({ space: "alpha", text: "/skill:bearings include PRs" });
+
+    // An update is never run on the working home from here.
+    expect(await run("updatefirstmate")).toMatch(/switched off/);
+    expect(await run("calm")).toMatch(/not available inside Amun yet/);
+    expect(
+      daemon.calls.filter((c) => c.method === "primary.send"),
+    ).toHaveLength(1);
+  });
+
+  it("shows an answered hold under Done at once, and reopens it if the answer did not land", async () => {
+    const { adapter, daemon } = make();
+    await adapter.handle({ version: 1, kind: "work", action: "snapshot" });
+    const open = adapter
+      .work()
+      .attention.find((item) => item.id.startsWith("hold:"))!;
+    let changed = 0;
+    adapter.onChange = () => (changed += 1);
+    const failing = daemon.request.bind(daemon);
+    daemon.request = (async (
+      method: string,
+      params?: Record<string, unknown>,
+    ) => {
+      if (method === "holds.answer") throw new Error("Firstmate took too long");
+      return failing(method, params);
+    }) as typeof daemon.request;
+
+    const [result, snapshot] = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "resolve-attention",
+      attentionId: open.id,
+      resolution: "answer",
+      answer: "One page",
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(String((result as { message: string }).message)).toContain(
+      "One page",
+    );
+    const taken = workEvent.parse(snapshot);
+    if (taken.kind !== "work-snapshot") throw new Error("expected a snapshot");
+    expect(taken.attention.find((item) => item.id === open.id)).toMatchObject({
+      state: "done",
+      answer: "One page",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(changed).toBeGreaterThan(0);
+    const after = adapter.work().attention.find((item) => item.id === open.id)!;
+    expect(after.state).toBe("open");
+    expect(after.detail).toContain("did not reach Firstmate");
+  });
+
   it("connects Azure DevOps through the daemon and reports what it can read", async () => {
     const { adapter, daemon } = make();
     const connection = {

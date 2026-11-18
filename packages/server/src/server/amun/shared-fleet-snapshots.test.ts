@@ -99,6 +99,24 @@ describe("shared fleet snapshots", () => {
     expect(pending).toHaveLength(2);
   });
 
+  it("shows what was kept from the last run at once, then replaces and keeps the new one", async () => {
+    const { pending, readOnce } = slowReader();
+    const kept: FleetSnapshot[] = [];
+    const older = { ...fixture, generated: "2026-11-17T08:00:00Z" };
+    const snapshots = shareFleetSnapshots(readOnce, {
+      load: () => older,
+      save: (_home, snapshot) => void kept.push(snapshot),
+    });
+
+    expect(await snapshots.read("/home")).toBe(older);
+    // The home is read again behind the caller.
+    expect(pending).toHaveLength(1);
+    pending[0].resolve(fixture);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await snapshots.read("/home")).toBe(fixture);
+    expect(kept).toEqual([fixture]);
+  });
+
   it("keeps homes apart", () => {
     const { pending, readOnce } = slowReader();
     const snapshots = shareFleetSnapshots(readOnce);

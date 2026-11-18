@@ -1,0 +1,99 @@
+import { describe, expect, it } from "vitest";
+import type { ProductSpace } from "@getpaseo/protocol/amun-rpc";
+import {
+  describeTurnFailure,
+  FirstMateTurnError,
+  PrimarySessions,
+  type PrimaryHost,
+} from "./primary-session.js";
+
+const space = {
+  slug: "home",
+  name: "Home",
+  fmHome: "/home/firstmate",
+  harness: "pi",
+  backend: "tmux",
+} as unknown as ProductSpace;
+
+interface Turn {
+  text: string;
+  resolve(reply: string): void;
+  reject(error: Error): void;
+}
+
+function host() {
+  const turns: Turn[] = [];
+  const cancelled: string[] = [];
+  let open = false;
+  const made: PrimaryHost = {
+    createAgent: async () => ({ agentId: "fm" }),
+    runAgent: (_agentId, text) => {
+      // Paseo refuses a second turn while one is open.
+      if (open) return Promise.reject(new Error("Agent fm already has an active run"));
+      open = true;
+      return new Promise((resolve, reject) => {
+        turns.push({
+          text,
+          resolve: (reply) => {
+            open = false;
+            resolve({ finalText: reply });
+          },
+          reject,
+        });
+      });
+    },
+    cancelRun: async (agentId) => {
+      cancelled.push(agentId);
+      open = false;
+    },
+  };
+  return { made, turns, cancelled };
+}
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("messages to the First Mate", () => {
+  it("answers them one at a time, in order, instead of refusing the second", async () => {
+    const { made, turns } = host();
+    const sessions = new PrimarySessions(made, "/root");
+    const first = sessions.send(space, "one");
+    const second = sessions.send(space, "two");
+    await settled();
+    expect(turns.map((turn) => turn.text)).toEqual(["one"]);
+    expect(sessions.pending(space.fmHome)).toBe(2);
+
+    turns[0].resolve("first reply");
+    expect((await first).reply).toBe("first reply");
+    await settled();
+    expect(turns.map((turn) => turn.text)).toEqual(["one", "two"]);
+    turns[1].resolve("second reply");
+    expect((await second).reply).toBe("second reply");
+    expect(sessions.pending(space.fmHome)).toBe(0);
+  });
+
+  it("closes a turn that failed, so the next message is not blocked by it", async () => {
+    const { made, turns, cancelled } = host();
+    const sessions = new PrimarySessions(made, "/root");
+    const stuck = sessions.send(space, "/model");
+    const next = sessions.send(space, "Help me connect to Notion");
+    await settled();
+    turns[0].reject(new Error("Pi RPC request timed out phase=prompt elapsedMs=60001"));
+    await expect(stuck).rejects.toBeInstanceOf(FirstMateTurnError);
+    await settled();
+    expect(cancelled).toEqual(["fm"]);
+    expect(turns.map((turn) => turn.text)).toEqual(["/model", "Help me connect to Notion"]);
+    turns[1].resolve("Sure.");
+    expect((await next).reply).toBe("Sure.");
+  });
+
+  it("says what happened in plain words, never an agent id", () => {
+    const timeout = describeTurnFailure(new Error("Pi RPC request timed out phase=prompt"));
+    const busy = describeTurnFailure(
+      new Error("Agent 144770d7-c3e0-4629-b509-0ee88625a731 already has an active run"),
+    );
+    for (const failure of [timeout, busy]) {
+      expect(failure.message).toMatch(/^Firstmate /);
+      expect(failure.message).not.toMatch(/144770d7|Agent |RPC/);
+    }
+    expect(busy.detail).toContain("144770d7");
+  });
+});

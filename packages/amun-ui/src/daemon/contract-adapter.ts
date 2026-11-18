@@ -214,27 +214,70 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   return agents;
 }
 
-/** Captain holds from Firstmate, as question cards. */
+/** What the owner answered to a held question, and how far it got. */
+export interface HoldAnswer {
+  title: string;
+  answer: string;
+  at: string;
+  /** "sending" until the First Mate has taken it; "failed" with the reason. */
+  status: "sending" | "recorded" | "failed";
+  problem?: string;
+}
+
+/**
+ * Captain holds from Firstmate, as question cards. A hold the owner has
+ * answered moves to Done with the answer shown, so there is no doubt it was
+ * taken; one whose answer did not reach Firstmate comes back open, saying so.
+ */
 export function holdAttention(
   view: DaemonView,
   now: string,
+  answers: ReadonlyMap<string, HoldAnswer> = new Map(),
 ): WorkSnapshot["attention"] {
-  return view.holds.map((hold) => ({
-    id: holdId(hold),
-    kind: "question" as const,
-    groupId: null,
-    workAreaId: null,
-    title: hold.source === "crew" ? hold.summary : hold.title,
-    detail:
+  const open = view.holds.map((hold) => {
+    const id = holdId(hold);
+    const answered = answers.get(id);
+    const detail =
       hold.source === "crew"
         ? `${hold.taskId} · ${hold.verb}`
-        : `${hold.taskId} · ${hold.reason}`,
-    state: "open" as const,
-    ref: hold.taskId,
-    options: [],
-    answer: null,
-    createdAt: now,
-  }));
+        : `${hold.taskId} · ${hold.reason}`;
+    const done = answered && answered.status !== "failed";
+    return {
+      id,
+      kind: "question" as const,
+      groupId: null,
+      workAreaId: null,
+      title: hold.source === "crew" ? hold.summary : hold.title,
+      detail: !answered
+        ? detail
+        : answered.status === "failed"
+          ? `Your answer did not reach Firstmate (${answered.problem ?? "it could not be sent"}). Answer again. ${detail}`
+          : `You answered: “${answered.answer}”. ${answered.status === "sending" ? "Firstmate is reading it." : "Firstmate has it."}`,
+      state: done ? ("done" as const) : ("open" as const),
+      ref: hold.taskId,
+      options: [],
+      answer: done ? answered.answer : null,
+      createdAt: done ? answered.at : now,
+    };
+  });
+  // Answered holds Firstmate has since cleared stay under Done for this run.
+  const still = new Set(open.map((item) => item.id));
+  const cleared = [...answers]
+    .filter(([id, answered]) => !still.has(id) && answered.status !== "failed")
+    .map(([id, answered]) => ({
+      id,
+      kind: "question" as const,
+      groupId: null,
+      workAreaId: null,
+      title: answered.title,
+      detail: `You answered: “${answered.answer}”. Firstmate has it.`,
+      state: "done" as const,
+      ref: null,
+      options: [],
+      answer: answered.answer,
+      createdAt: answered.at,
+    }));
+  return [...open, ...cleared];
 }
 
 /**
@@ -242,7 +285,11 @@ export function holdAttention(
  * join the agents, and captain holds join the attention items. Model sign-in
  * now belongs to Pi, so the old first-run sign-in wizard never shows.
  */
-export function toWorkSnapshot(view: DaemonView, now: string): WorkSnapshot {
+export function toWorkSnapshot(
+  view: DaemonView,
+  now: string,
+  answers: ReadonlyMap<string, HoldAnswer> = new Map(),
+): WorkSnapshot {
   const base = workSnapshot.parse(view.work ?? EMPTY_WORK);
   return workSnapshot.parse({
     ...base,
@@ -251,7 +298,7 @@ export function toWorkSnapshot(view: DaemonView, now: string): WorkSnapshot {
       ...fleetAgents(view),
       ...base.agents.filter((agent) => agent.id !== FIRST_MATE_ID),
     ],
-    attention: [...holdAttention(view, now), ...base.attention],
+    attention: [...holdAttention(view, now, answers), ...base.attention],
   });
 }
 
@@ -263,6 +310,8 @@ interface Conversation {
 }
 
 type Message = Record<string, unknown>;
+/** Firstmate skills the First Mate runs when asked by name. */
+const FIRSTMATE_SKILLS = new Set(["afk", "quiet", "ahoy", "bearings", "stow"]);
 const NOTION_AUTH = new Set([
   "notion-connect",
   "notion-check",
@@ -296,6 +345,10 @@ export class ContractAdapter {
   private conversation: Conversation | null = null;
   /** The First Mate's model as the daemon last reported it. */
   private model: string | null = null;
+  /** Held questions the owner has answered in this run. */
+  private readonly holdAnswers = new Map<string, HoldAnswer>();
+  /** Told when something changed without a request (an answer landed). */
+  onChange: (() => void) | null = null;
 
   constructor(
     private readonly daemon: AmunTransport,
@@ -399,7 +452,7 @@ export class ContractAdapter {
   }
 
   work(): WorkSnapshot {
-    return toWorkSnapshot(this.view, this.now());
+    return toWorkSnapshot(this.view, this.now(), this.holdAnswers);
   }
 
   private result(
@@ -773,14 +826,46 @@ export class ContractAdapter {
       return [
         this.result(action, false, "Answer the First Mate to clear this hold."),
       ];
-    const space = await this.ensureSpace();
-    await this.daemon.request("holds.answer", {
-      space,
-      hold: found,
+    const id = holdId(found);
+    const answered: HoldAnswer = {
+      title: found.source === "crew" ? found.summary : found.title,
       answer: message.answer,
-    });
-    await this.refresh();
-    return [this.result(action, true, "Sent to the First Mate."), this.work()];
+      at: this.now(),
+      status: "sending",
+    };
+    this.holdAnswers.set(id, answered);
+    // Firstmate takes the answer as a turn, which can wait behind another.
+    // The owner sees at once that it was taken, and later whether it landed.
+    void this.ensureSpace()
+      .then((space) =>
+        this.daemon.request("holds.answer", {
+          space,
+          hold: found,
+          answer: message.answer,
+        }),
+      )
+      .then(
+        () => {
+          this.holdAnswers.set(id, { ...answered, status: "recorded" });
+        },
+        (error: unknown) => {
+          this.holdAnswers.set(id, {
+            ...answered,
+            status: "failed",
+            problem: error instanceof Error ? error.message : String(error),
+          });
+        },
+      )
+      .then(() => this.refresh().catch(() => undefined))
+      .then(() => this.onChange?.());
+    return [
+      this.result(
+        action,
+        true,
+        `Sent to Firstmate: “${message.answer}”. It is under Done.`,
+      ),
+      this.work(),
+    ];
   }
 
   private findHold(attentionId: string): DaemonHold | null {
@@ -853,6 +938,33 @@ export class ContractAdapter {
         );
       }
     }
+    if (FIRSTMATE_SKILLS.has(command)) {
+      // Firstmate's own skills. Pi expands "/skill:name" in a message, so the
+      // First Mate runs the skill itself; Amun only passes the words on.
+      try {
+        if (this.view.spaces.length === 0) await this.refresh();
+        const space = await this.ensureSpace();
+        const argument = String(message.argument ?? "").trim();
+        const answer = await this.daemon.request<{ reply?: string }>(
+          "primary.send",
+          {
+            space,
+            text: `/skill:${command}${argument ? " " + argument : ""}`,
+          },
+        );
+        return fail((answer.reply ?? "").trim() || "Done.");
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+    }
+    if (command === "updatefirstmate")
+      return fail(
+        "Updating Firstmate from inside Amun is switched off. An update is tested as a separate candidate first, and only then approved by you.",
+      );
+    if (command === "calm" || command === "supervision-model")
+      return fail(
+        "This one only works in Pi’s own screen for now. It is not available inside Amun yet.",
+      );
     if (command !== "conversation" && command !== "conversation-send")
       return fail(UNAVAILABLE);
     try {

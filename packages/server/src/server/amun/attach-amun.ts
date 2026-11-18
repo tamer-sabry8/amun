@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
-import type { AmunEvent } from "@getpaseo/protocol/amun-rpc";
+import { fleetSnapshotSchema, type AmunEvent } from "@getpaseo/protocol/amun-rpc";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
@@ -15,7 +15,8 @@ import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
 import { openAdo, openCouncil, openNotion, openWorkStore } from "@amun/work-store";
-import { mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { TraceLog } from "./trace/trace-log.js";
 import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
@@ -31,6 +32,7 @@ import { ProductSpaceStore } from "./product-spaces.js";
 export const AMUN_WS_PATH = "/amun";
 const FLEET_POLL_MS = 5_000;
 const COUNCIL_POLL_MS = 1_500;
+const FIRST_MATE_RPC_TIMEOUT_MS = 5 * 60_000;
 const COUNCIL_UPDATE_CHECK_MS = 6 * 3_600_000;
 
 interface AmunLogger {
@@ -93,7 +95,16 @@ export function agentManagerHost(agentManager: AgentManager): PrimaryHost {
   return {
     async createAgent(launch) {
       const agent = await agentManager.createAgent(
-        { provider: launch.provider, cwd: launch.cwd, title: launch.title },
+        {
+          provider: launch.provider,
+          cwd: launch.cwd,
+          title: launch.title,
+          // Pi starts slowly in a busy Firstmate home, and its first reply to
+          // a message can take more than the default minute.
+          ...(launch.provider === "pi"
+            ? { providerOptions: { rpcTimeoutMs: FIRST_MATE_RPC_TIMEOUT_MS } }
+            : {}),
+        },
         undefined,
         { env: launch.env, initialTitle: launch.title, workspaceId: undefined },
       );
@@ -105,6 +116,9 @@ export function agentManagerHost(agentManager: AgentManager): PrimaryHost {
     async runAgent(agentId, text) {
       const result = await agentManager.runAgent(agentId, text);
       return { finalText: result.finalText };
+    },
+    async cancelRun(agentId) {
+      await agentManager.cancelAgentRun(agentId);
     },
   };
 }
@@ -167,8 +181,33 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     vendor: env.AMUN_COUNCIL_VENDOR ?? null,
     path: () => env.PATH ?? "",
   });
-  const snapshots = shareFleetSnapshots((fmHome) =>
-    readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+  // The last snapshot is kept in Amun's own home, so questions and crew show
+  // when the app opens instead of minutes later on a busy home.
+  const snapshotFile = (fmHome: string) =>
+    path.join(
+      paths.amunHome,
+      "fleet-snapshots",
+      `${createHash("sha256").update(fmHome).digest("hex").slice(0, 32)}.json`,
+    );
+  const snapshots = shareFleetSnapshots(
+    (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
+    {
+      load(fmHome) {
+        try {
+          const kept = fleetSnapshotSchema.safeParse(
+            JSON.parse(readFileSync(snapshotFile(fmHome), "utf8")),
+          );
+          return kept.success ? kept.data : null;
+        } catch {
+          return null;
+        }
+      },
+      save(fmHome, snapshot) {
+        const file = snapshotFile(fmHome);
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(file, JSON.stringify(snapshot), { mode: 0o600 });
+      },
+    },
   );
   const handler = new AmunRpcHandler({
     spaces,

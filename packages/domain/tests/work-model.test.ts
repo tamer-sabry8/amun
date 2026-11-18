@@ -807,3 +807,62 @@ describe("messages that are for Firstmate, not work to file", () => {
       expect(asksForNewWork(text), text).toBe(false);
   });
 });
+
+describe("built-in commands", () => {
+  it("reads a command typed in full, longest name first", async () => {
+    const { builtInCommand, commandAsRequest, pickByName } =
+      await import("../src/work/shell.ts");
+    expect(builtInCommand("/model")).toEqual({ name: "model", argument: "" });
+    expect(builtInCommand("/model  Opus 5.5 ")).toEqual({
+      name: "model",
+      argument: "Opus 5.5",
+    });
+    expect(builtInCommand("/sprint plan next two weeks")).toEqual({
+      name: "sprint plan",
+      argument: "next two weeks",
+    });
+    for (const text of [
+      "model",
+      "/modelx",
+      "/unknown",
+      "say /model",
+      "/prd\nmore",
+    ])
+      expect(builtInCommand(text), text).toBeNull();
+
+    // Work commands reach Firstmate in plain words; app commands never do.
+    expect(commandAsRequest("/research pricing in the GCC")).toBe(
+      "Research a question: pricing in the GCC",
+    );
+    expect(commandAsRequest("/prd")).toBe("Draft a short PRD.");
+    expect(commandAsRequest("/model opus")).toBeNull();
+    expect(commandAsRequest("/theme")).toBeNull();
+    expect(commandAsRequest("Draft a PRD")).toBeNull();
+
+    const models = [
+      { id: "github-copilot/claude-opus-5.5", label: "Claude Opus 5.5" },
+      { id: "github-copilot/claude-opus-5", label: "Claude Opus 5" },
+      { id: "openai-codex/gpt-5", label: "GPT-5" },
+    ];
+    expect(pickByName(models, "gpt")).toEqual({ one: models[2] });
+    // An exact name wins over the longer names that contain it.
+    expect(pickByName(models, "claude opus 5")).toEqual({ one: models[1] });
+    expect(pickByName(models, "opus")).toEqual({
+      several: [models[0], models[1]],
+    });
+    expect(pickByName(models, "gemini")).toEqual({ none: true });
+  });
+});
+
+describe("sending a command from the menu", () => {
+  it("sends a command typed in full or with words after it, and completes a partial one", async () => {
+    const { commandReadyToSend } = await import("../src/work/shell.ts");
+    expect(commandReadyToSend("/model", "/model ")).toBe(true);
+    expect(commandReadyToSend("/model opus 5.5", "/model ")).toBe(true);
+    expect(commandReadyToSend("/theme light", "/theme ")).toBe(true);
+    // Still being typed: Enter completes it.
+    expect(commandReadyToSend("/mo", "/model ")).toBe(false);
+    // A mention is completed, never sent half-typed.
+    expect(commandReadyToSend("ask @Atl", "@Atlas ")).toBe(false);
+  });
+});
