@@ -582,7 +582,7 @@ function getAppDistDir(): string {
     return path.join(process.resourcesPath, "app-dist");
   }
 
-  return path.resolve(__dirname, "../../app/dist");
+  return path.resolve(__dirname, "../../amun-ui/build");
 }
 
 function getWindowIconCandidates(): string[] {

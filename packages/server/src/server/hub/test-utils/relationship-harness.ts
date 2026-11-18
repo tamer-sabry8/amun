@@ -1414,6 +1414,8 @@ export class HubRelationshipHarness {
       corsAllowedOrigins: [],
       hostnames: true,
       mcpEnabled: this.mcpEnabled,
+      // Amun defaults injection off; this harness exercises the opt-in path.
+      mcpInjectIntoAgents: this.mcpEnabled,
       staticDir,
       mcpDebug: false,
       agentClients: this.agentClients ?? {

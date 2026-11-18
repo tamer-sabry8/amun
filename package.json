@@ -26,7 +26,7 @@
     "build:paseo": "npm run build -w @getpaseo/highlight && npm run build -w @getpaseo/relay && npm run build -w @getpaseo/protocol && npm run build -w @getpaseo/client && npm run build -w @getpaseo/plugin",
     "build:server": "npm run build:paseo && npm run build -w @getpaseo/server && npm run build -w @getpaseo/cli",
     "typecheck": "npm run build:paseo && npm run typecheck:paseo && npm run typecheck:amun",
-    "typecheck:paseo": "npm run typecheck -w @getpaseo/protocol -w @getpaseo/client -w @getpaseo/plugin -w @getpaseo/server",
+    "typecheck:paseo": "npm run typecheck -w @getpaseo/protocol -w @getpaseo/client -w @getpaseo/plugin -w @getpaseo/server -w @getpaseo/desktop",
     "typecheck:amun": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:server": "npm run test:unit -w @getpaseo/server",

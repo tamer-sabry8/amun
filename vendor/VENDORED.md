@@ -17,3 +17,10 @@ Not vendored, required on the host `PATH`: `treehouse` (MIT, https://github.com/
 - `server/package.json`: dropped the `@getpaseo/builtin-plugins` dependency; the build no longer copies root `skills/` and `plugins/`.
 - `plugin/package.json`: `typecheck` no longer checks the plugin examples (they need the deleted app's React Query).
 - `protocol/src/amun-rpc.ts`: new, additive Amun RPC schemas.
+
+### Phase 4 additions
+
+- `packages/server/src/server/websocket-server.ts`: the `/ws` upgrade router only attaches to a real HTTP server (`instanceof EventEmitter`), so Paseo's stubbed unit tests keep passing.
+- `packages/server/src/server/hub/test-utils/relationship-harness.ts`: opts into `mcpInjectIntoAgents` explicitly, since Amun defaults it off.
+- `packages/desktop`: appId `ai.transfrm.amun`, productName/executable `Amun`, renderer from `packages/amun-ui/build`, `vendor/firstmate` bundled as `resources/firstmate` and passed to the daemon as `AMUN_FIRSTMATE_ROOT`.
+- `tsconfig.base.json` copied from Paseo's root (desktop and cli extend it).

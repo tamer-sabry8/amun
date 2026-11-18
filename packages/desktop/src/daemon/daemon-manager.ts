@@ -317,7 +317,13 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
       home,
       timeoutMs: 30_000,
       ...invocation,
-      env: { ...invocation.env, PASEO_CLI: getBundledCliShimPath() },
+      env: {
+        ...invocation.env,
+        PASEO_CLI: getBundledCliShimPath(),
+        ...(app.isPackaged && !invocation.env.AMUN_FIRSTMATE_ROOT
+          ? { AMUN_FIRSTMATE_ROOT: path.join(process.resourcesPath, "firstmate") }
+          : {}),
+      },
       mode: "managed",
       desktopManaged: true,
       onAcquired: (instance) => {

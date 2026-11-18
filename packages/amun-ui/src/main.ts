@@ -1,6 +1,8 @@
 import { chooseShell } from "./shell-selection.ts";
+import { installDaemonPort } from "./daemon/daemon-port.ts";
 async function start() {
   const shell = chooseShell(location.search);
+  if (shell !== "gallery") installDaemonPort();
   if (shell === "proof") {
     const [{ startProof }, { proofMarkup }] = await Promise.all([
       import("./proof.ts"),

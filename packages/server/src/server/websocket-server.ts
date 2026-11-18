@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import {
   ChunkedTransport,
   ChunkedTransportProtocolError,
@@ -933,6 +934,8 @@ export class VoiceAssistantWebSocketServer {
     wss.on("connection", (ws, request) => {
       void this.attachAuthenticatedSocket(ws, request, password);
     });
+    // Only a real HTTP server can route upgrades (unit tests pass a stub).
+    if (!(server instanceof EventEmitter)) return wss;
     server.on("upgrade", (request, socket, head) => {
       const url = request.url ?? "";
       const query = url.indexOf("?");
