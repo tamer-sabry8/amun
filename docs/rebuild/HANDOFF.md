@@ -15,6 +15,70 @@
 
 This file is final as of the PR #33 merge on 18 November 2026. Later work gets its own PRs and adds its decisions here.
 
+## Read this first: Firstmate is the only path
+
+**For the next developer or LLM:** Amun is a window onto Tamer's Firstmate. It is not a second orchestrator. Every agent, every piece of crew work, every worktree and every decision goes through Firstmate. Paseo is plumbing: it hosts the First Mate process, carries messages between it and the UI, and stores Amun's data. If a change would start, steer or stop work any other way, it is the wrong direction. Ask Tamer before making it.
+
+### Why
+
+- **Firstmate already does this job, and does it well.** Its watcher, status files, supervision ladder, captain holds and treehouse worktrees only know about crew that Firstmate started. Work started anywhere else is invisible to it, so nothing supervises it, nothing reports on it, and its decisions never reach the captain.
+- **Tamer wants to keep upgrading Firstmate from upstream.** So `vendor/firstmate` stays a pristine `git subtree` (decision 2, and `firstmate-layer/README.md`). CI fails if anything under it changes (`scripts/check-firstmate-pristine.sh`). Amun's additions live in `firstmate-layer/` and `packages/server/src/server/amun/`.
+- **The First Mate decides where rules and agents go, not Amun.** Amun never writes into the Firstmate home. That covers `captain.md`, `secondmates.md`, `config/crew-dispatch.json`, memory and backlog files. Amun relays the captain's words, and the First Mate files them.
+
+### How the pieces fit
+
+```
+Amun UI (renderer)
+   │  MessagePort contract (packages/contracts)
+   ▼
+Contract adapter (packages/amun-ui/src/daemon/contract-adapter.ts)
+   │  WebSocket JSON-RPC to ws://127.0.0.1:6767/amun (loopback, trusted origins only)
+   ▼
+Paseo daemon + Amun RPC (packages/server/src/server/amun/)
+   │  hosts ONE process: the First Mate, run as `pi --mode rpc` in the Firstmate checkout
+   ▼
+Pi (the First Mate) ──runs──▶ Firstmate scripts in the home (fm-spawn, fm-send, fm-teardown, ...)
+                                   │
+                                   ▼
+                       Crew and secondmates in tmux/herdr panes, each in its own treehouse worktree
+```
+
+- **Pi** is the First Mate's brain. Paseo's Pi provider starts it headless (`pi --mode rpc`), so Tamer never sees a terminal (decision 9). Its working folder is the Firstmate checkout, so Pi loads Firstmate's extensions, watcher and turn-end guard there. That this all works in RPC mode is still to be proven by the Pi test on Tamer's Mac.
+- **Paseo** starts Pi, sends it the captain's messages (`primary.send` → `agentManager.runAgent`), and returns the reply. Paseo also gives the First Mate a short list of read-only tools plus heartbeats (decision 19). The 22 Paseo tools that start crew, worktrees, terminals or agent schedules are blocked for it (`first-mate-tools.ts`).
+- **Firstmate** runs everything else. The First Mate spawns, steers, supervises and tears down crew with Firstmate's own scripts.
+
+### How agents and work are created and monitored
+
+| Captain does in Amun                        | What Amun sends                                                                                                                                                                       | Who acts                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Chats with the First Mate                   | `primary.send`, with the captain's words passed through verbatim                                                                                                                      | The First Mate                                |
+| Answers a question card or hold             | `holds.answer` → a prompt asking the First Mate to record it with `fm-captain-hold.sh answer` or `fm-send.sh --resolve-key`                                                           | The First Mate                                |
+| Adds, creates, edits or retires an agent    | A request to the First Mate, for example "brief it, seed its home and spawn it (fm-brief, fm-home-seed, fm-spawn --secondmate)", or "save its work into data/<id>/, then fm-teardown" | The First Mate                                |
+| Watches agents (rail, Agents screen, Watch) | Reads only: `fleet.snapshot` (`fm-fleet-snapshot.sh --json`), `holds.list`, `crew.peek` (`fm-peek.sh`)                                                                                | Firstmate's own scripts, read-only            |
+| Changes the backlog                         | `amun-tasks-axi`, which wraps `vendor/firstmate/bin/fm-tasks-axi.sh`                                                                                                                  | tasks-axi                                     |
+| Wants something on a timer                  | Asks the First Mate to set a Paseo heartbeat (a timed prompt to itself)                                                                                                               | The First Mate, through Firstmate             |
+| Needs diagnostics                           | `trace.export`; the history flags are requested from the First Mate once                                                                                                              | Amun reads; the First Mate turns the flags on |
+
+Amun's own data, such as products, mapped sources, PRDs, conversations and avatar choices, lives in Amun's work store under `~/.amun`. Amun may write that freely.
+
+### Do
+
+- Route every change to crew, agents, rules or backlog through the First Mate (`primary.send`) or through Firstmate's own scripts.
+- Read Firstmate state through its scripts (`fm-fleet-snapshot.sh --json`, `fm-peek.sh`), or read `state/` and `data/` without writing to them.
+- Keep `vendor/firstmate` pristine. Update it only with `git subtree pull`.
+- When a Paseo feature looks useful, check it against Firstmate first, and ask Tamer one question at a time with a recommended option. Decision 19 is the model: worktrees and profiles didn't conflict, but the agent tools did.
+- When Paseo adds a built-in tool, put it on the kept or blocked list in `first-mate-tools.ts`. A test forces this choice.
+
+### Don't
+
+- Don't start, message, cancel or kill agents with Paseo's `create_agent`, `send_agent_prompt`, `kill_agent` or similar, from the UI or from the First Mate.
+- Don't create worktrees with Paseo (`create_workspace`). Crew get treehouse worktrees from `fm-spawn`.
+- Don't use Paseo schedules that start agents (`create_schedule`). Use a heartbeat to the First Mate instead.
+- Don't use Paseo agent profiles to pick models for crew. Firstmate's `config/crew-dispatch.json` does that, and the First Mate owns it.
+- Don't write into the Firstmate home, and don't edit anything under `vendor/firstmate`.
+- Don't start a second First Mate for the same home. Firstmate allows one live primary per home, and `PrimarySessions` keeps exactly one.
+- Don't bypass the First Mate to answer holds. `answerHoldDirect` exists, but it is off by default and needs Tamer's approval to turn on.
+
 ## Work locally on your Mac
 
 1. **Get `main`.** `git clone https://github.com/tamer-sabry8/amun && cd amun`, or `git checkout main && git pull` in an existing clone.
