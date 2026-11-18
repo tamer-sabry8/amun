@@ -733,3 +733,38 @@
   --amun-size-rail: 44px;
   --amun-size-inspector: 360px;
 }
+
+[data-theme="amun-brand"] {
+  --amun-color-canvas: #0a1128;
+  --amun-color-navigation: #0d1630;
+  --amun-color-card: #13203f;
+  --amun-color-text: #f2f4f8;
+  --amun-color-supporting: #a8b4c7;
+  --amun-color-accent: #f59e0b;
+  --amun-color-accent-soft: #d4af37;
+  --amun-color-structure: #29364c;
+  --amun-color-control-border: #64748b;
+  --amun-color-button-start: #f59e0b;
+  --amun-color-button-end: #d4af37;
+  --amun-color-button-text: #0a1128;
+  --amun-status-connected: #4ade80;
+  --amun-status-signed-out: #f5c451;
+  --amun-status-error: #f87171;
+  --amun-status-checking: #a8b4c7;
+  --amun-status-info: #7fb0ff;
+  --amun-safety-approval-background: #eab308;
+  --amun-safety-approval-text: #0b0e14;
+  --amun-safety-destructive-background: #ef4444;
+  --amun-safety-destructive-text: #0b0e14;
+  --amun-safety-repo-identity-border: #3b82f6;
+  --amun-safety-repo-identity-text: #f2f5f8;
+  --amun-safety-success: #22c55e;
+  --amun-safety-warning: #eab308;
+  --amun-safety-error: #ef4444;
+  --amun-safety-info: #3b82f6;
+  --amun-font-ui: "Inter", "sans-serif";
+  --amun-font-code: "JetBrains Mono", "monospace";
+  --amun-size-sidebar: 264px;
+  --amun-size-rail: 44px;
+  --amun-size-inspector: 360px;
+}

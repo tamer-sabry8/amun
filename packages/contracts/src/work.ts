@@ -50,6 +50,7 @@ const themeChoice = z.enum([
   "lg-ember",
   "lg-mono",
   "lg-cyberpunk",
+  "amun-brand",
 ]);
 const planItem = z.strictObject({
   id,

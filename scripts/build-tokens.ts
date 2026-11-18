@@ -23,6 +23,7 @@ const themes = [
   "lg-ember",
   "lg-mono",
   "lg-cyberpunk",
+  "amun-brand",
 ];
 StyleDictionary.registerFormat({
   name: "amun/css",

@@ -76,6 +76,7 @@ const themeNames: Record<string, string> = {
   "lg-ember": "Liquid Ember",
   "lg-mono": "Mono",
   "lg-cyberpunk": "Cyberpunk",
+  "amun-brand": "Amun brand",
 };
 const conditions = [
   [null, "Everything else"],
