@@ -1056,12 +1056,23 @@ export async function createPaseoDaemon(
         label: model.label,
         isDefault: model.isDefault === true,
       })),
-    loadAgent: (agentId) =>
-      ensureUnarchivedAgentLoaded(agentId, {
+    loadAgent: async (agentId, expected) => {
+      // Check the stored launch before opening its session, so an agent that
+      // is not this home's First Mate is never started just to be refused.
+      const record = await agentStorage.get(agentId);
+      if (
+        !record ||
+        record.archivedAt ||
+        record.provider !== expected.provider ||
+        record.cwd !== expected.cwd
+      )
+        return null;
+      return ensureUnarchivedAgentLoaded(agentId, {
         agentManager,
         agentStorage,
         logger: rootLogger.child({ module: "amun" }),
-      }),
+      });
+    },
   });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(

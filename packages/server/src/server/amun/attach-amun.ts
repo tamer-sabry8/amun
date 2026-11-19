@@ -60,10 +60,18 @@ export interface AttachAmunInput {
   /** The models Pi offers from its signed-in accounts (Paseo's Pi provider). */
   listPiModels?: () => Promise<ListedModel[]>;
   /**
-   * Loads a stored agent that is not archived, resuming its session; throws
-   * when there is none. Lets a restarted daemon bring back the same First Mate.
+   * Loads a stored agent that is not archived and was launched with this
+   * provider in this folder, resuming its session. Returns null, without
+   * opening any session, when there is no such agent. Lets a restarted daemon
+   * bring back the same First Mate.
    */
-  loadAgent?: (agentId: string) => Promise<ManagedAgent>;
+  loadAgent?: (agentId: string, expected: StoredAgentMatch) => Promise<ManagedAgent | null>;
+}
+
+/** What a stored agent must have been launched with to be resumed. */
+export interface StoredAgentMatch {
+  provider: string;
+  cwd: string;
 }
 
 export interface AmunAttachment {
@@ -106,15 +114,21 @@ function pathOf(request: IncomingMessage): string {
 
 export function agentManagerHost(
   agentManager: AgentManager,
-  loadAgent?: (agentId: string) => Promise<ManagedAgent>,
+  loadAgent?: (agentId: string, expected: StoredAgentMatch) => Promise<ManagedAgent | null>,
 ): PrimaryHost {
   return {
     ...(loadAgent
       ? {
           async resumeAgent(agentId: string, launch: PrimaryLaunch) {
-            const agent = await loadAgent(agentId);
             // Only this home's First Mate: same harness, same Firstmate checkout.
-            if (agent.provider !== launch.provider || agent.cwd !== launch.cwd) return false;
+            // The stored record is checked before any session is opened.
+            const agent = await loadAgent(agentId, { provider: launch.provider, cwd: launch.cwd });
+            if (!agent) return false;
+            if (agent.provider !== launch.provider || agent.cwd !== launch.cwd) {
+              // Never leave a rejected First Mate running beside the new one.
+              await agentManager.closeAgent(agentId).catch(() => undefined);
+              return false;
+            }
             if (launch.model)
               await agentManager.setAgentModel(agentId, launch.model).catch(() => undefined);
             return true;
