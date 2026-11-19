@@ -46,6 +46,8 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
   - Sidebar folders (`folders.ts`, `chrome.tsx`): one folder per piece of work under its own name, most recently used first, its chats inside, General last. Tamer's rules: Firstmate's card always keeps its space (the list scrolls inside what is left); more than five chats shows "See more"; more than six folders shows "See all", which opens Portfolio.
   - Not built: deleting or renaming a fork from the screen (the command exists); search and "What happened" open a work's main chat, not the fork a hit is in.
 
+- **Chat rules decided by Tamer on 19 November 2026 (in `AGENTS.md`, "Chats inside a piece of work"); not built yet.** Today a work has one main chat plus forks. Still to build, each visible part after a before/after preview: "New chat" in a folder and `/new`; a sprint link on a chat with sprint groups inside the folder; rename and archive; General with several chats; Firstmate's "new chat or fork?" card on a change of subject; the new-chat brief; the silent recap after Firstmate's memory starts fresh. Open technical question: how Amun learns that Firstmate's memory started fresh or was shortened (Pi reports compaction as an event; a new First Mate is known from `first-mates.json`). The test DMG waits until Tamer says to build it.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

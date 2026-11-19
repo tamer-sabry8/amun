@@ -94,6 +94,18 @@ Owner instruction, 15 November 2026. Amun follows upstream Firstmate (github.com
 - The visible crew is a core Firstmate feature. A view that lets the captain watch a crewmate's live session must be kept; it may be reworded or restyled (for example "Watch <agent>" instead of "terminal"), never deleted.
 - If a requested UI change would alter this workflow, stop and explain instead.
 
+## Chats inside a piece of work
+
+Owner decisions, 19 November 2026, answered one question at a time.
+
+- A piece of work (product, project, task, RFP) and General can each hold many chats. There is still exactly one Firstmate per home with one memory; a chat never gets its own Firstmate or its own Pi session, and Firstmate's memory is never swapped or rewound for a chat. Each message says which chat it belongs to.
+- A chat about a sprint lives inside its product or project, under that sprint's name. Sprints do not get top-level folders.
+- The owner starts a new chat ("New chat" in the folder, or `/new`). Nothing starts one automatically. When Firstmate sees the conversation has changed subject, it asks whether to start a new chat or fork; the owner decides.
+- A new chat gives Firstmate the work's own facts and the names of its other chats, and says it is a fresh topic. Nothing said in other chats is carried over unless the owner brings it up.
+- Chats are named from their first message and can be renamed. They are kept forever and never archived automatically; the owner archives by hand, and archived chats stay searchable and can be brought back.
+- When Firstmate's memory starts fresh, Amun gives it a short recap of the chat with the owner's next message, without showing anything.
+- A message from Home or Portfolio that does not create new work goes to General's most recent chat. General follows the same rules as any other folder.
+
 ## Council principles (Roast Room)
 
 Owner instruction, 15 November 2026. Amun's Council follows upstream Roast Room (github.com/nateherkai/roast-room). The Chair reads the decision, asks for missing facts, recommends a council (recommended / default board / everyone / other) and the owner confirms before it runs. The seated advisors argue in rounds. The owner gets a scored verdict and a downloadable PDF. "Ask <seat>" gets one seat's answer. Board settings are ask/auto/default.
