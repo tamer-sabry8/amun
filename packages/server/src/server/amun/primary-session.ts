@@ -1,6 +1,7 @@
 import type { PrimaryHarness, ProductSpace } from "@getpaseo/protocol/amun-rpc";
 import { firstmateEnv } from "./firstmate-cli.js";
 import { findOnPath } from "./product-spaces.js";
+import type { FirstMateRecordStore } from "./first-mate-records.js";
 
 /**
  * Paseo provider ids for each primary harness. `agy` (Antigravity) was a Paseo
@@ -90,6 +91,12 @@ export function checkHostTools(
 /** The slice of Paseo's AgentManager the First Mate needs. */
 export interface PrimaryHost {
   createAgent(launch: PrimaryLaunch): Promise<{ agentId: string }>;
+  /**
+   * Brings back a First Mate this home had before the daemon restarted, with
+   * its conversation. True only when that agent is still there, is not
+   * archived, and runs the same harness in the same Firstmate checkout.
+   */
+  resumeAgent?(agentId: string, launch: PrimaryLaunch): Promise<boolean>;
   runAgent(agentId: string, text: string): Promise<{ finalText: string }>;
   /** Ends a turn that is still open, so the next message can be sent. */
   cancelRun?(agentId: string): Promise<void>;
@@ -132,16 +139,35 @@ export class PrimarySessions {
   /** One message at a time per home: the First Mate takes a single turn. */
   private readonly turns = new Map<string, Promise<unknown>>();
   private readonly waiting = new Map<string, number>();
+  /** First Mate agents with a turn Amun itself asked for, still open. */
+  private readonly amunTurns = new Set<string>();
 
   constructor(
     private readonly host: PrimaryHost,
     private readonly firstmateRoot: string,
     /** The captain's saved model for the First Mate, when there is one. */
     private readonly preferredModel: () => string | null = () => null,
+    /** Which agent was this home's First Mate, kept across daemon restarts. */
+    private readonly records: FirstMateRecordStore | null = null,
   ) {}
 
   agentFor(fmHome: string): string | null {
     return this.agents.get(fmHome) ?? null;
+  }
+
+  /** The home this agent is the First Mate of, or null for any other agent. */
+  homeOf(agentId: string): string | null {
+    for (const [home, id] of this.agents) if (id === agentId) return home;
+    return null;
+  }
+
+  /**
+   * Whether the turn now running for this agent was asked for by Amun. A turn
+   * that was not (a heartbeat, a Firstmate wake or guard notice) has a reply
+   * nobody is waiting for, so it is shown to the captain separately.
+   */
+  isAmunTurn(agentId: string): boolean {
+    return this.amunTurns.has(agentId);
   }
 
   async start(space: ProductSpace, harness?: PrimaryHarness): Promise<{ agentId: string }> {
@@ -155,15 +181,25 @@ export class PrimarySessions {
       ...(harness ? { harness } : {}),
     });
     const model = this.preferredModel();
-    const started = this.host
-      .createAgent(model ? { ...launch, model } : launch)
-      .then(({ agentId }) => {
+    const withModel = model ? { ...launch, model } : launch;
+    const started = this.resume(space.fmHome, withModel)
+      .then(async (resumed) => {
+        const agentId = resumed ?? (await this.host.createAgent(withModel)).agentId;
         this.agents.set(space.fmHome, agentId);
+        if (!resumed) this.records?.write(space.fmHome, agentId);
         return { agentId };
       })
       .finally(() => this.starting.delete(space.fmHome));
     this.starting.set(space.fmHome, started);
     return started;
+  }
+
+  /** The home's earlier First Mate, when it can still be brought back. */
+  private async resume(fmHome: string, launch: PrimaryLaunch): Promise<string | null> {
+    const earlier = this.records?.read(fmHome) ?? null;
+    if (!earlier || !this.host.resumeAgent) return null;
+    const resumed = await this.host.resumeAgent(earlier, launch).catch(() => false);
+    return resumed ? earlier : null;
   }
 
   /** Messages being answered or waiting their turn for this home. */
@@ -196,12 +232,15 @@ export class PrimarySessions {
     text: string,
   ): Promise<{ agentId: string; reply: string }> {
     const { agentId } = await this.start(space);
+    this.amunTurns.add(agentId);
     try {
       const { finalText } = await this.host.runAgent(agentId, text);
       return { agentId, reply: finalText };
     } catch (error) {
       await this.host.cancelRun?.(agentId).catch(() => undefined);
       throw describeTurnFailure(error);
+    } finally {
+      this.amunTurns.delete(agentId);
     }
   }
 }

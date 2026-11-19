@@ -252,6 +252,7 @@ import { DaemonExecutions } from "./hub/daemon-executions.js";
 import { PluginService } from "./plugins/index.js";
 import { BuiltinPluginLoader } from "./plugins/builtin/index.js";
 import { attachAmun } from "./amun/attach-amun.js";
+import { ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import { firstMateRoot, paseoToolPolicyFor } from "./amun/first-mate-tools.js";
 import { ManagedPluginSources } from "./plugins/managed-source.js";
 
@@ -1055,6 +1056,12 @@ export async function createPaseoDaemon(
         label: model.label,
         isDefault: model.isDefault === true,
       })),
+    loadAgent: (agentId) =>
+      ensureUnarchivedAgentLoaded(agentId, {
+        agentManager,
+        agentStorage,
+        logger: rootLogger.child({ module: "amun" }),
+      }),
   });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(

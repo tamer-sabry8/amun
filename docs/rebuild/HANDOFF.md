@@ -78,15 +78,26 @@ Decisions waiting on Tamer:
 
 Known problems:
 
-- **A new First Mate is started each time the daemon starts.** The earlier agents stay in Paseo's registry and their conversation is not resumed.
+- **A new First Mate is started each time the daemon starts.** Fixed on 19 November 2026 (see below); not yet confirmed on the Mac.
 - **`/stow` is refused.** `AGENTS.md` requires it to run on the Mac only, with each change to a pinned entry reviewed. That local path is only in git history.
 - **`/calm` and `/supervision-model`** say they are not available inside Amun.
 - **Firstmate's fleet snapshot takes about two minutes on Tamer's home.** Amun copes with it but cannot make it faster; the script is Firstmate's.
 - **Two restored Notion tests failed once** in one full run and passed in every run after, including under load. Not reproduced.
-- **The desktop `build` script** calls a root script that does not exist.
-- **`README.md`** still describes the old pnpm setup.
+- ~~The desktop `build` script~~ and ~~`README.md`~~: fixed on 19 November 2026.
 
 Not wired yet (the screens exist; nothing answers them): prototype and output preview, attachments and screenshots, publishing to Notion, pull requests and code changes, backup, GitHub and Obsidian connections, global search, skills from a Git link, publishing approved plans to trackers, reminders delivery, PRD and story authoring, Jira and Linear, and hosted connectors such as Gmail. Tamer chose Notion first of prototype preview, attachments and Notion; the other two are next when he says so.
+
+### Changes on 19 November 2026
+
+Branch `claude/amun-handoff-work-20261119`. Nothing visible changed on any screen.
+
+- **Delegated jobs now reach Firstmate.** The chat tells the First Mate to hand real work to an agent with a `delegate` action, and the UI sends `work-delegate`. In the old app that started a worker outside Firstmate; in the rebuild nothing handled it, so the chat said "X is on it" and nothing ran. The adapter now sends the First Mate a request to give the job to the matching secondmate (`fm-send`, or `fm-brief`, `fm-home-seed`, `fm-spawn --secondmate`) or to crew (`fm-spawn`), not to do it itself, to supervise it and report back. Its answer is kept in the same conversation (`delegationRequest` and `delegate` in `contract-adapter.ts`). The result arrives later as an unprompted turn, below.
+- **Heartbeats, wakes and guard notices show in chat.** `UnpromptedTurns` (`packages/server/src/server/amun/unprompted-turns.ts`) watches the First Mate's turns. A turn Amun did not start (`PrimarySessions.isAmunTurn`) has its last reply saved in the standing "Chat with Firstmate" conversation (`recordFirstMateReply` in `packages/work-store/src/first-mate-thread.ts`), traced, and sent as `primary.output` plus `work.updated`.
+- **The same First Mate after a daemon restart.** Amun keeps which agent is each home's First Mate in `~/.amun/first-mates.json`. On start it resumes that agent through Paseo (`ensureUnarchivedAgentLoaded`), only if it runs the same harness in the same Firstmate checkout, and starts a new one only when that fails.
+- **The desktop `build` script works.** It calls the new root script `build:desktop-inputs` (Council stage, server build, UI build).
+- **`README.md`** describes the current npm setup and the Firstmate-only design.
+
+Not tested on a Mac with real Pi: all three behaviour changes above are unit-tested only. Check on the Mac: ask the First Mate for a heartbeat and see its reply in "Chat with Firstmate"; restart Amun and see the earlier conversation continue; ask for real work in a conversation and see a secondmate or crewmate appear on the Agents screen.
 
 ## Read this first: Firstmate is the only path
 
@@ -241,13 +252,7 @@ If anything fails, use the rail's lifebuoy button to download a trace bundle and
 
 - **What it is.** The First Mate keeps Paseo's `create_heartbeat` and `delete_heartbeat`. A heartbeat is a timed prompt that Paseo sends to the First Mate itself. Ask it in chat, for example: "Set a heartbeat every weekday at 9 AM Cairo time: prepare my standup." It then does the work through Firstmate.
 - **Where the policy lives.** `packages/server/src/server/amun/first-mate-tools.ts` holds the policy. It applies only to the agent running in the Firstmate checkout. To check a heartbeat, ask the First Mate to "list my schedules".
-- **The gap to build next.** The First Mate acts on a heartbeat, but its reply does not appear in Amun's chat. Amun only shows replies to messages it sent itself (`primary.send`). The plan:
-  1. In `attach-amun.ts`, subscribe to the First Mate agent with `agentManager.subscribe(cb, { agentId })`.
-  2. When a turn finishes that Amun did not start, broadcast the `primary.output` event. It is already defined in `packages/protocol/src/amun-rpc.ts`, but nothing sends it yet.
-  3. In `packages/amun-ui/src/daemon/daemon-port.ts`, handle `primary.output` beside `fleet.updated`, and add the text to the First Mate chat in `contract-adapter.ts`.
-  4. Add a test in `amun.test.ts` with a fake agent turn.
-
-  This also covers Firstmate's own wakes and guard notices, which raise the same unprompted turns.
+- **Replies in chat (done 19 November 2026).** A heartbeat's reply, and any other First Mate turn Amun did not start, is saved in "Chat with Firstmate" (see "Changes on 19 November 2026").
 
 ## How to read the decisions
 
@@ -580,7 +585,7 @@ This is the list from the PR #33 merge, brought up to date. The ordered list of 
 - A test of Azure DevOps against Tamer's real server.
 - Notion: publishing approved documents, and the Notion progress test held back from the workspace port. Sign-in and memory sync are wired (PR #35).
 - PRs, prototype, PRD authoring and backup. The Council is wired (PR #35).
-- Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat. The `primary.output` event is defined but nothing sends it yet.
+- ~~Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat.~~ Done 19 November 2026; to confirm on the Mac.
 - The rest of the Pi RPC test on Tamer's Mac: the reply arrives (confirmed 18 November 2026); the watcher, the turn-end guard and a question card are not confirmed.
 - Paseo features Tamer wants:
   - parallel development (Firstmate already gives each crewmate its own worktree);

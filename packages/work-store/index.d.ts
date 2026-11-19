@@ -3,6 +3,16 @@ export interface WorkStoreLike {
   snapshot(): unknown;
   handle(input: unknown): unknown[];
 }
+/**
+ * Saves a First Mate reply Amun did not ask for (a heartbeat, a wake) in the
+ * standing "Chat with Firstmate" conversation. Returns the message id, or
+ * null when there is no group to put it in.
+ */
+export declare function recordFirstMateReply(
+  store: WorkStoreLike,
+  text: string,
+  model?: string | null,
+): string | null;
 /** Masks registered secrets and common credential shapes in text and objects. */
 export declare class Redactor {
   register(secret: string): void;

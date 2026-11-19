@@ -1,19 +1,47 @@
 # Amun
 
-A macOS product workspace for directing an AI crew from intent through delivery, with explicit human decisions. Built with Electron and strict TypeScript per the approved R1 plan.
+A macOS product workspace for directing an AI crew from intent through delivery, with explicit human decisions.
+
+Amun is a window onto the captain's own [Firstmate](https://github.com/kunchenguid/firstmate). The captain talks only to the First Mate. The First Mate hands real work to its secondmates and crew, watches them, and reports back. Amun never starts, steers or stops crew any other way. Underneath, the [Paseo](https://github.com/getpaseo/paseo) daemon runs the First Mate headless (`pi --mode rpc`), carries messages to and from the UI, and keeps Amun's own data in `~/.amun`.
+
+Start with [the rebuild handoff](docs/rebuild/HANDOFF.md). It has the rules, the decisions and what to do next.
+
+## Layout
+
+- `vendor/firstmate`: Firstmate, a pristine `git subtree`. Never edit it; CI checks this (`scripts/check-firstmate-pristine.sh`).
+- `firstmate-layer/`, `packages/server/src/server/amun/`: Amun's additions on top of Firstmate and the daemon.
+- `packages/amun-ui`: the Amun interface.
+- `packages/desktop`: the Electron app.
+- `packages/work-store`, `contracts`, `domain`, `theme`, `council`, `notion`: Amun's own data, rules and features.
+- `packages/protocol`, `client`, `server`, `cli`, `plugin`, `relay`, `highlight`: Paseo.
 
 ## Development
 
-Use Node **24.22.1** and pnpm **11.25.0**. Install with `pnpm install --frozen-lockfile`, install the desktop binary with `pnpm --filter @amun/desktop exec install-electron`, then run `pnpm check` (lint, typecheck, unit tests and format checks). Run `pnpm build` to compile the desktop main process.
+Use Node 22.13 or later (`.node-version` pins the CI version) and npm.
 
-On a Mac, run `pnpm --filter @amun/desktop start` for the foundation window and `pnpm test:e2e` for the launch/isolation smoke test. `pnpm package` stages pinned Pi production dependencies and checksum-verified Firstmate and creates an unsigned development package; release signing/notarization remain T012. On macOS, `pnpm test:packaged` checks the bundled Pi runtime (empty PATH), Firstmate extension loading, app launch/isolation and service recovery. `pnpm firstmate:stage && pnpm test:firstmate` runs the isolated source-mode Firstmate probe without provider credentials or worker dispatch. Electron's binary installer requires network access and checksum verification remains enabled.
+```sh
+npm ci
+npm run build:server
+npm start                      # the daemon on 127.0.0.1:6767; Amun's RPC is ws://127.0.0.1:6767/amun
+```
 
-This is an M0 foundation, not a working product. No runtime connections or approval actions are available. The shell has a minimal sandboxed preload that transfers a service MessagePort. Its only RPC method is health; the renderer has no direct network capabilities. Service failure shows Reconnecting and restarts with bounded backoff.
+Firstmate needs `tmux` or `herdr`, `treehouse`, `tasks-axi`, `jq` and `git` on your PATH, and Pi installed and signed in. Amun uses `~/Projects/firstmate` as the Firstmate home unless `AMUN_FIRSTMATE_HOME` says otherwise, and never writes into it.
 
-## Delivery
+Run the UI in a browser with `cd packages/amun-ui && npx vite build && npx vite preview --port 6768`, then open `http://127.0.0.1:6768/index.html?daemon=ws://127.0.0.1:6767/amun`. Run the desktop app with `cd packages/desktop && npm run dev`.
 
-[Milestones and task status](docs/TASKS.md) · [Product plan](docs/plans/product-and-r1-plan.md) · [Architecture decision](docs/decisions/ADR-001-desktop-stack.md) · [TDD evidence rules](docs/evidence/README.md)
+Before a pull request, run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npx vitest run`.
 
-Only M0 is active. Keep later milestones locked until its acceptance gates pass. Write a failing behavior test before implementation and record red/green evidence. Unit, live integration, packaged Mac, accessibility and performance results are separate gates.
+## Test build for trusted testers
 
-In managed environments with an HTTP proxy, prefix the Electron installer with `NODE_USE_ENV_PROXY=1` so Node uses the configured proxy. Retain the injected CA trust and checksum verification.
+The beta is ad-hoc signed for Apple-chip Macs; it is not notarized. From the repository root:
+
+```sh
+npm ci
+npm run build:desktop-inputs
+cd packages/desktop && npm run build:main
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config electron-builder.yml \
+  --mac dmg --arm64 --publish never \
+  -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false
+```
+
+Hardened runtime must be off for an ad-hoc-signed build: macOS refuses to load Electron in an ad-hoc-signed app with it on.
