@@ -1566,3 +1566,99 @@ describe("a failed publication says what failed and why", () => {
     expect(snap().rfps).toEqual([]);
   });
 });
+
+describe("chats inside a work (fork from here)", () => {
+  const say = (
+    workAreaId: string,
+    role: string,
+    text: string,
+    chatId: string | null = null,
+  ) => send("message", { workAreaId, chatId, role, text }).ref!;
+  const texts = (messages: { text: string }[]) =>
+    messages.map((message) => message.text);
+
+  it("copies the chat up to the chosen message and leaves the original as it is", () => {
+    const { employer } = setup();
+    const id = area(employer, "project", "Support plan");
+    say(id, "you", "Plan support for 10 testers.");
+    const question = say(id, "firstmate", "How many support staff?");
+    say(id, "you", "Two.");
+    say(id, "firstmate", "Two it is.");
+
+    const fork = send("fork-chat", {
+      workAreaId: id,
+      messageId: question,
+    }).ref!;
+    say(id, "you", "One.", fork);
+
+    const after = snap();
+    expect(texts(after.messages)).toEqual([
+      "Plan support for 10 testers.",
+      "How many support staff?",
+      "Two.",
+      "Two it is.",
+    ]);
+    expect(after.chats).toHaveLength(1);
+    expect(after.chats[0]).toMatchObject({
+      id: fork,
+      workAreaId: id,
+      title: "How many support staff?",
+      forkedFrom: question,
+      fromChatId: null,
+    });
+    // The fork has nothing of the "Two" answer or what came after it.
+    expect(texts(after.chats[0]!.messages)).toEqual([
+      "Plan support for 10 testers.",
+      "How many support staff?",
+      "One.",
+    ]);
+  });
+
+  it("forks a fork, and deleting one chat touches no other", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Pricing");
+    const first = say(id, "you", "Draft three options.");
+    const fork = send("fork-chat", { workAreaId: id, messageId: first }).ref!;
+    const inFork = say(id, "firstmate", "Here are three.", fork);
+    const second = send("fork-chat", {
+      workAreaId: id,
+      messageId: inFork,
+    }).ref!;
+    expect(snap().chats.map((chat) => [chat.id, chat.fromChatId])).toEqual([
+      [fork, null],
+      [second, fork],
+    ]);
+    send("delete-chat", { chatId: fork });
+    const after = snap();
+    expect(texts(after.messages)).toEqual(["Draft three options."]);
+    expect(after.chats.map((chat) => [chat.id, chat.fromChatId])).toEqual([
+      [second, null],
+    ]);
+    expect(texts(after.chats[0]!.messages)).toEqual([
+      "Draft three options.",
+      "Here are three.",
+    ]);
+  });
+
+  it("does not show a copied message twice in search", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Pricing");
+    const first = say(id, "you", "Compare enterprise pricing tiers.");
+    send("fork-chat", { workAreaId: id, messageId: first });
+    expect(store.search("enterprise pricing")).toHaveLength(1);
+  });
+
+  it("refuses a message for a chat that belongs to another work", () => {
+    const { employer } = setup();
+    const one = area(employer, "task", "One");
+    const two = area(employer, "task", "Two");
+    const fork = send("fork-chat", {
+      workAreaId: one,
+      messageId: say(one, "you", "Hello."),
+    }).ref!;
+    expect(
+      send("message", { workAreaId: two, chatId: fork, role: "you", text: "x" })
+        .ok,
+    ).toBe(false);
+  });
+});

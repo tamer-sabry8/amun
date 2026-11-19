@@ -52,6 +52,8 @@ The user requires explicit approval before starting T022c (neumorphic interface 
 
 Amun runs `/stow` entirely on the Mac. It may read the selected conversation, crew memory files, local backlog and per-home budget. Apply ordinary edits automatically. Show each proposed change to a pinned entry for individual review. Retain the decision in the owned home and reuse it across restarts. Use the existing Firstmate memory files and tier markers. A prior decision settles the same question until its underlying rule or evidence changes.
 
+The owner decided on 19 November 2026 that Amun will not offer `/stow`. Do not restore the local `/stow` path described above unless the owner asks again. `/stow` typed in Amun is answered by Amun and is never sent to the First Mate.
+
 ## Reuse owner approvals
 
 Carry the owner's approval through Firstmate, secondmates, retries and restarts for the same authorized scope. Consult recorded decisions and approval bindings before asking again. Continue routine implementation, recovery and verification within that scope autonomously. A changed payload, destination or source head must pass the corresponding exact review. Describe the changed decision when owner input is required.
@@ -91,6 +93,18 @@ Owner instruction, 15 November 2026. Amun follows upstream Firstmate (github.com
 - Do not remove delegation, supervision, watch-a-crewmate, report-back or approval paths.
 - The visible crew is a core Firstmate feature. A view that lets the captain watch a crewmate's live session must be kept; it may be reworded or restyled (for example "Watch <agent>" instead of "terminal"), never deleted.
 - If a requested UI change would alter this workflow, stop and explain instead.
+
+## Chats inside a piece of work
+
+Owner decisions, 19 November 2026, answered one question at a time.
+
+- A piece of work (product, project, task, RFP) and General can each hold many chats. There is still exactly one Firstmate per home with one memory; a chat never gets its own Firstmate or its own Pi session, and Firstmate's memory is never swapped or rewound for a chat. Each message says which chat it belongs to.
+- A chat about a sprint lives inside its product or project, under that sprint's name. Sprints do not get top-level folders.
+- The owner starts a new chat ("New chat" in the folder, or `/new`). Nothing starts one automatically. When Firstmate sees the conversation has changed subject, it asks whether to start a new chat or fork; the owner decides.
+- A new chat gives Firstmate the work's own facts and the names of its other chats, and says it is a fresh topic. Nothing said in other chats is carried over unless the owner brings it up.
+- Chats are named from their first message and can be renamed. They are kept forever and never archived automatically; the owner archives by hand, and archived chats stay searchable and can be brought back.
+- When Firstmate's memory starts fresh, Amun gives it a short recap of the chat with the owner's next message, without showing anything.
+- A message from Home or Portfolio that does not create new work goes to General's most recent chat. General follows the same rules as any other folder.
 
 ## Council principles (Roast Room)
 

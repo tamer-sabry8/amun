@@ -2,6 +2,8 @@
 export interface WorkStoreLike {
   snapshot(): unknown;
   handle(input: unknown): unknown[];
+  /** Words inside documents, records and conversations, in the current group. */
+  search?(query: string): unknown[];
 }
 /**
  * Saves a First Mate reply Amun did not ask for (a heartbeat, a wake) in the

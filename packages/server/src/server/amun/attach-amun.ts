@@ -281,6 +281,10 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     models: agentManagerModelHost(input.agentManager, input.listPiModels ?? (async () => [])),
     modelChoice,
     checkAccount: (provider) => checkPiAccount(provider, runPi),
+    readTimeline: async (fmHome) => {
+      const agentId = primary.agentFor(fmHome);
+      return agentId ? input.agentManager.getTimelineRows(agentId) : [];
+    },
   });
   trace.record({ source: "amun", kind: "daemon-start", fmHome: paths.fmHome });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });

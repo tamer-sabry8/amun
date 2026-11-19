@@ -90,6 +90,55 @@ class FakeDaemon implements AmunTransport {
           summary: "One page?",
         },
       ],
+      "work.search": {
+        hits: [
+          {
+            kind: "message",
+            id: "m1",
+            title: "Customer Insights Portal",
+            snippet: [{ text: "pricing", match: true }],
+            workAreaId: "w1",
+            role: "you",
+            at: "2026-11-19T10:41:00.000Z",
+          },
+        ],
+        steps: [
+          {
+            turnId: "t1",
+            stepId: "s4",
+            workAreaId: "w1",
+            words: "started a secondmate in its own worktree",
+            script: "fm-spawn --secondmate",
+            at: "2026-11-19T10:42:06.000Z",
+          },
+        ],
+      },
+      "happened.read": {
+        available: true,
+        turns: [
+          {
+            id: "t1",
+            trigger: "you",
+            prompt: "Draft three pricing options.",
+            at: "2026-11-19T10:41:00.000Z",
+            durationMs: 12000,
+            workAreaId: "w1",
+            steps: [
+              {
+                id: "s4",
+                kind: "action",
+                words: "started a secondmate in its own worktree",
+                script: "fm-spawn --secondmate",
+                at: "2026-11-19T10:42:06.000Z",
+                durationMs: 4000,
+                sent: "bin/fm-spawn.sh --secondmate pricing-options",
+                cameBack: "started",
+                failed: false,
+              },
+            ],
+          },
+        ],
+      },
       "holds.answer": { reply: "Aye." },
       "primary.start": { agentId: "fm" },
       "primary.send": { reply: "Aye, Captain." },
@@ -509,13 +558,50 @@ describe("daemon contract adapter", () => {
     ).toEqual({ space: "alpha", text: "/skill:bearings include PRs" });
 
     // /stow must run on this Mac only, so it is never sent to the First Mate.
-    expect(await run("stow")).toMatch(/not available inside Amun yet/);
+    expect(await run("stow")).toMatch(/does not save session notes/);
     // An update is never run on the working home from here.
     expect(await run("updatefirstmate")).toMatch(/switched off/);
-    expect(await run("calm")).toMatch(/not available inside Amun yet/);
+    expect(await run("calm")).toBe("Amun already shows the calm view.");
     expect(
       daemon.calls.filter((c) => c.method === "primary.send"),
     ).toHaveLength(1);
+  });
+
+  it("asks the First Mate to save the supervision model; never writes it", async () => {
+    const { adapter, daemon } = make();
+    daemon.models = {
+      current: "github-copilot/claude-sonnet-5.5",
+      models: [
+        { id: "github-copilot/claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+        { id: "github-copilot/claude-haiku-5.5", label: "Claude Haiku 5.5" },
+      ],
+    };
+    const run = async (argument: string) => {
+      const [event] = await adapter.handle({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id: "s" + argument,
+        command: "supervision-model",
+        argument,
+      });
+      const result = nativePiEvent.parse(event).result;
+      return result.kind === "message" ? result.text : "";
+    };
+    const sent = () =>
+      daemon.calls
+        .filter((c) => c.method === "primary.send")
+        .map((c) => String(c.params.text));
+    expect(await run("")).toMatch(/type `\/supervision-model`/);
+    expect(await run("claude")).toMatch(/Several models match/);
+    expect(await run("gpt")).toMatch(/No model matches/);
+    expect(sent()).toEqual([]);
+
+    expect(await run("haiku")).toBe("Aye, Captain.");
+    expect(sent()[0]).toContain("github-copilot/claude-haiku-5.5");
+    expect(sent()[0]).toContain("config/supervision-branch-model");
+    await run("follow main");
+    expect(sent()[1]).toMatch(/follow the main conversation's model/);
   });
 
   it("hands a delegated job to the First Mate to dispatch through Firstmate, and keeps its answer", async () => {
@@ -792,5 +878,48 @@ describe("daemon contract adapter", () => {
       space: "alpha",
       taskId: "scout-1",
     });
+  });
+});
+
+describe("search and What happened", () => {
+  it("answers the palette with conversation words and Firstmate's steps", async () => {
+    const { adapter, daemon } = make();
+    const [reply] = await adapter.handle({
+      version: 1,
+      kind: "content-search",
+      requestId: "r1",
+      query: "pricing",
+    });
+    const event = workEvent.parse(reply);
+    if (event.kind !== "content-search-result") throw new Error(event.kind);
+    expect(event.hits.map((hit) => [hit.kind, hit.id, hit.workAreaId])).toEqual(
+      [
+        ["message", "m1", "w1"],
+        ["step", "s4", "w1"],
+      ],
+    );
+    expect(event.hits[1]).toMatchObject({
+      title: "started a secondmate in its own worktree",
+      script: "fm-spawn --secondmate",
+    });
+    // Reading never sends the First Mate anything.
+    expect(daemon.calls.map((call) => call.method)).toEqual(["work.search"]);
+  });
+
+  it("reads one conversation's turns and steps without starting anything", async () => {
+    const { adapter, daemon } = make();
+    const [reply] = await adapter.handle({
+      version: 1,
+      kind: "what-happened",
+      requestId: "r2",
+      workAreaId: "w1",
+    });
+    const event = workEvent.parse(reply);
+    if (event.kind !== "what-happened-result") throw new Error(event.kind);
+    expect(event.available).toBe(true);
+    expect(event.turns[0]!.steps[0]!.script).toBe("fm-spawn --secondmate");
+    expect(daemon.calls).toEqual([
+      { method: "happened.read", params: { workAreaId: "w1" } },
+    ]);
   });
 });

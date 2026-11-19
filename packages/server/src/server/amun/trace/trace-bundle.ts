@@ -25,6 +25,8 @@ export interface TraceBundleInput {
   redactor: Redactor;
   /** The Paseo daemon log, when known. */
   daemonLog?: string | null;
+  /** More text files for the zip, by name; each passes the redactor. */
+  extra?: Record<string, string>;
   /** Amun build and Firstmate versions for the manifest. */
   versions?: Record<string, string>;
   now?: Date;
@@ -139,6 +141,7 @@ export async function buildTraceBundle(input: TraceBundleInput): Promise<TraceBu
   add("git/status.txt", await git(input.fmHome, ["status", "--short", "--branch"]));
 
   if (input.daemonLog) await addFile("daemon/daemon.log", input.daemonLog);
+  for (const [name, text] of Object.entries(input.extra ?? {})) add(name, text);
 
   add(
     "manifest.json",

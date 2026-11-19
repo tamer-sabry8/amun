@@ -28,6 +28,26 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
 3. **Still to test on the Mac** with the DMG built from this branch (`packages/desktop/release/Amun-0.16.1-arm64.dmg`, not committed): a heartbeat reply in "Chat with Firstmate"; a restart continuing the same conversation; real work showing a secondmate or crewmate on the Agents screen; the Portfolio changes.
 4. Then the open items below, one question at a time.
 
+### Update, 19 November 2026, evening (branch `claude/amun-handoff-work-20261119b`)
+
+- **Search and "What happened" are built** as approved (item 1 above). Not yet committed, not yet in the packaged app.
+  - Daemon: `packages/server/src/server/amun/what-happened.ts` turns the First Mate's saved Paseo timeline into turns and plain-worded steps, and places each turn in its conversation by the captain's own words or the saved reply (no work area id travels with a message). Requests `work.search` and `happened.read` in `amun-rpc.ts`; both only read and never start or message the First Mate.
+  - UI: `packages/amun-ui/src/rebuild/what-happened.tsx`, pane kind `happened` in `work-session.tsx`, grouped results in the palette (`chrome.tsx`).
+  - Checked in an isolated preview with sample steps (no Pi there). Not checked against a real First Mate timeline: the plain words for each step depend on how Pi reports its shell calls, so look at this first on the Mac.
+  - Steps are only readable for the First Mate loaded in this daemon run.
+- **Tamer's answers the same evening:** atomic task checkout is not wanted (Firstmate already does it; do not show him Firstmate's own behaviour again). Chat-to-CLI continuity: skip for now. The test DMG comes after items 1, 2, 4 and 8.
+- **Built after his answers (not yet on the Mac):** the trace bundle now holds `first-mate/steps.json`, the First Mate's turns and steps with secrets removed. `/calm` answers "Amun already shows the calm view." `/supervision-model <part of a name>` or `/supervision-model follow main` asks the First Mate to save or remove the pin in `config/supervision-branch-model`; Amun never writes it. Whether the First Mate does this when asked in chat is not tested with real Pi.
+- **`/stow` is not wanted** (19 November 2026, recorded in `AGENTS.md`). Amun answers it itself and never sends it on.
+- **Fork is built** (approved by Tamer on 19 November 2026 through the review page `docs/preview/2026-11-19-fork/index.html`; not yet in the packaged app or with real Pi):
+  - Storage: migration 43 adds `work_chats` and `work_messages.chat_id`. The main chat has no row (`chat_id` NULL); the snapshot's `messages` is every main chat and `chats` holds each fork with its own messages. Commands `fork-chat` and `delete-chat`; `message` takes `chatId`.
+  - Conversation (`work-session.tsx`): the copy and "Fork from here" icons under each message; a fork opens with "Forked from the main chat. Back to main chat"; messages written from a fork are saved in it, also when the reply arrives after the owner moved on.
+  - Firstmate has one memory for every chat and is never rewound. Each message from a fork starts with a line saying which chat it is and what to set aside (`fork.ts`).
+  - The stop card: activity for the work that started after the fork point and is still running. "Stop it" sends the owner's request to the First Mate in that chat; Amun stops nothing itself.
+  - Sidebar folders (`folders.ts`, `chrome.tsx`): one folder per piece of work under its own name, most recently used first, its chats inside, General last. Tamer's rules: Firstmate's card always keeps its space (the list scrolls inside what is left); more than five chats shows "See more"; more than six folders shows "See all", which opens Portfolio.
+  - Not built: deleting or renaming a fork from the screen (the command exists); search and "What happened" open a work's main chat, not the fork a hit is in.
+
+- **Chat rules decided by Tamer on 19 November 2026 (in `AGENTS.md`, "Chats inside a piece of work"); not built yet.** Today a work has one main chat plus forks. Still to build, each visible part after a before/after preview: "New chat" in a folder and `/new`; a sprint link on a chat with sprint groups inside the folder; rename and archive; General with several chats; Firstmate's "new chat or fork?" card on a change of subject; the new-chat brief; the silent recap after Firstmate's memory starts fresh. Open technical question: how Amun learns that Firstmate's memory started fresh or was shortened (Pi reports compaction as an event; a new First Mate is known from `first-mates.json`). The test DMG waits until Tamer says to build it.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

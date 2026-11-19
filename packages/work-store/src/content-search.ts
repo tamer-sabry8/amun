@@ -13,6 +13,9 @@ export type ContentHit = {
   title: string;
   snippet: SnippetPart[];
   workAreaId: string | null;
+  /** For a message: who wrote it and when. Null for documents and records. */
+  role: "you" | "firstmate" | null;
+  at: string | null;
 };
 
 const sql = `
@@ -21,7 +24,8 @@ SELECT f.kind AS kind, f.ref AS id, f.snip AS snip,
   CASE f.kind
     WHEN 'document' THEN (SELECT l.work_area_id FROM library_output_links l JOIN work_areas x ON x.id=l.work_area_id WHERE l.output_id=o.id AND x.status<>'deleted' ORDER BY x.name LIMIT 1)
     WHEN 'record' THEN (SELECT l.work_area_id FROM work_record_links l JOIN work_areas x ON x.id=l.work_area_id WHERE l.record_id=r.id AND x.status<>'deleted' ORDER BY x.name LIMIT 1)
-    ELSE m.work_area_id END AS area
+    ELSE m.work_area_id END AS area,
+  m.role AS role, m.created_at AS at
 FROM (
   SELECT kind, ref, rank, snippet(content_index, -1, ?, ?, '…', 16) AS snip
   FROM content_index WHERE content_index MATCH ?
@@ -62,6 +66,8 @@ export function searchContent(
       snip: string;
       title: string | null;
       area: string | null;
+      role: string | null;
+      at: string | null;
     }[];
   const all = matchExpression(query, "all");
   if (!all) return [];
@@ -76,5 +82,7 @@ export function searchContent(
     title: row.title ?? "",
     snippet: snippetParts(row.snip),
     workAreaId: row.area,
+    role: row.role === "you" || row.role === "firstmate" ? row.role : null,
+    at: row.kind === "message" ? row.at : null,
   }));
 }

@@ -106,6 +106,8 @@ export function App() {
   const snapshot = state.snapshot;
   const [layout, dispatch] = useReducer(shellReducer, initialShell);
   const [pane, setPane] = useState<PaneTarget>(null);
+  /** The fork on screen inside the open work; null is its main chat. */
+  const [chatId, setChatId] = useState<string | null>(null);
   const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
@@ -309,11 +311,13 @@ export function App() {
     areaId: string,
     message?: string,
     target: PaneTarget = null,
+    chat: string | null = null,
   ) => {
     setPending(null);
     setNote("");
     setFirst(message ?? null);
     setPane(target);
+    setChatId(chat);
     dispatch({ type: "open_work", workAreaId: areaId });
   };
   const submit = async (text: string, files: string[], groupId?: string) => {
@@ -460,6 +464,13 @@ export function App() {
         onRoute={go}
         onSearch={() => dispatch({ type: "palette", open: true })}
         onToggle={() => dispatch({ type: "toggle_sidebar" })}
+        snapshot={snapshot as Snapshot}
+        open={
+          layout.route === "work" && layout.workAreaId
+            ? { areaId: layout.workAreaId, chatId }
+            : null
+        }
+        onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
         island={
           <Island
             top={view.island.top}
@@ -566,10 +577,15 @@ export function App() {
           />
         ) : layout.route === "work" && layout.workAreaId ? (
           <WorkSession
-            key={layout.workAreaId}
+            key={layout.workAreaId + ":" + (chatId ?? "")}
             snapshot={snapshot}
             workspace={bridgeState.workspace}
             areaId={layout.workAreaId}
+            chatId={chatId}
+            onChat={(next) => {
+              setFirst(null);
+              setChatId(next);
+            }}
             now={now}
             model={model}
             pane={pane}
@@ -745,16 +761,30 @@ export function App() {
           dispatch({ type: "palette", open: false });
           if (!item.workAreaId) {
             go("home");
-            if (item.kind !== "message")
+            if (item.kind !== "message" && item.kind !== "step")
               setNote(
                 "Link this to a piece of work to open it beside its conversation.",
               );
             return;
           }
+          // Words in a conversation and Firstmate's steps open the
+          // conversation with "What happened" beside it, at that step.
           openWork(
             item.workAreaId,
             undefined,
-            item.kind === "document" ? { kind: "output", id: item.id } : null,
+            item.kind === "document"
+              ? { kind: "output", id: item.id }
+              : item.kind === "step"
+                ? { kind: "happened", stepId: item.id }
+                : item.kind === "message"
+                  ? { kind: "happened" }
+                  : null,
+            // Words written in a fork open that fork, not the main chat.
+            item.kind === "message"
+              ? ((snapshot as Snapshot).chats.find((chat) =>
+                  chat.messages.some((message) => message.id === item.id),
+                )?.id ?? null)
+              : null,
           );
         }}
         onBrowser={

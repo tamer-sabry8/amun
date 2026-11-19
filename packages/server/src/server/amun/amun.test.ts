@@ -222,6 +222,19 @@ describe("Amun RPC", () => {
       trace,
       redactor: opened.redactor,
       fmHome: paths.fmHome,
+      readTimeline: async () => [
+        { seq: 1, timestamp: "2026-11-19T10:41:00.000Z", item: { type: "user_message", text: "Start pricing." } },
+        {
+          seq: 2,
+          timestamp: "2026-11-19T10:41:02.000Z",
+          item: {
+            type: "tool_call",
+            name: "bash",
+            status: "completed",
+            detail: { type: "shell", command: "bin/fm-spawn.sh pricing --token s3cr3t-token-value" },
+          } as never,
+        },
+      ],
     });
     const created = await handler.handleRaw({ id: "1", method: "spaces.create", name: "Gamma" });
     expect(created).toMatchObject({ id: "1", ok: true, result: { slug: "gamma" } });
@@ -341,11 +354,23 @@ describe("Amun RPC", () => {
     const bundle = exported.ok ? (exported.result as { base64: string; path: string }) : null;
     const entries = unzipSync(new Uint8Array(Buffer.from(bundle!.base64, "base64")));
     expect(Object.keys(entries)).toEqual(
-      expect.arrayContaining(["manifest.json", "firstmate/config-flags.txt", "git/worktrees.txt"]),
+      expect.arrayContaining([
+        "manifest.json",
+        "firstmate/config-flags.txt",
+        "git/worktrees.txt",
+        "first-mate/steps.json",
+      ]),
     );
     const everything = Object.values(entries).map((bytes) => strFromU8(bytes)).join("\n");
     expect(everything).toContain("Pro tier");
     expect(everything).not.toContain("s3cr3t-token-value");
+    const steps = JSON.parse(strFromU8(entries["first-mate/steps.json"]!)) as {
+      steps: { words: string; sent: string }[];
+    }[];
+    expect(steps[0]!.steps[0]).toMatchObject({
+      words: "started a crewmate in its own worktree",
+      sent: "bin/fm-spawn.sh pricing --token [REDACTED]",
+    });
     expect(bundle!.path.startsWith(paths.amunHome)).toBe(true);
 
     // History is requested from the First Mate once; Amun writes nothing in the home.

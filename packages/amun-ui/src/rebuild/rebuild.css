@@ -2038,6 +2038,255 @@
   background: var(--card);
 }
 
+/* Fork: the quiet icon row under a message */
+.rb-turn {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+.rb-turn.you {
+  justify-items: end;
+}
+.rb-msg-acts {
+  display: flex;
+  gap: 2px;
+  height: 26px;
+  /* Sits in the space between messages, so nothing moves when it shows. */
+  margin: 2px 0 -14px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.rb-turn:hover .rb-msg-acts,
+.rb-msg-acts:focus-within {
+  opacity: 1;
+}
+.rb-msg-acts .icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  position: relative;
+  justify-content: center;
+}
+.rb-msg-acts .tip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  max-width: 250px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--float);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  display: none;
+}
+.rb-turn.you .rb-msg-acts .tip {
+  left: auto;
+  right: 0;
+}
+.rb-msg-acts .tip strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+}
+.rb-msg-acts .icon-btn:hover .tip,
+.rb-msg-acts .icon-btn:focus-visible .tip {
+  display: block;
+}
+
+/* Sidebar folders: each piece of work and its chats */
+.rb-folders {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 14px -4px 10px;
+  padding: 0 4px;
+}
+.rb.collapsed .rb-folders {
+  visibility: hidden;
+}
+.rb-folders ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+}
+.rb-folders li {
+  min-width: 0;
+}
+.rb-folders button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 13.5px;
+  gap: 6px;
+  min-width: 0;
+}
+.rb-folders button:hover {
+  background: var(--hover);
+}
+.rb-folders .folder svg {
+  flex: none;
+  color: var(--muted);
+  transition: rotate 160ms var(--ease);
+}
+.rb-folders .folder span,
+.rb-folders .chat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-folders .chat {
+  display: block;
+  padding-left: 25px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-folders .chat[aria-current="page"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+.rb-folders .chat.more {
+  color: var(--accent);
+}
+.rb-folders > ul > li > .chat.more {
+  padding-left: 8px;
+}
+
+/* What happened: Firstmate's steps beside the conversation, read only */
+.rb-happened {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.rb-happened > input {
+  width: 100%;
+}
+.rb-happened-turn {
+  display: grid;
+  gap: 2px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.rb-happened-turn > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px 6px;
+}
+.rb-happened-prompt {
+  padding: 4px 10px 8px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+.rb-happened-step {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  text-align: left;
+  transition:
+    background-color 120ms,
+    border-color 120ms;
+}
+.rb-happened-step:hover {
+  background: var(--hover);
+}
+.rb-happened-step[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--card);
+}
+.rb-happened-step > .small,
+.rb-happened-turn > header > .small {
+  flex: none;
+  white-space: nowrap;
+}
+.rb-happened-step .what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rb-happened-step code {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+  color: var(--muted);
+}
+.rb-happened-step.failed .what {
+  color: var(--amun-status-error);
+}
+.rb-happened-panel {
+  margin: 6px 0 10px 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  display: grid;
+  gap: 10px;
+}
+.rb-happened-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+.rb-happened-tabs button {
+  padding: 2px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-radius: 4px;
+}
+.rb-happened-tabs button:hover {
+  color: var(--ink);
+}
+.rb-happened-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rb-happened-panel [role="tabpanel"] {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.rb-happened-panel pre {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--amun-font-code);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.rb-happened-panel dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+}
+.rb-happened-panel dt {
+  color: var(--muted);
+}
+.rb-happened-panel dd {
+  margin: 0;
+}
+
 /* Palette */
 .rb-palette {
   border: 0;
@@ -2074,6 +2323,12 @@
   justify-content: flex-start;
   padding: 8px 12px;
   border-radius: 8px;
+}
+.rb-palette .results h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 10px 12px 4px;
 }
 .rb-palette .results button:hover,
 .rb-palette .results button:focus-visible {

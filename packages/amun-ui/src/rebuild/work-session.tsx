@@ -1,6 +1,7 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { BlockerRow } from "./blocker-row.tsx";
+import { WhatHappened } from "./what-happened.tsx";
 import {
   AzureConnectCard,
   QuestionCard,
@@ -88,7 +89,8 @@ import {
   trackerTypesResult,
 } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
-import { work, workAsync } from "./store.ts";
+import { work as storeWork, workAsync as storeWorkAsync } from "./store.ts";
+import { forkNote, forkPoint } from "./fork.ts";
 import {
   answerQuestion,
   answerScope,
@@ -129,6 +131,8 @@ import {
   type Snapshot,
 } from "./view-model.ts";
 
+const work = storeWork;
+
 export type PaneTarget =
   | { kind: "output"; id: string }
   | { kind: "plan"; id: string }
@@ -136,6 +140,8 @@ export type PaneTarget =
   | { kind: "backlog" }
   | { kind: "pulls" }
   | { kind: "browser"; url: string }
+  /** "What happened": Firstmate's steps in this conversation, read only. */
+  | { kind: "happened"; stepId?: string }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -1125,16 +1131,81 @@ export function OutputDoc({
   );
 }
 
+const stopsKey = "amun.fork-stops";
+function readSettledStops(): string[] {
+  try {
+    const kept = JSON.parse(localStorage.getItem(stopsKey) ?? "[]") as unknown;
+    return Array.isArray(kept) ? kept.map(String).slice(-200) : [];
+  } catch {
+    return [];
+  }
+}
+function writeSettledStops(value: string[]) {
+  try {
+    localStorage.setItem(stopsKey, JSON.stringify(value.slice(-200)));
+  } catch {
+    // Best effort: the card may be offered once more after a restart.
+  }
+}
+
+/** The quiet icon row under a message: copy, and "Fork from here". */
+function MessageActions({
+  text,
+  onFork,
+}: {
+  text: string;
+  onFork(): void | Promise<void>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [forking, setForking] = useState(false);
+  return (
+    <div className="rb-msg-acts">
+      <button
+        className="icon-btn"
+        aria-label={copied ? "Copied" : "Copy"}
+        onClick={async () => {
+          if (!(await copyText(text))) return;
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        <Icon name={copied ? "check" : "copy"} width={15} height={15} />
+        <span className="tip" role="tooltip">
+          <strong>{copied ? "Copied" : "Copy"}</strong>
+        </span>
+      </button>
+      <button
+        className="icon-btn"
+        aria-label="Fork from here"
+        disabled={forking}
+        onClick={async () => {
+          setForking(true);
+          await onFork();
+          setForking(false);
+        }}
+      >
+        <Icon name="fork" width={15} height={15} />
+        <span className="tip" role="tooltip">
+          <strong>Fork from here</strong>
+          Starts a new chat from this point. This one stays as it is.
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function WorkSession({
   snapshot,
   workspace,
   areaId,
+  chatId,
   now,
   model,
   pane,
   ratio,
   expanded,
   first,
+  onChat,
   onPane,
   onResize,
   onExpand,
@@ -1144,6 +1215,8 @@ export function WorkSession({
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
   areaId: string;
+  /** A fork inside this work; null is the main chat. */
+  chatId: string | null;
   now: number;
   model: string | null;
   pane: PaneTarget;
@@ -1151,13 +1224,46 @@ export function WorkSession({
   expanded: boolean;
   /** A message typed on Home that opened this session. */
   first: string | null;
+  /** Opens another chat of this work (after "Fork from here"). */
+  onChat(chatId: string | null): void;
   onPane(target: PaneTarget): void;
   onResize(ratio: number): void;
   onExpand(): void;
   onGroupNeeded(): void;
   onSettings(): void;
 }) {
-  const context = workContext(snapshot, areaId, now);
+  const mainContext = workContext(snapshot, areaId, now);
+  const chat = chatId
+    ? (snapshot.chats.find(
+        (item) => item.id === chatId && item.workAreaId === areaId,
+      ) ?? null)
+    : null;
+  // A fork shows and continues its own messages; everything else about the
+  // work (its documents, plans, blockers) is shared with the main chat.
+  const context =
+    mainContext && chat
+      ? { ...mainContext, messages: chat.messages }
+      : mainContext;
+  // Messages written from here are saved in the chat this session was opened
+  // on, also when a reply arrives after the owner has moved to another chat.
+  const savedIn = chat?.id ?? null;
+  // A message that is waiting or out belongs to the chat it was typed in, so
+  // another chat of the same work never picks it up or answers it.
+  const threadKey = savedIn ? `${areaId}:${savedIn}` : areaId;
+  const work = ((action: string, payload?: object) =>
+    storeWork(
+      action as never,
+      (action === "message"
+        ? { ...payload, chatId: savedIn }
+        : payload) as never,
+    )) as typeof storeWork;
+  const workAsync = ((action: string, payload?: object) =>
+    storeWorkAsync(
+      action as never,
+      (action === "message"
+        ? { ...payload, chatId: savedIn }
+        : payload) as never,
+    )) as typeof storeWorkAsync;
   // The failure's own details are its plan's per-item reasons.
   const failureRef = context?.failure?.ref;
   const failurePlanId = failureRef?.startsWith("failure:")
@@ -1179,6 +1285,10 @@ export function WorkSession({
   /** Version history of the open document: the list ("list") or one version. */
   const [history, setHistory] = useState<"list" | number | null>(null);
   const titleRoot = useRef<HTMLElement>(null);
+  // Where "What happened" puts its Previous step, Next step and Fold all.
+  const [happenedControls, setHappenedControls] = useState<HTMLElement | null>(
+    null,
+  );
   useDismiss(menu === "title", titleRoot, () => setMenu(null));
   const openDocument = pane?.kind === "output" ? pane.id : null;
   useEffect(() => {
@@ -1495,7 +1605,7 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const [waiting, setWaiting] = useState(() => heldMessage(areaId));
+  const [waiting, setWaiting] = useState(() => heldMessage(threadKey));
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
@@ -1507,7 +1617,7 @@ export function WorkSession({
     /** This turn carries Amun's rules for a conversation that lacked them. */
     briefing = false,
   ) => {
-    if (inFlight.has(areaId)) {
+    if (inFlight.has(threadKey)) {
       // A turn is still out (for example a waiting message being retried):
       // a new message waits behind it instead of being dropped.
       if (!retry) {
@@ -1518,16 +1628,16 @@ export function WorkSession({
           image,
           reason: "busy" as const,
         };
-        holdMessage(areaId, queued);
+        holdMessage(threadKey, queued);
         setWaiting(queued);
       }
       return;
     }
-    inFlight.add(areaId);
+    inFlight.add(threadKey);
     // A message that is out stays saved until Firstmate has answered, so a
     // slow turn, a reload or a retry can never leave the newest one unsaved.
     if (!retry)
-      holdMessage(areaId, {
+      holdMessage(threadKey, {
         text,
         scoped,
         activityId,
@@ -1549,7 +1659,7 @@ export function WorkSession({
       ).ref;
     const turn = await askFirstmate(scoped, image);
     setBusy(false);
-    inFlight.delete(areaId);
+    inFlight.delete(threadKey);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
@@ -1595,28 +1705,28 @@ export function WorkSession({
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
       // Only the message this turn carried leaves the wait; a newer one stays.
-      if (heldMessage(areaId)?.scoped === scoped) {
-        releaseMessage(areaId);
+      if (heldMessage(threadKey)?.scoped === scoped) {
+        releaseMessage(threadKey);
         setWaiting(null);
       }
-      if (heldMessage(areaId)) retryWaiting();
+      if (heldMessage(threadKey)) retryWaiting();
     } else if (turn.needsProvider || retry) {
-      const newer = heldMessage(areaId);
+      const newer = heldMessage(threadKey);
       if (newer && newer.scoped !== scoped) {
         // A message queued behind this turn now waits for the provider too.
         if (turn.needsProvider && waitReason(newer) === "busy") {
           const message = { ...newer, reason: "provider" as const };
-          holdMessage(areaId, message);
+          holdMessage(threadKey, message);
           setWaiting(message);
         }
         return;
       }
       if (
         !turn.needsProvider &&
-        waitReason(heldMessage(areaId) ?? {}) === "busy"
+        waitReason(heldMessage(threadKey) ?? {}) === "busy"
       ) {
         // A message that only queued behind a turn is not a provider wait.
-        releaseMessage(areaId);
+        releaseMessage(threadKey);
         setWaiting(null);
         setProblem(turn.reason);
         return;
@@ -1629,15 +1739,15 @@ export function WorkSession({
         image,
         reason: "provider" as const,
       };
-      holdMessage(areaId, message);
+      holdMessage(threadKey, message);
       setWaiting(message);
       return;
     } else {
       setProblem(turn.reason);
       // This turn failed for a reason other than a provider: it is not kept.
-      if (heldMessage(areaId)?.scoped === scoped) releaseMessage(areaId);
+      if (heldMessage(threadKey)?.scoped === scoped) releaseMessage(threadKey);
       // A message queued behind this failed turn is still sent.
-      if (heldMessage(areaId)) retryWaiting();
+      if (heldMessage(threadKey)) retryWaiting();
     }
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
@@ -1652,6 +1762,26 @@ export function WorkSession({
   };
   const attachments = useAttachments(areaId);
   const [pickNonce, setPickNonce] = useState(0);
+  // Work that was started after the point a fork was taken from and is still
+  // running: the owner is asked once whether Firstmate should stop it.
+  const [settled, setSettled] = useState(() => readSettledStops());
+  const settleStop = (fork: string, activity: string) => {
+    const next = [...settled, `${fork}:${activity}`];
+    setSettled(next);
+    writeSettledStops(next);
+  };
+  const forkedAt = chat ? forkPoint(chat) : null;
+  const stopOffer =
+    chat && forkedAt
+      ? (snapshot.activity.find(
+          (item) =>
+            item.workAreaId === areaId &&
+            item.state === "running" &&
+            item.createdAt > forkedAt &&
+            item.createdAt < chat.createdAt &&
+            !settled.includes(`${chat.id}:${item.id}`),
+        ) ?? null)
+      : null;
   const send = async (typed: string) => {
     if ((!typed.trim() && !attachments.files.length) || !context) return;
     // A reminder is kept by Amun and answered here; it is not sent on to
@@ -1702,7 +1832,7 @@ export function WorkSession({
     const text =
       typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
     // One message waits at a time; a new one replaces the wait, not the text.
-    releaseMessage(areaId);
+    releaseMessage(threadKey);
     setWaiting(null);
     lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
@@ -1743,9 +1873,11 @@ export function WorkSession({
       notionPageLines(snapshot, areaId),
       failedPublicationLines(snapshot, areaId, reasons),
     );
+    // In a fork, Firstmate is told which chat this is and what to set aside.
+    const fork = chat ? forkNote(chat, context.messages) + "\n" : "";
     const scoped = briefing
-      ? `${amunProtocol}\n\n${header}${text}`
-      : `${header}${text}`;
+      ? `${amunProtocol}\n\n${header}${fork}${text}`
+      : `${header}${fork}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -1771,8 +1903,8 @@ export function WorkSession({
   const retryWaiting = () => {
     // One attempt at a time per work area, so it can only go out once. It
     // stays saved and on screen as waiting until Firstmate has answered.
-    const message = heldMessage(areaId);
-    if (!message || inFlight.has(areaId)) return;
+    const message = heldMessage(threadKey);
+    if (!message || inFlight.has(threadKey)) return;
     void deliver(
       message.text,
       message.scoped,
@@ -1812,8 +1944,8 @@ export function WorkSession({
   }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
-    setWaiting(heldMessage(areaId));
-    if (heldMessage(areaId)) retryWaiting();
+    setWaiting(heldMessage(threadKey));
+    if (heldMessage(threadKey)) retryWaiting();
   }, [areaId]);
   useEffect(() => {
     if (!waiting) return;
@@ -1919,7 +2051,9 @@ export function WorkSession({
             ? "Backlog"
             : pane?.kind === "pulls"
               ? "Pull requests"
-              : (output?.title ?? "");
+              : pane?.kind === "happened"
+                ? "What happened"
+                : (output?.title ?? "");
   const newOutput = async () => {
     const result = await workAsync("save-output", {
       groupId: area.groupId,
@@ -2142,6 +2276,14 @@ export function WorkSession({
             </button>
           )}
           {!open && (
+            <button
+              className="btn quiet"
+              onClick={() => onPane({ kind: "happened" })}
+            >
+              What happened
+            </button>
+          )}
+          {!open && (
             <button className="btn quiet" onClick={newOutput}>
               <Icon name="plus" width={15} height={15} />
               New document
@@ -2245,6 +2387,15 @@ export function WorkSession({
         <div className="rb-thread">
           <div className="inner">
             <div className="msgs">
+              {chat && (
+                <p className="muted small">
+                  Forked from{" "}
+                  {chat.fromChatId ? "another chat" : "the main chat"}.{" "}
+                  <button className="link" onClick={() => onChat(null)}>
+                    Back to main chat
+                  </button>
+                </p>
+              )}
               {!context.messages.length && !busy && (
                 <p className="muted">
                   {area.purpose ||
@@ -2348,37 +2499,85 @@ export function WorkSession({
                     />
                   )
                 ) : (
-                  <div
-                    key={message.id}
-                    ref={message.id === lastReplyId ? latestReply : undefined}
-                    className={"rb-msg " + message.role}
-                  >
-                    {/* Firstmate is named where its turn begins, on the left;
+                  <div key={message.id} className={"rb-turn " + message.role}>
+                    <div
+                      ref={message.id === lastReplyId ? latestReply : undefined}
+                      className={"rb-msg " + message.role}
+                    >
+                      {/* Firstmate is named where its turn begins, on the left;
                         the owner's own messages sit on the right. */}
-                    {message.role === "firstmate" &&
-                      context.messages[position - 1]?.role !== "firstmate" && (
-                        <span className="who">
-                          <FirstmateMark size={18} />
-                          Firstmate
-                          {modelDisplay(message.model ?? null) && (
-                            <span className="muted small">
-                              {"· "}
-                              {modelDisplay(message.model ?? null)}
-                            </span>
-                          )}
-                        </span>
+                      {message.role === "firstmate" &&
+                        context.messages[position - 1]?.role !==
+                          "firstmate" && (
+                          <span className="who">
+                            <FirstmateMark size={18} />
+                            Firstmate
+                            {modelDisplay(message.model ?? null) && (
+                              <span className="muted small">
+                                {"· "}
+                                {modelDisplay(message.model ?? null)}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      {message.role === "firstmate" ? (
+                        <MarkdownMessage
+                          text={message.text}
+                          onLink={(url) => onPane({ kind: "browser", url })}
+                          citations={citations}
+                        />
+                      ) : (
+                        message.text
                       )}
-                    {message.role === "firstmate" ? (
-                      <MarkdownMessage
-                        text={message.text}
-                        onLink={(url) => onPane({ kind: "browser", url })}
-                        citations={citations}
-                      />
-                    ) : (
-                      message.text
-                    )}
+                    </div>
+                    <MessageActions
+                      text={message.text}
+                      onFork={async () => {
+                        const made = await storeWorkAsync("fork-chat", {
+                          workAreaId: areaId,
+                          messageId: message.id,
+                        });
+                        if (made.ref) onChat(made.ref);
+                      }}
+                    />
                   </div>
                 ),
+              )}
+              {chat && stopOffer && (
+                <div
+                  className="rb-inline amber"
+                  role="group"
+                  aria-label="Work still running"
+                >
+                  <span>
+                    “{stopOffer.text}” is still running. It was started after
+                    the point you forked from. Stop it?
+                  </span>
+                  <span className="note">
+                    Stopping is a request to Firstmate. Leaving it running
+                    changes nothing.
+                  </span>
+                  <div className="row wrap">
+                    <button
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => {
+                        settleStop(chat.id, stopOffer.id);
+                        void send(
+                          `Please stop this work: “${stopOffer.text}”. I am trying a different direction in this chat.`,
+                        );
+                      }}
+                    >
+                      Stop it
+                    </button>
+                    <button
+                      className="btn quiet"
+                      onClick={() => settleStop(chat.id, stopOffer.id)}
+                    >
+                      Leave it running
+                    </button>
+                  </div>
+                </div>
               )}
               {waiting && (
                 <>
@@ -2405,7 +2604,7 @@ export function WorkSession({
                         <button
                           className="btn quiet"
                           onClick={() => {
-                            releaseMessage(areaId);
+                            releaseMessage(threadKey);
                             setWaiting(null);
                           }}
                         >
@@ -2933,6 +3132,9 @@ export function WorkSession({
                 </div>
               )}
               <span className="grow" />
+              {pane.kind === "happened" && (
+                <span className="row" ref={setHappenedControls} />
+              )}
               {output && output.section === "output" && (
                 <span style={{ position: "relative" }}>
                   <button
@@ -2986,7 +3188,11 @@ export function WorkSession({
               </button>
               <button
                 className="icon-btn"
-                aria-label="Close the document"
+                aria-label={
+                  pane.kind === "happened"
+                    ? "Close What happened"
+                    : "Close the document"
+                }
                 onClick={() => onPane(null)}
               >
                 <Icon name="close" width={17} height={17} />
@@ -3069,6 +3275,18 @@ export function WorkSession({
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
                   onPreview={(url) => onPane({ kind: "browser", url })}
                   citations={citations}
+                />
+              )}
+              {pane.kind === "happened" && (
+                <WhatHappened
+                  areaId={areaId}
+                  focus={pane.stepId ?? null}
+                  controls={happenedControls}
+                  refreshKey={
+                    snapshot.messages.filter(
+                      (message) => message.workAreaId === areaId,
+                    ).length
+                  }
                 />
               )}
               {pane.kind === "pulls" &&

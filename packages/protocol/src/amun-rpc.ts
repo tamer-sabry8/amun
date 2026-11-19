@@ -237,6 +237,11 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // command is the renderer's own work contract, validated by the work store.
   z.object({ id: z.string(), method: z.literal("work.snapshot") }),
   z.object({ id: z.string(), method: z.literal("work.command"), command: z.record(z.string(), z.unknown()) }),
+  // Read-only: words inside conversations, documents and the First Mate's own
+  // saved steps; and the turns and steps behind one conversation ("What
+  // happened"). Neither starts the First Mate or sends it anything.
+  z.object({ id: z.string(), method: z.literal("work.search"), query: z.string().max(200) }),
+  z.object({ id: z.string(), method: z.literal("happened.read"), workAreaId: z.string().min(1).max(128) }),
   // Trace bundle: a redacted zip of what happened, for the captain to share
   // when something goes wrong; and a one-time request that the First Mate
   // keep agent history (fleet ledger, status archive) in its home.

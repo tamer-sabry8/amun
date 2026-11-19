@@ -481,6 +481,32 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  /** Forks inside a work, oldest first. `messages` above is each main chat. */
+  chats: z
+    .array(
+      z.strictObject({
+        id,
+        workAreaId: id,
+        title: z.string(),
+        /** The message it was forked from, in the chat it came from. */
+        forkedFrom: id,
+        /** The chat it came from; null is the main chat. */
+        fromChatId: id.nullable(),
+        createdAt: stamp,
+        messages: z.array(
+          z.strictObject({
+            id,
+            workAreaId: id,
+            role: z.enum(["you", "firstmate", "card"]),
+            text: z.string(),
+            card: z.json().nullable(),
+            model: z.string().max(200).nullable().optional(),
+            createdAt: stamp,
+          }),
+        ),
+      }),
+    )
+    .default([]),
 });
 export type WorkSnapshot = z.infer<typeof workSnapshot>;
 
@@ -827,11 +853,19 @@ export const workCommand = z.discriminatedUnion("action", [
   }),
   act("message", {
     workAreaId: id,
+    /** A fork inside the work; null is the main chat. */
+    chatId: id.nullable().default(null),
     role: z.enum(["you", "firstmate", "card"]),
     text: z.string().max(16384),
     card: z.json().nullable().default(null),
     model: z.string().max(200).nullable().default(null),
   }),
+  /**
+   * "Fork from here": a second chat in the same work, copied up to and
+   * including this message. The chat it came from is not changed.
+   */
+  act("fork-chat", { workAreaId: id, messageId: id }),
+  act("delete-chat", { chatId: id }),
 ]);
 export type WorkCommand = z.infer<typeof workCommand>;
 
@@ -945,15 +979,59 @@ export const contentSearchResult = z.strictObject({
   requestId: id,
   hits: z.array(
     z.strictObject({
-      kind: z.enum(["document", "record", "message"]),
+      kind: z.enum(["document", "record", "message", "step"]),
       id,
       title: z.string(),
       snippet: z.array(
         z.strictObject({ text: z.string(), match: z.boolean() }),
       ),
       workAreaId: id.nullable(),
+      /** A message: who wrote it. A step: always Firstmate. */
+      role: z.enum(["you", "firstmate"]).nullable().optional(),
+      at: z.string().max(64).nullable().optional(),
+      /** A step: the Firstmate script behind it, when there is one. */
+      script: z.string().max(200).nullable().optional(),
     }),
   ),
+});
+
+/** One thing Firstmate did in a turn, read from its saved timeline. */
+export const happenedStep = z.strictObject({
+  id: z.string().max(64),
+  kind: z.enum(["action", "answer", "problem"]),
+  words: z.string(),
+  script: z.string().nullable(),
+  at: z.string().max(64),
+  durationMs: z.number().nullable(),
+  sent: z.string(),
+  cameBack: z.string(),
+  failed: z.boolean(),
+});
+export const happenedTurn = z.strictObject({
+  id: z.string().max(64),
+  trigger: z.enum(["you", "woke"]),
+  prompt: z.string(),
+  at: z.string().max(64),
+  durationMs: z.number().nullable(),
+  workAreaId: z.string().nullable(),
+  steps: z.array(happenedStep),
+});
+export type HappenedStep = z.infer<typeof happenedStep>;
+export type HappenedTurn = z.infer<typeof happenedTurn>;
+/** "What happened" in one conversation. Read only; nothing is run again. */
+export const whatHappened = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("what-happened"),
+  requestId: id,
+  workAreaId: id,
+});
+export const whatHappenedResult = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("what-happened-result"),
+  requestId: id,
+  /** False when Firstmate has no saved steps to read yet. */
+  available: z.boolean(),
+  turns: z.array(happenedTurn),
 });
 
 export type ContentSearchHit = z.infer<
@@ -1161,6 +1239,7 @@ export const workEvent = z.discriminatedUnion("kind", [
   workAttachmentResult,
   planPlacesResult,
   contentSearchResult,
+  whatHappenedResult,
   trackerTypesResult,
   workSnapshot,
   councilStatus,

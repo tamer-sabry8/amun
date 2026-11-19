@@ -1,5 +1,5 @@
 // Shell chrome: sidebar with six tiles, the Island, and the command palette.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   islandFloatMs,
   islandPresentation,
@@ -16,6 +16,13 @@ import {
   type ContentSearchHit,
 } from "../../../../packages/contracts/src/work.ts";
 import type { Snapshot } from "./view-model.ts";
+import { clockLabel } from "./what-happened.tsx";
+import {
+  chatLimit,
+  folderLimit,
+  workFolders,
+  type WorkFolder,
+} from "./folders.ts";
 
 const islandAction: Record<Attention["kind"], string | null> = {
   approval: "Review changes",
@@ -350,6 +357,9 @@ export function Sidebar({
   onSearch,
   onToggle,
   island,
+  snapshot,
+  open,
+  onChat,
 }: {
   route: Route;
   collapsed: boolean;
@@ -357,7 +367,76 @@ export function Sidebar({
   onSearch(): void;
   onToggle(): void;
   island: React.ReactNode;
+  snapshot: Snapshot;
+  /** The chat on screen, when a piece of work is open. */
+  open: { areaId: string; chatId: string | null } | null;
+  onChat(areaId: string, chatId: string | null): void;
 }) {
+  const { folders, general } = workFolders(
+    snapshot.areas,
+    snapshot.chats,
+    snapshot.setup.activeGroupId,
+  );
+  // Folders the owner opened or closed by hand; the open work's is open.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [allChats, setAllChats] = useState<Record<string, boolean>>({});
+  const folder = (item: WorkFolder, name = item.name) => {
+    const current = open?.areaId === item.areaId;
+    const expanded = toggled[item.areaId] ?? current;
+    const chats = allChats[item.areaId]
+      ? item.chats
+      : item.chats.slice(0, chatLimit);
+    return (
+      <li key={item.areaId}>
+        <button
+          className="folder"
+          aria-expanded={expanded}
+          onClick={() => {
+            setToggled({ ...toggled, [item.areaId]: !expanded });
+            if (!current) onChat(item.areaId, null);
+          }}
+        >
+          <Icon
+            name="chevron"
+            width={11}
+            height={11}
+            style={{ rotate: expanded ? "90deg" : undefined }}
+          />
+          <span>{name}</span>
+        </button>
+        {expanded && (
+          <ul>
+            {chats.map((chat) => (
+              <li key={chat.chatId ?? "main"}>
+                <button
+                  className="chat"
+                  aria-current={
+                    current && open.chatId === chat.chatId ? "page" : undefined
+                  }
+                  title={chat.title}
+                  onClick={() => onChat(item.areaId, chat.chatId)}
+                >
+                  {chat.title}
+                </button>
+              </li>
+            ))}
+            {item.chats.length > chats.length && (
+              <li>
+                <button
+                  className="chat more"
+                  onClick={() =>
+                    setAllChats({ ...allChats, [item.areaId]: true })
+                  }
+                >
+                  See more
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
   // Icon tiles; the name stays in the button for assistive technology and
   // shows as a tooltip.
   const item = (id: Exclude<Route, "work" | "setup">, label: string) => (
@@ -390,7 +469,24 @@ export function Sidebar({
         </button>
         {tiles.map(([id, label]) => item(id, label))}
       </div>
-      <div className="spacer" />
+      {/* Takes only the room between the tiles and Firstmate's card, and
+          scrolls inside it, so the card always keeps its place. */}
+      <div className="rb-folders" aria-label="Your work and its chats">
+        <ul>
+          {folders.slice(0, folderLimit).map((item) => folder(item))}
+          {folders.length > folderLimit && (
+            <li>
+              <button
+                className="chat more"
+                onClick={() => onRoute("portfolio")}
+              >
+                See all
+              </button>
+            </li>
+          )}
+          {general.map((item) => folder(item, "General"))}
+        </ul>
+      </div>
       {island}
       <div className="rb-user">
         <span className="avatar" aria-hidden="true" title="You">
@@ -495,7 +591,37 @@ export function Palette({
     ...areas.slice(0, 8).map((area) => area.id),
   ]);
   const inside = found.q === q && q.length >= 2 ? found.hits : [];
-  const contentHits = inside.filter((item) => !shown.has(item.id)).slice(0, 6);
+  const contentHits = inside.filter((item) => !shown.has(item.id));
+  const said = contentHits
+    .filter((item) => item.kind === "message")
+    .slice(0, 4);
+  const did = contentHits.filter((item) => item.kind === "step").slice(0, 4);
+  const texts = contentHits
+    .filter((item) => item.kind === "document" || item.kind === "record")
+    .slice(0, 6);
+  const areaName = (id: string | null) =>
+    snapshot.areas.find((area) => area.id === id)?.name ?? "";
+  const hitRow = (item: ContentHit, title: string, line: ReactNode) => (
+    <button key={item.kind + item.id} onClick={() => onHit(item)}>
+      <Icon
+        name={item.kind === "document" ? "library" : "decisions"}
+        width={16}
+        height={16}
+      />
+      <span style={{ minWidth: 0, textAlign: "left" }}>
+        <span style={{ display: "block" }}>{title}</span>
+        <span className="muted small" style={{ display: "block" }}>
+          {line}
+        </span>
+      </span>
+    </button>
+  );
+  const marked = (item: ContentHit) =>
+    item.snippet.map((part, index) =>
+      part.match ? <strong key={index}>{part.text}</strong> : part.text,
+    );
+  const joined = (parts: (string | null | undefined)[]) =>
+    parts.filter(Boolean).join(" · ");
   return (
     <dialog
       className="rb-palette"
@@ -536,27 +662,34 @@ export function Palette({
             {item.title}
           </button>
         ))}
-        {contentHits.map((item) => (
-          <button key={item.kind + item.id} onClick={() => onHit(item)}>
-            <Icon
-              name={item.kind === "message" ? "decisions" : "library"}
-              width={16}
-              height={16}
-            />
-            <span style={{ minWidth: 0, textAlign: "left" }}>
-              <span style={{ display: "block" }}>{item.title}</span>
-              <span className="muted small" style={{ display: "block" }}>
-                {item.snippet.map((part, index) =>
-                  part.match ? (
-                    <strong key={index}>{part.text}</strong>
-                  ) : (
-                    part.text
-                  ),
-                )}
-              </span>
-            </span>
-          </button>
-        ))}
+        {said.length > 0 && <h3>In conversations</h3>}
+        {said.map((item) =>
+          hitRow(
+            item,
+            joined([
+              item.title,
+              item.role === "you" ? "You" : "Firstmate",
+              item.at ? clockLabel(item.at) : null,
+            ]),
+            marked(item),
+          ),
+        )}
+        {did.length > 0 && <h3>In what Firstmate did</h3>}
+        {did.map((item) =>
+          hitRow(
+            item,
+            "Firstmate " + item.title,
+            joined([
+              areaName(item.workAreaId),
+              item.at ? clockLabel(item.at) : null,
+              item.script,
+            ]),
+          ),
+        )}
+        {texts.length > 0 && (said.length > 0 || did.length > 0) && (
+          <h3>Documents</h3>
+        )}
+        {texts.map((item) => hitRow(item, item.title, marked(item)))}
         {places
           .filter(([, label]) => hit(label))
           .map(([id, label]) => (
