@@ -15,6 +15,18 @@ This file was first written for the PR #33 merge. Later work adds to it; nothing
 
 Written at the end of 18 November 2026, after PR #36. Read this section before anything else, then "Read this first: Firstmate is the only path".
 
+### Resume point (19 November 2026, end of session)
+
+Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks green (1,039 tests); the one Codex review comment is fixed and resolved. Not merged; merging is Tamer's call.
+
+1. **Waiting on Tamer: the search and replay preview.** `docs/preview/2026-11-19-search-and-replay/index.html` (open it with `lavish-axi docs/preview/2026-11-19-search-and-replay/index.html`; if Lavish shows a blank page, run `lavish-axi stop` first, as its server was stuck once today). Nothing is built yet. On approval, build:
+   - **Search:** answer the ⌘K palette's existing `content-search` request (`chrome.tsx`) from `WorkStore.search` (`packages/work-store/src/content-search.ts`, never connected), through a new RPC in `amun-rpc.ts` / `amun-rpc-handler.ts` and the adapter. Add the First Mate's own steps from Paseo's saved timeline (`agentManager.fetchTimeline` / `getTimelineRows` for the First Mate's agent id: user and assistant messages, tool calls with input, output and time). Results open the conversation with "What happened" at that step.
+   - **Replay ("What happened"):** a read-only pane kind beside the conversation (`PaneTarget` in `work-session.tsx`, like `prd` and `backlog`), listing turns and steps from the same timeline, with Previous step / Next step, Search this conversation, Fold all, and a step panel (Summary, What it sent, What came back, Timing). Read only; nothing is re-run. Design reference: DeepSeek harness `packages/client/ui-trajectory` (its README and `.agents/notes/archived/feature/2026-07-27-trajectory-inspection-ledger.md`).
+   - Questions still open in the preview: where "What happened" is opened from (a link beside PRD / Backlog, or only from search and a `/` command), and whether resume and fork come later.
+2. **Tamer's instruction for the other features:** explain each one and ask before any work. **He does not want the agent org chart** (19 November 2026); do not build it. Atomic task checkout and chat-to-CLI continuity are still to be explained and asked about.
+3. **Still to test on the Mac** with the DMG built from this branch (`packages/desktop/release/Amun-0.16.1-arm64.dmg`, not committed): a heartbeat reply in "Chat with Firstmate"; a restart continuing the same conversation; real work showing a secondmate or crewmate on the Agents screen; the Portfolio changes.
+4. Then the open items below, one question at a time.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).
@@ -40,7 +52,7 @@ Not yet confirmed on his Mac with a build that has every fix: that the watcher a
 
 1. **Rebuild the test DMG from `main`.** The DMG Tamer last had was built before the last two fixes in PR #36: it still sent `/stow` to the First Mate and could show a task held again as already answered. Steps are under "Building a test DMG".
 2. ~~Settle the Portfolio message box.~~ Settled on 19 November 2026: Tamer kept it and approved the before/after preview (`docs/preview/2026-11-19-portfolio-message-box/`) after an impeccable critique. See "Changes on 19 November 2026".
-3. **The four features Tamer asked to wire** (next heading).
+3. **The four features Tamer asked to wire** (next heading). Search and replay is in preview (see the resume point above); the org chart is not wanted.
 4. **The open items** (the heading after that).
 
 ### The four features to wire next
