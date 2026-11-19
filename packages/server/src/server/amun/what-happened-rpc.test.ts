@@ -79,6 +79,35 @@ describe("What happened over Amun RPC", () => {
     expect(found.steps).toMatchObject([{ stepId: "s2", workAreaId: "portal" }]);
   });
 
+  it("places a turn asked from a fork in its work", async () => {
+    const { handler } = handlerWith(async () => [
+      { seq: 1, timestamp: at(0), item: { type: "user_message", text: "[Fork]\nWhat if we had one support person?" } as never },
+      { seq: 2, timestamp: at(3), item: { type: "assistant_message", text: "Then mornings only." } as never },
+    ]);
+    const deps = (handler as unknown as { deps: AmunRpcDeps }).deps;
+    const base = deps.work.snapshot() as Record<string, unknown>;
+    deps.work.snapshot = () => ({
+      ...base,
+      chats: [
+        {
+          messages: [
+            {
+              id: "f1",
+              workAreaId: "portal",
+              role: "you",
+              text: "What if we had one support person?",
+              createdAt: at(0),
+            },
+          ],
+        },
+      ],
+    });
+    const read = (await handler.handle({ id: "5", method: "happened.read", workAreaId: "portal" })) as {
+      turns: { prompt: string }[];
+    };
+    expect(read.turns.map((turn) => turn.prompt)).toEqual(["What if we had one support person?"]);
+  });
+
   it("says nothing is available when no First Mate timeline can be read", async () => {
     const { handler } = handlerWith(async () => {
       throw new Error("agent not loaded");

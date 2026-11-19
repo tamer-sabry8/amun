@@ -243,9 +243,17 @@ export class AmunRpcHandler {
   private async happened(): Promise<HappenedTurn[]> {
     const rows = (await this.deps.readTimeline?.(this.deps.fmHome).catch(() => [])) ?? [];
     if (!rows.length) return [];
-    const snapshot = this.deps.work.snapshot() as { messages?: MessageLike[] };
+    const snapshot = this.deps.work.snapshot() as {
+      messages?: MessageLike[];
+      chats?: { messages?: MessageLike[] }[];
+    };
+    // A turn asked from a fork is placed by the fork's own messages.
+    const messages = [
+      ...(snapshot.messages ?? []),
+      ...(snapshot.chats ?? []).flatMap((chat) => chat.messages ?? []),
+    ];
     const redact = (value: string) => this.deps.redactor.text(value);
-    return placeTurns(turnsFromTimeline(rows), snapshot.messages ?? []).map((turn) => ({
+    return placeTurns(turnsFromTimeline(rows), messages).map((turn) => ({
       ...turn,
       prompt: redact(turn.prompt),
       steps: turn.steps.map((step) => ({

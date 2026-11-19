@@ -1247,6 +1247,9 @@ export function WorkSession({
   // Messages written from here are saved in the chat this session was opened
   // on, also when a reply arrives after the owner has moved to another chat.
   const savedIn = chat?.id ?? null;
+  // A message that is waiting or out belongs to the chat it was typed in, so
+  // another chat of the same work never picks it up or answers it.
+  const threadKey = savedIn ? `${areaId}:${savedIn}` : areaId;
   const work = ((action: string, payload?: object) =>
     storeWork(
       action as never,
@@ -1602,7 +1605,7 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const [waiting, setWaiting] = useState(() => heldMessage(areaId));
+  const [waiting, setWaiting] = useState(() => heldMessage(threadKey));
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
@@ -1614,7 +1617,7 @@ export function WorkSession({
     /** This turn carries Amun's rules for a conversation that lacked them. */
     briefing = false,
   ) => {
-    if (inFlight.has(areaId)) {
+    if (inFlight.has(threadKey)) {
       // A turn is still out (for example a waiting message being retried):
       // a new message waits behind it instead of being dropped.
       if (!retry) {
@@ -1625,16 +1628,16 @@ export function WorkSession({
           image,
           reason: "busy" as const,
         };
-        holdMessage(areaId, queued);
+        holdMessage(threadKey, queued);
         setWaiting(queued);
       }
       return;
     }
-    inFlight.add(areaId);
+    inFlight.add(threadKey);
     // A message that is out stays saved until Firstmate has answered, so a
     // slow turn, a reload or a retry can never leave the newest one unsaved.
     if (!retry)
-      holdMessage(areaId, {
+      holdMessage(threadKey, {
         text,
         scoped,
         activityId,
@@ -1656,7 +1659,7 @@ export function WorkSession({
       ).ref;
     const turn = await askFirstmate(scoped, image);
     setBusy(false);
-    inFlight.delete(areaId);
+    inFlight.delete(threadKey);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
@@ -1702,28 +1705,28 @@ export function WorkSession({
       if (briefing) markBriefed();
       for (const proposed of parsed.actions) raise(proposed);
       // Only the message this turn carried leaves the wait; a newer one stays.
-      if (heldMessage(areaId)?.scoped === scoped) {
-        releaseMessage(areaId);
+      if (heldMessage(threadKey)?.scoped === scoped) {
+        releaseMessage(threadKey);
         setWaiting(null);
       }
-      if (heldMessage(areaId)) retryWaiting();
+      if (heldMessage(threadKey)) retryWaiting();
     } else if (turn.needsProvider || retry) {
-      const newer = heldMessage(areaId);
+      const newer = heldMessage(threadKey);
       if (newer && newer.scoped !== scoped) {
         // A message queued behind this turn now waits for the provider too.
         if (turn.needsProvider && waitReason(newer) === "busy") {
           const message = { ...newer, reason: "provider" as const };
-          holdMessage(areaId, message);
+          holdMessage(threadKey, message);
           setWaiting(message);
         }
         return;
       }
       if (
         !turn.needsProvider &&
-        waitReason(heldMessage(areaId) ?? {}) === "busy"
+        waitReason(heldMessage(threadKey) ?? {}) === "busy"
       ) {
         // A message that only queued behind a turn is not a provider wait.
-        releaseMessage(areaId);
+        releaseMessage(threadKey);
         setWaiting(null);
         setProblem(turn.reason);
         return;
@@ -1736,15 +1739,15 @@ export function WorkSession({
         image,
         reason: "provider" as const,
       };
-      holdMessage(areaId, message);
+      holdMessage(threadKey, message);
       setWaiting(message);
       return;
     } else {
       setProblem(turn.reason);
       // This turn failed for a reason other than a provider: it is not kept.
-      if (heldMessage(areaId)?.scoped === scoped) releaseMessage(areaId);
+      if (heldMessage(threadKey)?.scoped === scoped) releaseMessage(threadKey);
       // A message queued behind this failed turn is still sent.
-      if (heldMessage(areaId)) retryWaiting();
+      if (heldMessage(threadKey)) retryWaiting();
     }
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
@@ -1829,7 +1832,7 @@ export function WorkSession({
     const text =
       typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
     // One message waits at a time; a new one replaces the wait, not the text.
-    releaseMessage(areaId);
+    releaseMessage(threadKey);
     setWaiting(null);
     lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
@@ -1900,8 +1903,8 @@ export function WorkSession({
   const retryWaiting = () => {
     // One attempt at a time per work area, so it can only go out once. It
     // stays saved and on screen as waiting until Firstmate has answered.
-    const message = heldMessage(areaId);
-    if (!message || inFlight.has(areaId)) return;
+    const message = heldMessage(threadKey);
+    if (!message || inFlight.has(threadKey)) return;
     void deliver(
       message.text,
       message.scoped,
@@ -1941,8 +1944,8 @@ export function WorkSession({
   }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
-    setWaiting(heldMessage(areaId));
-    if (heldMessage(areaId)) retryWaiting();
+    setWaiting(heldMessage(threadKey));
+    if (heldMessage(threadKey)) retryWaiting();
   }, [areaId]);
   useEffect(() => {
     if (!waiting) return;
@@ -2601,7 +2604,7 @@ export function WorkSession({
                         <button
                           className="btn quiet"
                           onClick={() => {
-                            releaseMessage(areaId);
+                            releaseMessage(threadKey);
                             setWaiting(null);
                           }}
                         >

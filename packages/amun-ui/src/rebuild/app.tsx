@@ -779,6 +779,12 @@ export function App() {
                 : item.kind === "message"
                   ? { kind: "happened" }
                   : null,
+            // Words written in a fork open that fork, not the main chat.
+            item.kind === "message"
+              ? ((snapshot as Snapshot).chats.find((chat) =>
+                  chat.messages.some((message) => message.id === item.id),
+                )?.id ?? null)
+              : null,
           );
         }}
         onBrowser={
