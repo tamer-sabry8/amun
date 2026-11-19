@@ -39,7 +39,7 @@ Not yet confirmed on his Mac with a build that has every fix: that the watcher a
 ### Do next, in this order
 
 1. **Rebuild the test DMG from `main`.** The DMG Tamer last had was built before the last two fixes in PR #36: it still sent `/stow` to the First Mate and could show a task held again as already answered. Steps are under "Building a test DMG".
-2. **Settle the Portfolio message box.** It was added in PR #36 because Tamer asked for chat on that screen, on a screenshot of it. It reuses the existing message box unchanged, but it did not go through the before/after preview and the impeccable skill that `AGENTS.md` requires, and the Codex review on PR #36 flagged that. The thread is still open on the pull request. Ask Tamer: keep it and do the preview now, or take it out until the preview is approved. Other screens (Settings, Search) have no message box; do not add one without the same preview.
+2. ~~Settle the Portfolio message box.~~ Settled on 19 November 2026: Tamer kept it and approved the before/after preview (`docs/preview/2026-11-19-portfolio-message-box/`) after an impeccable critique. See "Changes on 19 November 2026".
 3. **The four features Tamer asked to wire** (next heading).
 4. **The open items** (the heading after that).
 
@@ -89,13 +89,14 @@ Not wired yet (the screens exist; nothing answers them): prototype and output pr
 
 ### Changes on 19 November 2026
 
-Branch `claude/amun-handoff-work-20261119`. Nothing visible changed on any screen.
+Branch `claude/amun-handoff-work-20261119` (PR #38). The only visible changes are the approved Portfolio ones below.
 
 - **Delegated jobs now reach Firstmate.** The chat tells the First Mate to hand real work to an agent with a `delegate` action, and the UI sends `work-delegate`. In the old app that started a worker outside Firstmate; in the rebuild nothing handled it, so the chat said "X is on it" and nothing ran. The adapter now sends the First Mate a request to give the job to the matching secondmate (`fm-send`, or `fm-brief`, `fm-home-seed`, `fm-spawn --secondmate`) or to crew (`fm-spawn`), not to do it itself, to supervise it and report back. Its answer is kept in the same conversation (`delegationRequest` and `delegate` in `contract-adapter.ts`). The result arrives later as an unprompted turn, below.
 - **Heartbeats, wakes and guard notices show in chat.** `UnpromptedTurns` (`packages/server/src/server/amun/unprompted-turns.ts`) watches the First Mate's turns. A turn Amun did not start (`PrimarySessions.isAmunTurn`) has its last reply saved in the standing "Chat with Firstmate" conversation (`recordFirstMateReply` in `packages/work-store/src/first-mate-thread.ts`), traced, and sent as `primary.output` plus `work.updated`.
 - **The same First Mate after a daemon restart.** Amun keeps which agent is each home's First Mate in `~/.amun/first-mates.json`. On start it resumes that agent through Paseo (`ensureUnarchivedAgentLoaded`), only if it runs the same harness in the same Firstmate checkout, and starts a new one only when that fails.
 - **The desktop `build` script works.** It calls the new root script `build:desktop-inputs` (Council stage, server build, UI build).
 - **`README.md`** describes the current npm setup and the Firstmate-only design.
+- **Portfolio message box, approved by Tamer.** The placeholder says where the answer goes ("Ask Firstmate. Its answer opens in the conversation."); statuses read "Active"; the empty line says "Work you start appears here."; the "/" list matches Home's; the Type, Status and Group filters are kept when he leaves and comes back. The message box on every screen gets the theme's accent ring while it has focus. Checked in an isolated preview in Chrome; not yet in the packaged app.
 
 Not tested on a Mac with real Pi: all three behaviour changes above are unit-tested only. Check on the Mac: ask the First Mate for a heartbeat and see its reply in "Chat with Firstmate"; restart Amun and see the earlier conversation continue; ask for real work in a conversation and see a secondmate or crewmate appear on the Agents screen.
 

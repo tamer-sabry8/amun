@@ -1964,6 +1964,12 @@ export function Sprints({
 }
 
 // ── Portfolio ────────────────────────────────────────────────────────────────
+/** A status as the owner reads it: "active" shows as "Active". */
+export function statusLabel(status: string): string {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : status;
+}
+/** The filters the owner set, kept while they visit a conversation and come back. */
+const portfolioFilters = { type: "", status: "", group: "" };
 export function Portfolio({
   snapshot,
   model,
@@ -1976,9 +1982,21 @@ export function Portfolio({
   /** Sends a message to Firstmate, the same way Home does. */
   onAsk(text: string, files: string[]): void;
 }) {
-  const [type, setType] = useState("");
-  const [status, setStatus] = useState("");
-  const [group, setGroup] = useState("");
+  const [type, setTypeState] = useState(portfolioFilters.type);
+  const [status, setStatusState] = useState(portfolioFilters.status);
+  const [group, setGroupState] = useState(portfolioFilters.group);
+  const setType = (value: string) => {
+    portfolioFilters.type = value;
+    setTypeState(value);
+  };
+  const setStatus = (value: string) => {
+    portfolioFilters.status = value;
+    setStatusState(value);
+  };
+  const setGroup = (value: string) => {
+    portfolioFilters.group = value;
+    setGroupState(value);
+  };
   const all = areasInScope(snapshot);
   const areas = all.filter(
     (area) =>
@@ -1999,8 +2017,12 @@ export function Portfolio({
       line="Every product, project, task and RFP. Open one to continue its conversation."
       footer={
         <Composer
-          placeholder="Ask Firstmate, or give it an objective"
+          placeholder="Ask Firstmate. Its answer opens in the conversation."
+          skills
           model={model}
+          agents={snapshot.agents
+            .filter((agent) => agent.enabled)
+            .map((agent) => ({ id: agent.id, name: agent.role }))}
           workAreas={snapshot.areas.map((area) => ({
             id: area.id,
             name: area.name,
@@ -2049,7 +2071,7 @@ export function Portfolio({
               <option value="">Any status</option>
               {statuses.map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  {statusLabel(item)}
                 </option>
               ))}
             </select>
@@ -2099,7 +2121,7 @@ export function Portfolio({
                     typeLabels[area.type],
                     area.type === "project" ? area.client : null,
                     groupName(snapshot, area.groupId) ?? "No group yet",
-                    area.status,
+                    statusLabel(area.status),
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -2118,7 +2140,7 @@ export function Portfolio({
         <p className="muted">
           {all.length
             ? "Nothing matches these filters."
-            : "Work you start from Home appears here."}
+            : "Work you start appears here."}
         </p>
       )}
     </Page>
