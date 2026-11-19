@@ -118,3 +118,36 @@ describe("What happened over Amun RPC", () => {
     });
   });
 });
+
+describe("a one-time request to the First Mate", () => {
+  it("is kept as done only when answered, so a failed turn is tried again", async () => {
+    const amunHome = (await import("node:fs")).mkdtempSync(
+      (await import("node:path")).join((await import("node:os")).tmpdir(), "amun-once-"),
+    );
+    let fail = true;
+    const said: string[] = [];
+    const handler = new AmunRpcHandler({
+      amunHome,
+      spaces: { get: async () => ({ slug: "home", fmHome: "/home/fm" }) },
+      primary: {
+        send: async () => {
+          if (fail) throw new Error("Pi is signed out");
+          return { agentId: "fm", reply: "Registered." };
+        },
+      },
+      trace: { record: () => undefined },
+      onOnceReply: (text: string) => said.push(text),
+    } as unknown as AmunRpcDeps);
+    const ask = () =>
+      handler.handle({ id: "1", method: "primary.once", space: "home", key: "register-agents-v1", text: "x" });
+    const settle = () => new Promise((done) => setTimeout(done, 10));
+    expect(await ask()).toEqual({ asked: true });
+    await settle();
+    expect(said[0]).toMatch(/try it again/);
+    fail = false;
+    expect(await ask()).toEqual({ asked: true });
+    await settle();
+    expect(said[1]).toBe("Registered.");
+    expect(await ask()).toEqual({ asked: false });
+  });
+});

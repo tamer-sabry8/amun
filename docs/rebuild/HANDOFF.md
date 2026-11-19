@@ -56,6 +56,8 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
   - The First Mate's briefing tells it to repair its own monitoring without asking, and to run interviews itself one question at a time.
   - Loading screen: the animated ram with "Loading Amun", approved by Tamer.
 
+- **Second round from Tamer's Mac test, 19 November 2026 (late):** question choices stack and wrap inside the card and the Firstmate card; a question card can be dismissed; Firstmate's crew show under plain names with plain reasons, blocked ones first, with "Ask Firstmate to unblock it" (a message to the First Mate). Once per home after setup, Amun asks the First Mate to register all twenty catalog agents as its own second mates, matching existing ones and starting each on its first job (`primary.once`, key `register-agents-v1`; Tamer chose this over starting all twenty). Not run against real Firstmate yet. Known and not changed: a Codex second mate stops at Codex's "Hooks need review" prompt because Firstmate keeps hooks on for second mates; the choice is the captain's, given to Firstmate in chat. Tamer also asked whether Home should show his last chat; not decided.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

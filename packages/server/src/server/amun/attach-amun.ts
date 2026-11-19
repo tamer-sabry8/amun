@@ -297,6 +297,9 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     models: agentManagerModelHost(input.agentManager, input.listPiModels ?? (async () => [])),
     modelChoice,
     checkAccount: (provider) => checkPiAccount(provider, runPi),
+    onOnceReply: (text) => {
+      if (text.trim()) showUnprompted({ fmHome: paths.fmHome, agentId: "", text });
+    },
     readTimeline: async (fmHome) => {
       const agentId = primary.agentFor(fmHome);
       return agentId ? input.agentManager.getTimelineRows(agentId) : [];

@@ -2704,6 +2704,12 @@ export function WorkSession({
                     recommended={parsed?.recommended ?? null}
                     why={parsed?.why ?? null}
                     onAnswer={(text) => answerQuestion(question, text)}
+                    onDismiss={() =>
+                      work("resolve-attention", {
+                        attentionId: question.id,
+                        resolution: "done",
+                      })
+                    }
                   />
                 );
               })}
@@ -2727,6 +2733,7 @@ export function WorkSession({
                     closeAsk();
                     void send(text);
                   }}
+                  onDismiss={closeAsk}
                 />
               )}
               {context.conversion && (

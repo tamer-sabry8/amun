@@ -21,6 +21,8 @@ interface QuestionCardProps {
   why: string | null;
   amber?: boolean;
   onAnswer(text: string): void;
+  /** Closes the card without answering; the question is not sent anywhere. */
+  onDismiss?: () => void;
 }
 
 /** A box for the owner's own words, with the cursor already in it. */
@@ -91,6 +93,7 @@ export function QuestionCard({
   why,
   amber,
   onAnswer,
+  onDismiss,
 }: QuestionCardProps) {
   const [writing, setWriting] = useState(false);
   const choices = options.slice(0, 4);
@@ -112,19 +115,28 @@ export function QuestionCard({
         />
       ) : (
         <>
+          {choices.length > 0 && (
+            <div className="rb-choices">
+              {choices.map((option, index) => (
+                <button
+                  key={option}
+                  className={"btn" + (index === recommended ? " primary" : "")}
+                  onClick={() => onAnswer(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="row wrap">
-            {choices.map((option, index) => (
-              <button
-                key={option}
-                className={"btn" + (index === recommended ? " primary" : "")}
-                onClick={() => onAnswer(option)}
-              >
-                {option}
-              </button>
-            ))}
             <button className="btn quiet" onClick={() => setWriting(true)}>
               Write my own response
             </button>
+            {onDismiss && (
+              <button className="btn quiet" onClick={onDismiss}>
+                Dismiss
+              </button>
+            )}
           </div>
           <Recommendation
             label={recommended === null ? null : (choices[recommended] ?? null)}

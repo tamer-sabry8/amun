@@ -444,6 +444,10 @@
 }
 .rb-island .btn {
   width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.35;
 }
 /* Send and Back share one row: Send takes the room, Back keeps its label. */
 .rb-island .row .btn {
@@ -1158,6 +1162,20 @@
   display: grid;
   gap: 10px;
   max-width: 72ch;
+}
+/* A question's choices: one per line, as wide as the card, wrapping inside it. */
+.rb-choices {
+  display: grid;
+  gap: 6px;
+}
+.rb-choices .btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  padding: 8px 12px;
 }
 .rb-inline.amber {
   border-color: color-mix(

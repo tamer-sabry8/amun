@@ -73,6 +73,8 @@ export interface AmunRpcDeps {
    * First Mate is loaded; reading never starts one.
    */
   readTimeline?: (fmHome: string) => Promise<TimelineRowLike[]>;
+  /** Shows the First Mate's answer to a one-time request in the general chat. */
+  onOnceReply?: (reply: string) => void;
   /** Asks Pi whether a provider is signed in. */
   checkAccount?: (provider: string) => Promise<AccountCheck>;
 }
@@ -112,6 +114,9 @@ function errorCode(error: unknown): string {
 
 /** Transport-free dispatcher so the same handler serves WebSocket and tests. */
 export class AmunRpcHandler {
+  /** One-time requests to the First Mate that are being answered now. */
+  private readonly onceInFlight = new Set<string>();
+
   constructor(private readonly deps: AmunRpcDeps) {}
 
   async handleRaw(raw: unknown): Promise<AmunResponse> {
@@ -333,6 +338,36 @@ export class AmunRpcHandler {
       case "primary.send": {
         const space = await this.deps.spaces.get(request.space);
         return this.deps.primary.send(space, request.text);
+      }
+      case "primary.once": {
+        const space = await this.deps.spaces.get(request.space);
+        const marker = path.join(this.deps.amunHome, `once-${request.key}.json`);
+        const done = existsSync(marker)
+          ? (JSON.parse(readFileSync(marker, "utf8")) as { fmHome?: string }).fmHome === space.fmHome
+          : false;
+        if (done || this.onceInFlight.has(request.key)) return { asked: false };
+        // One at a time while it runs; kept as done only once the First Mate
+        // has answered, so a failed turn is tried again the next time.
+        this.onceInFlight.add(request.key);
+        void this.deps.primary
+          .send(space, request.text)
+          .then(({ reply }) => {
+            writeFileSync(marker, JSON.stringify({ fmHome: space.fmHome, at: new Date().toISOString() }));
+            this.deps.onOnceReply?.(reply);
+          })
+          .catch((error: unknown) => {
+            this.deps.trace.record({
+              source: "amun",
+              kind: "once-failed",
+              key: request.key,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            this.deps.onOnceReply?.(
+              "I could not finish a setup step with Firstmate just now. Amun will try it again the next time it opens.",
+            );
+          })
+          .finally(() => this.onceInFlight.delete(request.key));
+        return { asked: true };
       }
       case "models.list": {
         const space = await this.deps.spaces.get(request.space);
