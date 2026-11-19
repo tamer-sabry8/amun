@@ -286,11 +286,12 @@ export function App() {
   if (!snapshot)
     return (
       <div className="rb setup">
-        <p role="status" className="muted" style={{ padding: 48 }}>
-          {bridgeState.status === "Connected"
-            ? "Opening Amun…"
-            : "Starting Amun…"}
-        </p>
+        <div className="rb-loading" role="status" aria-live="polite">
+          <span className="rb-loading-mark" aria-hidden="true">
+            <span className="rb-loading-shine" />
+          </span>
+          <p>Loading Amun</p>
+        </div>
         <AuthPrompt />
       </div>
     );
