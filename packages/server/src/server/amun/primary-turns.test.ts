@@ -85,6 +85,47 @@ describe("messages to the First Mate", () => {
     expect((await next).reply).toBe("Sure.");
   });
 
+  it("waits for a turn Firstmate started itself, and never stops it", async () => {
+    let wake = true;
+    const cancelled: string[] = [];
+    const sent: string[] = [];
+    const made: PrimaryHost = {
+      createAgent: async () => ({ agentId: "fm" }),
+      runAgent: async (_agentId, text) => {
+        if (wake) throw new Error("Agent fm already has an active run");
+        sent.push(text);
+        return { finalText: "Aye." };
+      },
+      cancelRun: async (agentId) => {
+        cancelled.push(agentId);
+      },
+    };
+    const sessions = new PrimarySessions(made, "/root", () => null, null, { waitMs: 2_000, everyMs: 5 });
+    const answer = sessions.send(space, "Move the crew to Claude Code");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(sent).toEqual([]);
+    wake = false;
+    expect((await answer).reply).toBe("Aye.");
+    expect(sent).toEqual(["Move the crew to Claude Code"]);
+    expect(cancelled).toEqual([]);
+  });
+
+  it("gives up after the wait without stopping Firstmate's own turn", async () => {
+    const cancelled: string[] = [];
+    const made: PrimaryHost = {
+      createAgent: async () => ({ agentId: "fm" }),
+      runAgent: async () => {
+        throw new Error("Agent fm already has an active run");
+      },
+      cancelRun: async (agentId) => {
+        cancelled.push(agentId);
+      },
+    };
+    const sessions = new PrimarySessions(made, "/root", () => null, null, { waitMs: 20, everyMs: 5 });
+    await expect(sessions.send(space, "hello")).rejects.toThrow(/Nothing was stopped/);
+    expect(cancelled).toEqual([]);
+  });
+
   it("says what happened in plain words, never an agent id", () => {
     const timeout = describeTurnFailure(new Error("Pi RPC request timed out phase=prompt"));
     const busy = describeTurnFailure(
