@@ -231,12 +231,14 @@ function SpecialistPanel({
   total,
   onLink,
   onAdded,
+  onAsk,
 }: {
   agent: AgentRow;
   position: number;
   total: number;
   onLink?(url: string): void;
   onAdded?(id: string): void;
+  onAsk?(text: string): void;
 }) {
   const [watch, setWatch] = useState(false);
   const profile = agentProfile(agent.role);
@@ -257,7 +259,7 @@ function SpecialistPanel({
             {profile
               ? profile.summary
               : agent.kind === "temporary"
-                ? "Temporary helper"
+                ? "One of Firstmate’s crew"
                 : "Added by you"}
           </p>
         </div>
@@ -302,6 +304,7 @@ function SpecialistPanel({
         onWatch={setWatch}
         onLink={onLink}
         onAdded={onAdded}
+        onAsk={onAsk}
       />
     </section>
   );
@@ -504,12 +507,15 @@ function AgentControls({
   onWatch,
   onLink,
   onAdded,
+  onAsk,
 }: {
   agent: AgentRow;
   watch: boolean;
   onWatch(value: boolean): void;
   onLink?: ((url: string) => void) | undefined;
   onAdded?: ((id: string) => void) | undefined;
+  /** Sends Firstmate a message about this agent. */
+  onAsk?: ((text: string) => void) | undefined;
 }) {
   const member = agent.kind !== "lead";
   const notCreated = absent(agent);
@@ -555,6 +561,26 @@ function AgentControls({
       {member && agent.enabled && (
         <TeamActions agent={agent} editable={!notCreated} />
       )}
+      {agent.state === "waiting" && member && onAsk && (
+        <div className="rb-inline amber" role="group" aria-label="Blocked">
+          <span>
+            {agent.role} is blocked and waiting. Firstmate can look at it and
+            unblock it, or tell you what it needs from you.
+          </span>
+          <div className="row wrap">
+            <button
+              className="btn"
+              onClick={() =>
+                onAsk(
+                  `${agent.role} is blocked. Look at its window, tell me in one line what it is waiting for, and unblock it if you can. If it needs my choice, ask me with the options.`,
+                )
+              }
+            >
+              Ask Firstmate to unblock it
+            </button>
+          </div>
+        </div>
+      )}
       <AgentOutput output={agent.output} {...(onLink && { onLink })} />
       {watch && (
         <AgentWatch
@@ -589,10 +615,13 @@ export function Agents({
   snapshot,
   model,
   onLink,
+  onAsk,
   initialAgent = null,
 }: {
   snapshot: Snapshot;
   model: string | null;
+  /** Sends Firstmate a message, opening the conversation it lands in. */
+  onAsk?(text: string): void;
   /** The agent to open first, e.g. from its avatar in the right rail. */
   initialAgent?: string | null;
   /** Opens a link from an agent's output; without it links stay plain text. */
@@ -605,7 +634,7 @@ export function Agents({
   const members = snapshot.agents.filter((item) => item.kind !== "lead");
   // Every catalog specialist in catalog order (a placeholder when it is not in
   // the workspace yet), then the agents the owner added themselves.
-  const specialists: AgentRow[] = [
+  const everyone: AgentRow[] = [
     ...agentCatalog.map(
       (profile): AgentRow =>
         members.find(
@@ -628,9 +657,18 @@ export function Agents({
         ),
     ),
   ];
+  // Anyone blocked comes first, so a problem is on screen without scrolling;
+  // then whoever is working; the rest keep their order.
+  const urgency = (item: AgentRow) =>
+    item.state === "waiting" ? 0 : item.state === "working" ? 1 : 2;
+  const specialists = everyone
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => urgency(a.item) - urgency(b.item) || a.index - b.index)
+    .map(({ item }) => item);
   const chosen =
     (selected && specialists.find((item) => item.id === selected)) ||
     (selected && snapshot.agents.find((item) => item.id === selected)) ||
+    specialists.find((item) => item.state === "waiting") ||
     specialists.find((item) => item.role === "Product Manager") ||
     specialists[0] ||
     lead;
@@ -750,6 +788,7 @@ export function Agents({
                 total={specialists.length}
                 onAdded={setSelected}
                 {...(onLink && { onLink })}
+                {...(onAsk && { onAsk })}
               />
             ))
           )}

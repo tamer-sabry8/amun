@@ -194,6 +194,15 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // The First Mate's model: what Pi offers from its signed-in accounts, and a
   // switch for the running First Mate. Model sign-ins stay inside Pi; Amun
   // only asks Pi whether a provider is ready.
+  // A request sent to the First Mate once per home and key (for example to
+  // register Amun's agents as second mates); later calls do nothing.
+  z.object({
+    id: z.string(),
+    method: z.literal("primary.once"),
+    space: slug,
+    key: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+    text: z.string().min(1).max(32000),
+  }),
   z.object({ id: z.string(), method: z.literal("models.list"), space: slug }),
   z.object({
     id: z.string(),

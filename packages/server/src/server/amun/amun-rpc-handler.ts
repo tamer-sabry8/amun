@@ -73,6 +73,8 @@ export interface AmunRpcDeps {
    * First Mate is loaded; reading never starts one.
    */
   readTimeline?: (fmHome: string) => Promise<TimelineRowLike[]>;
+  /** Shows the First Mate's answer to a one-time request in the general chat. */
+  onOnceReply?: (reply: string) => void;
   /** Asks Pi whether a provider is signed in. */
   checkAccount?: (provider: string) => Promise<AccountCheck>;
 }
@@ -333,6 +335,21 @@ export class AmunRpcHandler {
       case "primary.send": {
         const space = await this.deps.spaces.get(request.space);
         return this.deps.primary.send(space, request.text);
+      }
+      case "primary.once": {
+        const space = await this.deps.spaces.get(request.space);
+        const marker = path.join(this.deps.amunHome, `once-${request.key}.json`);
+        const done = existsSync(marker)
+          ? (JSON.parse(readFileSync(marker, "utf8")) as { fmHome?: string }).fmHome === space.fmHome
+          : false;
+        if (done) return { asked: false };
+        // Marked first, so a slow or failed turn is never sent twice.
+        writeFileSync(marker, JSON.stringify({ fmHome: space.fmHome, at: new Date().toISOString() }));
+        void this.deps.primary
+          .send(space, request.text)
+          .then(({ reply }) => this.deps.onOnceReply?.(reply))
+          .catch(() => undefined);
+        return { asked: true };
       }
       case "models.list": {
         const space = await this.deps.spaces.get(request.space);

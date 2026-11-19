@@ -627,6 +627,7 @@ export function App() {
             snapshot={snapshot}
             initialAgent={focusAgent}
             model={model}
+            onAsk={(text) => void submit(text, [])}
             {...(recentArea && {
               onLink: (url: string) =>
                 openWork(recentArea, undefined, { kind: "browser", url }),

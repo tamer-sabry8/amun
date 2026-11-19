@@ -220,6 +220,49 @@ const EMPTY_WORK = {
   messages: [],
 };
 
+/**
+ * Asks the First Mate, once, to make Amun's agents real second mates (owner,
+ * 19 November 2026). Firstmate provisions them its own way; Amun writes
+ * nothing in the Firstmate home.
+ */
+export function poolRegistrationRequest(): string {
+  const lines = agentCatalog.map(
+    (profile) =>
+      `- ${profile.name}: ${profile.scope}. Produces: ${profile.outputs}.`,
+  );
+  return [
+    "The captain asked that every agent on Amun's Agents screen be one of your registered second mates, so you can route work to each of them by scope. This is a concrete, standing instruction from the captain for these agents.",
+    "For each agent below: if a second mate you already have covers the same scope (for example your Designer, Researcher or PRD), keep that one and widen its registered scope to match; do not create a duplicate. Otherwise register a new persistent second mate with that name and scope, through your own second-mate provisioning.",
+    "Do not start them all now. Register each one, and start it the first time you route work to it; it then stays. Keep any limits your existing second mates carry (for example personal-only roles).",
+    "When you are done, tell the captain in a few lines which were matched to existing second mates, which were newly registered, and any you could not register and why.",
+    "",
+    ...lines,
+  ].join("\n");
+}
+
+/** "saas-devops" as "Saas Devops": a crewmate's id as a name. */
+export function crewName(id: string): string {
+  return id
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/** Firstmate's own status wording, in words the captain can act on. */
+export function plainCrewDetail(detail: string | null | undefined) {
+  if (!detail) return detail ?? null;
+  const missed = /pending-reply-missed:.*?request=(.*)$/s.exec(detail);
+  if (missed)
+    return `Has not answered Firstmate’s last request: “${missed[1]!.trim()}” It may be waiting at a prompt in its own window. Open Watch to see it, or ask Firstmate to unblock it.`;
+  if (/no current-state source/i.test(detail)) return "Nothing to report yet.";
+  return detail
+    .replace(/^(?:blocked|needs-decision|done|resolved)\s*/i, "")
+    .replace(/\[(?:key|at|corr)=[^\]]*\]\s*:?\s*/g, "")
+    .replace(/\bcorr=[0-9a-f]+\s*/g, "")
+    .trim();
+}
+
 /** The First Mate and its live crew, from Firstmate's fleet snapshot. */
 export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   const agents: WorkSnapshot["agents"] = [
@@ -237,14 +280,12 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   for (const task of view.fleet) {
     agents.push({
       id: `crew:${task.id}`,
-      role:
-        poolRole(task.id) ??
-        (task.kind ? `${task.kind} · ${task.id}` : task.id),
+      role: poolRole(task.id) ?? crewName(task.id),
       kind: "temporary",
       launcherId: FIRST_MATE_ID,
       state: agentState(task),
-      nowDoing: task.current_state?.detail || null,
-      output: task.hints?.last_event_text ?? "",
+      nowDoing: plainCrewDetail(task.current_state?.detail) || null,
+      output: plainCrewDetail(task.hints?.last_event_text) ?? "",
       enabled: true,
     });
   }
@@ -461,7 +502,22 @@ export class ContractAdapter {
     };
     settleHoldAnswers(this.holdAnswers, holds);
     await this.ensureGroup();
+    // Once per home, after setup: Firstmate registers Amun's agents as its
+    // own second mates, so it can route work to every one of them.
+    if (via && work.setup.completed && !this.poolAsked) {
+      this.poolAsked = true;
+      void this.daemon
+        .request("primary.once", {
+          space: via,
+          key: "register-agents-v1",
+          text: poolRegistrationRequest(),
+        })
+        .catch(() => {
+          this.poolAsked = false;
+        });
+    }
   }
+  private poolAsked = false;
 
   /**
    * The first-run wizard used to create the owner's groups; it no longer runs

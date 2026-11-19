@@ -18,6 +18,9 @@ import {
 } from "../../contracts/src/crew.ts";
 import type { AmunTransport } from "../src/daemon/amun-client.ts";
 import {
+  crewName,
+  plainCrewDetail,
+  poolRegistrationRequest,
   ContractAdapter,
   holdId,
   holdSignature,
@@ -139,6 +142,7 @@ class FakeDaemon implements AmunTransport {
           },
         ],
       },
+      "primary.once": { asked: true },
       "holds.answer": { reply: "Aye." },
       "primary.start": { agentId: "fm" },
       "primary.send": { reply: "Aye, Captain." },
@@ -921,5 +925,36 @@ describe("search and What happened", () => {
     expect(daemon.calls).toEqual([
       { method: "happened.read", params: { workAreaId: "w1" } },
     ]);
+  });
+});
+
+describe("Firstmate's crew in plain words", () => {
+  it("names a crewmate and explains a missed request without Firstmate's own codes", () => {
+    expect(crewName("saas-devops")).toBe("Saas Devops");
+    const plain = plainCrewDetail(
+      "pending-reply-missed: task=researcher pending-reply-id=a6a0e2dd2b57aa69 request=Captain note: try the connection.",
+    );
+    expect(plain).toMatch(
+      /^Has not answered Firstmate’s last request: “Captain note: try the connection.”/,
+    );
+    expect(plain).not.toMatch(/pending-reply|task=/);
+    expect(plainCrewDetail("no current-state source recorded")).toBe(
+      "Nothing to report yet.",
+    );
+    expect(
+      plainCrewDetail(
+        "blocked [key=k1] [at=1795110838]: waiting on the hooks prompt",
+      ),
+    ).toBe("waiting on the hooks prompt");
+  });
+
+  it("asks Firstmate once to register all twenty agents as second mates", async () => {
+    const text = poolRegistrationRequest();
+    expect(text).toMatch(/registered second mates/);
+    expect(text).toMatch(/do not create a duplicate/);
+    expect(
+      text.split("\n").filter((line) => line.startsWith("- ")),
+    ).toHaveLength(20);
+    expect(text.length).toBeLessThan(32000);
   });
 });
