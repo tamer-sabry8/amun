@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -95,7 +95,12 @@ export interface BackendServerDeps {
   /** Starts `herdr server --session <s>` on its own, holding none of Amun's pipes. */
   start(session: string, env: Record<string, string>): void;
   wait(ms: number): Promise<void>;
+  exists(file: string): boolean;
 }
+
+/** Firstmate's herdr markers (vendor/firstmate/bin/backends/herdr.sh). */
+const HERDR_OWNER_MARKER = "firstmate-server-owner";
+const HERDR_REPLACING_MARKER = "firstmate-server-replacing";
 
 const herdrDeps: BackendServerDeps = {
   async status(session, env) {
@@ -119,6 +124,7 @@ const herdrDeps: BackendServerDeps = {
     child.unref();
   },
   wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+  exists: (file) => existsSync(file),
 };
 
 /**
@@ -132,7 +138,7 @@ const herdrDeps: BackendServerDeps = {
 export async function ensureBackendServer(
   home: FirstmateHome,
   deps: BackendServerDeps = herdrDeps,
-): Promise<"not-herdr" | "running" | "started" | "unavailable"> {
+): Promise<"not-herdr" | "running" | "started" | "managed" | "unavailable"> {
   let backend = "";
   try {
     backend = readFileSync(path.join(home.fmHome, "config", "backend"), "utf8").trim();
@@ -143,18 +149,30 @@ export async function ensureBackendServer(
   const env = firstmateEnv(home);
   for (const key of HERDR_SERVER_UNSET) delete env[key];
   const session = env.HERDR_SESSION || "default";
-  const running = async () => {
+  const read = async () => {
     const out = await deps.status(session, env);
     if (out === null) return null;
     try {
-      return (JSON.parse(out) as { server?: { running?: boolean } }).server?.running === true;
+      const server = (JSON.parse(out) as { server?: { running?: boolean; socket?: string } })
+        .server;
+      return { running: server?.running === true, socket: server?.socket ?? null };
     } catch {
       return null;
     }
   };
-  const now = await running();
+  const running = async () => (await read())?.running ?? null;
+  const now = await read();
   if (now === null) return "unavailable";
-  if (now) return "running";
+  // A server that another manager owns, or that is being replaced, is never
+  // started here, exactly as Firstmate's fm_backend_herdr_server_ensure
+  // refuses: a second server would split panes between two servers.
+  const markers = now.socket
+    ? [HERDR_OWNER_MARKER, HERDR_REPLACING_MARKER].map((name) =>
+        path.join(path.dirname(now.socket!), name),
+      )
+    : [];
+  if (markers.some((marker) => deps.exists(marker))) return now.running ? "running" : "managed";
+  if (now.running) return "running";
   deps.start(session, env);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await deps.wait(500);

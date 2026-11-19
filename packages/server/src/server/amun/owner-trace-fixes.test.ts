@@ -18,13 +18,14 @@ function home(backend: string | null) {
   return { root: dir, fmHome: dir };
 }
 
-function herdr(states: boolean[]) {
+function herdr(states: boolean[], markers: string[] = []) {
   const started: { session: string; env: Record<string, string> }[] = [];
   const deps: BackendServerDeps = {
     async status() {
       const running = states.length > 1 ? states.shift()! : states[0]!;
-      return JSON.stringify({ server: { running } });
+      return JSON.stringify({ server: { running, socket: "/run/herdr/default/herdr.sock" } });
     },
+    exists: (file) => markers.includes(path.basename(file)),
     start(session, env) {
       started.push({ session, env });
     },
@@ -42,6 +43,14 @@ describe("herdr server before the fleet is read", () => {
     // Like Firstmate, the server is not given this home's or Pi's identity.
     expect(started[0]!.env.FM_HOME).toBeUndefined();
     expect(started[0]!.env.PI_CODING_AGENT).toBeUndefined();
+  });
+
+  it("never starts a server another manager owns or is replacing", async () => {
+    for (const marker of ["firstmate-server-owner", "firstmate-server-replacing"]) {
+      const owned = herdr([false], [marker]);
+      expect(await ensureBackendServer(home("herdr"), owned.deps)).toBe("managed");
+      expect(owned.started).toEqual([]);
+    }
   });
 
   it("leaves a running server, a tmux home and a home with no backend alone", async () => {

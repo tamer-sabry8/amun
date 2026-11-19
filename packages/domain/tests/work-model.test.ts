@@ -881,6 +881,15 @@ describe("a message that asks for new work by name (owner's trace, 19 November 2
         "Create a new PRD for a new product name product-3. Help me figure out the problem",
       ),
     ).toEqual({ type: "product", name: "product-3" });
+    expect(
+      newWorkNamed(
+        'Create a new product named "Research and Development" and interview me',
+      ),
+    ).toEqual({ type: "product", name: "Research and Development" });
+    expect(newWorkNamed("Create a new project called “Go to Market”")).toEqual({
+      type: "project",
+      name: "Go to Market",
+    });
     expect(newWorkNamed('Start a new project called "Dubai pilot"')).toEqual({
       type: "project",
       name: "Dubai pilot",

@@ -294,8 +294,15 @@ export function newWorkNamed(
   const kind = /\b(?:new\s+)?(product|project|task|rfp)\b/i.exec(
     first.replace(/^.*?\bnew\s+(?=(?:product|project|task|rfp)\b)/i, ""),
   );
+  // A quoted name is taken whole ("Research and Development"); only an
+  // unquoted one ends at "and", "to", "that" or "which".
+  const quoted =
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*["“']([^"”'\n]{1,80})["”']/i.exec(
+      first,
+    );
   const named =
-    /\b(?:named|called|name|titled)\s*[:\-]?\s*["“']?([^"”'.,;\n]{1,80}?)["”']?\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|$)/i.exec(
+    quoted ??
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|$)/i.exec(
       first,
     );
   const name = named?.[1]?.trim();
