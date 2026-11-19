@@ -3,6 +3,7 @@
 // switched off and how to restore it.
 import {
   asksForNewWork,
+  newWorkNamed,
   generalConversationName,
 } from "../../../../packages/domain/src/work/model.ts";
 import {
@@ -323,6 +324,17 @@ export function App() {
   };
   const submit = async (text: string, files: string[], groupId?: string) => {
     setNote("");
+    // "Create a new product named Atlas and interview me": make it and start.
+    const named = files.length ? null : newWorkNamed(text);
+    const group = groupId ?? snapshot.setup.activeGroupId;
+    if (named && (group || snapshot.groups.length === 1)) {
+      const made = await workAsync("create-area", {
+        groupId: group ?? snapshot.groups[0]!.id,
+        type: named.type,
+        name: named.name,
+      });
+      if (made.ok && made.ref) return openWork(made.ref, text);
+    }
     const result = await workAsync("intake", {
       text,
       fileNames: files,

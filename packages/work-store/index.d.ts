@@ -83,6 +83,10 @@ export interface NotionLike {
     message: unknown,
     emit: (event: Record<string, unknown>) => void,
   ): Record<string, unknown>[];
+  /** Read only: a search or one page from the connected workspace, as text. */
+  lookup(
+    request: { kind: "search"; query: string } | { kind: "read"; page: string },
+  ): Promise<string>;
   stop(): void;
 }
 export declare function openNotion(

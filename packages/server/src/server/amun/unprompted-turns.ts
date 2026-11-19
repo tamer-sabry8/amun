@@ -7,6 +7,46 @@ export interface UnpromptedReply {
   text: string;
 }
 
+/**
+ * Firstmate's "nothing to report" answer to a wake ("Captain, shipshape.").
+ * It is not shown in the chat: a wake that finds nothing new is not news.
+ */
+export function isAllClear(text: string): boolean {
+  const said = text.replace(/\s+/g, " ").trim();
+  return (
+    said.length <= 80 &&
+    /^(?:captain[,.!]?\s*)?(?:shipshape|all clear|all quiet|nothing (?:new|to report))\b[.!]?$/i.test(
+      said.replace(/^aye[,.!]?\s*/i, ""),
+    )
+  );
+}
+
+/**
+ * The replies in one run of the First Mate, in order. A run can hold more
+ * than the turn Amun asked for: a Firstmate wake that arrives while it is
+ * still answering is handled in the same run. The first reply belongs to the
+ * owner's message; the rest are replies to those wakes.
+ */
+export function repliesInRun(
+  timeline: readonly { type: string; text?: unknown }[],
+): string[] {
+  const replies: string[] = [];
+  let current: string | null = null;
+  let previous = "";
+  for (const item of timeline) {
+    if (item.type === "user_message") {
+      if (current?.trim()) replies.push(current.trim());
+      current = null;
+    } else if (item.type === "assistant_message" && typeof item.text === "string") {
+      // A reply streams in pieces; a tool call between pieces starts a new message.
+      current = previous === "assistant_message" && current !== null ? current + item.text : item.text;
+    }
+    previous = item.type;
+  }
+  if (current?.trim()) replies.push(current.trim());
+  return replies;
+}
+
 export interface UnpromptedTurnsInput {
   /** The home this agent is the First Mate of, or null for any other agent. */
   homeOf(agentId: string): string | null;

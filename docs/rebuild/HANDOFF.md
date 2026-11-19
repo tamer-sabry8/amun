@@ -48,6 +48,14 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
 
 - **Chat rules decided by Tamer on 19 November 2026 (in `AGENTS.md`, "Chats inside a piece of work"); not built yet.** Today a work has one main chat plus forks. Still to build, each visible part after a before/after preview: "New chat" in a folder and `/new`; a sprint link on a chat with sprint groups inside the folder; rename and archive; General with several chats; Firstmate's "new chat or fork?" card on a change of subject; the new-chat brief; the silent recap after Firstmate's memory starts fresh. Open technical question: how Amun learns that Firstmate's memory started fresh or was shortened (Pi reports compaction as an event; a new First Mate is known from `first-mates.json`). The test DMG waits until Tamer says to build it.
 
+- **Fixes from Tamer's Mac test, evening of 19 November 2026 (three trace bundles):**
+  - Firstmate's fleet snapshot never finished inside the app. On his herdr home the first crew-status read started the herdr server as its own child, the server kept the read's output open, and `fm-fleet-snapshot.sh` waited forever, so no fresh questions, crew or answers reached Amun (the Product Manager's Question 1 sat unseen). Amun now starts the home's herdr server on its own, the way Firstmate does, before reading the fleet (`ensureBackendServer` in `firstmate-cli.ts`). Firstmate is unchanged.
+  - The First Mate can read the captain's Notion through Amun's connection: `~/.amun/bin/amun-notion search|read`, a read-only helper over an owner-only socket (`notion-for-first-mate.ts`). Writing stays a reviewed plan.
+  - The owner's message is answered with its own turn's reply; a wake handled in the same run no longer replaces it. Bare all-clear wake replies ("Captain, shipshape.") are not added to the chat.
+  - "Create a new product named X …" creates the product and opens it with the message; "interview me" is no longer filed as interview notes.
+  - The First Mate's briefing tells it to repair its own monitoring without asking, and to run interviews itself one question at a time.
+  - Loading screen: the animated ram with "Loading Amun", approved by Tamer.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

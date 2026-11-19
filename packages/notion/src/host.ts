@@ -63,6 +63,7 @@ export interface NotionHostOptions {
     | "inspectTarget"
     | "memoryField"
     | "identity"
+    | "lookup"
   >;
 }
 
@@ -162,6 +163,31 @@ export class NotionHost {
             );
           }),
       });
+  }
+
+  /**
+   * Searches the connected Notion workspace, or reads one page, for the First
+   * Mate. Read only: the answer is plain text with secrets removed.
+   */
+  async lookup(
+    request: { kind: "search"; query: string } | { kind: "read"; page: string },
+  ): Promise<string> {
+    const result = await this.withGrant(() =>
+      request.kind === "search"
+        ? this.connection.lookup("notion-search", { query: request.query })
+        : this.connection.lookup("notion-fetch", { id: request.page }),
+    );
+    const content = (result as { content?: { type?: string; text?: string }[] })
+      ?.content;
+    const text = Array.isArray(content)
+      ? content
+          .filter(
+            (part) => part?.type === "text" && typeof part.text === "string",
+          )
+          .map((part) => part.text)
+          .join("\n")
+      : JSON.stringify(result ?? null);
+    return this.options.redact(text);
   }
 
   /** True for the renderer messages this host answers. */
