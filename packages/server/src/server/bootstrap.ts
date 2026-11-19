@@ -252,6 +252,7 @@ import { DaemonExecutions } from "./hub/daemon-executions.js";
 import { PluginService } from "./plugins/index.js";
 import { BuiltinPluginLoader } from "./plugins/builtin/index.js";
 import { attachAmun } from "./amun/attach-amun.js";
+import { ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import { firstMateRoot, paseoToolPolicyFor } from "./amun/first-mate-tools.js";
 import { ManagedPluginSources } from "./plugins/managed-source.js";
 
@@ -1055,6 +1056,23 @@ export async function createPaseoDaemon(
         label: model.label,
         isDefault: model.isDefault === true,
       })),
+    loadAgent: async (agentId, expected) => {
+      // Check the stored launch before opening its session, so an agent that
+      // is not this home's First Mate is never started just to be refused.
+      const record = await agentStorage.get(agentId);
+      if (
+        !record ||
+        record.archivedAt ||
+        record.provider !== expected.provider ||
+        record.cwd !== expected.cwd
+      )
+        return null;
+      return ensureUnarchivedAgentLoaded(agentId, {
+        agentManager,
+        agentStorage,
+        logger: rootLogger.child({ module: "amun" }),
+      });
+    },
   });
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(

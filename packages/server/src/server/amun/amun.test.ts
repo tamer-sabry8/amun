@@ -375,11 +375,18 @@ describe("Amun RPC", () => {
       const logs: string[] = [];
       const logger = { info: (_o: object, m?: string) => logs.push(m ?? ""), warn: () => {} };
       const host = new RecordingHost();
+      let subscribed = 0;
       const attachment = attachAmun({
         httpServer: server,
         agentManager: {
           createAgent: async (config: { title: string }) => ({ id: `fm-${config.title}` }),
           runAgent: async (_id: string, text: string) => host.runAgent(_id, text),
+          subscribe: () => {
+            subscribed += 1;
+            return () => {
+              subscribed -= 1;
+            };
+          },
         } as never,
         logger,
         env: testEnv(),
@@ -391,8 +398,11 @@ describe("Amun RPC", () => {
       const reply = new Promise<unknown>((resolve) => ws.once("message", (d) => resolve(JSON.parse(String(d)))));
       ws.send(JSON.stringify({ id: "a", method: "spaces.list" }));
       expect(await reply).toEqual({ id: "a", ok: true, result: [] });
+      // The First Mate's own turns (heartbeats, wakes) are watched while mounted.
+      expect(subscribed).toBe(1);
       ws.close();
       attachment?.close();
+      expect(subscribed).toBe(0);
       expect(logs).toContain("Amun RPC mounted");
     });
   });

@@ -786,10 +786,14 @@
   border-radius: 16px;
   background: var(--card);
   padding: 12px 12px 8px 14px;
-  transition: border-color 140ms;
+  transition:
+    border-color 140ms,
+    box-shadow 140ms;
 }
 .rb-composer:focus-within {
   border-color: var(--accent);
+  /* The ring other controls get, so it is clear the box is ready to type. */
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .rb-composer textarea {
   display: block;

@@ -2,7 +2,7 @@ import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { fleetSnapshotSchema, type AmunEvent } from "@getpaseo/protocol/amun-rpc";
-import type { AgentManager } from "../agent/agent-manager.js";
+import type { AgentManager, ManagedAgent } from "../agent/agent-manager.js";
 import { AmunRpcHandler } from "./amun-rpc-handler.js";
 import { resolveAmunPaths } from "./amun-paths.js";
 import {
@@ -14,12 +14,19 @@ import {
 import { ConnectionStore } from "./connections/connection-store.js";
 import { keychainSecretStore } from "./connections/secret-store.js";
 import { PmStore } from "./pm-store.js";
-import { openAdo, openCouncil, openNotion, openWorkStore } from "@amun/work-store";
+import {
+  openAdo,
+  openCouncil,
+  openNotion,
+  openWorkStore,
+  recordFirstMateReply,
+} from "@amun/work-store";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { TraceLog } from "./trace/trace-log.js";
-import { PrimarySessions, type PrimaryHost } from "./primary-session.js";
+import { PrimarySessions, type PrimaryHost, type PrimaryLaunch } from "./primary-session.js";
+import { FirstMateRecords } from "./first-mate-records.js";
 import {
   checkPiAccount,
   FirstMateModelChoice,
@@ -28,6 +35,7 @@ import {
   type ModelHost,
 } from "./first-mate-models.js";
 import { ProductSpaceStore } from "./product-spaces.js";
+import { UnpromptedTurns, type UnpromptedReply } from "./unprompted-turns.js";
 
 export const AMUN_WS_PATH = "/amun";
 const FLEET_POLL_MS = 5_000;
@@ -51,6 +59,19 @@ export interface AttachAmunInput {
   allowedOrigins?: () => ReadonlySet<string>;
   /** The models Pi offers from its signed-in accounts (Paseo's Pi provider). */
   listPiModels?: () => Promise<ListedModel[]>;
+  /**
+   * Loads a stored agent that is not archived and was launched with this
+   * provider in this folder, resuming its session. Returns null, without
+   * opening any session, when there is no such agent. Lets a restarted daemon
+   * bring back the same First Mate.
+   */
+  loadAgent?: (agentId: string, expected: StoredAgentMatch) => Promise<ManagedAgent | null>;
+}
+
+/** What a stored agent must have been launched with to be resumed. */
+export interface StoredAgentMatch {
+  provider: string;
+  cwd: string;
 }
 
 export interface AmunAttachment {
@@ -91,8 +112,29 @@ function pathOf(request: IncomingMessage): string {
   return index === -1 ? url : url.slice(0, index);
 }
 
-export function agentManagerHost(agentManager: AgentManager): PrimaryHost {
+export function agentManagerHost(
+  agentManager: AgentManager,
+  loadAgent?: (agentId: string, expected: StoredAgentMatch) => Promise<ManagedAgent | null>,
+): PrimaryHost {
   return {
+    ...(loadAgent
+      ? {
+          async resumeAgent(agentId: string, launch: PrimaryLaunch) {
+            // Only this home's First Mate: same harness, same Firstmate checkout.
+            // The stored record is checked before any session is opened.
+            const agent = await loadAgent(agentId, { provider: launch.provider, cwd: launch.cwd });
+            if (!agent) return false;
+            if (agent.provider !== launch.provider || agent.cwd !== launch.cwd) {
+              // Never leave a rejected First Mate running beside the new one.
+              await agentManager.closeAgent(agentId).catch(() => undefined);
+              return false;
+            }
+            if (launch.model)
+              await agentManager.setAgentModel(agentId, launch.model).catch(() => undefined);
+            return true;
+          },
+        }
+      : {}),
     async createAgent(launch) {
       const agent = await agentManager.createAgent(
         {
@@ -163,9 +205,10 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const trace = new TraceLog({ dir: path.join(paths.amunHome, "trace"), redactor: work.redactor });
   const modelChoice = new FirstMateModelChoice(paths.amunHome);
   const primary = new PrimarySessions(
-    agentManagerHost(input.agentManager),
+    agentManagerHost(input.agentManager, input.loadAgent),
     paths.firstmateRoot,
     () => modelChoice.read(),
+    new FirstMateRecords(paths.amunHome),
   );
   const runPi = piOnPath(() => env.PATH ?? "");
   // Notion signs in through its hosted MCP server; the grant lives in the
@@ -312,6 +355,65 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   }, FLEET_POLL_MS);
   timer.unref();
 
+  // A First Mate turn Amun did not ask for (a heartbeat, a Firstmate wake or
+  // guard notice) has a reply nobody is waiting on. It is kept in the
+  // standing "Chat with Firstmate" conversation and every UI is told.
+  function showUnprompted(reply: UnpromptedReply): void {
+    let saved: string | null = null;
+    try {
+      const agent = input.agentManager.getAgent(reply.agentId);
+      saved = recordFirstMateReply(
+        work.store,
+        reply.text,
+        agent?.runtimeInfo?.model ?? agent?.config.model ?? null,
+      );
+    } catch (error) {
+      input.logger.warn({ err: error }, "amun could not keep a First Mate reply");
+    }
+    trace.record({
+      source: "chat",
+      kind: "message",
+      from: "first-mate",
+      to: "captain",
+      unprompted: true,
+      text: reply.text,
+    });
+    for (const [ws, set] of watched)
+      for (const slug of set)
+        void spaces
+          .get(slug)
+          .then((space) => {
+            if (space.fmHome !== reply.fmHome) return;
+            const event: AmunEvent = {
+              event: "primary.output",
+              space: slug,
+              agentId: reply.agentId,
+              text: reply.text,
+            };
+            send(ws, event);
+          })
+          .catch(() => undefined);
+    if (saved) {
+      const event: AmunEvent = { event: "work.updated" };
+      for (const ws of wss.clients) send(ws, event);
+    }
+  }
+  const unprompted = new UnpromptedTurns({
+    homeOf: (agentId) => primary.homeOf(agentId),
+    isAmunTurn: (agentId) => primary.isAmunTurn(agentId),
+    onReply: showUnprompted,
+  });
+  const stopWatchingTurns = input.agentManager.subscribe(
+    (event) => {
+      try {
+        unprompted.handle(event);
+      } catch (error) {
+        input.logger.warn({ err: error }, "amun turn watch failed");
+      }
+    },
+    { replayState: false },
+  );
+
   // Chair questions reach the captain as attention items, and answers go
   // back; connected UIs are told when that (or a finished council) shows.
   let councilPolling = false;
@@ -345,6 +447,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   return {
     handler,
     close() {
+      stopWatchingTurns();
       clearInterval(timer);
       clearInterval(councilTimer);
       clearInterval(councilUpdateTimer);

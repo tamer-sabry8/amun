@@ -97,3 +97,73 @@ describe("messages to the First Mate", () => {
     expect(busy.detail).toContain("144770d7");
   });
 });
+
+describe("the First Mate after a daemon restart", () => {
+  function records(initial: Record<string, string> = {}) {
+    const kept = { ...initial };
+    return {
+      kept,
+      store: {
+        read: (home: string) => kept[home] ?? null,
+        write: (home: string, id: string) => {
+          kept[home] = id;
+        },
+      },
+    };
+  }
+  function resumingHost(resumable: Set<string>) {
+    const created: string[] = [];
+    const host: PrimaryHost = {
+      createAgent: async () => {
+        const agentId = `fm-${created.length + 1}`;
+        created.push(agentId);
+        return { agentId };
+      },
+      runAgent: async () => ({ finalText: "" }),
+      resumeAgent: async (agentId) => resumable.has(agentId),
+    };
+    return { host, created };
+  }
+
+  it("brings back the same First Mate instead of starting a second one", async () => {
+    const { host, created } = resumingHost(new Set(["fm-earlier"]));
+    const { store } = records({ [space.fmHome]: "fm-earlier" });
+    const sessions = new PrimarySessions(host, "/root", () => null, store);
+    expect(await sessions.start(space)).toEqual({ agentId: "fm-earlier" });
+    expect(created).toEqual([]);
+  });
+
+  it("starts a new one, and remembers it, when the earlier one is gone", async () => {
+    const { host, created } = resumingHost(new Set());
+    const { kept, store } = records({ [space.fmHome]: "fm-archived" });
+    const sessions = new PrimarySessions(host, "/root", () => null, store);
+    expect(await sessions.start(space)).toEqual({ agentId: "fm-1" });
+    expect(created).toEqual(["fm-1"]);
+    expect(kept[space.fmHome]).toBe("fm-1");
+  });
+
+  it("remembers the first First Mate of a home", async () => {
+    const { host } = resumingHost(new Set());
+    const { kept, store } = records();
+    const sessions = new PrimarySessions(host, "/root", () => null, store);
+    await sessions.start(space);
+    expect(kept).toEqual({ [space.fmHome]: "fm-1" });
+  });
+
+  it("starts a new one when bringing the earlier one back fails", async () => {
+    const created: string[] = [];
+    const host: PrimaryHost = {
+      createAgent: async () => {
+        created.push("fm-new");
+        return { agentId: "fm-new" };
+      },
+      runAgent: async () => ({ finalText: "" }),
+      resumeAgent: async () => {
+        throw new Error("Agent is archived: fm-old");
+      },
+    };
+    const { store } = records({ [space.fmHome]: "fm-old" });
+    const sessions = new PrimarySessions(host, "/root", () => null, store);
+    expect(await sessions.start(space)).toEqual({ agentId: "fm-new" });
+  });
+});

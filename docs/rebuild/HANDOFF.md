@@ -15,6 +15,19 @@ This file was first written for the PR #33 merge. Later work adds to it; nothing
 
 Written at the end of 18 November 2026, after PR #36. Read this section before anything else, then "Read this first: Firstmate is the only path".
 
+### Resume point (19 November 2026, end of session)
+
+Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks green (1,039 tests); the one Codex review comment is fixed and resolved. Not merged; merging is Tamer's call.
+
+1. **Approved by Tamer at 14:24 on 19 November 2026 ("all approved"): the search and replay preview, both proposals as shown.** Build it next, on a new branch from `main` after PR #38 merges (or on top of PR #38's branch if it has not merged). The design approved: `docs/preview/2026-11-19-search-and-replay/index.html` (open it with `lavish-axi docs/preview/2026-11-19-search-and-replay/index.html`; if Lavish shows a blank page, run `lavish-axi stop` first, as its server was stuck once today). Nothing is built yet. Build:
+   - **Search:** answer the ⌘K palette's existing `content-search` request (`chrome.tsx`) from `WorkStore.search` (`packages/work-store/src/content-search.ts`, never connected), through a new RPC in `amun-rpc.ts` / `amun-rpc-handler.ts` and the adapter. Add the First Mate's own steps from Paseo's saved timeline (`agentManager.fetchTimeline` / `getTimelineRows` for the First Mate's agent id: user and assistant messages, tool calls with input, output and time). Results open the conversation with "What happened" at that step.
+   - **Replay ("What happened"):** a read-only pane kind beside the conversation (`PaneTarget` in `work-session.tsx`, like `prd` and `backlog`), listing turns and steps from the same timeline, with Previous step / Next step, Search this conversation, Fold all, and a step panel (Summary, What it sent, What came back, Timing). Read only; nothing is re-run. Design reference: DeepSeek harness `packages/client/ui-trajectory` (its README and `.agents/notes/archived/feature/2026-07-27-trajectory-inspection-ledger.md`).
+   - "What happened" opens from a link beside PRD / Backlog / Pull requests / Browser in the conversation header (as in the approved picture) and from search results. Resume and fork come later, each explained and asked about first.
+   - Before calling it done: check it in the packaged app, run the impeccable detector on the changed screens, and show Tamer the built result.
+2. **Tamer's instruction for the other features:** explain each one and ask before any work. **He does not want the agent org chart** (19 November 2026); do not build it. Atomic task checkout and chat-to-CLI continuity are still to be explained and asked about.
+3. **Still to test on the Mac** with the DMG built from this branch (`packages/desktop/release/Amun-0.16.1-arm64.dmg`, not committed): a heartbeat reply in "Chat with Firstmate"; a restart continuing the same conversation; real work showing a secondmate or crewmate on the Agents screen; the Portfolio changes.
+4. Then the open items below, one question at a time.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).
@@ -39,8 +52,8 @@ Not yet confirmed on his Mac with a build that has every fix: that the watcher a
 ### Do next, in this order
 
 1. **Rebuild the test DMG from `main`.** The DMG Tamer last had was built before the last two fixes in PR #36: it still sent `/stow` to the First Mate and could show a task held again as already answered. Steps are under "Building a test DMG".
-2. **Settle the Portfolio message box.** It was added in PR #36 because Tamer asked for chat on that screen, on a screenshot of it. It reuses the existing message box unchanged, but it did not go through the before/after preview and the impeccable skill that `AGENTS.md` requires, and the Codex review on PR #36 flagged that. The thread is still open on the pull request. Ask Tamer: keep it and do the preview now, or take it out until the preview is approved. Other screens (Settings, Search) have no message box; do not add one without the same preview.
-3. **The four features Tamer asked to wire** (next heading).
+2. ~~Settle the Portfolio message box.~~ Settled on 19 November 2026: Tamer kept it and approved the before/after preview (`docs/preview/2026-11-19-portfolio-message-box/`) after an impeccable critique. See "Changes on 19 November 2026".
+3. **The four features Tamer asked to wire** (next heading). Search and replay is in preview (see the resume point above); the org chart is not wanted.
 4. **The open items** (the heading after that).
 
 ### The four features to wire next
@@ -78,15 +91,27 @@ Decisions waiting on Tamer:
 
 Known problems:
 
-- **A new First Mate is started each time the daemon starts.** The earlier agents stay in Paseo's registry and their conversation is not resumed.
+- **A new First Mate is started each time the daemon starts.** Fixed on 19 November 2026 (see below); not yet confirmed on the Mac.
 - **`/stow` is refused.** `AGENTS.md` requires it to run on the Mac only, with each change to a pinned entry reviewed. That local path is only in git history.
 - **`/calm` and `/supervision-model`** say they are not available inside Amun.
 - **Firstmate's fleet snapshot takes about two minutes on Tamer's home.** Amun copes with it but cannot make it faster; the script is Firstmate's.
 - **Two restored Notion tests failed once** in one full run and passed in every run after, including under load. Not reproduced.
-- **The desktop `build` script** calls a root script that does not exist.
-- **`README.md`** still describes the old pnpm setup.
+- ~~The desktop `build` script~~ and ~~`README.md`~~: fixed on 19 November 2026.
 
 Not wired yet (the screens exist; nothing answers them): prototype and output preview, attachments and screenshots, publishing to Notion, pull requests and code changes, backup, GitHub and Obsidian connections, global search, skills from a Git link, publishing approved plans to trackers, reminders delivery, PRD and story authoring, Jira and Linear, and hosted connectors such as Gmail. Tamer chose Notion first of prototype preview, attachments and Notion; the other two are next when he says so.
+
+### Changes on 19 November 2026
+
+Branch `claude/amun-handoff-work-20261119` (PR #38). The only visible changes are the approved Portfolio ones below.
+
+- **Delegated jobs now reach Firstmate.** The chat tells the First Mate to hand real work to an agent with a `delegate` action, and the UI sends `work-delegate`. In the old app that started a worker outside Firstmate; in the rebuild nothing handled it, so the chat said "X is on it" and nothing ran. The adapter now sends the First Mate a request to give the job to the matching secondmate (`fm-send`, or `fm-brief`, `fm-home-seed`, `fm-spawn --secondmate`) or to crew (`fm-spawn`), not to do it itself, to supervise it and report back. Its answer is kept in the same conversation (`delegationRequest` and `delegate` in `contract-adapter.ts`). The result arrives later as an unprompted turn, below.
+- **Heartbeats, wakes and guard notices show in chat.** `UnpromptedTurns` (`packages/server/src/server/amun/unprompted-turns.ts`) watches the First Mate's turns. A turn Amun did not start (`PrimarySessions.isAmunTurn`) has its last reply saved in the standing "Chat with Firstmate" conversation (`recordFirstMateReply` in `packages/work-store/src/first-mate-thread.ts`), traced, and sent as `primary.output` plus `work.updated`.
+- **The same First Mate after a daemon restart.** Amun keeps which agent is each home's First Mate in `~/.amun/first-mates.json`. On start it resumes that agent through Paseo (`ensureUnarchivedAgentLoaded`), only if it runs the same harness in the same Firstmate checkout, and starts a new one only when that fails.
+- **The desktop `build` script works.** It calls the new root script `build:desktop-inputs` (Council stage, server build, UI build).
+- **`README.md`** describes the current npm setup and the Firstmate-only design.
+- **Portfolio message box, approved by Tamer.** The placeholder says where the answer goes ("Ask Firstmate. Its answer opens in the conversation."); statuses read "Active"; the empty line says "Work you start appears here."; the "/" list matches Home's; the Type, Status and Group filters are kept when he leaves and comes back. The message box on every screen gets the theme's accent ring while it has focus. Checked in an isolated preview in Chrome; not yet in the packaged app.
+
+Not tested on a Mac with real Pi: all three behaviour changes above are unit-tested only. Check on the Mac: ask the First Mate for a heartbeat and see its reply in "Chat with Firstmate"; restart Amun and see the earlier conversation continue; ask for real work in a conversation and see a secondmate or crewmate appear on the Agents screen.
 
 ## Read this first: Firstmate is the only path
 
@@ -241,13 +266,7 @@ If anything fails, use the rail's lifebuoy button to download a trace bundle and
 
 - **What it is.** The First Mate keeps Paseo's `create_heartbeat` and `delete_heartbeat`. A heartbeat is a timed prompt that Paseo sends to the First Mate itself. Ask it in chat, for example: "Set a heartbeat every weekday at 9 AM Cairo time: prepare my standup." It then does the work through Firstmate.
 - **Where the policy lives.** `packages/server/src/server/amun/first-mate-tools.ts` holds the policy. It applies only to the agent running in the Firstmate checkout. To check a heartbeat, ask the First Mate to "list my schedules".
-- **The gap to build next.** The First Mate acts on a heartbeat, but its reply does not appear in Amun's chat. Amun only shows replies to messages it sent itself (`primary.send`). The plan:
-  1. In `attach-amun.ts`, subscribe to the First Mate agent with `agentManager.subscribe(cb, { agentId })`.
-  2. When a turn finishes that Amun did not start, broadcast the `primary.output` event. It is already defined in `packages/protocol/src/amun-rpc.ts`, but nothing sends it yet.
-  3. In `packages/amun-ui/src/daemon/daemon-port.ts`, handle `primary.output` beside `fleet.updated`, and add the text to the First Mate chat in `contract-adapter.ts`.
-  4. Add a test in `amun.test.ts` with a fake agent turn.
-
-  This also covers Firstmate's own wakes and guard notices, which raise the same unprompted turns.
+- **Replies in chat (done 19 November 2026).** A heartbeat's reply, and any other First Mate turn Amun did not start, is saved in "Chat with Firstmate" (see "Changes on 19 November 2026").
 
 ## How to read the decisions
 
@@ -580,7 +599,7 @@ This is the list from the PR #33 merge, brought up to date. The ordered list of 
 - A test of Azure DevOps against Tamer's real server.
 - Notion: publishing approved documents, and the Notion progress test held back from the workspace port. Sign-in and memory sync are wired (PR #35).
 - PRs, prototype, PRD authoring and backup. The Council is wired (PR #35).
-- Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat. The `primary.output` event is defined but nothing sends it yet.
+- ~~Show First Mate turns Amun did not ask for (heartbeats, wakes) in the chat.~~ Done 19 November 2026; to confirm on the Mac.
 - The rest of the Pi RPC test on Tamer's Mac: the reply arrives (confirmed 18 November 2026); the watcher, the turn-end guard and a question card are not confirmed.
 - Paseo features Tamer wants:
   - parallel development (Firstmate already gives each crewmate its own worktree);

@@ -5,6 +5,7 @@
 // home-wide and appear once, not once per product.
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
+  workDelegate,
   workSnapshot,
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
@@ -51,6 +52,41 @@ export function teamRequest(
       "then tear it down with fm-teardown. Amun puts its card back in the pool."
     );
   return `The captain wants this change to the "${role}" secondmate: ${detail}`;
+}
+
+/**
+ * What Amun asks the First Mate when a conversation hands a job to an agent.
+ * Amun starts no worker itself: the First Mate gives the job to the
+ * secondmate whose charter fits (briefing and spawning one if there is none)
+ * through Firstmate's own scripts, supervises it, and reports back.
+ */
+export function delegationRequest(job: {
+  agent: string;
+  title: string;
+  task: string;
+  acceptance?: boolean | undefined;
+  repo?: string | undefined;
+}): string {
+  return [
+    `The captain's conversation hands this job to the "${job.agent}" agent: "${job.title}".`,
+    "Give it to the secondmate whose charter fits that role your usual way " +
+      "(fm-send to a live one; otherwise fm-brief, fm-home-seed, fm-spawn --secondmate), " +
+      "or spawn crew for it with fm-spawn if that fits better. Do not do the work yourself. " +
+      "Supervise it, and tell the captain in plain words who is on it now and the result when it is back.",
+    ...(job.acceptance
+      ? [
+          "It is an acceptance checklist: every item must cite its evidence, and the captain decides whether it is accepted.",
+        ]
+      : []),
+    ...(job.repo
+      ? [
+          `It changes code in ${job.repo}. The crew works in its own treehouse worktree; nothing is merged without the captain's word.`,
+        ]
+      : []),
+    "",
+    "The job:",
+    job.task,
+  ].join("\n");
 }
 
 export interface DaemonSpace {
@@ -550,6 +586,7 @@ export class ContractAdapter {
     }
     if (message.kind === "auth") return this.handleAuth(message);
     if (message.kind === "work") return this.handleWork(message);
+    if (message.kind === "work-delegate") return this.delegate(message);
     if (message.kind === "native-pi" && message.action === "run")
       return [await this.handleNativePi(message)];
     if (message.kind === "diagnostics" && typeof message.id === "string")
@@ -840,6 +877,48 @@ export class ContractAdapter {
       return teamRequest(message.enabled ? "add" : "retire", role);
     }
     return null;
+  }
+
+  /**
+   * A conversation handed a job to an agent. It goes to the First Mate, who
+   * dispatches it through Firstmate; what it says back is kept in the same
+   * conversation. Nothing is started here.
+   */
+  private delegate(message: Message): unknown[] {
+    const parsed = workDelegate.safeParse(message);
+    if (!parsed.success) return [];
+    const job = parsed.data;
+    const say = (text: string) =>
+      this.daemon.request("work.command", {
+        command: {
+          action: "message",
+          workAreaId: job.workAreaId,
+          role: "firstmate",
+          text: text.slice(0, 16384),
+          model: this.model,
+        },
+      });
+    void this.ensureSpace()
+      .then((space) =>
+        this.daemon.request<{ reply?: string }>("primary.send", {
+          space,
+          text: delegationRequest(job),
+        }),
+      )
+      .then(
+        (answer) => {
+          const reply = (answer.reply ?? "").trim();
+          return reply ? say(reply) : undefined;
+        },
+        (error: unknown) =>
+          say(
+            `I could not hand “${job.title}” to ${job.agent}: ${error instanceof Error ? error.message : String(error)} Ask me again when I am free.`,
+          ),
+      )
+      .catch(() => undefined)
+      .then(() => this.refresh().catch(() => undefined))
+      .then(() => this.onChange?.());
+    return [];
   }
 
   private async askFirstMate(text: string): Promise<void> {

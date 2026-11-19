@@ -16,6 +16,7 @@ export { WorkStore, WorkError } from "./work-store.ts";
 export { openDatabase, type Database } from "./sqlite.ts";
 export { WorkspaceService } from "./workspace-service.ts";
 export { ToolsService } from "./tools-service.ts";
+export { recordFirstMateReply } from "./first-mate-thread.ts";
 export {
   AdoService,
   NO_AZURE_PROJECT,

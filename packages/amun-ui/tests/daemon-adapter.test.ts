@@ -518,6 +518,56 @@ describe("daemon contract adapter", () => {
     ).toHaveLength(1);
   });
 
+  it("hands a delegated job to the First Mate to dispatch through Firstmate, and keeps its answer", async () => {
+    const { adapter, daemon } = make();
+    await adapter.handle({ version: 1, kind: "work", action: "snapshot" });
+    const [created] = await adapter.handle({
+      version: 1,
+      kind: "work",
+      action: "create-area",
+      groupId: adapter.work().groups[0]!.id,
+      type: "task",
+      name: "Pricing review",
+    });
+    const areaId = String((created as { ref: string }).ref);
+    let changed = 0;
+    adapter.onChange = () => (changed += 1);
+    const replies = await adapter.handle({
+      version: 1,
+      kind: "work-delegate",
+      workAreaId: areaId,
+      agent: "Product Manager",
+      title: "Pricing options",
+      task: "Draft three pricing options for the owner.",
+    });
+    // Nothing is started here and nothing is claimed.
+    expect(replies).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const asked = daemon.calls.filter((c) => c.method === "primary.send");
+    expect(asked).toHaveLength(1);
+    const text = String(asked[0]!.params.text);
+    expect(text).toContain("Pricing options");
+    expect(text).toContain("fm-spawn");
+    expect(text).toContain("Do not do the work yourself");
+    expect(text).toContain("Draft three pricing options for the owner.");
+    const kept = daemon.work
+      .snapshot()
+      .messages.filter((m) => m.workAreaId === areaId);
+    expect(kept.map((m) => [m.role, m.text])).toEqual([
+      ["firstmate", "Aye, Captain."],
+    ]);
+    expect(changed).toBeGreaterThan(0);
+  });
+
+  it("ignores a delegation that does not match the contract", async () => {
+    const { adapter, daemon } = make();
+    expect(
+      await adapter.handle({ version: 1, kind: "work-delegate", task: "" }),
+    ).toEqual([]);
+    expect(daemon.calls.filter((c) => c.method === "primary.send")).toEqual([]);
+  });
+
   it("shows an answered hold under Done at once, and reopens it if the answer did not land", async () => {
     const { adapter, daemon } = make();
     await adapter.handle({ version: 1, kind: "work", action: "snapshot" });
