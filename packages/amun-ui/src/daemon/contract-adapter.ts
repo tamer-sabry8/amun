@@ -584,6 +584,57 @@ export class ContractAdapter {
         .catch(() => null);
       return report ? [report] : [];
     }
+    if (message.kind === "content-search") {
+      // Read only: Amun's own store and Firstmate's saved steps.
+      const found = await this.daemon
+        .request<{
+          hits: Record<string, unknown>[];
+          steps: {
+            stepId: string;
+            workAreaId: string;
+            words: string;
+            script: string | null;
+            at: string;
+          }[];
+        }>("work.search", { query: String(message.query ?? "") })
+        .catch(() => ({ hits: [], steps: [] }));
+      return [
+        {
+          version: 1,
+          kind: "content-search-result",
+          requestId: message.requestId,
+          hits: [
+            ...found.hits,
+            ...found.steps.map((step) => ({
+              kind: "step",
+              id: step.stepId,
+              title: step.words,
+              snippet: [],
+              workAreaId: step.workAreaId,
+              role: "firstmate",
+              at: step.at,
+              script: step.script,
+            })),
+          ],
+        },
+      ];
+    }
+    if (message.kind === "what-happened") {
+      const read = await this.daemon
+        .request<{ available: boolean; turns: unknown[] }>("happened.read", {
+          workAreaId: String(message.workAreaId ?? ""),
+        })
+        .catch(() => ({ available: false, turns: [] }));
+      return [
+        {
+          version: 1,
+          kind: "what-happened-result",
+          requestId: message.requestId,
+          available: read.available,
+          turns: read.turns,
+        },
+      ];
+    }
     if (message.kind === "auth") return this.handleAuth(message);
     if (message.kind === "work") return this.handleWork(message);
     if (message.kind === "work-delegate") return this.delegate(message);

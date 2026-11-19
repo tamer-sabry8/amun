@@ -23,6 +23,14 @@ import type { ConnectionStore } from "./connections/connection-store.js";
 import type { PrimarySessions } from "./primary-session.js";
 import type { ProductSpaceStore } from "./product-spaces.js";
 import {
+  placeTurns,
+  searchSteps,
+  turnsFromTimeline,
+  type HappenedTurn,
+  type MessageLike,
+  type TimelineRowLike,
+} from "./what-happened.js";
+import {
   UnknownModelError,
   type AccountCheck,
   type FirstMateModelChoice,
@@ -60,12 +68,19 @@ export interface AmunRpcDeps {
   council?: CouncilLike;
   /** Agent command-line tools on this Mac and the captain's choices. */
   tools?: ToolsServiceLike;
+  /**
+   * The First Mate's saved timeline for a home, read only. Empty when no
+   * First Mate is loaded; reading never starts one.
+   */
+  readTimeline?: (fmHome: string) => Promise<TimelineRowLike[]>;
   /** Asks Pi whether a provider is signed in. */
   checkAccount?: (provider: string) => Promise<AccountCheck>;
 }
 
 /** Methods polled every few seconds; traced only when they fail. */
 const QUIET = new Set([
+  "work.search",
+  "happened.read",
   "spaces.list",
   "fleet.snapshot",
   "holds.list",
@@ -221,6 +236,24 @@ export class AmunRpcHandler {
     return this.deps.readSnapshot(space.fmHome);
   }
 
+  /** Every First Mate turn, each placed in the conversation it belongs to. */
+  private async happened(): Promise<HappenedTurn[]> {
+    const rows = (await this.deps.readTimeline?.(this.deps.fmHome).catch(() => [])) ?? [];
+    if (!rows.length) return [];
+    const snapshot = this.deps.work.snapshot() as { messages?: MessageLike[] };
+    const redact = (value: string) => this.deps.redactor.text(value);
+    return placeTurns(turnsFromTimeline(rows), snapshot.messages ?? []).map((turn) => ({
+      ...turn,
+      prompt: redact(turn.prompt),
+      steps: turn.steps.map((step) => ({
+        ...step,
+        words: redact(step.words),
+        sent: redact(step.sent),
+        cameBack: redact(step.cameBack),
+      })),
+    }));
+  }
+
   async handle(request: AmunRequest): Promise<unknown> {
     switch (request.method) {
       case "spaces.list":
@@ -323,6 +356,27 @@ export class AmunRpcHandler {
         return this.deps.work.snapshot();
       case "work.command":
         return this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
+      case "work.search": {
+        const snapshot = this.deps.work.snapshot() as { setup?: { activeGroupId?: string | null }; areas?: { id: string; groupId: string | null }[] };
+        const group = snapshot.setup?.activeGroupId ?? null;
+        const inGroup = new Set(
+          (snapshot.areas ?? [])
+            .filter((area) => !group || !area.groupId || area.groupId === group)
+            .map((area) => area.id),
+        );
+        const turns = (await this.happened()).filter(
+          (turn) => turn.workAreaId && inGroup.has(turn.workAreaId),
+        );
+        return { hits: this.deps.work.search?.(request.query) ?? [], steps: searchSteps(turns, request.query) };
+      }
+      case "happened.read": {
+        const turns = await this.happened();
+        return {
+          // False when the First Mate has no saved steps to read at all.
+          available: turns.length > 0,
+          turns: turns.filter((turn) => turn.workAreaId === request.workAreaId),
+        };
+      }
       case "workspace.snapshot":
         return this.deps.workspace.snapshot();
       case "workspace.command":

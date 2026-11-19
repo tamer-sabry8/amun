@@ -1,5 +1,5 @@
 // Shell chrome: sidebar with six tiles, the Island, and the command palette.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   islandFloatMs,
   islandPresentation,
@@ -16,6 +16,7 @@ import {
   type ContentSearchHit,
 } from "../../../../packages/contracts/src/work.ts";
 import type { Snapshot } from "./view-model.ts";
+import { clockLabel } from "./what-happened.tsx";
 
 const islandAction: Record<Attention["kind"], string | null> = {
   approval: "Review changes",
@@ -495,7 +496,37 @@ export function Palette({
     ...areas.slice(0, 8).map((area) => area.id),
   ]);
   const inside = found.q === q && q.length >= 2 ? found.hits : [];
-  const contentHits = inside.filter((item) => !shown.has(item.id)).slice(0, 6);
+  const contentHits = inside.filter((item) => !shown.has(item.id));
+  const said = contentHits
+    .filter((item) => item.kind === "message")
+    .slice(0, 4);
+  const did = contentHits.filter((item) => item.kind === "step").slice(0, 4);
+  const texts = contentHits
+    .filter((item) => item.kind === "document" || item.kind === "record")
+    .slice(0, 6);
+  const areaName = (id: string | null) =>
+    snapshot.areas.find((area) => area.id === id)?.name ?? "";
+  const hitRow = (item: ContentHit, title: string, line: ReactNode) => (
+    <button key={item.kind + item.id} onClick={() => onHit(item)}>
+      <Icon
+        name={item.kind === "document" ? "library" : "decisions"}
+        width={16}
+        height={16}
+      />
+      <span style={{ minWidth: 0, textAlign: "left" }}>
+        <span style={{ display: "block" }}>{title}</span>
+        <span className="muted small" style={{ display: "block" }}>
+          {line}
+        </span>
+      </span>
+    </button>
+  );
+  const marked = (item: ContentHit) =>
+    item.snippet.map((part, index) =>
+      part.match ? <strong key={index}>{part.text}</strong> : part.text,
+    );
+  const joined = (parts: (string | null | undefined)[]) =>
+    parts.filter(Boolean).join(" · ");
   return (
     <dialog
       className="rb-palette"
@@ -536,27 +567,34 @@ export function Palette({
             {item.title}
           </button>
         ))}
-        {contentHits.map((item) => (
-          <button key={item.kind + item.id} onClick={() => onHit(item)}>
-            <Icon
-              name={item.kind === "message" ? "decisions" : "library"}
-              width={16}
-              height={16}
-            />
-            <span style={{ minWidth: 0, textAlign: "left" }}>
-              <span style={{ display: "block" }}>{item.title}</span>
-              <span className="muted small" style={{ display: "block" }}>
-                {item.snippet.map((part, index) =>
-                  part.match ? (
-                    <strong key={index}>{part.text}</strong>
-                  ) : (
-                    part.text
-                  ),
-                )}
-              </span>
-            </span>
-          </button>
-        ))}
+        {said.length > 0 && <h3>In conversations</h3>}
+        {said.map((item) =>
+          hitRow(
+            item,
+            joined([
+              item.title,
+              item.role === "you" ? "You" : "Firstmate",
+              item.at ? clockLabel(item.at) : null,
+            ]),
+            marked(item),
+          ),
+        )}
+        {did.length > 0 && <h3>In what Firstmate did</h3>}
+        {did.map((item) =>
+          hitRow(
+            item,
+            "Firstmate " + item.title,
+            joined([
+              areaName(item.workAreaId),
+              item.at ? clockLabel(item.at) : null,
+              item.script,
+            ]),
+          ),
+        )}
+        {texts.length > 0 && (said.length > 0 || did.length > 0) && (
+          <h3>Documents</h3>
+        )}
+        {texts.map((item) => hitRow(item, item.title, marked(item)))}
         {places
           .filter(([, label]) => hit(label))
           .map(([id, label]) => (

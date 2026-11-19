@@ -114,6 +114,16 @@ const samples: [string, unknown][] = [
     { version: 1, kind: "content-search-result", requestId: "r", hits: [] },
   ],
   [
+    "what-happened-result",
+    {
+      version: 1,
+      kind: "what-happened-result",
+      requestId: "r",
+      available: false,
+      turns: [],
+    },
+  ],
+  [
     "work-result",
     {
       version: 1,

@@ -745,16 +745,24 @@ export function App() {
           dispatch({ type: "palette", open: false });
           if (!item.workAreaId) {
             go("home");
-            if (item.kind !== "message")
+            if (item.kind !== "message" && item.kind !== "step")
               setNote(
                 "Link this to a piece of work to open it beside its conversation.",
               );
             return;
           }
+          // Words in a conversation and Firstmate's steps open the
+          // conversation with "What happened" beside it, at that step.
           openWork(
             item.workAreaId,
             undefined,
-            item.kind === "document" ? { kind: "output", id: item.id } : null,
+            item.kind === "document"
+              ? { kind: "output", id: item.id }
+              : item.kind === "step"
+                ? { kind: "happened", stepId: item.id }
+                : item.kind === "message"
+                  ? { kind: "happened" }
+                  : null,
           );
         }}
         onBrowser={

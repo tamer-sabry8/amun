@@ -28,6 +28,16 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
 3. **Still to test on the Mac** with the DMG built from this branch (`packages/desktop/release/Amun-0.16.1-arm64.dmg`, not committed): a heartbeat reply in "Chat with Firstmate"; a restart continuing the same conversation; real work showing a secondmate or crewmate on the Agents screen; the Portfolio changes.
 4. Then the open items below, one question at a time.
 
+### Update, 19 November 2026, evening (branch `claude/amun-handoff-work-20261119b`)
+
+- **Search and "What happened" are built** as approved (item 1 above). Not yet committed, not yet in the packaged app.
+  - Daemon: `packages/server/src/server/amun/what-happened.ts` turns the First Mate's saved Paseo timeline into turns and plain-worded steps, and places each turn in its conversation by the captain's own words or the saved reply (no work area id travels with a message). Requests `work.search` and `happened.read` in `amun-rpc.ts`; both only read and never start or message the First Mate.
+  - UI: `packages/amun-ui/src/rebuild/what-happened.tsx`, pane kind `happened` in `work-session.tsx`, grouped results in the palette (`chrome.tsx`).
+  - Checked in an isolated preview with sample steps (no Pi there). Not checked against a real First Mate timeline: the plain words for each step depend on how Pi reports its shell calls, so look at this first on the Mac.
+  - Steps are only readable for the First Mate loaded in this daemon run.
+- **Tamer's answers the same evening:** atomic task checkout is not wanted (Firstmate already does it; do not show him Firstmate's own behaviour again). Chat-to-CLI continuity: skip for now. The test DMG comes after items 1, 2, 4 and 8.
+- **Waiting on Tamer:** the trace bundle timeline (explained, no UI change); fork ("Fork from here" under a message, a second chat inside the same work, no Resume button; the chat switcher needs a picture first); `/stow` (needs a local model, and Amun would write Firstmate's memory files itself), `/calm` wording, `/supervision-model` through the model list.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

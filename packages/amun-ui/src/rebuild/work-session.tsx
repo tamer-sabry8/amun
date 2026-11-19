@@ -1,6 +1,7 @@
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { BlockerRow } from "./blocker-row.tsx";
+import { WhatHappened } from "./what-happened.tsx";
 import {
   AzureConnectCard,
   QuestionCard,
@@ -136,6 +137,8 @@ export type PaneTarget =
   | { kind: "backlog" }
   | { kind: "pulls" }
   | { kind: "browser"; url: string }
+  /** "What happened": Firstmate's steps in this conversation, read only. */
+  | { kind: "happened"; stepId?: string }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -1179,6 +1182,10 @@ export function WorkSession({
   /** Version history of the open document: the list ("list") or one version. */
   const [history, setHistory] = useState<"list" | number | null>(null);
   const titleRoot = useRef<HTMLElement>(null);
+  // Where "What happened" puts its Previous step, Next step and Fold all.
+  const [happenedControls, setHappenedControls] = useState<HTMLElement | null>(
+    null,
+  );
   useDismiss(menu === "title", titleRoot, () => setMenu(null));
   const openDocument = pane?.kind === "output" ? pane.id : null;
   useEffect(() => {
@@ -1919,7 +1926,9 @@ export function WorkSession({
             ? "Backlog"
             : pane?.kind === "pulls"
               ? "Pull requests"
-              : (output?.title ?? "");
+              : pane?.kind === "happened"
+                ? "What happened"
+                : (output?.title ?? "");
   const newOutput = async () => {
     const result = await workAsync("save-output", {
       groupId: area.groupId,
@@ -2139,6 +2148,14 @@ export function WorkSession({
               }
             >
               Browser
+            </button>
+          )}
+          {!open && (
+            <button
+              className="btn quiet"
+              onClick={() => onPane({ kind: "happened" })}
+            >
+              What happened
             </button>
           )}
           {!open && (
@@ -2933,6 +2950,9 @@ export function WorkSession({
                 </div>
               )}
               <span className="grow" />
+              {pane.kind === "happened" && (
+                <span className="row" ref={setHappenedControls} />
+              )}
               {output && output.section === "output" && (
                 <span style={{ position: "relative" }}>
                   <button
@@ -2986,7 +3006,11 @@ export function WorkSession({
               </button>
               <button
                 className="icon-btn"
-                aria-label="Close the document"
+                aria-label={
+                  pane.kind === "happened"
+                    ? "Close What happened"
+                    : "Close the document"
+                }
                 onClick={() => onPane(null)}
               >
                 <Icon name="close" width={17} height={17} />
@@ -3069,6 +3093,18 @@ export function WorkSession({
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
                   onPreview={(url) => onPane({ kind: "browser", url })}
                   citations={citations}
+                />
+              )}
+              {pane.kind === "happened" && (
+                <WhatHappened
+                  areaId={areaId}
+                  focus={pane.stepId ?? null}
+                  controls={happenedControls}
+                  refreshKey={
+                    snapshot.messages.filter(
+                      (message) => message.workAreaId === areaId,
+                    ).length
+                  }
                 />
               )}
               {pane.kind === "pulls" &&
