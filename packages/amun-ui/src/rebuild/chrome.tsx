@@ -11,6 +11,7 @@ import type { Attention } from "../../../../packages/domain/src/work/home.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { bridge } from "../bridge.ts";
+import { work } from "./store.ts";
 import {
   contentSearchResult,
   type ContentSearchHit,
@@ -380,44 +381,174 @@ export function Sidebar({
   // Folders the owner opened or closed by hand; the open work's is open.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [allChats, setAllChats] = useState<Record<string, boolean>>({});
+  // The "…" menu of one folder or one fork, placed beside its button.
+  const [menu, setMenu] = useState<{
+    key: string;
+    top: number;
+    left: number;
+    confirm: boolean;
+  } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const openMenu = (key: string, button: HTMLElement) => {
+    const box = button.getBoundingClientRect();
+    setMenu(
+      menu?.key === key
+        ? null
+        : { key, top: box.bottom + 4, left: box.left, confirm: false },
+    );
+  };
+  const dots = (key: string, label: string) => (
+    <button
+      className="dots"
+      aria-label={`More for ${label}`}
+      aria-haspopup="menu"
+      aria-expanded={menu?.key === key}
+      onClick={(event) => openMenu(key, event.currentTarget)}
+    >
+      <Icon name="more" width={16} height={16} />
+    </button>
+  );
+  const popup = (key: string, items: ReactNode) =>
+    menu?.key === key && (
+      <>
+        <div className="rb-folder-veil" onClick={() => setMenu(null)} />
+        <div
+          className="rb-menu rb-folder-menu"
+          role="menu"
+          style={{ top: menu.top, left: menu.left }}
+        >
+          {items}
+        </div>
+      </>
+    );
   const folder = (item: WorkFolder, name = item.name) => {
     const current = open?.areaId === item.areaId;
+    const isGeneral = name !== item.name;
     const expanded = toggled[item.areaId] ?? current;
     const chats = allChats[item.areaId]
       ? item.chats
       : item.chats.slice(0, chatLimit);
     return (
       <li key={item.areaId}>
-        <button
-          className="folder"
-          aria-expanded={expanded}
-          onClick={() => {
-            setToggled({ ...toggled, [item.areaId]: !expanded });
-            if (!current) onChat(item.areaId, null);
-          }}
-        >
-          <Icon
-            name="chevron"
-            width={11}
-            height={11}
-            style={{ rotate: expanded ? "90deg" : undefined }}
-          />
-          <span>{name}</span>
-        </button>
+        {renaming === item.areaId ? (
+          <form
+            className="rename"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const next = new FormData(event.currentTarget).get("name");
+              if (typeof next === "string" && next.trim())
+                work("update-area", {
+                  areaId: item.areaId,
+                  patch: { name: next.trim() },
+                });
+              setRenaming(null);
+            }}
+          >
+            <input
+              name="name"
+              type="text"
+              aria-label="Name"
+              autoFocus
+              maxLength={200}
+              defaultValue={item.name}
+              onBlur={() => setRenaming(null)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setRenaming(null);
+              }}
+            />
+          </form>
+        ) : (
+          <div className="line">
+            <button
+              className="folder"
+              aria-expanded={expanded}
+              onClick={() => {
+                setToggled({ ...toggled, [item.areaId]: !expanded });
+                if (!current) onChat(item.areaId, null);
+              }}
+            >
+              <Icon
+                name="chevron"
+                width={11}
+                height={11}
+                style={{ rotate: expanded ? "90deg" : undefined }}
+              />
+              <span>{name}</span>
+            </button>
+            {!isGeneral && dots(item.areaId, item.name)}
+          </div>
+        )}
+        {popup(
+          item.areaId,
+          menu?.confirm ? (
+            <>
+              <div className="rb-menu-title">
+                Delete “{item.name}”? Its chats, plans and anything waiting on
+                it go with it.
+              </div>
+              <button
+                role="menuitem"
+                className="danger"
+                onClick={() => {
+                  setMenu(null);
+                  work("delete-area", { areaId: item.areaId });
+                }}
+              >
+                Delete it
+              </button>
+              <button role="menuitem" onClick={() => setMenu(null)}>
+                Keep it
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  onChat(item.areaId, null);
+                }}
+              >
+                Open
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  setRenaming(item.areaId);
+                }}
+              >
+                Rename
+              </button>
+              <div className="rule" />
+              <button
+                role="menuitem"
+                className="danger"
+                onClick={() => setMenu({ ...menu!, confirm: true })}
+              >
+                Delete
+              </button>
+            </>
+          ),
+        )}
         {expanded && (
           <ul>
             {chats.map((chat) => (
               <li key={chat.chatId ?? "main"}>
-                <button
-                  className="chat"
-                  aria-current={
-                    current && open.chatId === chat.chatId ? "page" : undefined
-                  }
-                  title={chat.title}
-                  onClick={() => onChat(item.areaId, chat.chatId)}
-                >
-                  {chat.title}
-                </button>
+                <div className="line">
+                  <button
+                    className="chat"
+                    aria-current={
+                      current && open.chatId === chat.chatId
+                        ? "page"
+                        : undefined
+                    }
+                    title={chat.title}
+                    onClick={() => onChat(item.areaId, chat.chatId)}
+                  >
+                    {chat.title}
+                  </button>
+                </div>
               </li>
             ))}
             {item.chats.length > chats.length && (

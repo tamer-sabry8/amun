@@ -123,7 +123,7 @@ export function describeTurnFailure(error: unknown): FirstMateTurnError {
     );
   if (/already has an active run/i.test(detail))
     return new FirstMateTurnError(
-      "Firstmate was still busy with an earlier message, which has now been stopped. Send this one again.",
+      "Firstmate is still busy with its own work and could not take this message yet. Nothing was stopped. Send it again in a moment.",
       detail,
     );
   return new FirstMateTurnError(`Firstmate could not answer: ${detail}`, detail);
@@ -149,6 +149,11 @@ export class PrimarySessions {
     private readonly preferredModel: () => string | null = () => null,
     /** Which agent was this home's First Mate, kept across daemon restarts. */
     private readonly records: FirstMateRecordStore | null = null,
+    /** How long, and how often, to wait for a turn Firstmate started itself. */
+    private readonly busy: { waitMs: number; everyMs: number } = {
+      waitMs: 10 * 60_000,
+      everyMs: 2_000,
+    },
   ) {}
 
   agentFor(fmHome: string): string | null {
@@ -232,15 +237,32 @@ export class PrimarySessions {
     text: string,
   ): Promise<{ agentId: string; reply: string }> {
     const { agentId } = await this.start(space);
-    this.amunTurns.add(agentId);
-    try {
-      const { finalText } = await this.host.runAgent(agentId, text);
-      return { agentId, reply: finalText };
-    } catch (error) {
-      await this.host.cancelRun?.(agentId).catch(() => undefined);
-      throw describeTurnFailure(error);
-    } finally {
-      this.amunTurns.delete(agentId);
+    // The First Mate also takes turns nobody here asked for (a Firstmate wake,
+    // a heartbeat). The captain's message waits for such a turn to finish; it
+    // never stops Firstmate's own work, and it is never lost to it (owner, 19
+    // November 2026: "which has now been stopped. Send this one again.").
+    const until = Date.now() + this.busy.waitMs;
+    for (;;) {
+      this.amunTurns.add(agentId);
+      try {
+        const { finalText } = await this.host.runAgent(agentId, text);
+        return { agentId, reply: finalText };
+      } catch (error) {
+        const ownTurn = /already has an active run/i.test(
+          error instanceof Error ? error.message : String(error),
+        );
+        if (ownTurn && Date.now() < until) {
+          this.amunTurns.delete(agentId);
+          await new Promise((done) => setTimeout(done, this.busy.everyMs));
+          continue;
+        }
+        // A turn of Firstmate's own is left running; only a turn this message
+        // opened is closed, so the next message is not blocked by it.
+        if (!ownTurn) await this.host.cancelRun?.(agentId).catch(() => undefined);
+        throw describeTurnFailure(error);
+      } finally {
+        this.amunTurns.delete(agentId);
+      }
     }
   }
 }
