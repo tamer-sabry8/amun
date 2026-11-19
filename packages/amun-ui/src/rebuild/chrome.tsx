@@ -548,36 +548,7 @@ export function Sidebar({
                   >
                     {chat.title}
                   </button>
-                  {chat.chatId && dots(chat.chatId, chat.title)}
                 </div>
-                {chat.chatId &&
-                  popup(
-                    chat.chatId,
-                    <>
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          setMenu(null);
-                          onChat(item.areaId, chat.chatId);
-                        }}
-                      >
-                        Open
-                      </button>
-                      <div className="rule" />
-                      <button
-                        role="menuitem"
-                        className="danger"
-                        onClick={() => {
-                          setMenu(null);
-                          work("delete-chat", { chatId: chat.chatId! });
-                          if (current && open.chatId === chat.chatId)
-                            onChat(item.areaId, null);
-                        }}
-                      >
-                        Delete this fork
-                      </button>
-                    </>,
-                  )}
               </li>
             ))}
             {item.chats.length > chats.length && (
