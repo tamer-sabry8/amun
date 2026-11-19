@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  asksForNewWork,
+  newWorkNamed,
   classifyMaterial,
   inferWorkArea,
   intake,
@@ -864,5 +866,55 @@ describe("sending a command from the menu", () => {
     expect(commandReadyToSend("/mo", "/model ")).toBe(false);
     // A mention is completed, never sent half-typed.
     expect(commandReadyToSend("ask @Atl", "@Atlas ")).toBe(false);
+  });
+});
+
+describe("a message that asks for new work by name (owner's trace, 19 November 2026)", () => {
+  it("names the kind and the name, so the work is made and Firstmate starts", () => {
+    expect(
+      newWorkNamed(
+        "Create a new product named AI perosnal assistant and interview me to learn more about it",
+      ),
+    ).toEqual({ type: "product", name: "AI perosnal assistant" });
+    expect(
+      newWorkNamed(
+        "Create a new PRD for a new product name product-3. Help me figure out the problem",
+      ),
+    ).toEqual({ type: "product", name: "product-3" });
+    expect(
+      newWorkNamed(
+        'Create a new product named "Research and Development" and interview me',
+      ),
+    ).toEqual({ type: "product", name: "Research and Development" });
+    expect(newWorkNamed("Create a new project called “Go to Market”")).toEqual({
+      type: "project",
+      name: "Go to Market",
+    });
+    expect(newWorkNamed('Start a new project called "Dubai pilot"')).toEqual({
+      type: "project",
+      name: "Dubai pilot",
+    });
+  });
+
+  it("asks nothing new of plain requests or unnamed work", () => {
+    expect(newWorkNamed("Read from notion about me and who I am")).toBeNull();
+    expect(newWorkNamed("Create a new product for the pilot")).toBeNull();
+    expect(
+      asksForNewWork("Create a new PRD for a new product name product-3"),
+    ).toBe(true);
+  });
+
+  it('does not file an "interview me" request as interview notes', () => {
+    expect(
+      classifyMaterial({
+        text: "Create a product and interview me one question at a time",
+      }),
+    ).toEqual({ kind: "work", type: "product" });
+    expect(
+      classifyMaterial({ text: "Interview with Sara about onboarding" }),
+    ).toEqual({
+      kind: "record",
+      type: "interview",
+    });
   });
 });

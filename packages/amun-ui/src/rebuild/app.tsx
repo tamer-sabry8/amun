@@ -3,6 +3,7 @@
 // switched off and how to restore it.
 import {
   asksForNewWork,
+  newWorkNamed,
   generalConversationName,
 } from "../../../../packages/domain/src/work/model.ts";
 import {
@@ -286,11 +287,12 @@ export function App() {
   if (!snapshot)
     return (
       <div className="rb setup">
-        <p role="status" className="muted" style={{ padding: 48 }}>
-          {bridgeState.status === "Connected"
-            ? "Opening Amun…"
-            : "Starting Amun…"}
-        </p>
+        <div className="rb-loading" role="status" aria-live="polite">
+          <span className="rb-loading-mark" aria-hidden="true">
+            <span className="rb-loading-shine" />
+          </span>
+          <p>Loading Amun</p>
+        </div>
         <AuthPrompt />
       </div>
     );
@@ -322,6 +324,17 @@ export function App() {
   };
   const submit = async (text: string, files: string[], groupId?: string) => {
     setNote("");
+    // "Create a new product named Atlas and interview me": make it and start.
+    const named = files.length ? null : newWorkNamed(text);
+    const group = groupId ?? snapshot.setup.activeGroupId;
+    if (named && (group || snapshot.groups.length === 1)) {
+      const made = await workAsync("create-area", {
+        groupId: group ?? snapshot.groups[0]!.id,
+        type: named.type,
+        name: named.name,
+      });
+      if (made.ok && made.ref) return openWork(made.ref, text);
+    }
     const result = await workAsync("intake", {
       text,
       fileNames: files,

@@ -212,6 +212,9 @@ describe("linked memory fields", () => {
         memoryField: async () => {
           throw Error("unused");
         },
+        lookup: async () => {
+          throw Error("unused");
+        },
       } as Fake,
     });
     return { made, emitted, emit: (event: NotionEvent) => emitted.push(event) };

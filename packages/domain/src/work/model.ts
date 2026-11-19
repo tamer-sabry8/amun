@@ -73,7 +73,11 @@ export function classifyMaterial(input: {
     return { kind: "objective" };
   if (has(text, "okr", "objective:", "key result"))
     return { kind: "objective" };
-  if (has(text, "interview", "transcript", "call notes"))
+  // "Interview me" is a request to Firstmate, not interview notes to file.
+  if (
+    has(text, "interview", "transcript", "call notes") &&
+    !/\b(?:interview|ask|question)\s+me\b/i.test(text)
+  )
     return { kind: "record", type: "interview" };
   if (has(text, "story", "bug", "ticket", "pbi", "work item"))
     return { kind: "execution" };
@@ -266,9 +270,47 @@ export const generalConversationName = "Chat with Firstmate";
 
 const newWorkRequest =
   /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b/i;
+// "Create a new PRD for a new product named X": the new work is named later
+// in the sentence, after what the owner wants done with it.
+const newWorkLater =
+  /^(?:please\s+)?(?:create|start|add|open|begin|set up|make|plan|write|draft)\b[^.\n]{0,60}?\b(?:an?\s+)?new\s+(product|project|task|rfp)\b/i;
 /** True only when the message itself asks for new work of a named kind. */
 export function asksForNewWork(text: string): boolean {
-  return newWorkRequest.test(text.trim().split("\n")[0]?.trim() ?? "");
+  const first = text.trim().split("\n")[0]?.trim() ?? "";
+  return newWorkRequest.test(first) || newWorkLater.test(first);
+}
+
+/**
+ * The kind and name of the new work a message asks for, when it says both
+ * ("Create a new product named Atlas and interview me"). Amun then creates it
+ * and opens it with the message, so Firstmate starts at once instead of the
+ * owner being asked where the message belongs.
+ */
+export function newWorkNamed(
+  text: string,
+): { type: "product" | "project" | "task" | "rfp"; name: string } | null {
+  const first = text.trim().split("\n")[0]?.trim() ?? "";
+  if (!asksForNewWork(first)) return null;
+  const kind = /\b(?:new\s+)?(product|project|task|rfp)\b/i.exec(
+    first.replace(/^.*?\bnew\s+(?=(?:product|project|task|rfp)\b)/i, ""),
+  );
+  // A quoted name is taken whole ("Research and Development"); only an
+  // unquoted one ends at "and", "to", "that" or "which".
+  const quoted =
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*["“']([^"”'\n]{1,80})["”']/i.exec(
+      first,
+    );
+  const named =
+    quoted ??
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|$)/i.exec(
+      first,
+    );
+  const name = named?.[1]?.trim();
+  if (!kind || !name) return null;
+  return {
+    type: kind[1]!.toLowerCase() as "product" | "project" | "task" | "rfp",
+    name,
+  };
 }
 
 /** Library › Needs linking and the single Home line when more than ten pile up (Q79). */

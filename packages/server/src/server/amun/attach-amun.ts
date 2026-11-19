@@ -35,7 +35,18 @@ import {
   type ModelHost,
 } from "./first-mate-models.js";
 import { ProductSpaceStore } from "./product-spaces.js";
-import { UnpromptedTurns, type UnpromptedReply } from "./unprompted-turns.js";
+import {
+  UnpromptedTurns,
+  isAllClear,
+  repliesInRun,
+  type UnpromptedReply,
+} from "./unprompted-turns.js";
+
+/** Replies to wakes that arrived while the First Mate answered the owner. */
+const laterReplies: { current: ((reply: { agentId: string; text: string }) => void) | null } = {
+  current: null,
+};
+import { serveNotionForFirstMate } from "./notion-for-first-mate.js";
 
 export const AMUN_WS_PATH = "/amun";
 const FLEET_POLL_MS = 5_000;
@@ -157,7 +168,12 @@ export function agentManagerHost(
     },
     async runAgent(agentId, text) {
       const result = await agentManager.runAgent(agentId, text);
-      return { finalText: result.finalText };
+      // The owner's reply is the first one in the run, not the last: a wake
+      // handled in the same run must not take its place (owner's trace, 19
+      // November 2026: "yes" was answered with a wake's "shipshape").
+      const [reply, ...later] = repliesInRun(result.timeline);
+      for (const text of later) laterReplies.current?.({ agentId, text });
+      return { finalText: reply ?? result.finalText };
     },
     async cancelRun(agentId) {
       await agentManager.cancelAgentRun(agentId);
@@ -287,6 +303,13 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     },
   });
   trace.record({ source: "amun", kind: "daemon-start", fmHome: paths.fmHome });
+  // The First Mate reads the captain's Notion through Amun's connection.
+  let notionForFirstMate: ReturnType<typeof serveNotionForFirstMate> | null = null;
+  try {
+    notionForFirstMate = serveNotionForFirstMate({ amunHome: paths.amunHome, notion });
+  } catch (error) {
+    input.logger.warn({ err: error }, "Notion for the First Mate not available");
+  }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   const watched = new Map<WebSocket, Set<string>>();
   const lastSent = new Map<string, string>();
@@ -363,6 +386,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   // guard notice) has a reply nobody is waiting on. It is kept in the
   // standing "Chat with Firstmate" conversation and every UI is told.
   function showUnprompted(reply: UnpromptedReply): void {
+    if (isAllClear(reply.text)) return;
     let saved: string | null = null;
     try {
       const agent = input.agentManager.getAgent(reply.agentId);
@@ -407,6 +431,10 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     isAmunTurn: (agentId) => primary.isAmunTurn(agentId),
     onReply: showUnprompted,
   });
+  laterReplies.current = ({ agentId, text }) => {
+    const fmHome = primary.homeOf(agentId);
+    if (fmHome) showUnprompted({ fmHome, agentId, text });
+  };
   const stopWatchingTurns = input.agentManager.subscribe(
     (event) => {
       try {
@@ -451,12 +479,14 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   return {
     handler,
     close() {
+      laterReplies.current = null;
       stopWatchingTurns();
       clearInterval(timer);
       clearInterval(councilTimer);
       clearInterval(councilUpdateTimer);
       clearTimeout(councilFirstCheck);
       council.stop();
+      notionForFirstMate?.close();
       notion.stop();
       work.close();
       input.httpServer.off("upgrade", onUpgrade);

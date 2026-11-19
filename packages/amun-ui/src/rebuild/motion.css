@@ -404,3 +404,77 @@ button.rb-tile {
     animation: none;
   }
 }
+
+/* Loading Amun: the ram, centred in the window whatever its size. It eases
+   in once (a soft blur clearing), then breathes slowly while a light passes
+   through it. Every colour is the theme's own. */
+.rb-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  background: var(--canvas);
+  color: var(--ink);
+  animation: rb-loading-in 520ms var(--ease) both;
+}
+.rb-loading p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+.rb-loading-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  background: currentColor;
+  -webkit-mask: url("./brand/ram.png") center / contain no-repeat;
+  mask: url("./brand/ram.png") center / contain no-repeat;
+  animation: rb-loading-breathe 2.4s ease-in-out 520ms infinite;
+}
+.rb-loading-shine {
+  position: absolute;
+  inset: -40% -60%;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    var(--accent) 50%,
+    transparent 62%
+  );
+  transform: translateX(-60%);
+  animation: rb-loading-shine 2.4s cubic-bezier(0.45, 0, 0.25, 1) 520ms infinite;
+}
+@keyframes rb-loading-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(0.96);
+  }
+}
+@keyframes rb-loading-breathe {
+  50% {
+    transform: scale(1.04);
+  }
+}
+@keyframes rb-loading-shine {
+  0% {
+    transform: translateX(-60%);
+  }
+  55%,
+  100% {
+    transform: translateX(60%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-loading,
+  .rb-loading-mark,
+  .rb-loading-shine {
+    animation: none;
+  }
+  .rb-loading-shine {
+    display: none;
+  }
+}

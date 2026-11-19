@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -71,8 +72,118 @@ async function script(
 
 const FLEET_SNAPSHOT_TIMEOUT_MS = 5 * 60_000;
 
+/** Variables Firstmate removes before it starts a herdr server (fm_backend_herdr_server_ensure). */
+const HERDR_SERVER_UNSET = [
+  "FM_HOME",
+  "FM_ROOT_OVERRIDE",
+  "FM_STATE_OVERRIDE",
+  "FM_DATA_OVERRIDE",
+  "FM_PROJECTS_OVERRIDE",
+  "FM_CONFIG_OVERRIDE",
+  "CURSOR_AGENT",
+  "CURSOR_INVOKED_AS",
+  "CLAUDECODE",
+  "PI_CODING_AGENT",
+  "FM_PI_HARNESS",
+  "GROK_AGENT",
+  "FM_SUPERVISION_MODEL",
+];
+
+export interface BackendServerDeps {
+  /** `herdr --session <s> status --json`; null when herdr cannot be asked. */
+  status(session: string, env: Record<string, string>): Promise<string | null>;
+  /** Starts `herdr server --session <s>` on its own, holding none of Amun's pipes. */
+  start(session: string, env: Record<string, string>): void;
+  wait(ms: number): Promise<void>;
+  exists(file: string): boolean;
+}
+
+/** Firstmate's herdr markers (vendor/firstmate/bin/backends/herdr.sh). */
+const HERDR_OWNER_MARKER = "firstmate-server-owner";
+const HERDR_REPLACING_MARKER = "firstmate-server-replacing";
+
+const herdrDeps: BackendServerDeps = {
+  async status(session, env) {
+    try {
+      const { stdout } = await run("herdr", ["--session", session, "status", "--json"], {
+        env,
+        timeout: 10_000,
+      });
+      return stdout;
+    } catch {
+      return null;
+    }
+  },
+  start(session, env) {
+    const child = spawn("herdr", ["server", "--session", session], {
+      env: { ...env, HERDR_SESSION: session },
+      detached: true,
+      stdio: "ignore",
+    });
+    child.on("error", () => undefined);
+    child.unref();
+  },
+  wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+  exists: (file) => existsSync(file),
+};
+
+/**
+ * When the home runs its crew in herdr and no herdr server is up, starts one
+ * the way Firstmate does, but on its own. Otherwise the first crew-status read
+ * inside fm-fleet-snapshot.sh starts the server as its own child, the server
+ * keeps that read's output open, and the snapshot never finishes: Amun then
+ * never sees fresh questions or crew (owner's trace, 19 November 2026).
+ * Does nothing for a tmux home or when the server is already running.
+ */
+export async function ensureBackendServer(
+  home: FirstmateHome,
+  deps: BackendServerDeps = herdrDeps,
+): Promise<"not-herdr" | "running" | "started" | "managed" | "unavailable"> {
+  let backend = "";
+  try {
+    backend = readFileSync(path.join(home.fmHome, "config", "backend"), "utf8").trim();
+  } catch {
+    return "not-herdr";
+  }
+  if (backend !== "herdr") return "not-herdr";
+  const env = firstmateEnv(home);
+  for (const key of HERDR_SERVER_UNSET) delete env[key];
+  const session = env.HERDR_SESSION || "default";
+  const read = async () => {
+    const out = await deps.status(session, env);
+    if (out === null) return null;
+    try {
+      const server = (JSON.parse(out) as { server?: { running?: boolean; socket?: string } })
+        .server;
+      return { running: server?.running === true, socket: server?.socket ?? null };
+    } catch {
+      return null;
+    }
+  };
+  const running = async () => (await read())?.running ?? null;
+  const now = await read();
+  if (now === null) return "unavailable";
+  // A server that another manager owns, or that is being replaced, is never
+  // started here, exactly as Firstmate's fm_backend_herdr_server_ensure
+  // refuses: a second server would split panes between two servers.
+  const markers = now.socket
+    ? [HERDR_OWNER_MARKER, HERDR_REPLACING_MARKER].map((name) =>
+        path.join(path.dirname(now.socket!), name),
+      )
+    : [];
+  if (markers.some((marker) => deps.exists(marker))) return now.running ? "running" : "managed";
+  if (now.running) return "running";
+  deps.start(session, env);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await deps.wait(500);
+    if (await running()) return "started";
+  }
+  return "unavailable";
+}
+
 /** bin/fm-fleet-snapshot.sh --json (schema fm-fleet-snapshot.v1). Read-only by contract. */
 export async function readFleetSnapshot(home: FirstmateHome): Promise<FleetSnapshot> {
+  await ensureBackendServer(home).catch(() => undefined);
   // A busy home takes minutes; callers share one run (shareFleetSnapshots).
   const stdout = await script(home, "fm-fleet-snapshot.sh", ["--json"], FLEET_SNAPSHOT_TIMEOUT_MS);
   return fleetSnapshotSchema.parse(JSON.parse(stdout));

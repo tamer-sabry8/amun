@@ -114,6 +114,12 @@ async function verifyMcp(
     update: boolean;
     run(io: NotionPageIo): Promise<void>;
   },
+  /** A read-only search or page fetch, for the First Mate. */
+  lookup?: {
+    name: "notion-search" | "notion-fetch";
+    args: Record<string, unknown>;
+    done(result: unknown): void;
+  },
 ): Promise<void> {
   const { Client, StreamableHTTPClientTransport } =
     await import("./mcp-client.ts");
@@ -344,6 +350,7 @@ async function verifyMcp(
         ).create(publication.input),
       );
     }
+    if (lookup) lookup.done(await read(lookup.name, lookup.args));
     if (target) {
       if (
         notionToolPolicy("notion-fetch") !== "read" ||
@@ -594,6 +601,47 @@ export class NotionConnection {
         },
       );
       return pageId;
+    });
+  }
+  /**
+   * A read-only search or page fetch in the connected workspace. Nothing is
+   * written; the result is Notion's own text.
+   */
+  async lookup(
+    name: "notion-search" | "notion-fetch",
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
+    await this.connect("edge", false);
+    return withRefreshLock(this.options.root, async () => {
+      const record = readNotionOAuthRecord(
+        this.options.keyring.get(this.account),
+      );
+      if (
+        !record?.tokens ||
+        !record.expiresAt ||
+        record.expiresAt <= Date.now()
+      )
+        throw Error("Reconnect Notion");
+      this.options.registerSecret(record.tokens.access_token);
+      let result: unknown;
+      await verifyMcp(
+        record.tokens.access_token,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          name,
+          args,
+          done: (value) => {
+            result = value;
+          },
+        },
+      );
+      return result;
     });
   }
   configured() {
