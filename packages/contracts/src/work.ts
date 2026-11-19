@@ -481,6 +481,32 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  /** Forks inside a work, oldest first. `messages` above is each main chat. */
+  chats: z
+    .array(
+      z.strictObject({
+        id,
+        workAreaId: id,
+        title: z.string(),
+        /** The message it was forked from, in the chat it came from. */
+        forkedFrom: id,
+        /** The chat it came from; null is the main chat. */
+        fromChatId: id.nullable(),
+        createdAt: stamp,
+        messages: z.array(
+          z.strictObject({
+            id,
+            workAreaId: id,
+            role: z.enum(["you", "firstmate", "card"]),
+            text: z.string(),
+            card: z.json().nullable(),
+            model: z.string().max(200).nullable().optional(),
+            createdAt: stamp,
+          }),
+        ),
+      }),
+    )
+    .default([]),
 });
 export type WorkSnapshot = z.infer<typeof workSnapshot>;
 
@@ -827,11 +853,19 @@ export const workCommand = z.discriminatedUnion("action", [
   }),
   act("message", {
     workAreaId: id,
+    /** A fork inside the work; null is the main chat. */
+    chatId: id.nullable().default(null),
     role: z.enum(["you", "firstmate", "card"]),
     text: z.string().max(16384),
     card: z.json().nullable().default(null),
     model: z.string().max(200).nullable().default(null),
   }),
+  /**
+   * "Fork from here": a second chat in the same work, copied up to and
+   * including this message. The chat it came from is not changed.
+   */
+  act("fork-chat", { workAreaId: id, messageId: id }),
+  act("delete-chat", { chatId: id }),
 ]);
 export type WorkCommand = z.infer<typeof workCommand>;
 

@@ -17,6 +17,12 @@ import {
 } from "../../../../packages/contracts/src/work.ts";
 import type { Snapshot } from "./view-model.ts";
 import { clockLabel } from "./what-happened.tsx";
+import {
+  chatLimit,
+  folderLimit,
+  workFolders,
+  type WorkFolder,
+} from "./folders.ts";
 
 const islandAction: Record<Attention["kind"], string | null> = {
   approval: "Review changes",
@@ -351,6 +357,9 @@ export function Sidebar({
   onSearch,
   onToggle,
   island,
+  snapshot,
+  open,
+  onChat,
 }: {
   route: Route;
   collapsed: boolean;
@@ -358,7 +367,76 @@ export function Sidebar({
   onSearch(): void;
   onToggle(): void;
   island: React.ReactNode;
+  snapshot: Snapshot;
+  /** The chat on screen, when a piece of work is open. */
+  open: { areaId: string; chatId: string | null } | null;
+  onChat(areaId: string, chatId: string | null): void;
 }) {
+  const { folders, general } = workFolders(
+    snapshot.areas,
+    snapshot.chats,
+    snapshot.setup.activeGroupId,
+  );
+  // Folders the owner opened or closed by hand; the open work's is open.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [allChats, setAllChats] = useState<Record<string, boolean>>({});
+  const folder = (item: WorkFolder, name = item.name) => {
+    const current = open?.areaId === item.areaId;
+    const expanded = toggled[item.areaId] ?? current;
+    const chats = allChats[item.areaId]
+      ? item.chats
+      : item.chats.slice(0, chatLimit);
+    return (
+      <li key={item.areaId}>
+        <button
+          className="folder"
+          aria-expanded={expanded}
+          onClick={() => {
+            setToggled({ ...toggled, [item.areaId]: !expanded });
+            if (!current) onChat(item.areaId, null);
+          }}
+        >
+          <Icon
+            name="chevron"
+            width={11}
+            height={11}
+            style={{ rotate: expanded ? "90deg" : undefined }}
+          />
+          <span>{name}</span>
+        </button>
+        {expanded && (
+          <ul>
+            {chats.map((chat) => (
+              <li key={chat.chatId ?? "main"}>
+                <button
+                  className="chat"
+                  aria-current={
+                    current && open.chatId === chat.chatId ? "page" : undefined
+                  }
+                  title={chat.title}
+                  onClick={() => onChat(item.areaId, chat.chatId)}
+                >
+                  {chat.title}
+                </button>
+              </li>
+            ))}
+            {item.chats.length > chats.length && (
+              <li>
+                <button
+                  className="chat more"
+                  onClick={() =>
+                    setAllChats({ ...allChats, [item.areaId]: true })
+                  }
+                >
+                  See more
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
   // Icon tiles; the name stays in the button for assistive technology and
   // shows as a tooltip.
   const item = (id: Exclude<Route, "work" | "setup">, label: string) => (
@@ -391,7 +469,24 @@ export function Sidebar({
         </button>
         {tiles.map(([id, label]) => item(id, label))}
       </div>
-      <div className="spacer" />
+      {/* Takes only the room between the tiles and Firstmate's card, and
+          scrolls inside it, so the card always keeps its place. */}
+      <div className="rb-folders" aria-label="Your work and its chats">
+        <ul>
+          {folders.slice(0, folderLimit).map((item) => folder(item))}
+          {folders.length > folderLimit && (
+            <li>
+              <button
+                className="chat more"
+                onClick={() => onRoute("portfolio")}
+              >
+                See all
+              </button>
+            </li>
+          )}
+          {general.map((item) => folder(item, "General"))}
+        </ul>
+      </div>
       {island}
       <div className="rb-user">
         <span className="avatar" aria-hidden="true" title="You">

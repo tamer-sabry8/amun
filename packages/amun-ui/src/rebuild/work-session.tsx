@@ -89,7 +89,8 @@ import {
   trackerTypesResult,
 } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
-import { work, workAsync } from "./store.ts";
+import { work as storeWork, workAsync as storeWorkAsync } from "./store.ts";
+import { forkNote, forkPoint } from "./fork.ts";
 import {
   answerQuestion,
   answerScope,
@@ -129,6 +130,8 @@ import {
   type AmunAction,
   type Snapshot,
 } from "./view-model.ts";
+
+const work = storeWork;
 
 export type PaneTarget =
   | { kind: "output"; id: string }
@@ -1128,16 +1131,81 @@ export function OutputDoc({
   );
 }
 
+const stopsKey = "amun.fork-stops";
+function readSettledStops(): string[] {
+  try {
+    const kept = JSON.parse(localStorage.getItem(stopsKey) ?? "[]") as unknown;
+    return Array.isArray(kept) ? kept.map(String).slice(-200) : [];
+  } catch {
+    return [];
+  }
+}
+function writeSettledStops(value: string[]) {
+  try {
+    localStorage.setItem(stopsKey, JSON.stringify(value.slice(-200)));
+  } catch {
+    // Best effort: the card may be offered once more after a restart.
+  }
+}
+
+/** The quiet icon row under a message: copy, and "Fork from here". */
+function MessageActions({
+  text,
+  onFork,
+}: {
+  text: string;
+  onFork(): void | Promise<void>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [forking, setForking] = useState(false);
+  return (
+    <div className="rb-msg-acts">
+      <button
+        className="icon-btn"
+        aria-label={copied ? "Copied" : "Copy"}
+        onClick={async () => {
+          if (!(await copyText(text))) return;
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        <Icon name={copied ? "check" : "copy"} width={15} height={15} />
+        <span className="tip" role="tooltip">
+          <strong>{copied ? "Copied" : "Copy"}</strong>
+        </span>
+      </button>
+      <button
+        className="icon-btn"
+        aria-label="Fork from here"
+        disabled={forking}
+        onClick={async () => {
+          setForking(true);
+          await onFork();
+          setForking(false);
+        }}
+      >
+        <Icon name="fork" width={15} height={15} />
+        <span className="tip" role="tooltip">
+          <strong>Fork from here</strong>
+          Starts a new chat from this point. This one stays as it is.
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function WorkSession({
   snapshot,
   workspace,
   areaId,
+  chatId,
   now,
   model,
   pane,
   ratio,
   expanded,
   first,
+  onChat,
   onPane,
   onResize,
   onExpand,
@@ -1147,6 +1215,8 @@ export function WorkSession({
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
   areaId: string;
+  /** A fork inside this work; null is the main chat. */
+  chatId: string | null;
   now: number;
   model: string | null;
   pane: PaneTarget;
@@ -1154,13 +1224,43 @@ export function WorkSession({
   expanded: boolean;
   /** A message typed on Home that opened this session. */
   first: string | null;
+  /** Opens another chat of this work (after "Fork from here"). */
+  onChat(chatId: string | null): void;
   onPane(target: PaneTarget): void;
   onResize(ratio: number): void;
   onExpand(): void;
   onGroupNeeded(): void;
   onSettings(): void;
 }) {
-  const context = workContext(snapshot, areaId, now);
+  const mainContext = workContext(snapshot, areaId, now);
+  const chat = chatId
+    ? (snapshot.chats.find(
+        (item) => item.id === chatId && item.workAreaId === areaId,
+      ) ?? null)
+    : null;
+  // A fork shows and continues its own messages; everything else about the
+  // work (its documents, plans, blockers) is shared with the main chat.
+  const context =
+    mainContext && chat
+      ? { ...mainContext, messages: chat.messages }
+      : mainContext;
+  // Messages written from here are saved in the chat this session was opened
+  // on, also when a reply arrives after the owner has moved to another chat.
+  const savedIn = chat?.id ?? null;
+  const work = ((action: string, payload?: object) =>
+    storeWork(
+      action as never,
+      (action === "message"
+        ? { ...payload, chatId: savedIn }
+        : payload) as never,
+    )) as typeof storeWork;
+  const workAsync = ((action: string, payload?: object) =>
+    storeWorkAsync(
+      action as never,
+      (action === "message"
+        ? { ...payload, chatId: savedIn }
+        : payload) as never,
+    )) as typeof storeWorkAsync;
   // The failure's own details are its plan's per-item reasons.
   const failureRef = context?.failure?.ref;
   const failurePlanId = failureRef?.startsWith("failure:")
@@ -1659,6 +1759,26 @@ export function WorkSession({
   };
   const attachments = useAttachments(areaId);
   const [pickNonce, setPickNonce] = useState(0);
+  // Work that was started after the point a fork was taken from and is still
+  // running: the owner is asked once whether Firstmate should stop it.
+  const [settled, setSettled] = useState(() => readSettledStops());
+  const settleStop = (fork: string, activity: string) => {
+    const next = [...settled, `${fork}:${activity}`];
+    setSettled(next);
+    writeSettledStops(next);
+  };
+  const forkedAt = chat ? forkPoint(chat) : null;
+  const stopOffer =
+    chat && forkedAt
+      ? (snapshot.activity.find(
+          (item) =>
+            item.workAreaId === areaId &&
+            item.state === "running" &&
+            item.createdAt > forkedAt &&
+            item.createdAt < chat.createdAt &&
+            !settled.includes(`${chat.id}:${item.id}`),
+        ) ?? null)
+      : null;
   const send = async (typed: string) => {
     if ((!typed.trim() && !attachments.files.length) || !context) return;
     // A reminder is kept by Amun and answered here; it is not sent on to
@@ -1750,9 +1870,11 @@ export function WorkSession({
       notionPageLines(snapshot, areaId),
       failedPublicationLines(snapshot, areaId, reasons),
     );
+    // In a fork, Firstmate is told which chat this is and what to set aside.
+    const fork = chat ? forkNote(chat, context.messages) + "\n" : "";
     const scoped = briefing
-      ? `${amunProtocol}\n\n${header}${text}`
-      : `${header}${text}`;
+      ? `${amunProtocol}\n\n${header}${fork}${text}`
+      : `${header}${fork}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -2262,6 +2384,15 @@ export function WorkSession({
         <div className="rb-thread">
           <div className="inner">
             <div className="msgs">
+              {chat && (
+                <p className="muted small">
+                  Forked from{" "}
+                  {chat.fromChatId ? "another chat" : "the main chat"}.{" "}
+                  <button className="link" onClick={() => onChat(null)}>
+                    Back to main chat
+                  </button>
+                </p>
+              )}
               {!context.messages.length && !busy && (
                 <p className="muted">
                   {area.purpose ||
@@ -2365,37 +2496,85 @@ export function WorkSession({
                     />
                   )
                 ) : (
-                  <div
-                    key={message.id}
-                    ref={message.id === lastReplyId ? latestReply : undefined}
-                    className={"rb-msg " + message.role}
-                  >
-                    {/* Firstmate is named where its turn begins, on the left;
+                  <div key={message.id} className={"rb-turn " + message.role}>
+                    <div
+                      ref={message.id === lastReplyId ? latestReply : undefined}
+                      className={"rb-msg " + message.role}
+                    >
+                      {/* Firstmate is named where its turn begins, on the left;
                         the owner's own messages sit on the right. */}
-                    {message.role === "firstmate" &&
-                      context.messages[position - 1]?.role !== "firstmate" && (
-                        <span className="who">
-                          <FirstmateMark size={18} />
-                          Firstmate
-                          {modelDisplay(message.model ?? null) && (
-                            <span className="muted small">
-                              {"· "}
-                              {modelDisplay(message.model ?? null)}
-                            </span>
-                          )}
-                        </span>
+                      {message.role === "firstmate" &&
+                        context.messages[position - 1]?.role !==
+                          "firstmate" && (
+                          <span className="who">
+                            <FirstmateMark size={18} />
+                            Firstmate
+                            {modelDisplay(message.model ?? null) && (
+                              <span className="muted small">
+                                {"· "}
+                                {modelDisplay(message.model ?? null)}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      {message.role === "firstmate" ? (
+                        <MarkdownMessage
+                          text={message.text}
+                          onLink={(url) => onPane({ kind: "browser", url })}
+                          citations={citations}
+                        />
+                      ) : (
+                        message.text
                       )}
-                    {message.role === "firstmate" ? (
-                      <MarkdownMessage
-                        text={message.text}
-                        onLink={(url) => onPane({ kind: "browser", url })}
-                        citations={citations}
-                      />
-                    ) : (
-                      message.text
-                    )}
+                    </div>
+                    <MessageActions
+                      text={message.text}
+                      onFork={async () => {
+                        const made = await storeWorkAsync("fork-chat", {
+                          workAreaId: areaId,
+                          messageId: message.id,
+                        });
+                        if (made.ref) onChat(made.ref);
+                      }}
+                    />
                   </div>
                 ),
+              )}
+              {chat && stopOffer && (
+                <div
+                  className="rb-inline amber"
+                  role="group"
+                  aria-label="Work still running"
+                >
+                  <span>
+                    “{stopOffer.text}” is still running. It was started after
+                    the point you forked from. Stop it?
+                  </span>
+                  <span className="note">
+                    Stopping is a request to Firstmate. Leaving it running
+                    changes nothing.
+                  </span>
+                  <div className="row wrap">
+                    <button
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => {
+                        settleStop(chat.id, stopOffer.id);
+                        void send(
+                          `Please stop this work: “${stopOffer.text}”. I am trying a different direction in this chat.`,
+                        );
+                      }}
+                    >
+                      Stop it
+                    </button>
+                    <button
+                      className="btn quiet"
+                      onClick={() => settleStop(chat.id, stopOffer.id)}
+                    >
+                      Leave it running
+                    </button>
+                  </div>
+                </div>
               )}
               {waiting && (
                 <>

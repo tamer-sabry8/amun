@@ -2038,6 +2038,130 @@
   background: var(--card);
 }
 
+/* Fork: the quiet icon row under a message */
+.rb-turn {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+.rb-turn.you {
+  justify-items: end;
+}
+.rb-msg-acts {
+  display: flex;
+  gap: 2px;
+  height: 26px;
+  /* Sits in the space between messages, so nothing moves when it shows. */
+  margin: 2px 0 -14px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.rb-turn:hover .rb-msg-acts,
+.rb-msg-acts:focus-within {
+  opacity: 1;
+}
+.rb-msg-acts .icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  position: relative;
+  justify-content: center;
+}
+.rb-msg-acts .tip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  max-width: 250px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--float);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  display: none;
+}
+.rb-turn.you .rb-msg-acts .tip {
+  left: auto;
+  right: 0;
+}
+.rb-msg-acts .tip strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+}
+.rb-msg-acts .icon-btn:hover .tip,
+.rb-msg-acts .icon-btn:focus-visible .tip {
+  display: block;
+}
+
+/* Sidebar folders: each piece of work and its chats */
+.rb-folders {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 14px -4px 10px;
+  padding: 0 4px;
+}
+.rb.collapsed .rb-folders {
+  visibility: hidden;
+}
+.rb-folders ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+}
+.rb-folders li {
+  min-width: 0;
+}
+.rb-folders button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 13.5px;
+  gap: 6px;
+  min-width: 0;
+}
+.rb-folders button:hover {
+  background: var(--hover);
+}
+.rb-folders .folder svg {
+  flex: none;
+  color: var(--muted);
+  transition: rotate 160ms var(--ease);
+}
+.rb-folders .folder span,
+.rb-folders .chat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-folders .chat {
+  display: block;
+  padding-left: 25px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-folders .chat[aria-current="page"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+.rb-folders .chat.more {
+  color: var(--accent);
+}
+.rb-folders > ul > li > .chat.more {
+  padding-left: 8px;
+}
+
 /* What happened: Firstmate's steps beside the conversation, read only */
 .rb-happened {
   display: grid;

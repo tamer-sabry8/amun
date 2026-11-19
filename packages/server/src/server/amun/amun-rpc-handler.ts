@@ -174,7 +174,10 @@ export class AmunRpcHandler {
   }
 
   private async exportTrace(): Promise<unknown> {
+    // What the First Mate did, step by step, from the timeline Paseo keeps.
+    const steps = await this.happened().catch(() => []);
     const bundle = await buildTraceBundle({
+      extra: { "first-mate/steps.json": JSON.stringify(steps, null, 2) + "\n" },
       amunHome: this.deps.amunHome,
       fmHome: this.deps.fmHome,
       traceDir: this.deps.trace.dir,

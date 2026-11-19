@@ -126,6 +126,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     findings: [],
     memory: { unsynced: 0, disputed: 0, facts: [] },
     messages: [],
+    chats: [],
     ...extra,
   };
 }
@@ -337,6 +338,9 @@ describe("shell chrome", () => {
         onSearch: noop,
         onToggle: noop,
         island: null,
+        snapshot: snapshot() as never,
+        open: null,
+        onChat: noop,
       }),
     );
     expect(
@@ -366,6 +370,9 @@ describe("shell chrome", () => {
         onSearch: noop,
         onToggle: noop,
         island: null,
+        snapshot: snapshot() as never,
+        open: null,
+        onChat: noop,
       }),
     );
     expect(html).toContain('aria-label="Sprints"');

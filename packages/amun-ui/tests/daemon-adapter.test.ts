@@ -558,13 +558,50 @@ describe("daemon contract adapter", () => {
     ).toEqual({ space: "alpha", text: "/skill:bearings include PRs" });
 
     // /stow must run on this Mac only, so it is never sent to the First Mate.
-    expect(await run("stow")).toMatch(/not available inside Amun yet/);
+    expect(await run("stow")).toMatch(/does not save session notes/);
     // An update is never run on the working home from here.
     expect(await run("updatefirstmate")).toMatch(/switched off/);
-    expect(await run("calm")).toMatch(/not available inside Amun yet/);
+    expect(await run("calm")).toBe("Amun already shows the calm view.");
     expect(
       daemon.calls.filter((c) => c.method === "primary.send"),
     ).toHaveLength(1);
+  });
+
+  it("asks the First Mate to save the supervision model; never writes it", async () => {
+    const { adapter, daemon } = make();
+    daemon.models = {
+      current: "github-copilot/claude-sonnet-5.5",
+      models: [
+        { id: "github-copilot/claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+        { id: "github-copilot/claude-haiku-5.5", label: "Claude Haiku 5.5" },
+      ],
+    };
+    const run = async (argument: string) => {
+      const [event] = await adapter.handle({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id: "s" + argument,
+        command: "supervision-model",
+        argument,
+      });
+      const result = nativePiEvent.parse(event).result;
+      return result.kind === "message" ? result.text : "";
+    };
+    const sent = () =>
+      daemon.calls
+        .filter((c) => c.method === "primary.send")
+        .map((c) => String(c.params.text));
+    expect(await run("")).toMatch(/type `\/supervision-model`/);
+    expect(await run("claude")).toMatch(/Several models match/);
+    expect(await run("gpt")).toMatch(/No model matches/);
+    expect(sent()).toEqual([]);
+
+    expect(await run("haiku")).toBe("Aye, Captain.");
+    expect(sent()[0]).toContain("github-copilot/claude-haiku-5.5");
+    expect(sent()[0]).toContain("config/supervision-branch-model");
+    await run("follow main");
+    expect(sent()[1]).toMatch(/follow the main conversation's model/);
   });
 
   it("hands a delegated job to the First Mate to dispatch through Firstmate, and keeps its answer", async () => {

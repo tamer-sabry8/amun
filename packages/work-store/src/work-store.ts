@@ -539,11 +539,12 @@ export class WorkStore {
             )?.n ?? 0,
           ),
         },
-        messages: this.all(
-          "SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages ORDER BY created_at,rowid",
-        ).map(({ card_json, ...row }) => ({
-          ...row,
-          card: card_json ? JSON.parse(String(card_json)) : null,
+        messages: this.chatMessages(null),
+        chats: this.all(
+          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
+        ).map((chat) => ({
+          ...chat,
+          messages: this.chatMessages(String(chat.id)),
         })),
       }),
     );
@@ -708,6 +709,17 @@ export class WorkStore {
       now,
     );
     return { id, existing: false };
+  }
+
+  /** One chat's messages in order; null is every work's main chat. */
+  private chatMessages(chatId: string | null) {
+    return this.all(
+      `SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages WHERE ${chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at,rowid`,
+      ...(chatId === null ? [] : [chatId]),
+    ).map(({ card_json, ...row }) => ({
+      ...row,
+      card: card_json ? JSON.parse(String(card_json)) : null,
+    }));
   }
 
   /** Content search, always limited to the group the owner is working in. */
@@ -2151,11 +2163,21 @@ export class WorkStore {
       case "message": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
+        if (
+          command.chatId !== null &&
+          !this.get(
+            "SELECT 1 FROM work_chats WHERE id=? AND work_area_id=?",
+            command.chatId,
+            command.workAreaId,
+          )
+        )
+          throw new WorkError("That chat no longer exists.");
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_messages(id,work_area_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?)",
+          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?,?)",
           id,
           command.workAreaId,
+          command.chatId,
           command.role,
           this.clean(command.text),
           command.card === null ? null : JSON.stringify(command.card),
@@ -2168,6 +2190,67 @@ export class WorkStore {
           command.workAreaId,
         );
         return { ref: id };
+      }
+      case "fork-chat": {
+        if (!this.live(command.workAreaId))
+          throw new WorkError("That work area no longer exists.");
+        const from = this.get(
+          "SELECT rowid AS seq,chat_id AS chatId,text,created_at AS createdAt FROM work_messages WHERE id=? AND work_area_id=?",
+          command.messageId,
+          command.workAreaId,
+        );
+        if (!from) throw new WorkError("That message is no longer there.");
+        const fromChat = from.chatId === null ? null : String(from.chatId);
+        const line = String(from.text).replace(/\s+/g, " ").trim();
+        const id = randomUUID();
+        this.run(
+          "INSERT INTO work_chats(id,work_area_id,title,forked_from,from_chat_id,created_at) VALUES (?,?,?,?,?,?)",
+          id,
+          command.workAreaId,
+          line.length > 60 ? line.slice(0, 60).trimEnd() + "…" : line || "Fork",
+          command.messageId,
+          fromChat,
+          now,
+        );
+        // Everything up to and including that message, in the same order.
+        const kept = this.all(
+          `SELECT id,role,text,card_json,model,created_at FROM work_messages WHERE work_area_id=? AND ${fromChat === null ? "chat_id IS NULL" : "chat_id=?"} AND (created_at<? OR (created_at=? AND rowid<=?)) ORDER BY created_at,rowid`,
+          command.workAreaId,
+          ...(fromChat === null ? [] : [fromChat]),
+          from.createdAt,
+          from.createdAt,
+          from.seq,
+        );
+        for (const row of kept) {
+          const copy = randomUUID();
+          this.run(
+            "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            copy,
+            command.workAreaId,
+            id,
+            row.role,
+            row.text,
+            row.card_json,
+            row.model,
+            row.created_at,
+          );
+          // The original is already searchable; a copy would show twice.
+          this.run(
+            "DELETE FROM content_index WHERE kind='message' AND ref=?",
+            copy,
+          );
+        }
+        return { ref: id };
+      }
+      case "delete-chat": {
+        // Only the fork goes; the chat it came from is never touched.
+        this.run("DELETE FROM work_messages WHERE chat_id=?", command.chatId);
+        this.run(
+          "UPDATE work_chats SET from_chat_id=NULL WHERE from_chat_id=?",
+          command.chatId,
+        );
+        this.run("DELETE FROM work_chats WHERE id=?", command.chatId);
+        return {};
       }
     }
   }

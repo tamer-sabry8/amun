@@ -11,6 +11,7 @@ import {
 } from "../../../contracts/src/work.ts";
 import type { AmunTransport } from "./amun-client.ts";
 import { agentCatalog } from "../../../domain/src/work/agents.ts";
+import { pickByName } from "../../../domain/src/work/shell.ts";
 
 const slug = (text: string) =>
   text
@@ -1122,18 +1123,53 @@ export class ContractAdapter {
       return fail(
         "Updating Firstmate from inside Amun is switched off. An update is tested as a separate candidate first, and only then approved by you.",
       );
-    // /stow must run entirely on this Mac, with each change to a pinned entry
-    // reviewed one by one (AGENTS.md, "Local Firstmate memory"). Sending it to
-    // the First Mate would run it on a hosted model, so it waits for that
-    // local path to be restored.
+    // The captain decided on 19 November 2026 that Amun does not offer /stow.
+    // It is still caught here so the words never reach the First Mate, where
+    // the skill would run on a hosted model.
     if (command === "stow")
       return fail(
-        "Saving what this session learned is not available inside Amun yet. It has to run on this Mac only, and that part is not restored.",
+        "Amun does not save session notes to Firstmate’s memory. Firstmate keeps its own memory as it works.",
       );
-    if (command === "calm" || command === "supervision-model")
-      return fail(
-        "This one only works in Pi’s own screen for now. It is not available inside Amun yet.",
-      );
+    // /calm hides tool chatter in Pi's terminal screen. Amun has no terminal
+    // and only ever shows the calm view.
+    if (command === "calm") return fail("Amun already shows the calm view.");
+    if (command === "supervision-model") {
+      // Firstmate owns this setting, so the choice goes to the First Mate as
+      // a request; Amun never writes Firstmate's config itself.
+      const argument = String(message.argument ?? "").trim();
+      const usage =
+        "To choose the model Firstmate uses to supervise the crew, type `/supervision-model` and part of a name, for example `/supervision-model sonnet`. To use the same model as your conversation, type `/supervision-model follow main`.";
+      if (!argument) return fail(usage);
+      try {
+        let request: string;
+        if (/^follow(\s+main)?$/i.test(argument))
+          request =
+            "The captain asked that the supervision branch follow the main conversation's model again. Please remove the pin in config/supervision-branch-model (see docs/configuration.md), and tell the captain in one line whether it is done.";
+        else {
+          const picked = pickByName((await this.models()).models, argument);
+          if ("none" in picked)
+            return fail(`No model matches “${argument}”. ${usage}`);
+          if ("several" in picked)
+            return fail(
+              `Several models match “${argument}”: ${picked.several
+                .slice(0, 8)
+                .map((item) => item.label)
+                .join(", ")}. Type more of the name.`,
+            );
+          request = `The captain chose ${picked.one.id} as the model for the supervision branch. Please save it as the pin in config/supervision-branch-model, in the format docs/configuration.md describes, and tell the captain in one line whether it is saved.`;
+        }
+        const space = await this.ensureSpace();
+        const answer = await this.daemon.request<{ reply?: string }>(
+          "primary.send",
+          { space, text: request },
+        );
+        return fail(
+          (answer.reply ?? "").trim() || "Firstmate has the request.",
+        );
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+    }
     if (command !== "conversation" && command !== "conversation-send")
       return fail(UNAVAILABLE);
     try {

@@ -50,6 +50,7 @@ const paths: Record<string, string> = {
   grid: "M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z",
   list: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
   external: "M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6",
+  fork: "M6 7v10 M18 9c0 4-12 3-12 8 M8 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M8 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0z M20 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0z",
 };
 export function Icon({
   name,

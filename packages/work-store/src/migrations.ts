@@ -1117,4 +1117,17 @@ UPDATE library_output_versions SET author_known=0 WHERE version=1 AND author='ow
   // 42 · The Notion parent a page was created under, so a later update can
   // tell the page is still in the destination when Notion does not say.
   `ALTER TABLE plan_writes ADD COLUMN page_parent TEXT;`,
+  // 43 · Chats inside one piece of work. The main chat has no row: its
+  // messages keep chat_id NULL. A fork is a second chat that starts as a copy
+  // of another chat up to one message, and remembers which.
+  `CREATE TABLE work_chats (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  title TEXT NOT NULL,
+  forked_from TEXT NOT NULL,
+  from_chat_id TEXT REFERENCES work_chats(id),
+  created_at TEXT NOT NULL
+);
+ALTER TABLE work_messages ADD COLUMN chat_id TEXT REFERENCES work_chats(id);
+CREATE INDEX work_messages_chat ON work_messages(chat_id);`,
 ] as const;

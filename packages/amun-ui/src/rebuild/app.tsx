@@ -106,6 +106,8 @@ export function App() {
   const snapshot = state.snapshot;
   const [layout, dispatch] = useReducer(shellReducer, initialShell);
   const [pane, setPane] = useState<PaneTarget>(null);
+  /** The fork on screen inside the open work; null is its main chat. */
+  const [chatId, setChatId] = useState<string | null>(null);
   const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
@@ -309,11 +311,13 @@ export function App() {
     areaId: string,
     message?: string,
     target: PaneTarget = null,
+    chat: string | null = null,
   ) => {
     setPending(null);
     setNote("");
     setFirst(message ?? null);
     setPane(target);
+    setChatId(chat);
     dispatch({ type: "open_work", workAreaId: areaId });
   };
   const submit = async (text: string, files: string[], groupId?: string) => {
@@ -460,6 +464,13 @@ export function App() {
         onRoute={go}
         onSearch={() => dispatch({ type: "palette", open: true })}
         onToggle={() => dispatch({ type: "toggle_sidebar" })}
+        snapshot={snapshot as Snapshot}
+        open={
+          layout.route === "work" && layout.workAreaId
+            ? { areaId: layout.workAreaId, chatId }
+            : null
+        }
+        onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
         island={
           <Island
             top={view.island.top}
@@ -566,10 +577,15 @@ export function App() {
           />
         ) : layout.route === "work" && layout.workAreaId ? (
           <WorkSession
-            key={layout.workAreaId}
+            key={layout.workAreaId + ":" + (chatId ?? "")}
             snapshot={snapshot}
             workspace={bridgeState.workspace}
             areaId={layout.workAreaId}
+            chatId={chatId}
+            onChat={(next) => {
+              setFirst(null);
+              setChatId(next);
+            }}
             now={now}
             model={model}
             pane={pane}
