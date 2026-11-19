@@ -502,20 +502,26 @@ export class ContractAdapter {
     };
     settleHoldAnswers(this.holdAnswers, holds);
     await this.ensureGroup();
-    // Once per home, after setup: Firstmate registers Amun's agents as its
-    // own second mates, so it can route work to every one of them.
-    if (via && work.setup.completed && !this.poolAsked) {
-      this.poolAsked = true;
-      void this.daemon
-        .request("primary.once", {
-          space: via,
-          key: "register-agents-v1",
-          text: poolRegistrationRequest(),
-        })
-        .catch(() => {
-          this.poolAsked = false;
-        });
-    }
+  }
+
+  /**
+   * Once per home: Firstmate registers Amun's agents as its own second mates,
+   * so it can route work to every one of them. Asked after the First Mate has
+   * answered a message, which is when it is known to be working (the stored
+   * setup flag is not used: the current first run never sets it).
+   */
+  private registerPool(space: string): void {
+    if (this.poolAsked) return;
+    this.poolAsked = true;
+    void this.daemon
+      .request("primary.once", {
+        space,
+        key: "register-agents-v1",
+        text: poolRegistrationRequest(),
+      })
+      .catch(() => {
+        this.poolAsked = false;
+      });
   }
   private poolAsked = false;
 
@@ -1256,6 +1262,7 @@ export class ContractAdapter {
         conversation.text += `${conversation.text ? "\n\n" : ""}You: ${argument.text}\n\nFirst Mate: ${latest}`;
         conversation.replyCount += 1;
         conversation.latestReply = latest;
+        this.registerPool(space);
       }
       return reply(this.conversationResult(conversation));
     } catch (error) {

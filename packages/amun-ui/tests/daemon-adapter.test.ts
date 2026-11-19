@@ -958,3 +958,27 @@ describe("Firstmate's crew in plain words", () => {
     expect(text.length).toBeLessThan(32000);
   });
 });
+
+describe("registering the agents with Firstmate", () => {
+  it("asks once, after the First Mate has answered a message", async () => {
+    const { adapter, daemon } = make();
+    const once = () =>
+      daemon.calls.filter((call) => call.method === "primary.once");
+    await adapter.handle({ version: 1, kind: "work", action: "snapshot" });
+    expect(once()).toEqual([]);
+    for (const id of ["a", "b"])
+      await adapter.handle({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id,
+        command: "conversation-send",
+        argument: JSON.stringify({ text: "hello" }),
+      });
+    expect(once()).toHaveLength(1);
+    expect(once()[0]!.params).toMatchObject({
+      space: "alpha",
+      key: "register-agents-v1",
+    });
+  });
+});
