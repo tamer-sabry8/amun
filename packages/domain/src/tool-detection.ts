@@ -186,7 +186,9 @@ export type ToolStatus =
   | "disabled";
 
 export const toolStatusLabels: Record<ToolStatus, string> = {
-  ready: "Ready to use",
+  // Only the version is checked, so this never claims a sign-in (owner, 19
+  // November 2026: "Ready to use" read as signed in when Claude Code was not).
+  ready: "Installed",
   needs_sign_in: "Found, needs sign-in",
   not_installed: "Not installed",
   outdated: "Installed, needs an update",
