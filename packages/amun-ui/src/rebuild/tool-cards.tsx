@@ -115,8 +115,8 @@ export function ToolCards() {
         </button>
       </div>
       <p className="muted small">
-        Amun only checks each tool’s version. A tool you turn off is never
-        handed work.
+        Amun only checks that each tool is installed, not whether you are signed
+        in to it. A tool you turn off is never handed work.
       </p>
       {report?.message && (
         <p className="rb-notice" role="alert">
