@@ -15,6 +15,44 @@ This file was first written for the PR #33 merge. Later work adds to it; nothing
 
 Newest first. Read the 20 November 2026 afternoon update before anything else, then "Read this first: Firstmate is the only path".
 
+### Update, 20 November 2026, evening: the chat workflow (branch `claude/amun-chat-ux-20261120`)
+
+Read this first if your work touches chats, the sidebar, Firstmate's card, search or deliveries. The owner's brief is `AMUN-CHAT-UX-CLAUDE-HANDOFF.md` in his Amun releases folder. He approved every screen on `docs/preview/2026-11-20-chat-ux/index.html` ("approved all", 20 November 2026). His decisions on request references and the installed-size limit are in `AGENTS.md`, "Chat workflow".
+
+What is built:
+
+- **Sidebar** (`packages/amun-ui/src/rebuild/sidebar.tsx`; lists in `packages/domain/src/work/chat-lists.ts`):
+  - New chat beside Search chats, and three views: Recent, Folders, General. The views are switched by three dots in the bottom row, and the choice is remembered.
+  - Ordering uses only the owner's own sent messages, so reading a chat or receiving a reply never reorders anything. There are no row caps.
+  - Pins sit at the top of Recent in the owner's order. Unread replies show bold with a dot on the folder, an unsent folder draft shows a pencil, and three small dots mean Firstmate is writing in that chat.
+  - Hovering a folder opens a panel listing every chat in it, with + New chat first. Clicking the folder's name lists all its chats inline. The chat opened during this visit stays shown under its folder.
+  - `folders.ts` is gone.
+- **Drafts, reading position and Continue** (`chat-memory.ts`, `reading.ts`). This state is kept in localStorage on the Mac:
+  - Home and the global New chat share one draft. Each folder's + and each chat keep their own.
+  - Opening a chat with unread replies lands on a New replies divider. Replies are marked read as they come into view. New content is followed when the owner is at the bottom; otherwise New reply ↓ appears.
+  - Home's Continue line returns the owner to where they stopped reading.
+- **Migration 46**: `work_messages.read_at`, chat pin order, and who named a chat. The owner's rename always beats Firstmate's `{"do":"title"}`, which applies only to a chat's first reply.
+- **Search chats** (`chat-search.tsx`): results grouped by chat, opening at the passage with a short highlight. Back to results restores the query, matches and scroll position.
+- **Firstmate's card**: decisions come first. One unread reply shows Open reply; several show a count with a list.
+- **Ask about <name>** on the project panel opens a fresh chat with the card attached (`ask-card.tsx`). Opening it sends nothing.
+- **Request references** (`packages/domain/src/work/requests.ts`, migration 47 `work_requests`, store command `apply-reply`):
+  - Every owner message carries `[Amun request amun-r-…]`, and Firstmate's briefing tells it to keep that reference everywhere. A report or document links to a request only when its reference matches.
+  - Unknown or missing references stay where the reply arrived. Repeated reports change nothing, and a revision becomes a new version of the same document.
+  - Firstmate's later, unprompted replies are routed by reference to the chat that asked (`recordFirstMateReply`), including after moves.
+  - Each request gets a status line under its message, and each delivery reply opens its exact version.
+  - Moving a chat that has unfinished requests opens a dialog: move the chat only, or also ask Firstmate to change the project of the requests the owner ticks. `{"do":"reassigned"}` settles that change.
+- **Decision answers** (`contract-adapter.ts`): an answer cut off by a dropped connection waits, across restarts, and is checked before anything is resent. It is sent once if the hold is unchanged, dropped if the hold changed, and marked settled if the hold is gone.
+
+Not built, or not verified:
+
+- **Nothing has run against real Firstmate.** The out-of-order delivery was seen only with the stand-in in `scripts/preview-daemon.ts`.
+  - That stand-in answers with reports and delivers later. It is not Firstmate.
+  - The owner's acceptance test still has to be run live: two requests in one chat finishing out of order, each result linking back to its exact message.
+- **Status from Firstmate's backlog links is not read.** Status comes only from the `report` blocks in Firstmate's replies.
+- **Firstmate's card does not show project, request or recommended answer for its own holds.** Holds carry no request reference or recommendation.
+- **The Library This chat view** lists documents delivered in the chat and documents linked to its card. Documents that are only mentioned in text are not listed.
+- **Not checked:** keyboard browsing of the folder panel by hand, the light themes, and the packaged app's memory use.
+
 ### Update, 20 November 2026, afternoon (pull request 48): every action goes to Firstmate; Portfolio, RFPs and card panels
 
 Read this section first. It is written for an agent that has not seen the session. Branch `claude/amun-agentic-wiring-20261120`, draft pull request 48 (https://github.com/tamer-sabry8/amun/pull/48), started from `main` at `53e0a5b`. It is not merged. **Another agent may be working on this branch: start your own branch from `main`, and do not touch this one.**
