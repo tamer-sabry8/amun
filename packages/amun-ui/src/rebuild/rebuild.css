@@ -4838,3 +4838,14 @@
   gap: 8px;
   margin-top: 18px;
 }
+.rb-moved {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 30;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  box-shadow: var(--float);
+}

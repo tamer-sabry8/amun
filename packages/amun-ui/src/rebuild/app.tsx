@@ -133,6 +133,17 @@ export function App() {
   });
   /** The open chat came from Search chats, so "Back to results" shows. */
   const [fromSearch, setFromSearch] = useState(false);
+  /** "Moved to Gitex · Open chat", after a move approved from elsewhere. */
+  const [movedTo, setMovedTo] = useState<{
+    name: string;
+    areaId: string;
+    chatId: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!movedTo) return;
+    const timer = setTimeout(() => setMovedTo(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [movedTo]);
   /** A move waiting on the owner's choice about unfinished requests. */
   const [moving, setMoving] = useState<{
     areaId: string;
@@ -618,6 +629,14 @@ export function App() {
         card: { ...offer, state: "kept" } as never,
       });
       await done();
+      // Approved while reading another chat: stay there, and say where it
+      // went (owner's chat handoff, 20 November 2026).
+      const reading =
+        layout.route === "work" &&
+        layout.workAreaId === offer.workAreaId &&
+        chatId === offer.chatId;
+      if (!reading)
+        return setMovedTo({ name, areaId: targetId, chatId: moved.ref });
       return openWork(targetId, undefined, null, moved.ref);
     }
     // A held message becomes a chat of its own in that folder.
@@ -973,6 +992,23 @@ export function App() {
             style={{ margin: "44px 32px 0" }}
           >
             <span>Reconnecting to Amun’s service. Your work is saved.</span>
+          </p>
+        )}
+        {movedTo && (
+          <p className="rb-notice rb-moved" role="status">
+            <span>Moved to {movedTo.name}</span>
+            <button
+              className="link"
+              onClick={() => {
+                const to = movedTo;
+                setMovedTo(null);
+                openWork(to.areaId, undefined, null, to.chatId, {
+                  resume: true,
+                });
+              }}
+            >
+              Open chat
+            </button>
           </p>
         )}
         {bridgeState.notice && (
