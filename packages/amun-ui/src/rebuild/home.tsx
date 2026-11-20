@@ -2,7 +2,8 @@
 // were away" line, Needs your attention, compact Your work, composer.
 import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
 import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { tickedTasks, type Ticked } from "./ticked-tasks.ts";
 import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
 import {
@@ -20,8 +21,6 @@ import {
   helpRequest,
   isHeld,
   laterDays,
-  tickUndoMs,
-  tickedVisibleMs,
 } from "../../../../packages/domain/src/work/held-tasks.ts";
 import { BlockerRow } from "./blocker-row.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
@@ -384,11 +383,10 @@ export function IntakeCard({
   return null;
 }
 
-/** A ticked Firstmate task: when it was ticked, and whether it has been sent. */
-interface Ticked {
-  at: number;
-  sent: boolean;
-}
+/** Ticked Firstmate tasks, kept while the owner is on other screens. */
+const ticks = tickedTasks((attentionId) =>
+  work("resolve-attention", { attentionId, resolution: "done" }),
+);
 
 function Row({
   snapshot,
@@ -666,34 +664,9 @@ export function Home({
   );
   // Firstmate tasks the owner ticked: shown struck through for a while, with
   // Undo until the request goes to Firstmate, then they move to Done.
-  const [ticked, setTicked] = useState<Record<string, Ticked>>({});
-  const [clock, setClock] = useState(() => Date.now());
-  const tickedIds = Object.keys(ticked);
-  useEffect(() => {
-    if (!tickedIds.length) return;
-    const timer = setInterval(() => setClock(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [tickedIds.length]);
-  useEffect(() => {
-    for (const [id, entry] of Object.entries(ticked)) {
-      if (!entry.sent && clock - entry.at >= tickUndoMs) {
-        setTicked((all) => ({ ...all, [id]: { ...entry, sent: true } }));
-        work("resolve-attention", { attentionId: id, resolution: "done" });
-      } else if (entry.sent && clock - entry.at >= tickedVisibleMs)
-        setTicked((all) => {
-          const next = { ...all };
-          delete next[id];
-          return next;
-        });
-    }
-  }, [clock]);
+  const ticked = useSyncExternalStore(ticks.subscribe, ticks.get, ticks.get);
   const tick = (id: string, done: boolean) =>
-    setTicked((all) => {
-      const next = { ...all };
-      if (done) next[id] = { at: Date.now(), sent: false };
-      else if (!all[id]?.sent) delete next[id];
-      return next;
-    });
+    done ? ticks.tick(id) : ticks.undo(id);
   // A ticked task stays in the open list until its time is up.
   const stillShown = (row: { id: string }) => row.id in ticked;
   const listed =

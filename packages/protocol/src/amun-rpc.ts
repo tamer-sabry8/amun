@@ -178,6 +178,8 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
     space: slug,
     hold: captainHoldSchema,
     answer: z.string().min(1).max(8000),
+    // "Remind me later": the hold is put off to this day and stays held.
+    until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }),
   z.object({
     id: z.string(),

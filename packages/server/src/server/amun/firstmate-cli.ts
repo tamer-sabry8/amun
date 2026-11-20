@@ -354,7 +354,21 @@ export function boardColumnFor(record: BacklogRecord): BoardColumn {
  * Default hold route: the captain's answer goes to the First Mate, which owns
  * fm-send.sh and fm-captain-hold.sh (AGENTS.md: the UI never bypasses Firstmate).
  */
-export function holdAnswerPrompt(hold: CaptainHold, answer: string): string {
+export function holdAnswerPrompt(hold: CaptainHold, answer: string, until?: string): string {
+  // "Remind me later" keeps the task held. `answer` would record a decision
+  // and close it, so Firstmate is told to defer it instead (owner, 20
+  // November 2026; review of pull request 46).
+  if (until) {
+    const subject =
+      hold.source === "backlog"
+        ? `the held task ${hold.taskId} ("${hold.title}")`
+        : `${hold.taskId}, open ${hold.verb} "${hold.key}": ${hold.summary}`;
+    return [
+      `The captain wants to be reminded about ${subject} on ${until}, not now.`,
+      `Keep it held and put it off to that day with bin/fm-captain-hold.sh hold ${hold.taskId} --reason <its current reason> --until ${until}.`,
+      "Do not run bin/fm-captain-hold.sh answer, do not close or release it, and do not raise it again before that day.",
+    ].join("\n");
+  }
   if (hold.source === "backlog") {
     return [
       `Captain's answer for the held task ${hold.taskId} ("${hold.title}").`,

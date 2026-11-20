@@ -1102,6 +1102,7 @@ export class ContractAdapter {
           space,
           hold: found,
           answer: said.sent,
+          ...(message.resolution === "snooze" && until ? { until } : {}),
         }),
       )
       .then(

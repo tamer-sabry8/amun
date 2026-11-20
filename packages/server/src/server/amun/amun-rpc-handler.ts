@@ -329,7 +329,7 @@ export class AmunRpcHandler {
       }
       case "holds.answer": {
         const space = await this.deps.spaces.get(request.space);
-        return this.deps.primary.send(space, holdAnswerPrompt(request.hold, request.answer));
+        return this.deps.primary.send(space, holdAnswerPrompt(request.hold, request.answer, request.until));
       }
       case "primary.start": {
         const space = await this.deps.spaces.get(request.space);
