@@ -13,7 +13,178 @@ This file was first written for the PR #33 merge. Later work adds to it; nothing
 
 ## Where things stand and what to do next
 
-Written at the end of 18 November 2026, after PR #36. Read this section before anything else, then "Read this first: Firstmate is the only path".
+Newest first. Read the 20 November 2026 afternoon update before anything else, then "Read this first: Firstmate is the only path".
+
+### Update, 20 November 2026, afternoon (pull request 48): every action goes to Firstmate; Portfolio, RFPs and card panels
+
+Read this section first. It is written for an agent that has not seen the session. Branch `claude/amun-agentic-wiring-20261120`, draft pull request 48 (https://github.com/tamer-sabry8/amun/pull/48), started from `main` at `53e0a5b`. It is not merged. **Another agent may be working on this branch: start your own branch from `main`, and do not touch this one.**
+
+`docs/HANDOFF-NEXT-AGENT.md` is out of date (13 November, old `apps/` layout). This file is the current handoff.
+
+#### The rules, in one place
+
+These are Tamer's. `AGENTS.md` has the full text; these are the ones that decide most work.
+
+1. **Firstmate is the only path.** Tamer is the captain and talks only to Firstmate. Firstmate delegates all real work to its second mates and crew, watches them, and reports back. Amun never starts, messages, stops or supervises crew, never creates worktrees, and never writes into the Firstmate home. `vendor/firstmate` stays untouched; CI fails if it changes. See "Read this first: Firstmate is the only path" below.
+2. **Every AI request goes through Firstmate through Pi.** No separate router model, no embedding model, no second agent.
+3. **Almost every on-screen action is told to Firstmate** (new, 20 November 2026; details below). Moving between screens is not.
+4. **Every UI change needs Tamer's approval before it is built.** Show the real current screen beside the proposal in Lavish (`lavish-axi <file>`, then `lavish-axi poll <file>` as a tracked background job), say which workflow it enables, and wait. Run UI work through the `/impeccable` skill. Approval of a workflow is not approval of its look.
+5. **Design preferences.** Plain, friendly words, never technical ones. Reuse what a screen already has. Add nothing to the prompt box. Desktop app: wide layouts. Text must never be cut off, overlap or wrap badly; he checks this closely. Draw previews large.
+6. **Ask one question at a time**, with choices and a recommended option.
+7. **Report honestly:** what was run, what was not, what is unverified.
+8. **Sign-ins are Tamer's.** Never type credentials.
+9. **Migrations are append-only.** There are 45 after this branch.
+10. **Do not reopen pull request 10.** Do not start the Roadmap redesign (see below) or the neumorphic redesign (T022c) without asking.
+11. **Merging:** wait for CI on the final commit, resolve the Codex reviewer's comments, merge with a merge commit, and ask before the first merge of a session.
+
+Withdrawn rules, do not restore:
+
+- **20 November 2026: "signing in does not authorize publishing" and the exact-content review that went with it** are removed from `AGENTS.md` at Tamer's instruction. **The code still asks before it publishes** to Notion and Azure DevOps (reviewed plans). He was asked whether the code should stop asking too, for Notion only or not at all; **not answered yet. Do not change publishing behaviour until he answers.**
+- 20 November 2026: the rule that a Claude subscription is used only through Claude Code (see pull request 45 below).
+- 19 November 2026: `/stow` is not offered.
+
+#### What Tamer asked for in this session, and where each item stands
+
+| #   | Ask                                                           | State                                                                                                 |
+| --- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | Every on-screen action goes to Firstmate with the whole card  | Built, tested, pushed. Not run against real Firstmate.                                                |
+| 2   | Tests that enforce it                                         | Built.                                                                                                |
+| 3   | Check Firstmate delegates and only watches                    | Not done. Needs a run on his Mac with real Firstmate. Nothing in Amun was changed that bypasses it.   |
+| 4   | Portfolio as progress cards                                   | Approved and built. Azure DevOps figures are not wired (see "What is built").                         |
+| 5   | RFPs page like his picture                                    | Approved and built. Seen in the preview only.                                                         |
+| 6   | Clicking a card opens a panel over the page (project and RFP) | Both approved and built. Seen in the preview only.                                                    |
+| 7   | Roadmap timeline                                              | **Deferred by Tamer: "ask me later, I will want to redesign the entire page."** Do not touch Roadmap. |
+| 8   | A better GitHub connection than pasting a token               | Investigated only; a recommendation is waiting for him (below).                                       |
+| 9   | File paths in replies open in Finder                          | Built, pushed. Not seen in the running app.                                                           |
+| 10  | "Why is the chat named /model?"                               | Fixed, pushed.                                                                                        |
+| 11  | Hooks review should open inside Amun, not in a terminal       | Not started. Needs a preview and his approval.                                                        |
+| 12  | A reminder put off to a later day still showed on Home        | Fixed, pushed. Not seen on his Mac.                                                                   |
+| 13  | The "Notion MCP connected…" banner                            | Explained to him. A rewording was proposed, not approved, not changed.                                |
+
+#### Every on-screen action is told to Firstmate
+
+Tamer's words: almost all interaction, "99%", goes to Firstmate as a prompt saying what was done and what the card held, sent in the background. Clicking Home, Activity or a tile to move around sends nothing.
+
+How it is built:
+
+- **One rule per work command.** `packages/domain/src/work/firstmate-notice.ts` has `noticeRules`, a table keyed by every `WorkCommand` action. Each entry is `tell` (Firstmate is told), `own` (it already reaches Firstmate another way) or `local` (Amun's own bookkeeping, with the reason written down). The type `{ [A in Action]: Rule<A> }` makes the compiler refuse a new command with no rule, and `packages/domain/tests/firstmate-notice.test.ts` checks it at run time too. **When you add a work command, add its rule.**
+- **Where it is sent.** `ContractAdapter.handleWork` (`packages/amun-ui/src/daemon/contract-adapter.ts`) runs the command, then `tellFirstmate` builds a note from the workspace before and after. The note carries a plain sentence ("The captain moved the RFP "X" to lost") and the card: every record with the ids involved, as JSON.
+- **Batching and keeping.** `NoticeQueue` (`packages/amun-ui/src/daemon/firstmate-notices.ts`) waits 1.5 seconds, sends up to eight notes as one `primary.send` prompt, keeps a note until Firstmate has taken it, retries with a growing wait when Firstmate is away, and keeps waiting notes in the window's `localStorage` across restarts.
+- **No echo.** A command may carry `told: true` (added to the base of every work command in `packages/contracts/src/work.ts`; stripped before it reaches the store). It means Firstmate already knows: it asked for the change in its own reply (`raise` in `work-session.tsx` marks everything it files), or the owner's own message that caused it is on its way (the `create-area` calls in `app.tsx` and `home.tsx`, answers and plan-change requests in `accept-offer.ts`). **If you add a command that Firstmate's reply triggers, send it with `told: true`.**
+- **Nothing changed, nothing sent.** If the records are the same before and after (a field left as it was on blur), no note is made. A refused command sends nothing.
+- **Firstmate's reply.** The prompt asks for exactly "Noted." when nothing follows; `isNoted` drops that. Anything else is saved as a Firstmate message in that work's conversation, or in the chats with no folder.
+- **Holds keep their own path.** Firstmate's own reminders are still answered through `holds.answer`. The "remind me later" prompt now also carries what the card said.
+
+Not told, by this session's choice (Tamer was told and has not objected): chat housekeeping (new, rename, archive, move, fork, delete, keep-here), display settings, and changes that come from Firstmate, the crew or the tracker. He can ask for any of these to be sent.
+
+Cost to know about: each note is a full Firstmate turn, so heavy clicking uses more of his model allowance. Batching is the only limit on that today.
+
+Not verified: how real Firstmate answers a note, and whether it replies "Noted." when nothing follows.
+
+#### Research Tamer supplied, and what was decided
+
+He pasted long research on Pi, Paseo, Firstmate, GitHub and connectors. Much of it contradicts itself and some would break Firstmate. The verdicts:
+
+| Idea in the research                                                                              | Verdict      | Why                                                                                     |
+| ------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------- |
+| The app talks only to Firstmate; Firstmate decides whether to answer, scout, ship or delegate     | Kept         | It is how Amun already works.                                                           |
+| Amun's status view is a read-only projection of Firstmate's state (`fm-fleet-snapshot.sh --json`) | Kept         | Already built.                                                                          |
+| A `pi-firstmate` wrapper script, and `FM_WORKER=1`                                                | Rejected     | Amun already starts Pi in the Firstmate checkout. The wrapper breaks second-mate homes. |
+| Locking Paseo's provider list to Pi                                                               | Rejected     | Changes behaviour Firstmate does not expect; not needed.                                |
+| Paseo as the backend for second mates                                                             | Rejected     | Firstmate says it is unsupported; his home uses herdr.                                  |
+| The `gpambrozio/firstmate` Paseo plugin                                                           | Rejected     | A different, Paseo-native reimplementation.                                             |
+| An app-side reminder scheduler and "Dynamic Island" event engine                                  | Rejected     | Reminders are Firstmate's captain holds; a timer goes through Firstmate.                |
+| Sending anything to a crew member's terminal                                                      | Rejected     | Watching only (`AGENTS.md`, "Firstmate principles").                                    |
+| Writing Firstmate's `state/`, charters, `secondmates.md` or wake queue                            | Rejected     | Amun never writes the Firstmate home.                                                   |
+| Azure DevOps, Jira, Linear or Notion as a Firstmate forge                                         | Rejected     | Firstmate supports GitHub and GitLab only. They stay Amun connectors.                   |
+| A separate interaction router, event bus and SQL reminder store                                   | Not needed   | The work store and `primary.send` already do this.                                      |
+| Pi's `pi-github` package for structured GitHub reads                                              | Not assessed | Would be installed in Pi, which is Tamer's own install. Ask first.                      |
+| Paseo Hub's GitHub App for webhooks                                                               | Not assessed | A separate product; not needed for anything asked so far.                               |
+
+#### GitHub connection: what was found
+
+- The GitHub card in Settings asks for a pasted token and says browser sign-in gives no access. That note is about Pi's GitHub sign-in, which is for Copilot models only.
+- `gh` on his Mac is signed in as `tamer-sabry8` with `repo` scope. It is the same sign-in Firstmate's crew use for pull requests.
+- A device-code sign-in flow already exists in the interface (`GithubAccess` in `connection-cards.tsx`, action `github-repo-connect`), left from the old app; nothing in the daemon answers it.
+- **Recommended to Tamer, not approved:** have Amun use the Mac's `gh` sign-in and drop the token box. His rule says to try the provider's hosted MCP browser sign-in first; whether GitHub's hosted MCP accepts a sign-in from Amun was **not checked**. Check it and ask him before building.
+
+#### Portfolio, RFPs and the two panels: what was approved
+
+The review page is `docs/preview/2026-11-20-portfolio-rfps/index.html` (open with `lavish-axi`). It shows each current screen above its proposal. He ended the review with **"all approved"** after seven rounds. His notes, in order, so you do not repeat them:
+
+1. The team and type tags were unreadable: made bright and never cut off.
+2. "What happens when this page has 34 cards?": three or four to a row, scrolling under the filters, at risk first, then nearest date; the message box stays pinned.
+3. He asked for RFP columns to be landscape, saw wide rows, and said **"Revert to your original proposal"**: five columns of cards it is.
+4. "Make all cards the same size."
+5. Text overlapped, then wrapped badly: the card foot is faces left, value right, the lead's name on one line under them.
+6. "What does Open conversation do?": it closes the panel and opens that work's chat. Opening sends nothing; the first message carries the record.
+
+Decisions inside the approved design:
+
+- **RFP columns are a view over the stages.** New = Received. In progress = In response and Submitted. Won includes Handed to delivery. Lost includes Withdrawn. **On hold is a mark on an open RFP, not a stage**, because the `rfps.stage` column has a CHECK list that SQLite cannot alter; `held_at` and `hold_reason` hold it, and taking it off hold returns it where it was. Rules: `rfpColumn`, `rfpColumnDrop`, `rfpStats`, `rfpAttention`, `rfpMoney`, `rfpPeople` in `packages/domain/src/work/flows.ts`.
+- **New RFP fields** (migration 45): value in dirhams, next step and its date, hold mark and reason, requirements, source, received day, clarifications-by day, people on the bid, the day it was decided, and dated summaries (`rfp_summaries`). Commands `update-rfp`, `hold-rfp`, `add-rfp-summary`.
+- No "New RFP" button: RFPs are still added through the message box. A coloured dot, not a side stripe, on Needs attention. No example-data banner.
+- **Project panel:** "Open conversation" instead of "View full product status"; "Ask Firstmate for a summary" instead of "Add new summary"; "Add phase" and "Edit members" left out.
+- **Done %, story counts, pull requests and team members come from Azure DevOps, and that reading is not wired.** `workProgress` in `work-cards.tsx` returns null, so cards show a dash and the panel says "Link this … to Azure DevOps to see …". He was told this on the review page and approved it. Azure DevOps is not connected on his Mac; he said to do that later. Tech lead, project manager and product manager shown in his picture are not stored anywhere yet.
+- Tasks and RFPs keep the small Portfolio card; the progress card is for products and projects.
+- Sample names only in committed previews. His real colleagues' names are not put in the repository.
+
+#### What is built on this branch, and what is not
+
+Everything below is committed and pushed. Locally, 1,151 tests, both type-checks, lint, the format check and the impeccable detector pass.
+
+- **RFPs screen and its panel** (`packages/amun-ui/src/rebuild/rfps.tsx`: `Rfps`, `RfpSheet`). The old `Rfps` and `Readiness` were removed from `screens.tsx`. Migration 45, the contract, the store (`update-rfp`, `hold-rfp`, `add-rfp-summary`) and the rules in `flows.ts` carry it. Seen in the preview with sample RFPs: tiles, Needs attention, five columns, drag between columns, the panel's three tabs.
+- **Portfolio progress cards and the project panel** (`packages/amun-ui/src/rebuild/work-cards.tsx`: `ProgressCard`, `WorkSheet`; rules in `packages/domain/src/work/portfolio.ts`). `Portfolio` in `screens.tsx` shows them for products and projects, at risk first; tasks and RFPs keep the small card under them. "Ask Firstmate for a summary" opens the work's conversation with that request. Seen in the preview.
+- **A reminder put off to a later day stays off Home until that day** (`heldUntil`, `holdsDue` in `contract-adapter.ts`).
+
+Not built, and why:
+
+- **Done %, story counts, pull requests, the team list and the "Azure DevOps" button** on the cards and the project panel. They need a reading from Azure DevOps per product, which is not wired; `workProgress` in `work-cards.tsx` returns null, so the ring is empty and "Done" shows a dash. Wire it there: return `{ donePercent, line }` and the cards, the order and the at-risk rule already use it.
+- Tech lead, project manager and product manager on the project panel: not stored anywhere.
+- The card foot shows "Firstmate is working on it" or "Nothing running" and how many things wait for the owner, not the faces and story bar from his picture, for the same reason.
+- Estimated value is kept in dirhams only.
+
+Not checked:
+
+- None of it in the packaged app or against real Firstmate. The preview has no Firstmate.
+- Dragging a card onto "On hold" marks it held and opens its panel for the reason; tried only by reading the code path, not by hand.
+- The light themes. Colours come from the theme tokens, and "On hold" purple is mixed from the text colour, but only "Amun dark" was looked at.
+- The daemon must be rebuilt (`npm run build:server`) to pick up migration 45.
+
+#### Small fixes in this pull request
+
+- **Finder button.** A file or folder named in a reply (a path under `~` or a top macOS folder, bare or in code marks) gets a small folder button that reveals it through the desktop shell's existing Finder target (`paseoDesktop.editor.openTarget`, id `finder`). `markdown-view.ts` (`path` inline kind), `LocalPath` in `markdown-doc.tsx`. No right-click menu.
+- **Chat names.** A typed command such as `/model` never names a chat, and a chat it named earlier is renamed by the next real message (`isTypedCommand` in `work-store.ts`).
+- **Deferred reminders.** Firstmate keeps a deferred hold in its lists; a crew member's open question only says so in words ("Deferred by the captain to 2026-11-23."). Amun now reads the day from the record or those words and hides it until then. Found from his trace bundle: the snooze had worked in Firstmate; Amun kept showing it.
+
+#### How the chats work (unchanged this session)
+
+See "Update, 20 November 2026 (pull request 44): chats that group themselves" below and `AGENTS.md`, "Chats inside a piece of work". In short: one Firstmate per home with one memory; a folder per product, project, task or RFP, each holding many chats; chats are rows in Amun's store, never Paseo agents; an explicit "create a new …" makes the folder at once; the same request typed inside another folder is held and asked about on Firstmate's card; Firstmate suggests a move when a chat drifts and the owner confirms; each message tells Firstmate which chat and folder it belongs to.
+
+#### How to look at screens without Firstmate
+
+`scripts/preview-daemon.ts` stands in for the daemon with the real work store in memory and sample work. Nothing in it ships.
+
+```bash
+npm ci
+npm run build:server
+npm run build -w @amun/ui
+npx tsx scripts/preview-daemon.ts
+```
+
+Then open `http://127.0.0.1:6791/index.html?daemon=ws://127.0.0.1:6790/amun`. For screenshots, Playwright with the installed Chrome works (`chromium.launch({ channel: "chrome" })`); its own browser is not downloaded. Use the dark colour scheme: his app is on "Amun dark".
+
+Checks that must pass: `npx vitest run`, `npm run typecheck:amun`, `npm run typecheck -w @getpaseo/server`, `npm run lint`, `npm run format:check`. The server tests fail to load until `npm run build:server` has run once in a fresh checkout. Node 22 is enough.
+
+#### Open questions for Tamer
+
+1. Should Amun's code stop asking before it publishes, for Notion only or not at all?
+2. GitHub: use the Mac's `gh` sign-in and drop the token box?
+3. The Notion banner: show it only after he connects, reworded as "Notion is connected to Tamer's Space. Amun shows you anything before it is written there."? (The wording depends on question 1.)
+4. Hooks review inside Amun: needs a preview.
+5. Should chat housekeeping and settings also be told to Firstmate?
+6. Roadmap: he will say when and how.
+7. Still open from before: whether Home should show his last chat; how a model switch reaches the crew; Azure DevOps connection; a run of the new build against real Firstmate.
 
 ### Resume point (19 November 2026, end of session)
 
