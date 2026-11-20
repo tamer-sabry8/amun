@@ -23,6 +23,7 @@ import {
   linkRecord,
   nameFromRequest,
   type WorkArea,
+  sameWorkName,
 } from "../../domain/src/work/model.ts";
 import {
   changeSinceApproval,
@@ -45,6 +46,11 @@ type Row = Record<string, unknown>;
 type Step = Parameters<typeof JSON.stringify>[0];
 const bool = (value: unknown) => value === 1;
 const list = (value: unknown) => JSON.parse(String(value ?? "[]"));
+/** A chat's name from a line of text: one line, at most sixty characters. */
+const chatTitle = (text: string) => {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 60 ? line.slice(0, 60).trimEnd() + "…" : line;
+};
 
 /**
  * A deleted work is gone from everything Amun shows: the work itself, and
@@ -217,6 +223,13 @@ export class WorkStore {
       lastContextAt: (row.last_context_at as string | null) ?? null,
       interest: Number(row.interest),
       createdAt: String(row.created_at),
+      priority:
+        (row.priority as "low" | "medium" | "high" | "urgent" | null) ?? null,
+      keptHere: list(row.kept_here_json).map(String),
+      firstChat: {
+        title: (row.first_chat_title as string | null) ?? null,
+        archivedAt: (row.first_chat_archived_at as string | null) ?? null,
+      },
     }));
   }
   private plans(): WorkSnapshot["plans"] {
@@ -541,9 +554,11 @@ export class WorkStore {
         },
         messages: this.chatMessages(null),
         chats: this.all(
-          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
+          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.kind,c.archived_at AS archivedAt,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
         ).map((chat) => ({
           ...chat,
+          // A chat the owner started has no fork point.
+          forkedFrom: chat.forkedFrom ? String(chat.forkedFrom) : null,
           messages: this.chatMessages(String(chat.id)),
         })),
       }),
@@ -669,6 +684,7 @@ export class WorkStore {
     dueAt?: string | undefined;
     effort?: string | undefined;
     stakeholder?: number | undefined;
+    priority?: string | undefined;
     convertedFrom?: string;
   }) {
     this.requireGroup(input.groupId);
@@ -694,7 +710,7 @@ export class WorkStore {
       );
     }
     this.run(
-      "INSERT INTO work_areas(id,group_id,type,name,purpose,product_id,client,due_at,effort,stakeholder,last_context_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO work_areas(id,group_id,type,name,purpose,product_id,client,due_at,effort,stakeholder,priority,last_context_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
       id,
       input.groupId,
       input.type,
@@ -705,6 +721,7 @@ export class WorkStore {
       input.dueAt ?? null,
       input.effort ?? null,
       input.stakeholder ?? 0,
+      input.priority ?? null,
       now,
       now,
     );
@@ -2189,6 +2206,22 @@ export class WorkStore {
           now,
           command.workAreaId,
         );
+        // A chat is named by the owner's first message in it.
+        if (command.role === "you") {
+          const title = chatTitle(command.text);
+          if (command.chatId === null)
+            this.run(
+              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND first_chat_title IS NULL",
+              title,
+              command.workAreaId,
+            );
+          else
+            this.run(
+              "UPDATE work_chats SET title=? WHERE id=? AND title=''",
+              title,
+              command.chatId,
+            );
+        }
         return { ref: id };
       }
       case "fork-chat": {
@@ -2207,7 +2240,7 @@ export class WorkStore {
           "INSERT INTO work_chats(id,work_area_id,title,forked_from,from_chat_id,created_at) VALUES (?,?,?,?,?,?)",
           id,
           command.workAreaId,
-          line.length > 60 ? line.slice(0, 60).trimEnd() + "…" : line || "Fork",
+          chatTitle(line) || "Fork",
           command.messageId,
           fromChat,
           now,
@@ -2252,7 +2285,189 @@ export class WorkStore {
         this.run("DELETE FROM work_chats WHERE id=?", command.chatId);
         return {};
       }
+      case "new-chat": {
+        if (!this.live(command.workAreaId))
+          throw new WorkError("That work area no longer exists.");
+        const id = randomUUID();
+        this.run(
+          "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at) VALUES (?,?,'','chat','',NULL,?)",
+          id,
+          command.workAreaId,
+          now,
+        );
+        this.run(
+          "UPDATE work_areas SET last_context_at=? WHERE id=?",
+          now,
+          command.workAreaId,
+        );
+        return { ref: id };
+      }
+      case "rename-chat": {
+        this.requireChat(command.workAreaId, command.chatId);
+        const title = chatTitle(this.clean(command.title));
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_title=? WHERE id=?",
+            title,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET title=? WHERE id=?",
+            title,
+            command.chatId,
+          );
+        return {};
+      }
+      case "archive-chat": {
+        this.requireChat(command.workAreaId, command.chatId);
+        const at = command.archived ? now : null;
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_archived_at=? WHERE id=?",
+            at,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET archived_at=? WHERE id=?",
+            at,
+            command.chatId,
+          );
+        return {};
+      }
+      case "move-chat": {
+        this.requireChat(command.workAreaId, command.chatId);
+        if (command.toWorkAreaId === command.workAreaId)
+          throw new WorkError("That chat is already in this work.");
+        const to = this.get(
+          "SELECT id,name,first_chat_title,first_chat_archived_at FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.toWorkAreaId,
+        );
+        if (!to) throw new WorkError("That work area no longer exists.");
+        const inChat =
+          command.chatId === null ? "chat_id IS NULL" : "chat_id=?";
+        const chatArgs = command.chatId === null ? [] : [command.chatId];
+        let from: Row | undefined;
+        if (command.fromMessageId) {
+          from = this.get(
+            `SELECT rowid AS seq,created_at AS createdAt FROM work_messages WHERE id=? AND work_area_id=? AND ${inChat}`,
+            command.fromMessageId,
+            command.workAreaId,
+            ...chatArgs,
+          );
+          if (!from) throw new WorkError("That message is no longer there.");
+        }
+        // That message and everything after it, or the whole chat.
+        const moving = this.all(
+          `SELECT id,role,text FROM work_messages WHERE work_area_id=? AND ${inChat}${from ? " AND (created_at>? OR (created_at=? AND rowid>=?))" : ""} ORDER BY created_at,rowid`,
+          command.workAreaId,
+          ...chatArgs,
+          ...(from ? [from.createdAt, from.createdAt, from.seq] : []),
+        );
+        if (!moving.length) throw new WorkError("There is nothing to move.");
+        const first = moving.find((row) => row.role === "you");
+        const title = first ? chatTitle(String(first.text)) : "";
+        // An unused first chat takes them; otherwise they get a chat of their own.
+        const firstChatFree =
+          to.first_chat_archived_at === null &&
+          !this.get(
+            "SELECT 1 FROM work_messages WHERE work_area_id=? AND chat_id IS NULL LIMIT 1",
+            command.toWorkAreaId,
+          );
+        let target: string | null = null;
+        if (firstChatFree) {
+          if (title)
+            this.run(
+              "UPDATE work_areas SET first_chat_title=? WHERE id=?",
+              title,
+              command.toWorkAreaId,
+            );
+        } else {
+          target = randomUUID();
+          this.run(
+            "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at) VALUES (?,?,?,'chat','',NULL,?)",
+            target,
+            command.toWorkAreaId,
+            title,
+            now,
+          );
+        }
+        for (const row of moving)
+          this.run(
+            "UPDATE work_messages SET work_area_id=?,chat_id=? WHERE id=?",
+            command.toWorkAreaId,
+            target,
+            row.id,
+          );
+        // The chat they left says where the conversation went.
+        this.run(
+          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,'card',?,?,NULL,?)",
+          randomUUID(),
+          command.workAreaId,
+          command.chatId,
+          `Continued in ${String(to.name)}`,
+          JSON.stringify({
+            kind: "moved",
+            toWorkAreaId: command.toWorkAreaId,
+            toChatId: target,
+            name: String(to.name),
+          }),
+          now,
+        );
+        this.run(
+          "UPDATE work_areas SET last_context_at=? WHERE id IN (?,?)",
+          now,
+          command.workAreaId,
+          command.toWorkAreaId,
+        );
+        return target ? { ref: target } : {};
+      }
+      case "keep-here": {
+        const area = this.get(
+          "SELECT kept_here_json FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.workAreaId,
+        );
+        if (!area) throw new WorkError("That work area no longer exists.");
+        const kept: string[] = list(area.kept_here_json).map(String);
+        const name = this.clean(command.name);
+        if (!kept.some((item) => sameWorkName(item, name)))
+          this.run(
+            "UPDATE work_areas SET kept_here_json=? WHERE id=?",
+            JSON.stringify([...kept, name].slice(-200)),
+            command.workAreaId,
+          );
+        return {};
+      }
+      case "settle-card": {
+        const card = this.get(
+          "SELECT 1 FROM work_messages WHERE id=? AND role='card'",
+          command.messageId,
+        );
+        if (!card) throw new WorkError("That card is no longer there.");
+        this.run(
+          "UPDATE work_messages SET card_json=? WHERE id=?",
+          JSON.stringify(command.card),
+          command.messageId,
+        );
+        return {};
+      }
     }
+  }
+
+  /** The work is live and the chat (null is its first chat) belongs to it. */
+  private requireChat(workAreaId: string, chatId: string | null) {
+    if (!this.live(workAreaId))
+      throw new WorkError("That work area no longer exists.");
+    if (
+      chatId !== null &&
+      !this.get(
+        "SELECT 1 FROM work_chats WHERE id=? AND work_area_id=?",
+        chatId,
+        workAreaId,
+      )
+    )
+      throw new WorkError("That chat no longer exists.");
   }
 
   private addGroup(raw: string) {

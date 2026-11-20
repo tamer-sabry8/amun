@@ -1662,3 +1662,262 @@ describe("chats inside a work (fork from here)", () => {
     ).toBe(false);
   });
 });
+
+describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
+  const say = (
+    workAreaId: string,
+    role: string,
+    text: string,
+    chatId: string | null = null,
+  ) => send("message", { workAreaId, chatId, role, text }).ref!;
+  const texts = (messages: { text: string }[]) =>
+    messages.map((message) => message.text);
+  const areaOf = (id: string) => snap().areas.find((item) => item.id === id)!;
+  const chatOf = (id: string) => snap().chats.find((item) => item.id === id)!;
+
+  it("names every chat by the owner's first message in it", () => {
+    const { employer } = setup();
+    const id = area(employer, "project", "Gitex");
+    expect(areaOf(id).firstChat).toEqual({ title: null, archivedAt: null });
+    say(id, "firstmate", "Ahoy.");
+    say(id, "you", "Plan the\nbooth for Gitex.");
+    say(id, "you", "And the travel.");
+    expect(areaOf(id).firstChat.title).toBe("Plan the booth for Gitex.");
+
+    const chat = send("new-chat", { workAreaId: id }).ref!;
+    expect(chatOf(chat)).toMatchObject({
+      kind: "chat",
+      title: "",
+      forkedFrom: null,
+      fromChatId: null,
+      archivedAt: null,
+      messages: [],
+    });
+    say(id, "you", "Who are the sponsors? " + "x".repeat(80), chat);
+    expect(chatOf(chat).title).toHaveLength(61);
+    expect(chatOf(chat).title.endsWith("…")).toBe(true);
+    // The first chat is untouched by what is said in another one.
+    expect(texts(snap().messages)).toEqual([
+      "Ahoy.",
+      "Plan the\nbooth for Gitex.",
+      "And the travel.",
+    ]);
+  });
+
+  it("renames and archives any chat, and brings it back", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Pricing");
+    say(id, "you", "Draft three options.");
+    const chat = send("new-chat", { workAreaId: id }).ref!;
+
+    send("rename-chat", { workAreaId: id, chatId: null, title: "Options" });
+    send("rename-chat", { workAreaId: id, chatId: chat, title: " Discounts " });
+    expect(areaOf(id).firstChat.title).toBe("Options");
+    expect(chatOf(chat).title).toBe("Discounts");
+    // A renamed chat keeps its name when the owner writes in it.
+    say(id, "you", "What about students?", chat);
+    expect(chatOf(chat).title).toBe("Discounts");
+
+    send("archive-chat", { workAreaId: id, chatId: null, archived: true });
+    send("archive-chat", { workAreaId: id, chatId: chat, archived: true });
+    expect(areaOf(id).firstChat.archivedAt).not.toBeNull();
+    expect(chatOf(chat).archivedAt).not.toBeNull();
+    // Archived chats are kept whole.
+    expect(texts(snap().messages)).toEqual(["Draft three options."]);
+    expect(texts(chatOf(chat).messages)).toEqual(["What about students?"]);
+    send("archive-chat", { workAreaId: id, chatId: chat, archived: false });
+    expect(chatOf(chat).archivedAt).toBeNull();
+
+    const other = area(employer, "task", "Other");
+    expect(
+      send("rename-chat", { workAreaId: other, chatId: chat, title: "X" }).ok,
+    ).toBe(false);
+  });
+
+  it("stores the priority the owner stated, and none otherwise", () => {
+    const { employer } = setup();
+    const made = send("create-area", {
+      groupId: employer,
+      type: "project",
+      name: "Gitex",
+      priority: "high",
+      dueAt: "2026-12-06",
+    }).ref!;
+    expect(areaOf(made)).toMatchObject({
+      priority: "high",
+      dueAt: "2026-12-06",
+    });
+    expect(areaOf(area(employer, "task", "Plain")).priority).toBeNull();
+  });
+
+  it("moves a chat from one message on and leaves a line behind", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const sdk = area(employer, "product", "AMUN-SDK");
+    say(gitex, "you", "Plan the booth.");
+    say(gitex, "firstmate", "On it.");
+    const drift = say(gitex, "you", "Help me write the vision for Amun-SDK.");
+    say(gitex, "firstmate", "Here is a first vision.");
+
+    const moved = send("move-chat", {
+      workAreaId: gitex,
+      chatId: null,
+      fromMessageId: drift,
+      toWorkAreaId: sdk,
+    });
+    expect(moved.ok).toBe(true);
+    // The new folder's unused first chat takes them.
+    expect(moved.ref).toBeNull();
+    const after = snap();
+    const of = (id: string) =>
+      after.messages.filter((message) => message.workAreaId === id);
+    expect(texts(of(sdk))).toEqual([
+      "Help me write the vision for Amun-SDK.",
+      "Here is a first vision.",
+    ]);
+    expect(areaOf(sdk).firstChat.title).toBe(
+      "Help me write the vision for Amun-SDK.",
+    );
+    expect(texts(of(gitex))).toEqual([
+      "Plan the booth.",
+      "On it.",
+      "Continued in AMUN-SDK",
+    ]);
+    expect(of(gitex).at(-1)).toMatchObject({
+      role: "card",
+      card: { kind: "moved", toWorkAreaId: sdk, toChatId: null },
+    });
+    // Moved messages are still found by search, once.
+    expect(
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM content_index WHERE kind='message' AND ref=?",
+        )
+        .get(drift),
+    ).toEqual({ n: 1 });
+  });
+
+  it("gives moved messages their own chat when the folder is in use", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const sdk = area(employer, "product", "AMUN-SDK");
+    say(sdk, "you", "Existing talk.");
+    const chat = send("new-chat", { workAreaId: gitex }).ref!;
+    say(gitex, "you", "SDK pricing ideas.", chat);
+
+    const target = send("move-chat", {
+      workAreaId: gitex,
+      chatId: chat,
+      toWorkAreaId: sdk,
+    }).ref!;
+    expect(chatOf(target)).toMatchObject({
+      workAreaId: sdk,
+      kind: "chat",
+      title: "SDK pricing ideas.",
+    });
+    expect(texts(chatOf(target).messages)).toEqual(["SDK pricing ideas."]);
+    expect(texts(chatOf(chat).messages)).toEqual(["Continued in AMUN-SDK"]);
+    expect(texts(snap().messages)).toEqual(["Existing talk."]);
+  });
+
+  it("refuses a move that would do nothing or go nowhere", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const sdk = area(employer, "product", "AMUN-SDK");
+    const said = say(gitex, "you", "Plan the booth.");
+    const fails = (extra: Record<string, unknown>) =>
+      send("move-chat", { workAreaId: gitex, chatId: null, ...extra });
+    expect(fails({ toWorkAreaId: gitex }).ok).toBe(false);
+    expect(fails({ toWorkAreaId: "missing" }).ok).toBe(false);
+    expect(fails({ toWorkAreaId: sdk, fromMessageId: "missing" }).ok).toBe(
+      false,
+    );
+    const empty = send("new-chat", { workAreaId: gitex }).ref!;
+    expect(
+      send("move-chat", {
+        workAreaId: gitex,
+        chatId: empty,
+        toWorkAreaId: sdk,
+      }).ok,
+    ).toBe(false);
+    // Nothing moved.
+    expect(snap().messages.map((message) => message.id)).toEqual([said]);
+  });
+
+  it("remembers a name the owner kept here, once", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    send("keep-here", { workAreaId: gitex, name: "Amun-SDK" });
+    send("keep-here", { workAreaId: gitex, name: "AMUN SDK" });
+    expect(areaOf(gitex).keptHere).toEqual(["Amun-SDK"]);
+  });
+
+  it("keeps a held message on its card until the owner chooses", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const held = send("message", {
+      workAreaId: gitex,
+      role: "card",
+      text: "Create a new product called Amun-SDK",
+      card: { kind: "move-offer", state: "open" },
+    }).ref!;
+    // A new store on the same data still has it.
+    const again = new WorkStore(db, undefined, tick).snapshot();
+    expect(again.messages.at(-1)).toMatchObject({
+      id: held,
+      card: { kind: "move-offer", state: "open" },
+    });
+    send("settle-card", {
+      messageId: held,
+      card: { kind: "move-offer", state: "kept" },
+    });
+    expect(snap().messages.at(-1)!.card).toEqual({
+      kind: "move-offer",
+      state: "kept",
+    });
+    const plain = say(gitex, "you", "Hello.");
+    expect(send("settle-card", { messageId: plain, card: {} }).ok).toBe(false);
+  });
+
+  it("upgrades a store that had chats before, naming each first chat", () => {
+    const old = openDatabase(":memory:");
+    migrate(old, 43);
+    const add = (sql: string, ...values: (string | null)[]) =>
+      old.prepare(sql).run(...values);
+    const at = "2026-11-19T08:00:00.000Z";
+    add(
+      "INSERT INTO work_areas(id,type,name,created_at) VALUES ('a1','task','Pricing',?)",
+      at,
+    );
+    add(
+      "INSERT INTO work_areas(id,type,name,created_at) VALUES ('a2','task','Quiet',?)",
+      at,
+    );
+    add(
+      "INSERT INTO work_messages(id,work_area_id,role,text,created_at) VALUES ('m0','a1','firstmate','Ahoy.',?)",
+      at,
+    );
+    add(
+      "INSERT INTO work_messages(id,work_area_id,role,text,created_at) VALUES ('m1','a1','you',?,?)",
+      "Draft three\noptions.",
+      at,
+    );
+    add(
+      "INSERT INTO work_chats(id,work_area_id,title,forked_from,created_at) VALUES ('c1','a1','Draft three options.','m1',?)",
+      at,
+    );
+    migrate(old);
+    const upgraded = new WorkStore(old, undefined, tick).snapshot();
+    const named = (id: string) =>
+      upgraded.areas.find((item) => item.id === id)!.firstChat.title;
+    expect(named("a1")).toBe("Draft three options.");
+    expect(named("a2")).toBeNull();
+    // A chat that was a fork is still one.
+    expect(upgraded.chats[0]).toMatchObject({
+      id: "c1",
+      kind: "fork",
+      forkedFrom: "m1",
+      archivedAt: null,
+    });
+  });
+});

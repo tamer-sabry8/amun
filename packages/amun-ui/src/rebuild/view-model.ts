@@ -107,6 +107,7 @@ export function attentionItems(snapshot: Snapshot): Attention[] {
         detail: item.detail,
         state: item.state,
         createdAt: item.createdAt,
+        ref: item.ref,
         ...(plan && plan.state === "proposed"
           ? {
               batch: {
@@ -301,6 +302,13 @@ export type AmunAction =
       }[];
     }
   | { do: "question"; title: string; detail: string; options: string[] }
+  | {
+      do: "move";
+      name: string;
+      type: "product" | "project" | "task" | "rfp";
+      /** How many of the owner's latest messages it is about. */
+      messages: number;
+    }
   | { do: "offer"; title: string; detail: string }
   | { do: "scope"; item: string; brd: string | null }
   | { do: "update"; message: string }
@@ -389,6 +397,24 @@ function action(raw: unknown): AmunAction | null {
         summary,
         items: items.slice(0, 200),
       };
+    }
+    case "move": {
+      const name = text(input.name, 80);
+      const count = Number(input.messages);
+      return name
+        ? {
+            do: "move",
+            name,
+            type:
+              input.type === "product" ||
+              input.type === "task" ||
+              input.type === "rfp"
+                ? input.type
+                : "project",
+            messages:
+              Number.isInteger(count) && count >= 1 ? Math.min(count, 20) : 1,
+          }
+        : null;
     }
     case "question":
       return title
@@ -816,6 +842,7 @@ export const amunProtocol = [
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
   '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Amun raises the plan and may refuse it; never say a review card or plan is ready, shown or waiting, only that you have asked Amun to raise it for approval. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps, new item: type, description, acceptance (one criterion per line), area, iteration, parent (the number of an existing work item in this same project to create it under, for example a Task under #123: set type to the task type and parent to "123"), and the required fields of the work item type listed above for this project, plus "Original Estimate", "Remaining Work" and "Completed Work" (numbers, in hours) and "Activity" when the project has them. Where a field lists allowed values, only one of those is accepted. Never pick a required value yourself: ask the owner for exactly the values the type needs, listing the allowed values for a choice, then put them in the fields of the item under those names. Amun can set that parent link: it checks the parent exists, shows "Under #123" on the review card for the owner to approve, and verifies the link after creating. Never say Amun cannot set a parent or that the item will be standalone. Azure DevOps, existing item (moving it to a sprint or changing who it is assigned to): workitem (its number) plus iteration and/or assignedto (a name or email), and nothing else. Notion, new page: title (the page title), body; it goes under the Notion destination chosen in Settings, which the review card shows. Notion, update of a page Amun created (listed above in this work area): page (its exact page id or link from that list), plus title (optional; kept when left out) and either body (the whole new text) or append (only the lines to add at the end of the existing text), never both; the review card shows the exact result for the owner to approve. Amun cannot update any page it did not create, so say so plainly and do not raise a plan for one. Leave out any other field, because it will be refused, and never name a different project. If an item was not created, its reason is listed under the failed publications above: use it, tell the owner what is needed, and raise a corrected plan; never guess. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result.',
+  '{"do":"move","name":"…","type":"product|project|task|rfp","messages":2} suggests that the owner\'s latest messages in this chat belong in a folder of their own, when the owner has clearly moved on to a different product, project, task or RFP than the one this work area is about; "messages" is how many of the owner\'s latest messages are about it, and "name" is what the owner calls it. Amun asks the owner, and nothing moves unless they agree. Suggest it at most once per subject and only when you are sure: never for a passing mention, never for something that is part of this work area, and never for a name the owner already chose to keep here. Keep answering the owner here as usual, and do not say that anything was moved.',
   '{"do":"offer","title":"…","detail":"…"} offers a follow-up draft; draft it only after the owner accepts.',
   '{"do":"scope","item":"…","brd":"BRD v2"} flags a request outside the approved scope.',
   '{"do":"update","message":"50–90 words"} gives a stakeholder update to copy; never send it. Do not list blockers in it: Amun adds each open blocker with its owner and how long ago it was raised.',

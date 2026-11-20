@@ -9,6 +9,7 @@ const text = z.string().trim().max(4096);
 const longText = z.string().max(100000);
 const stamp = z.string().max(64);
 export const workType = z.enum(["product", "project", "task", "rfp"]);
+export const workPriority = z.enum(["low", "medium", "high", "urgent"]);
 export const recordType = z.enum(["idea", "problem", "interview", "document"]);
 export const linkage = z.enum([
   "linked",
@@ -143,6 +144,15 @@ export const workSnapshot = z.strictObject({
       lastContextAt: stamp.nullable(),
       interest: z.int(),
       createdAt: stamp,
+      /** Only what the owner said; null when no priority was stated. */
+      priority: workPriority.nullable(),
+      /** Names the owner said belong inside this work ("Keep it here"). */
+      keptHere: z.array(z.string()),
+      /** The work's first chat: its name once it has one, and its archive mark. */
+      firstChat: z.strictObject({
+        title: z.string().nullable(),
+        archivedAt: stamp.nullable(),
+      }),
     }),
   ),
   relations: z.array(
@@ -481,15 +491,21 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
-  /** Forks inside a work, oldest first. `messages` above is each main chat. */
+  /**
+   * The chats inside a work besides its first one, oldest first: chats the
+   * owner started and forks. `messages` above is each work's first chat.
+   */
   chats: z
     .array(
       z.strictObject({
         id,
         workAreaId: id,
         title: z.string(),
-        /** The message it was forked from, in the chat it came from. */
-        forkedFrom: id,
+        kind: z.enum(["fork", "chat"]),
+        /** Set while the owner has archived it; it stays searchable. */
+        archivedAt: stamp.nullable(),
+        /** The message a fork was taken from, in the chat it came from. */
+        forkedFrom: id.nullable(),
         /** The chat it came from; null is the main chat. */
         fromChatId: id.nullable(),
         createdAt: stamp,
@@ -561,6 +577,7 @@ export const workCommand = z.discriminatedUnion("action", [
     dueAt: stamp.optional(),
     effort: effort.optional(),
     stakeholder: z.int().min(0).max(3).optional(),
+    priority: workPriority.optional(),
   }),
   act("update-area", {
     areaId: id,
@@ -866,6 +883,31 @@ export const workCommand = z.discriminatedUnion("action", [
    */
   act("fork-chat", { workAreaId: id, messageId: id }),
   act("delete-chat", { chatId: id }),
+  /** "New chat" in a folder: an empty chat, named by its first message. */
+  act("new-chat", { workAreaId: id }),
+  /** `chatId` null is the work's first chat. */
+  act("rename-chat", { workAreaId: id, chatId: id.nullable(), title: name }),
+  /** Archived chats leave the sidebar, stay searchable and can come back. */
+  act("archive-chat", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    archived: z.boolean(),
+  }),
+  /**
+   * Re-files a chat's messages, from one message on (or all of them), as a
+   * chat in another work. The chat they left keeps one line saying where the
+   * conversation continued. Only ever sent after the owner said yes.
+   */
+  act("move-chat", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    fromMessageId: id.optional(),
+    toWorkAreaId: id,
+  }),
+  /** "Keep it here": this name belongs inside this work; do not ask again. */
+  act("keep-here", { workAreaId: id, name }),
+  /** Replaces what a card message holds, for example once it is answered. */
+  act("settle-card", { messageId: id, card: z.json() }),
 ]);
 export type WorkCommand = z.infer<typeof workCommand>;
 

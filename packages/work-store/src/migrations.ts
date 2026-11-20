@@ -1130,4 +1130,22 @@ UPDATE library_output_versions SET author_known=0 WHERE version=1 AND author='ow
 );
 ALTER TABLE work_messages ADD COLUMN chat_id TEXT REFERENCES work_chats(id);
 CREATE INDEX work_messages_chat ON work_messages(chat_id);`,
+  // 44 · Ordinary chats (owner, 20 November 2026). Every folder, General
+  // included, holds a list of chats the owner can add to, rename and archive.
+  // A chat the owner starts is a work_chats row of kind 'chat' with no fork
+  // point (forked_from is ''). A work's first chat still has no row, so its
+  // name and archive mark live on the work. A work also keeps its stated
+  // priority and the names the owner said belong inside it ("Keep it here").
+  `ALTER TABLE work_chats ADD COLUMN kind TEXT NOT NULL DEFAULT 'fork' CHECK (kind IN ('fork','chat'));
+ALTER TABLE work_chats ADD COLUMN archived_at TEXT;
+ALTER TABLE work_areas ADD COLUMN first_chat_title TEXT;
+ALTER TABLE work_areas ADD COLUMN first_chat_archived_at TEXT;
+ALTER TABLE work_areas ADD COLUMN priority TEXT CHECK (priority IS NULL OR priority IN ('low','medium','high','urgent'));
+ALTER TABLE work_areas ADD COLUMN kept_here_json TEXT NOT NULL DEFAULT '[]';
+UPDATE work_areas SET first_chat_title=(
+  SELECT substr(trim(replace(replace(m.text,char(10),' '),char(13),' ')),1,60)
+  FROM work_messages m
+  WHERE m.work_area_id=work_areas.id AND m.chat_id IS NULL AND m.role='you'
+  ORDER BY m.created_at,m.rowid LIMIT 1
+);`,
 ] as const;

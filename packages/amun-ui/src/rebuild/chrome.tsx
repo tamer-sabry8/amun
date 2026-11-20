@@ -18,10 +18,12 @@ import {
 } from "../../../../packages/contracts/src/work.ts";
 import type { Snapshot } from "./view-model.ts";
 import { clockLabel } from "./what-happened.tsx";
+import type { MoveChoice, MoveQuestion } from "./move-offers.ts";
 import {
   chatLimit,
   folderLimit,
   workFolders,
+  type FolderChat,
   type WorkFolder,
 } from "./folders.ts";
 
@@ -48,6 +50,8 @@ export interface IslandActions {
   onOpen(item: Attention): void;
   onPrimary(item: Attention): void;
   onAnswer(item: Attention, answer: string): void;
+  /** The owner's choice on "where should this go?", with the folder's name. */
+  onMove(item: Attention, choice: MoveChoice, name: string): void;
 }
 
 /** Where an item stands, in three steps. Only what is known is claimed. */
@@ -73,6 +77,7 @@ function IslandCard({
   options,
   floating,
   actions,
+  move,
   onMinimise,
 }: {
   item: Attention;
@@ -80,14 +85,85 @@ function IslandCard({
   options: string[];
   floating: boolean;
   actions: IslandActions;
+  move: IslandMove | null;
   onMinimise?: (() => void) | undefined;
 }) {
   const [writing, setWriting] = useState(false);
   const [answer, setAnswer] = useState("");
+  const [folderName, setFolderName] = useState(move?.name ?? "");
   useEffect(() => {
     setWriting(false);
     setAnswer("");
+    setFolderName(move?.name ?? "");
   }, [item.id]);
+  // "Where should this go?": the folder's name and the owner's choices.
+  if (move)
+    return (
+      <section
+        className={"rb-island" + (floating ? " floating" : "")}
+        aria-label="Needs you"
+      >
+        <div className="head">
+          <FirstmateMark mood="needs" />
+          <span className="who">
+            <strong>Firstmate</strong>
+            <span className="state question">{move.question.label}</span>
+          </span>
+          {count > 1 && (
+            <span className="count" title={`${count} items need you`}>
+              {count}
+            </span>
+          )}
+          {onMinimise && (
+            <button
+              className="icon-btn"
+              aria-label="Minimise"
+              onClick={onMinimise}
+            >
+              <Icon name="chevron" width={14} height={14} />
+            </button>
+          )}
+        </div>
+        <button
+          className="title"
+          style={{ justifyContent: "flex-start", textAlign: "left" }}
+          onClick={() => actions.onOpen(item)}
+        >
+          {move.question.title}
+        </button>
+        <p className="detail">{move.question.detail}</p>
+        {move.question.nameField && (
+          <label className="name">
+            <span>Folder name</span>
+            <input
+              type="text"
+              value={folderName}
+              maxLength={200}
+              onChange={(event) => setFolderName(event.target.value)}
+            />
+          </label>
+        )}
+        <div className="choices">
+          {move.question.buttons.map((button, position) => (
+            <button
+              key={button.choice}
+              className={"btn" + (position === 0 ? " primary" : "")}
+              disabled={
+                button.choice === "new" &&
+                move.question.nameField &&
+                !folderName.trim()
+              }
+              onClick={() =>
+                actions.onMove(item, button.choice, folderName.trim())
+              }
+            >
+              {button.label}
+            </button>
+          ))}
+        </div>
+        <p className="foot">{move.question.note}</p>
+      </section>
+    );
   const primary = islandAction[item.kind];
   const steps = islandSteps[item.kind];
   return (
@@ -226,6 +302,13 @@ function IslandCard({
   );
 }
 
+/** The move question behind the item on the card, when it is one. */
+export interface IslandMove {
+  question: MoveQuestion;
+  /** The folder name offered, which the owner can change. */
+  name: string;
+}
+
 const minimisedKey = "amun.island.minimised";
 export function Island({
   top,
@@ -234,7 +317,9 @@ export function Island({
   options,
   collapsed,
   actions,
+  move = null,
 }: {
+  move?: IslandMove | null;
   top: Attention | null;
   count: number;
   /** Things left out because the open chat is already asking about them. */
@@ -298,6 +383,7 @@ export function Island({
         options={options}
         floating={false}
         actions={actions}
+        move={move}
         onMinimise={() => minimise(true)}
       />
     );
@@ -313,7 +399,7 @@ export function Island({
         <FirstmateMark size={28} mood="needs" />
         <span className="text">
           <strong>Firstmate</strong>
-          <span>{kindLabel[top.kind]}</span>
+          <span>{move ? move.question.label : kindLabel[top.kind]}</span>
         </span>
         <span className="count">{count}</span>
         <Icon name="chevron" width={14} height={14} />
@@ -344,6 +430,7 @@ export function Island({
             options={options}
             floating
             actions={actions}
+            move={move}
           />
         </div>
       )}
@@ -361,6 +448,7 @@ export function Sidebar({
   snapshot,
   open,
   onChat,
+  onNewChat,
 }: {
   route: Route;
   collapsed: boolean;
@@ -372,21 +460,30 @@ export function Sidebar({
   /** The chat on screen, when a piece of work is open. */
   open: { areaId: string; chatId: string | null } | null;
   onChat(areaId: string, chatId: string | null): void;
+  /** "New chat" on a folder, or (null) in the Chats list. */
+  onNewChat(areaId: string | null): void;
 }) {
-  const { folders, general } = workFolders(
+  const { folders, loose, looseArchived, looseAreaId } = workFolders(
     snapshot.areas,
     snapshot.chats,
+    snapshot.messages,
     snapshot.setup.activeGroupId,
   );
   // Folders the owner opened or closed by hand; the open work's is open.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [allChats, setAllChats] = useState<Record<string, boolean>>({});
-  // The "…" menu of one folder or one fork, placed beside its button.
+  // Lists the owner folded: "work", "chats".
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  // Folders (and "chats") whose archived chats are being shown.
+  const [archivedShown, setArchivedShown] = useState<Record<string, boolean>>(
+    {},
+  );
+  // The "…" menu of one folder or one chat, placed beside its button.
   const [menu, setMenu] = useState<{
     key: string;
     top: number;
     left: number;
-    confirm: boolean;
+    step: "menu" | "confirm" | "move";
   } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const openMenu = (key: string, button: HTMLElement) => {
@@ -394,7 +491,7 @@ export function Sidebar({
     setMenu(
       menu?.key === key
         ? null
-        : { key, top: box.bottom + 4, left: box.left, confirm: false },
+        : { key, top: box.bottom + 4, left: box.left, step: "menu" },
     );
   };
   const dots = (key: string, label: string) => (
@@ -406,6 +503,16 @@ export function Sidebar({
       onClick={(event) => openMenu(key, event.currentTarget)}
     >
       <Icon name="more" width={16} height={16} />
+    </button>
+  );
+  const newChat = (areaId: string | null, label: string) => (
+    <button
+      className="dots"
+      aria-label={label}
+      title={label}
+      onClick={() => onNewChat(areaId)}
+    >
+      <Icon name="compose" width={15} height={15} />
     </button>
   );
   const popup = (key: string, items: ReactNode) =>
@@ -421,42 +528,172 @@ export function Sidebar({
         </div>
       </>
     );
-  const folder = (item: WorkFolder, name = item.name) => {
+  const rename = (key: string, value: string, save: (next: string) => void) => (
+    <form
+      className="rename"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = new FormData(event.currentTarget).get("name");
+        if (typeof next === "string" && next.trim()) save(next.trim());
+        setRenaming(null);
+      }}
+    >
+      <input
+        name="name"
+        type="text"
+        aria-label="Name"
+        autoFocus
+        maxLength={200}
+        defaultValue={value}
+        onBlur={() => setRenaming(null)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setRenaming(null);
+        }}
+      />
+    </form>
+  );
+  // One chat's row, under its folder or in the Chats list.
+  const chatRow = (areaId: string, chat: FolderChat, flat: boolean) => {
+    const key = `${areaId}:${chat.chatId ?? "first"}`;
+    const archived = chat.archivedAt !== null;
+    const elsewhere = folders.filter((item) => item.areaId !== areaId);
+    return (
+      <li key={key}>
+        {renaming === key ? (
+          rename(key, chat.title, (title) =>
+            work("rename-chat", {
+              workAreaId: areaId,
+              chatId: chat.chatId,
+              title,
+            }),
+          )
+        ) : (
+          <div className="line">
+            <button
+              className={
+                "chat" + (flat ? " flat" : "") + (archived ? " archived" : "")
+              }
+              aria-current={
+                open?.areaId === areaId && open.chatId === chat.chatId
+                  ? "page"
+                  : undefined
+              }
+              title={chat.title}
+              onClick={() => onChat(areaId, chat.chatId)}
+            >
+              {chat.title}
+            </button>
+            {dots(key, chat.title)}
+          </div>
+        )}
+        {popup(
+          key,
+          archived ? (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                work("archive-chat", {
+                  workAreaId: areaId,
+                  chatId: chat.chatId,
+                  archived: false,
+                });
+              }}
+            >
+              Bring back
+            </button>
+          ) : menu?.step === "move" ? (
+            <>
+              <div className="rb-menu-title">Move this chat to</div>
+              {elsewhere.map((item) => (
+                <button
+                  key={item.areaId}
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(null);
+                    work("move-chat", {
+                      workAreaId: areaId,
+                      chatId: chat.chatId,
+                      toWorkAreaId: item.areaId,
+                    });
+                  }}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  setRenaming(key);
+                }}
+              >
+                Rename
+              </button>
+              {elsewhere.length > 0 && !chat.empty && (
+                <button
+                  role="menuitem"
+                  onClick={() => setMenu({ ...menu!, step: "move" })}
+                >
+                  Move to another folder
+                </button>
+              )}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  work("archive-chat", {
+                    workAreaId: areaId,
+                    chatId: chat.chatId,
+                    archived: true,
+                  });
+                }}
+              >
+                Archive
+              </button>
+            </>
+          ),
+        )}
+      </li>
+    );
+  };
+  const heading = (key: "work" | "chats", label: string, extra?: ReactNode) => (
+    <li className="heading">
+      <div className="line">
+        <button
+          className="section"
+          aria-expanded={!folded[key]}
+          onClick={() => setFolded({ ...folded, [key]: !folded[key] })}
+        >
+          <span>{label}</span>
+          <Icon
+            name="chevron"
+            width={10}
+            height={10}
+            style={{ rotate: folded[key] ? undefined : "90deg" }}
+          />
+        </button>
+        {extra}
+      </div>
+    </li>
+  );
+  const folder = (item: WorkFolder) => {
     const current = open?.areaId === item.areaId;
-    const isGeneral = name !== item.name;
     const expanded = toggled[item.areaId] ?? current;
-    const chats = allChats[item.areaId]
-      ? item.chats
-      : item.chats.slice(0, chatLimit);
+    const listed = [
+      ...item.chats,
+      ...(archivedShown[item.areaId] ? item.archived : []),
+    ];
+    const chats = allChats[item.areaId] ? listed : listed.slice(0, chatLimit);
     return (
       <li key={item.areaId}>
         {renaming === item.areaId ? (
-          <form
-            className="rename"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const next = new FormData(event.currentTarget).get("name");
-              if (typeof next === "string" && next.trim())
-                work("update-area", {
-                  areaId: item.areaId,
-                  patch: { name: next.trim() },
-                });
-              setRenaming(null);
-            }}
-          >
-            <input
-              name="name"
-              type="text"
-              aria-label="Name"
-              autoFocus
-              maxLength={200}
-              defaultValue={item.name}
-              onBlur={() => setRenaming(null)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setRenaming(null);
-              }}
-            />
-          </form>
+          rename(item.areaId, item.name, (name) =>
+            work("update-area", { areaId: item.areaId, patch: { name } }),
+          )
         ) : (
           <div className="line">
             <button
@@ -464,23 +701,24 @@ export function Sidebar({
               aria-expanded={expanded}
               onClick={() => {
                 setToggled({ ...toggled, [item.areaId]: !expanded });
-                if (!current) onChat(item.areaId, null);
+                if (!current)
+                  onChat(item.areaId, item.chats[0]?.chatId ?? null);
               }}
             >
               <Icon
-                name="chevron"
-                width={11}
-                height={11}
-                style={{ rotate: expanded ? "90deg" : undefined }}
+                name={expanded ? "folderOpen" : "folder"}
+                width={16}
+                height={16}
               />
-              <span>{name}</span>
+              <span>{item.name}</span>
             </button>
-            {!isGeneral && dots(item.areaId, item.name)}
+            {dots(item.areaId, item.name)}
+            {newChat(item.areaId, `New chat in ${item.name}`)}
           </div>
         )}
         {popup(
           item.areaId,
-          menu?.confirm ? (
+          menu?.step === "confirm" ? (
             <>
               <div className="rb-menu-title">
                 Delete “{item.name}”? Its chats, plans and anything waiting on
@@ -506,7 +744,7 @@ export function Sidebar({
                 role="menuitem"
                 onClick={() => {
                   setMenu(null);
-                  onChat(item.areaId, null);
+                  onChat(item.areaId, item.chats[0]?.chatId ?? null);
                 }}
               >
                 Open
@@ -520,11 +758,28 @@ export function Sidebar({
               >
                 Rename
               </button>
+              {item.archived.length > 0 && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(null);
+                    setToggled({ ...toggled, [item.areaId]: true });
+                    setArchivedShown({
+                      ...archivedShown,
+                      [item.areaId]: !archivedShown[item.areaId],
+                    });
+                  }}
+                >
+                  {archivedShown[item.areaId]
+                    ? "Hide archived chats"
+                    : "Archived chats"}
+                </button>
+              )}
               <div className="rule" />
               <button
                 role="menuitem"
                 className="danger"
-                onClick={() => setMenu({ ...menu!, confirm: true })}
+                onClick={() => setMenu({ ...menu!, step: "confirm" })}
               >
                 Delete
               </button>
@@ -533,25 +788,8 @@ export function Sidebar({
         )}
         {expanded && (
           <ul>
-            {chats.map((chat) => (
-              <li key={chat.chatId ?? "main"}>
-                <div className="line">
-                  <button
-                    className="chat"
-                    aria-current={
-                      current && open.chatId === chat.chatId
-                        ? "page"
-                        : undefined
-                    }
-                    title={chat.title}
-                    onClick={() => onChat(item.areaId, chat.chatId)}
-                  >
-                    {chat.title}
-                  </button>
-                </div>
-              </li>
-            ))}
-            {item.chats.length > chats.length && (
+            {chats.map((chat) => chatRow(item.areaId, chat, false))}
+            {listed.length > chats.length && (
               <li>
                 <button
                   className="chat more"
@@ -568,6 +806,10 @@ export function Sidebar({
       </li>
     );
   };
+  const looseListed = [...loose, ...(archivedShown.chats ? looseArchived : [])];
+  const looseChats = allChats.chats
+    ? looseListed
+    : looseListed.slice(0, chatLimit);
   // Icon tiles; the name stays in the button for assistive technology and
   // shows as a tooltip.
   const item = (id: Exclude<Route, "work" | "setup">, label: string) => (
@@ -602,20 +844,63 @@ export function Sidebar({
       </div>
       {/* Takes only the room between the tiles and Firstmate's card, and
           scrolls inside it, so the card always keeps its place. */}
-      <div className="rb-folders" aria-label="Your work and its chats">
+      <div className="rb-folders" aria-label="Your work and your chats">
         <ul>
-          {folders.slice(0, folderLimit).map((item) => folder(item))}
-          {folders.length > folderLimit && (
-            <li>
-              <button
-                className="chat more"
-                onClick={() => onRoute("portfolio")}
-              >
-                See all
-              </button>
-            </li>
+          {heading("work", "Your work")}
+          {!folded.work && (
+            <>
+              {folders.slice(0, folderLimit).map((item) => folder(item))}
+              {folders.length > folderLimit && (
+                <li>
+                  <button
+                    className="chat more flat"
+                    onClick={() => onRoute("portfolio")}
+                  >
+                    See all
+                  </button>
+                </li>
+              )}
+            </>
           )}
-          {general.map((item) => folder(item, "General"))}
+          {heading(
+            "chats",
+            "Chats",
+            <>
+              {looseArchived.length > 0 && dots("chats", "Chats")}
+              {newChat(looseAreaId, "New chat")}
+            </>,
+          )}
+          {popup(
+            "chats",
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                setFolded({ ...folded, chats: false });
+                setArchivedShown({
+                  ...archivedShown,
+                  chats: !archivedShown.chats,
+                });
+              }}
+            >
+              {archivedShown.chats ? "Hide archived chats" : "Archived chats"}
+            </button>,
+          )}
+          {!folded.chats && (
+            <>
+              {looseChats.map((chat) => chatRow(chat.areaId, chat, true))}
+              {looseListed.length > looseChats.length && (
+                <li>
+                  <button
+                    className="chat more flat"
+                    onClick={() => setAllChats({ ...allChats, chats: true })}
+                  >
+                    See more
+                  </button>
+                </li>
+              )}
+            </>
+          )}
         </ul>
       </div>
       {island}

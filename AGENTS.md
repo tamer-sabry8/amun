@@ -106,6 +106,14 @@ Owner decisions, 19 November 2026, answered one question at a time.
 - When Firstmate's memory starts fresh, Amun gives it a short recap of the chat with the owner's next message, without showing anything.
 - A message from Home or Portfolio that does not create new work goes to General's most recent chat. General follows the same rules as any other folder.
 
+Owner decisions, 20 November 2026 (they replace "Nothing starts one automatically" above). The plan is `docs/plans/2026-11-20-auto-grouped-chats.md`.
+
+- Amun groups chats itself. An explicit request for new work ("Create a new project for Gitex …") creates the folder straight away and files the message as its first chat. A name that matches an existing or archived folder asks first.
+- The same request typed inside another folder is held, and a card asks whether to move it to a new folder or keep it here. Nothing is sent until the owner chooses.
+- When a chat drifts to another subject, Firstmate suggests the move and the owner confirms. Nothing is ever moved without the owner's yes. There is no separate router model: every AI request goes to Firstmate through Pi.
+- General and every folder hold ordinary chats. There is no fixed "Main chat" and no single "Chat with Firstmate"; existing conversations are kept as the first chat in each.
+- A chat is never a Paseo agent or workspace, and a folder is never a directory on disk. Both are rows in Amun's own store.
+
 ## Council principles (Roast Room)
 
 Owner instruction, 15 November 2026. Amun's Council follows upstream Roast Room (github.com/nateherkai/roast-room). The Chair reads the decision, asks for missing facts, recommends a council (recommended / default board / everyone / other) and the owner confirms before it runs. The seated advisors argue in rounds. The owner gets a scored verdict and a downloadable PDF. "Ask <seat>" gets one seat's answer. Board settings are ask/auto/default.

@@ -64,6 +64,30 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
   - Waiting on Tamer: how a model switch in chat should reach the crew (recommended: a card asking "Use this for the whole crew too?", since his crew models are per-job rules in `config/crew-dispatch.json` with a Copilot credit limit); whether Home should show his last chat; the screens for the seven chat rules; archive for chats.
   - Not verified with real Firstmate: the one-time registration of the twenty agents, the Notion helper, and whether Firstmate keeps forks apart.
 
+### Update, 20 November 2026 (branch `claude/amun-handoff-work`): chats that group themselves
+
+Tamer's decisions that day are in `AGENTS.md` ("Chats inside a piece of work", second list). The plan and the stress test of his research are in `docs/plans/2026-11-20-auto-grouped-chats.md`; the approved pictures are in `docs/preview/2026-11-20-auto-grouped-chats/index.html` (third round: the first sidebar was rejected, ChatGPT's layout was approved, and he asked for the move question on Firstmate's card).
+
+- **A chat is never a Paseo agent or workspace.** His research built on one agent per chat. That would be a second agent Firstmate never sees, so chats stay rows in Amun's store and every message still goes to the one First Mate. No file under Paseo's code or `vendor/firstmate` changed.
+- **Storage (migration 44).** `work_chats` has `kind` (`fork` or `chat`) and `archived_at`. A work's first chat still has no row: its name and archive mark are on the work (`first_chat_title`, `first_chat_archived_at`). A work also has `priority` and `kept_here_json`. Commands: `new-chat`, `rename-chat`, `archive-chat`, `move-chat`, `keep-here`, `settle-card`; `create-area` takes `priority`.
+- **Rules, no model** (`packages/domain/src/work/model.ts`, `chats.ts`): `routeNewWork` reads an explicit request for new work (name after "named", "called" or "for", stated priority, the next day that has not passed) and says create, ask because a folder has that name, hold and ask because it was typed inside another folder, or nothing. `chatsOf` and `latestOpenChat` list a folder's chats.
+- **Sidebar** (`folders.ts`, `chrome.tsx`): "Your work" lists folders with their chats under them; each folder row has the three dots and a New chat button; "Chats" lists the chats with no folder (the standing "Chat with Firstmate" work area, once shown as General). A chat's menu has Rename, Move to another folder and Archive; archived chats are reached from the folder's menu and can be brought back.
+- **The move question** (`move-offers.ts`, `move-ask.ts`, `resolveMove` in `app.tsx`): the owner's words are kept on a card message in the chat they were typed in, marked "Not sent yet", and an attention item with ref `move:<message id>` shows on Firstmate's card with the folder name and the choices. Move creates the folder and sends the message there; Keep sends it where it was typed and remembers the name for that folder. The chat it left keeps "Continued in <folder>. Open".
+- **Firstmate's suggestion.** The briefing has a new action, `{"do":"move","name","type","messages"}`. Amun turns it into the same question for messages already sent; Move re-files them with `move-chat`.
+- **A chat the owner started** tells Firstmate on its first message that it is a fresh topic and names the folder's other chats (`chatNote` in `fork.ts`). When Firstmate's conversation is new, the chat's last eight messages travel with the owner's next message as a recap (`chatRecap`), not shown.
+- **A reply nobody asked for** (heartbeat, wake) goes to the latest chat with no folder that is not archived.
+
+Checked: 1,107 tests, type-check, lint, format and the Firstmate pristine check pass. The screens were walked through in an isolated copy with a sample workspace and no Pi (new chat, hold, move, keep, archive, create from Home): no errors. The impeccable detector found nothing on the changed files.
+
+Not checked or not built:
+
+- Nothing ran with real Pi or real Firstmate: whether Firstmate uses the `move` action sensibly, whether it keeps a new chat apart from the others, and the recap.
+- The recap is given only when Firstmate's conversation is new. A memory shortened inside the same conversation (compaction) is not detected.
+- Search and "What happened" still open a work's first chat, not the chat a result is in.
+- One message that asks for several folders is not split; Firstmate answers it where it was typed.
+- A sprint link on a chat, and Firstmate's "new chat or fork?" card for a change of subject inside the same folder, are not built.
+- Not in the packaged app. Found on the way: the daemon stops at start when `AMUN_HOME` is a very long path, because the Notion helper's socket path is too long. Tamer's `~/.amun` is short; not fixed.
+
 ### The number one rule
 
 **Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).

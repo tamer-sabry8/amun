@@ -63,6 +63,9 @@ const area = (
   lastContextAt: "2026-11-11T08:00:00Z",
   interest: 0,
   createdAt: "2026-11-01T08:00:00Z",
+  priority: null,
+  keptHere: [],
+  firstChat: { title: null, archivedAt: null },
   ...extra,
 });
 const attention = (
@@ -341,6 +344,7 @@ describe("shell chrome", () => {
         snapshot: snapshot() as never,
         open: null,
         onChat: noop,
+        onNewChat: noop,
       }),
     );
     expect(
@@ -373,6 +377,7 @@ describe("shell chrome", () => {
         snapshot: snapshot() as never,
         open: null,
         onChat: noop,
+        onNewChat: noop,
       }),
     );
     expect(html).toContain('aria-label="Sprints"');
@@ -387,7 +392,12 @@ describe("shell chrome", () => {
           count: view.island.count,
           options: [],
           collapsed: false,
-          actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+          actions: {
+            onOpen: noop,
+            onPrimary: noop,
+            onAnswer: noop,
+            onMove: noop,
+          },
         }),
       ),
     );
@@ -405,7 +415,12 @@ describe("shell chrome", () => {
           count: 1,
           options: ["People", "Hours"],
           collapsed: false,
-          actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+          actions: {
+            onOpen: noop,
+            onPrimary: noop,
+            onAnswer: noop,
+            onMove: noop,
+          },
         }),
       ),
     );
@@ -421,7 +436,12 @@ describe("shell chrome", () => {
         count: 2,
         options: [],
         collapsed: true,
-        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+        actions: {
+          onOpen: noop,
+          onPrimary: noop,
+          onAnswer: noop,
+          onMove: noop,
+        },
       }),
     );
     expect(collapsed).toContain('aria-label="2 items need you"');
@@ -432,7 +452,12 @@ describe("shell chrome", () => {
         count: 0,
         options: [],
         collapsed: false,
-        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+        actions: {
+          onOpen: noop,
+          onPrimary: noop,
+          onAnswer: noop,
+          onMove: noop,
+        },
       }),
     );
     expect(empty).toContain("Nothing needs you right now.");
@@ -1495,7 +1520,12 @@ describe("Firstmate's card beside an open chat", () => {
         held: 1,
         options: [],
         collapsed: false,
-        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+        actions: {
+          onOpen: noop,
+          onPrimary: noop,
+          onAnswer: noop,
+          onMove: noop,
+        },
       }),
     );
     expect(html).toBe("");
@@ -1507,7 +1537,12 @@ describe("Firstmate's card beside an open chat", () => {
         count: 1,
         options: [],
         collapsed: false,
-        actions: { onOpen: noop, onPrimary: noop, onAnswer: noop },
+        actions: {
+          onOpen: noop,
+          onPrimary: noop,
+          onAnswer: noop,
+          onMove: noop,
+        },
       }),
     );
     expect(html).toContain("Something failed");

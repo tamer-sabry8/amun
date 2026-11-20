@@ -12,6 +12,8 @@ export interface Attention {
   detail: string;
   state: "open" | "done" | "snoozed";
   createdAt: string;
+  /** What the item is about, for example "plan:<id>" or "move:<message id>". */
+  ref?: string | null;
   /** Present when the row carries a batch that can be approved in the tray. */
   batch?: { count: number; noun: string; summary: string; items: string[] };
 }
@@ -126,6 +128,11 @@ export function attentionList(
     );
 }
 /** The Island shows the single most urgent open item plus a count badge. */
+/** A question about which folder a message or chat belongs in. */
+export const moveQuestionRef = "move:";
+export const isMoveQuestion = (item: { ref?: string | null }) =>
+  !!item.ref?.startsWith(moveQuestionRef);
+
 /** The kinds a work's chat shows its own control for: a plan to review, a
     question to answer, a failure to retry. An offer, a result, a risk or a
     linking request has its button only on the card and on Home. */
@@ -142,11 +149,19 @@ const askedInChat: ReadonlySet<AttentionKind> = new Set([
  * card can stay away instead of claiming nothing needs the owner.
  */
 export function islandItem(items: Attention[], openWorkAreaId?: string | null) {
-  const open = attentionList(items);
+  const listed = attentionList(items);
+  // "Where should this message go?" is asked on the card and nowhere else,
+  // and a message is waiting on it, so it comes before everything else.
+  const open = [
+    ...listed.filter(isMoveQuestion),
+    ...listed.filter((item) => !isMoveQuestion(item)),
+  ];
   const shown = openWorkAreaId
     ? open.filter(
         (item) =>
-          item.workAreaId !== openWorkAreaId || !askedInChat.has(item.kind),
+          item.workAreaId !== openWorkAreaId ||
+          !askedInChat.has(item.kind) ||
+          isMoveQuestion(item),
       )
     : open;
   return {
