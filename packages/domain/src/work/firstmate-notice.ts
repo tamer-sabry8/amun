@@ -156,6 +156,15 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   "read-messages": { local: "Reading a reply is the owner's own bookkeeping." },
   "suggest-chat-title": { own: "Firstmate suggested this title itself." },
   "move-chat": { local: chats },
+  "register-request": {
+    own: "The owner's message carries the reference to Firstmate.",
+  },
+  "request-report": { own: "Firstmate reported it itself." },
+  "apply-reply": { own: "Firstmate's own reply." },
+  "request-change": {
+    own: "Sent to Firstmate as the owner's own request to change project.",
+  },
+  "request-change-result": { own: "Firstmate confirmed or refused it." },
   "keep-here": { local: chats },
 
   // ── Already sent to Firstmate another way ──

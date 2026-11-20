@@ -422,9 +422,15 @@ export function LibraryPanel({
   extra = [],
   onOpen,
   onWork,
+  chatDocuments = null,
 }: {
   snapshot: Snapshot;
   workAreaId: string | null;
+  /**
+   * The documents delivered or referenced in the open chat. With it, the
+   * panel opens on This chat, beside a view named for the folder.
+   */
+  chatDocuments?: string[] | null;
   initialType?: string | null;
   /** Exports and downloads from earlier flows, shown as Downloaded. */
   extra?: LibraryItem[];
@@ -432,6 +438,8 @@ export function LibraryPanel({
   onWork(areaId: string): void;
 }) {
   const [all, setAll] = useState(workAreaId === null);
+  const [inChat, setInChat] = useState(chatDocuments !== null);
+  const folderName = workAreaId ? areaOf(snapshot, workAreaId)?.name : null;
   const [type, setType] = useState<string | null>(initialType);
   const [needs, setNeeds] = useState(false);
   const [text, setText] = useState("");
@@ -450,8 +458,14 @@ export function LibraryPanel({
       ),
     ),
   ];
-  const groups = library(items, {
-    ...scope,
+  const chatItems =
+    inChat && chatDocuments
+      ? items.filter((item) => chatDocuments.includes(item.id))
+      : items;
+  const groups = library(chatItems, {
+    ...(inChat && chatDocuments
+      ? { workAreaId: null, groupIds: scope.groupIds }
+      : scope),
     type,
     needsLinking: needs,
     text,
@@ -464,6 +478,16 @@ export function LibraryPanel({
   });
   return (
     <>
+      {chatDocuments !== null && folderName && (
+        <div className="rb-seg" role="group" aria-label="Show documents from">
+          <button aria-pressed={inChat} onClick={() => setInChat(true)}>
+            This chat
+          </button>
+          <button aria-pressed={!inChat} onClick={() => setInChat(false)}>
+            {folderName}
+          </button>
+        </div>
+      )}
       <div className="row wrap">
         <input
           type="text"
@@ -550,7 +574,9 @@ export function LibraryPanel({
         <p className="muted">
           {needs
             ? "Nothing is waiting to be linked."
-            : "Outputs and records for this work will appear here."}
+            : inChat && chatDocuments
+              ? "Documents delivered or mentioned in this chat will appear here."
+              : "Outputs and records for this work will appear here."}
         </p>
       )}
       {groups.map(

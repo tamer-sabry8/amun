@@ -41,6 +41,10 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
+import {
+  readRequestBlocks,
+  reportFingerprint,
+} from "../../domain/src/work/requests.ts";
 
 type Row = Record<string, unknown>;
 type Step = Parameters<typeof JSON.stringify>[0];
@@ -594,6 +598,24 @@ export class WorkStore {
           pinOrder: chat.pinOrder === null ? null : Number(chat.pinOrder),
           titleBy: String(chat.titleBy ?? ""),
           messages: this.chatMessages(String(chat.id)),
+        })),
+        requests: this.all(
+          "SELECT ref,message_id,project_area_id,status,role,detail,parts,updated_at,change_to_area_id,change_state FROM work_requests ORDER BY updated_at,ref",
+        ).map((row) => ({
+          ref: String(row.ref),
+          messageId: String(row.message_id),
+          projectAreaId: (row.project_area_id as string | null) ?? null,
+          status: String(
+            row.status,
+          ) as WorkSnapshot["requests"][number]["status"],
+          role: String(row.role),
+          detail: String(row.detail),
+          parts: Number(row.parts),
+          updatedAt: String(row.updated_at),
+          changeToAreaId: (row.change_to_area_id as string | null) ?? null,
+          changeState: String(
+            row.change_state,
+          ) as WorkSnapshot["requests"][number]["changeState"],
         })),
       }),
     );
@@ -2651,6 +2673,218 @@ export class WorkStore {
           command.toWorkAreaId,
         );
         return target ? { ref: target } : {};
+      }
+      case "register-request": {
+        if (
+          !this.get("SELECT 1 FROM work_messages WHERE id=?", command.messageId)
+        )
+          throw new WorkError("That message is no longer there.");
+        // A retry registers the same reference again; nothing changes.
+        this.run(
+          "INSERT OR IGNORE INTO work_requests(ref,message_id,project_area_id,updated_at) VALUES (?,?,?,?)",
+          command.ref,
+          command.messageId,
+          command.projectAreaId,
+          now,
+        );
+        return { ref: command.ref };
+      }
+      case "request-report": {
+        const row = this.get(
+          "SELECT seen_json FROM work_requests WHERE ref=?",
+          command.ref,
+        );
+        // Never guess: a report for a reference Amun never gave is refused,
+        // and the request it might belong to keeps its confirmed status.
+        if (!row) throw new WorkError("No request has that reference.");
+        const seen: string[] = list(row.seen_json).map(String);
+        if (seen.includes(command.fingerprint)) return { ref: command.ref };
+        this.run(
+          "UPDATE work_requests SET status=?,role=?,detail=?,parts=max(parts,?),updated_at=?,seen_json=? WHERE ref=?",
+          command.status,
+          this.clean(command.role),
+          this.clean(command.detail),
+          command.parts,
+          now,
+          JSON.stringify([...seen, command.fingerprint].slice(-50)),
+          command.ref,
+        );
+        return { ref: command.ref };
+      }
+      case "apply-reply": {
+        if (!this.live(command.workAreaId))
+          throw new WorkError("That work area no longer exists.");
+        const { visible, reports, documents, moves } = readRequestBlocks(
+          command.text,
+        );
+        // Where a request's own message is now, after any move or split.
+        const request = (ref: string | null) => {
+          if (!ref) return null;
+          const row = this.get(
+            "SELECT r.ref,r.project_area_id,m.work_area_id,m.chat_id FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
+            ref,
+          );
+          return row
+            ? {
+                ref: String(row.ref),
+                project: (row.project_area_id as string | null) ?? null,
+                areaId: String(row.work_area_id),
+                chatId: (row.chat_id as string | null) ?? null,
+              }
+            : null;
+        };
+        const here = { areaId: command.workAreaId, chatId: command.chatId };
+        const say = (
+          at: { areaId: string; chatId: string | null },
+          role: "firstmate" | "card",
+          text: string,
+          card: unknown = null,
+        ) =>
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "message",
+            workAreaId: at.areaId,
+            chatId: at.chatId,
+            role,
+            text,
+            card: card as never,
+            model: role === "firstmate" ? command.model : null,
+          } as never);
+        // Reports for a reference Amun gave; any other is left alone.
+        for (const report of reports) {
+          if (!request(report.request)) continue;
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "request-report",
+            ref: report.request,
+            status: report.status,
+            role: report.role,
+            detail: report.text,
+            parts: report.parts,
+            fingerprint: reportFingerprint(report),
+          } as never);
+        }
+        // Firstmate's answer to a change of project the owner asked for. It
+        // settles only a change that is waiting, for the project asked for.
+        for (const move of moves) {
+          const row = this.get(
+            "SELECT r.change_state,a.name FROM work_requests r LEFT JOIN work_areas a ON a.id=r.change_to_area_id WHERE r.ref=?",
+            move.request,
+          );
+          if (!row || row.change_state !== "requested") continue;
+          const asked = row.name === null ? "" : String(row.name);
+          if (
+            move.accepted &&
+            asked.trim().toLowerCase() !== move.project.trim().toLowerCase()
+          )
+            continue;
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "request-change-result",
+            ref: move.request,
+            accepted: move.accepted,
+          } as never);
+        }
+        const linked = new Set<string>();
+        for (const document of documents) {
+          const known = request(document.request);
+          if (known) linked.add(`${known.areaId}:${known.chatId ?? ""}`);
+          // A matched result lands with its request; anything else where the
+          // reply arrived, as before.
+          const at = known ?? here;
+          // The project card gets it only for a confirmed project.
+          const owner = known ? known.project : command.workAreaId;
+          const group = this.groupOf(owner ?? at.areaId);
+          const same = this.get(
+            owner
+              ? "SELECT o.id,o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND lower(trim(o.title))=lower(trim(?)) ORDER BY o.updated_at DESC LIMIT 1"
+              : "SELECT o.id,o.body FROM library_outputs o WHERE NOT EXISTS (SELECT 1 FROM library_output_links l WHERE l.output_id=o.id) AND lower(trim(o.title))=lower(trim(?)) ORDER BY o.updated_at DESC LIMIT 1",
+            ...(owner ? [owner, document.title] : [document.title]),
+          );
+          const body = this.clean(document.body);
+          // The same version delivered again is not a second reply.
+          if (same && String(same.body) === body) continue;
+          const saved = this.apply({
+            version: 1,
+            kind: "work",
+            action: "save-output",
+            ...(same ? { outputId: String(same.id) } : {}),
+            groupId: group,
+            type: document.type,
+            title: document.title,
+            body,
+            status: "Draft",
+            workAreaIds: owner ? [owner] : [],
+            author: "firstmate",
+          } as never);
+          const outputId = String(saved.ref);
+          const version = Number(
+            this.get(
+              "SELECT max(version) AS v FROM library_output_versions WHERE output_id=?",
+              outputId,
+            )?.v ?? 1,
+          );
+          say(at, "card", document.title, {
+            kind: "delivered",
+            outputId,
+            title: document.title,
+            version,
+            request: known ? known.ref : null,
+          });
+        }
+        if (command.saveText && visible) {
+          const places = new Set([
+            ...linked,
+            ...reports.flatMap((report) => {
+              const known = request(report.request);
+              return known ? [`${known.areaId}:${known.chatId ?? ""}`] : [];
+            }),
+          ]);
+          const only = places.size === 1 ? [...places][0]! : null;
+          const [areaId, chatId] = only ? only.split(":") : [];
+          say(
+            only ? { areaId: areaId!, chatId: chatId || null } : here,
+            "firstmate",
+            visible,
+          );
+        }
+        return {};
+      }
+      case "request-change": {
+        if (!this.get("SELECT 1 FROM work_requests WHERE ref=?", command.ref))
+          throw new WorkError("No request has that reference.");
+        this.run(
+          "UPDATE work_requests SET change_to_area_id=?,change_state='requested',updated_at=? WHERE ref=?",
+          command.toAreaId,
+          now,
+          command.ref,
+        );
+        return { ref: command.ref };
+      }
+      case "request-change-result": {
+        const row = this.get(
+          "SELECT change_to_area_id,change_state FROM work_requests WHERE ref=?",
+          command.ref,
+        );
+        if (!row || row.change_state !== "requested")
+          throw new WorkError("No change of project is waiting for that.");
+        if (command.accepted)
+          this.run(
+            "UPDATE work_requests SET project_area_id=?,change_to_area_id=NULL,change_state='',updated_at=? WHERE ref=?",
+            row.change_to_area_id,
+            now,
+            command.ref,
+          );
+        else
+          this.run(
+            "UPDATE work_requests SET change_state='refused',updated_at=? WHERE ref=?",
+            now,
+            command.ref,
+          );
+        return { ref: command.ref };
       }
       case "keep-here": {
         const area = this.get(

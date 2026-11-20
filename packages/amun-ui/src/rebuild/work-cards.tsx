@@ -153,6 +153,7 @@ export function WorkSheet({
   onClose,
   onWork,
   onAsk,
+  onAskAbout,
 }: {
   area: Area;
   snapshot: Snapshot;
@@ -160,6 +161,8 @@ export function WorkSheet({
   onClose(): void;
   /** Opens the work's conversation. */
   onWork(areaId: string): void;
+  /** A fresh chat in this folder with the card attached; sends nothing. */
+  onAskAbout?(areaId: string): void;
   /** Opens the conversation with a message for Firstmate. */
   onAsk(areaId: string, text: string): void;
 }) {
@@ -219,6 +222,17 @@ export function WorkSheet({
           <span className={"rb-pill " + tone}>{label(area.status)}</span>
           <span className="rb-chip">{typeLabels[area.type]}</span>
           <span className="grow" />
+          {onAskAbout && (
+            <button
+              className="btn"
+              onClick={() => {
+                onClose();
+                onAskAbout(area.id);
+              }}
+            >
+              Ask about {area.name}
+            </button>
+          )}
           <button
             className="btn solid"
             onClick={() => {

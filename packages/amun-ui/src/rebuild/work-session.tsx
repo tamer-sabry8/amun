@@ -14,6 +14,14 @@ import {
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
+import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
+import { requestRefOf } from "./requests.ts";
+import {
+  newRequestRef,
+  requestLine,
+  requestProtocol,
+  requestStatusLine,
+} from "../../../../packages/domain/src/work/requests.ts";
 import { chatKey } from "../../../../packages/domain/src/work/chat-lists.ts";
 import {
   askDraftKey,
@@ -164,7 +172,12 @@ import {
 const work = storeWork;
 
 export type PaneTarget =
-  | { kind: "output"; id: string }
+  | {
+      kind: "output";
+      id: string;
+      /** A delivery reply opens the exact version it delivered. */
+      version?: number;
+    }
   | { kind: "plan"; id: string }
   | { kind: "prd" }
   | { kind: "backlog" }
@@ -1378,12 +1391,19 @@ export function WorkSession({
   );
   useDismiss(menu === "title", titleRoot, () => setMenu(null));
   const openDocument = pane?.kind === "output" ? pane.id : null;
+  const openVersion = pane?.kind === "output" ? (pane.version ?? null) : null;
   useEffect(() => {
     setMenu((current) => (current === "title" ? null : current));
-    setHistory(null);
+    // An older version is opened as itself, never as the latest.
+    const item = snapshot.library.find((entry) => entry.id === openDocument);
+    setHistory(
+      openVersion !== null && item && openVersion !== item.version
+        ? openVersion
+        : null,
+    );
     setDeciding(null);
     setDecisionProblem("");
-  }, [openDocument]);
+  }, [openDocument, openVersion]);
   const [dragging, setDragging] = useState(false);
   // Reply cards the owner already answered or set aside.
   const [closedAsks, setClosedAsks] = useState<string[]>([]);
@@ -1447,16 +1467,10 @@ export function WorkSession({
     const work = toldWork;
     const workAsync = toldWorkAsync;
     const groupId = context?.area.groupId ?? null;
-    if (proposed.do === "document")
-      work("save-output", {
-        groupId,
-        type: proposed.type,
-        title: proposed.title,
-        body: proposed.body,
-        workAreaIds: [areaId],
-        author: "firstmate",
-      });
-    else if (proposed.do === "plan")
+    // Documents are saved by "apply-reply", which links them to their
+    // request when the reference matches.
+    if (proposed.do === "document") return;
+    if (proposed.do === "plan")
       void (async () => {
         const result = await workAsync("propose-plan", {
           groupId: null,
@@ -1860,6 +1874,14 @@ export function WorkSession({
           model: turn.model,
         });
       if (briefing) markBriefed();
+      // Reports and documents: linked to a request only by its reference.
+      if (/```amun/.test(turn.reply))
+        work("apply-reply", {
+          text: turn.reply,
+          workAreaId: areaId,
+          chatId: savedIn,
+          saveText: false,
+        });
       for (const proposed of parsed.actions) raise(proposed);
       // Only the message this turn carried leaves the wait; a newer one stays.
       if (heldMessage(threadKey)?.scoped === scoped) {
@@ -2055,20 +2077,34 @@ export function WorkSession({
     lastRequest.current = text;
     // A chat started from a card carries the card with its first message.
     const asked = askCard;
-    await workAsync("message", {
+    // Every request gets a stable reference; Firstmate repeats it in its
+    // backlog links, hand-offs and replies (owner, 20 November 2026).
+    const ref = newRequestRef();
+    const saved = await workAsync("message", {
       workAreaId: areaId,
       role: "you",
       text,
-      ...(asked
+      card: asked
         ? {
-            card: {
-              kind: "ask-card",
-              label: asked.label,
-              fields: asked.fields,
-            },
+            kind: "ask-card",
+            ref,
+            label: asked.label,
+            fields: asked.fields,
+            documentIds: (
+              (asked.record as { documents?: { id: string }[] }).documents ?? []
+            ).map((item) => item.id),
           }
-        : {}),
+        : { kind: "request", ref },
     });
+    if (saved.ok && saved.ref)
+      await workAsync("register-request", {
+        ref,
+        messageId: saved.ref,
+        // General has no project; a folder's work is the project until
+        // Firstmate says otherwise.
+        projectAreaId:
+          context.area.name === generalConversationName ? null : areaId,
+      });
     if (asked) setAsk(entryKey, null);
     // The owner's words are saved here now, so their question can be settled.
     decided?.();
@@ -2138,9 +2174,10 @@ export function WorkSession({
     const about = asked
       ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
       : "";
+    const asks = `${requestLine(ref)}\n${text}`;
     const scoped = briefing
-      ? `${amunProtocol}\n\n${header}${which}${recap}${text}${about}`
-      : `${header}${which}${text}${about}`;
+      ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
+      : `${header}${which}${asks}${about}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -2244,6 +2281,50 @@ export function WorkSession({
         ? homeDraftKey
         : folderDraftKey(areaId)
       : chatDraftKey(entryKey);
+  /** The owner's message that a request reference belongs to, if confirmed. */
+  const requestMessage = (ref: string | null | undefined) =>
+    ref
+      ? (context?.messages.find(
+          (message) =>
+            message.role === "you" && requestRefOf(message.card) === ref,
+        ) ?? null)
+      : null;
+  /** Where the request this message carries stands, from Firstmate's reports. */
+  const requestLineFor = (card: unknown) => {
+    const ref = requestRefOf(card);
+    const request = ref
+      ? snapshot.requests.find((item) => item.ref === ref)
+      : undefined;
+    if (!request || request.status === "sent") return null;
+    const deliveries = (context?.messages ?? []).flatMap((message) => {
+      const delivered = deliveredOf(message.card);
+      return delivered?.request === ref
+        ? [
+            {
+              messageId: message.id,
+              title: delivered.title,
+              version: delivered.version,
+            },
+          ]
+        : [];
+    });
+    const name = (id: string | null) =>
+      id ? (snapshot.areas.find((area) => area.id === id)?.name ?? null) : null;
+    return (
+      <RequestLine
+        request={request}
+        deliveries={deliveries}
+        line={requestStatusLine(
+          request,
+          new Set(deliveries.map((item) => item.title)).size,
+          request.parts,
+        )}
+        project={name(request.projectAreaId)}
+        changeTo={name(request.changeToAreaId)}
+        onShow={(id) => reading.show(id)}
+      />
+    );
+  };
   const reading = useReading({
     chatKey: entryKey,
     messages: context?.messages ?? noMessages,
@@ -2762,7 +2843,39 @@ export function WorkSession({
                 </div>
               )}
               {context.messages.map((message, position) =>
-                asMoveOffer(message.card) || asMovedLine(message.card) ? (
+                deliveredOf(message.card) ? (
+                  <div
+                    key={message.id}
+                    data-mid={message.id}
+                    className={reading.flash === message.id ? "flash" : ""}
+                  >
+                    <DeliveredReply
+                      card={deliveredOf(message.card)!}
+                      available={snapshot.library.some(
+                        (item) =>
+                          item.id === deliveredOf(message.card)!.outputId,
+                      )}
+                      request={
+                        requestMessage(deliveredOf(message.card)!.request)
+                          ?.text ?? null
+                      }
+                      onOpen={() => {
+                        const card = deliveredOf(message.card)!;
+                        onPane({
+                          kind: "output",
+                          id: card.outputId,
+                          version: card.version,
+                        });
+                      }}
+                      onRequest={() => {
+                        const asked = requestMessage(
+                          deliveredOf(message.card)!.request,
+                        );
+                        if (asked) reading.show(asked.id);
+                      }}
+                    />
+                  </div>
+                ) : asMoveOffer(message.card) || asMovedLine(message.card) ? (
                   <MoveLine
                     key={message.id}
                     card={message.card}
@@ -2865,6 +2978,7 @@ export function WorkSession({
                           if (made.ref) onChat(made.ref);
                         }}
                       />
+                      {message.role === "you" && requestLineFor(message.card)}
                     </div>
                   </Fragment>
                 ),

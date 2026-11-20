@@ -35,8 +35,11 @@ import "./motion.css";
 import { Island, Palette, type IslandMove } from "./chrome.tsx";
 import { Sidebar } from "./sidebar.tsx";
 import { ChatSearch } from "./chat-search.tsx";
+import { MoveDialog, type UnfinishedRequest } from "./move-dialog.tsx";
+import { requestRefOf } from "./requests.ts";
+import { requestStatusLine } from "../../../../packages/domain/src/work/requests.ts";
 import type { ReadingFocus } from "./reading.ts";
-import { renameKey } from "./chat-memory.ts";
+import { chatMemory, renameKey, setAsk } from "./chat-memory.ts";
 import { chatLists } from "../../../../packages/domain/src/work/chat-lists.ts";
 import {
   chatsOf,
@@ -74,7 +77,7 @@ import {
   workStore,
 } from "./store.ts";
 import { acceptOffer } from "./accept-offer.ts";
-import { areaOf, homeModel, type Snapshot } from "./view-model.ts";
+import { areaOf, homeModel, typeLabels, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
 
@@ -130,6 +133,13 @@ export function App() {
   });
   /** The open chat came from Search chats, so "Back to results" shows. */
   const [fromSearch, setFromSearch] = useState(false);
+  /** A move waiting on the owner's choice about unfinished requests. */
+  const [moving, setMoving] = useState<{
+    areaId: string;
+    chatId: string | null;
+    toAreaId: string;
+    requests: UnfinishedRequest[];
+  } | null>(null);
   const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
@@ -387,7 +397,11 @@ export function App() {
     const area = snapshot.areas.find((item) => item.id === areaId);
     const unused = area
       ? chatsOf(area, snapshot.chats, snapshot.messages).find(
-          (chat) => chat.empty && chat.archivedAt === null,
+          (chat) =>
+            chat.empty &&
+            chat.archivedAt === null &&
+            // A chat started from a card keeps its card; + is the folder's own.
+            !chatMemory().asks[`${areaId}:${chat.chatId ?? "first"}`],
         )
       : undefined;
     if (unused || !area)
@@ -395,6 +409,142 @@ export function App() {
     const made = await workAsync("new-chat", { workAreaId: areaId });
     if (made.ok && made.ref) openWork(areaId, undefined, null, made.ref);
     else setNote(made.message);
+  };
+  /**
+   * "Ask about Gitex" on a card: a fresh chat in that folder with the card
+   * attached. Opening it sends nothing; the first message carries the card
+   * as it is now. The folder's own unsent draft stays behind its +.
+   */
+  const askAbout = async (areaId: string) => {
+    const area = snapshot.areas.find((item) => item.id === areaId);
+    if (!area) return;
+    const made = await workAsync("new-chat", { workAreaId: areaId });
+    if (!made.ok || !made.ref) return setNote(made.message);
+    const day = (at: string | null) =>
+      at
+        ? new Date(at).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        : "Not set";
+    const documents = snapshot.library.filter((item) =>
+      item.workAreaIds.includes(areaId),
+    );
+    const group = snapshot.groups.find((item) => item.id === area.groupId);
+    const fields: [string, string][] = [
+      [typeLabels[area.type], area.name],
+      ["Client", area.client ?? "Not set"],
+      ["Due", day(area.dueAt)],
+      ["Priority", area.priority ?? "Not set"],
+      ["Status", area.status],
+      ...(group ? [["Group", group.name] as [string, string]] : []),
+      ...(documents.length
+        ? [
+            [
+              "Linked",
+              documents
+                .slice(0, 6)
+                .map((item) => `${item.title} (v${item.version ?? 1})`)
+                .join(" · "),
+            ] as [string, string],
+          ]
+        : []),
+    ];
+    setAsk(`${areaId}:${made.ref}`, {
+      label: `${area.name} · ${typeLabels[area.type]}`,
+      fields,
+      record: {
+        id: area.id,
+        type: area.type,
+        name: area.name,
+        client: area.client,
+        dueAt: area.dueAt,
+        priority: area.priority,
+        status: area.status,
+        purpose: area.purpose,
+        group: group?.name ?? null,
+        documents: documents.slice(0, 12).map((item) => ({
+          id: item.id,
+          title: item.title,
+          version: item.version ?? 1,
+        })),
+        takenAt: new Date().toISOString(),
+      },
+    });
+    openWork(areaId, undefined, null, made.ref);
+  };
+  /** Files a chat in another folder; asks first when requests are unfinished. */
+  const moveChat = async (
+    areaId: string,
+    chat: string | null,
+    toAreaId: string,
+    reassign: string[] | null = null,
+  ) => {
+    const messages =
+      chat === null
+        ? snapshot.messages.filter((message) => message.workAreaId === areaId)
+        : (snapshot.chats.find((item) => item.id === chat)?.messages ?? []);
+    const unfinished = messages.flatMap((message) => {
+      const ref = message.role === "you" ? requestRefOf(message.card) : null;
+      const request = ref
+        ? snapshot.requests.find((item) => item.ref === ref)
+        : undefined;
+      return request &&
+        request.status !== "delivered" &&
+        request.status !== "failed"
+        ? [
+            {
+              ref: request.ref,
+              text: message.text,
+              line: requestStatusLine(request),
+            },
+          ]
+        : [];
+    });
+    if (reassign === null && unfinished.length) {
+      setMoving({ areaId, chatId: chat, toAreaId, requests: unfinished });
+      return;
+    }
+    setMoving(null);
+    const moved = await workAsync("move-chat", {
+      workAreaId: areaId,
+      chatId: chat,
+      toWorkAreaId: toAreaId,
+    });
+    if (!moved.ok) return setNote(moved.message);
+    const from = `${areaId}:${chat ?? "first"}`;
+    const to = `${toAreaId}:${moved.ref ?? "first"}`;
+    renameKey(from, to);
+    const fromName =
+      snapshot.areas.find((area) => area.id === areaId)?.name ?? "";
+    const toName =
+      snapshot.areas.find((area) => area.id === toAreaId)?.name ?? "";
+    const picked = unfinished.filter((item) => reassign?.includes(item.ref));
+    for (const item of picked)
+      await workAsync("request-change", { ref: item.ref, toAreaId });
+    if (picked.length) {
+      // The change is the owner's request to Firstmate, sent in the moved
+      // chat; it counts only once Firstmate confirms each one.
+      const list = picked
+        .map((item) => `“${item.text.slice(0, 80)}” (${item.ref})`)
+        .join("; ");
+      return openWork(
+        toAreaId,
+        `Please move ${picked.length === 1 ? "this request" : "these requests"} from ${fromName} to ${toName}: ${list}. Leave my other requests where they are.`,
+        null,
+        moved.ref ?? null,
+      );
+    }
+    // An explicit move follows the chat to where it went.
+    if (
+      layout.route === "work" &&
+      layout.workAreaId === areaId &&
+      chatId === chat
+    )
+      openWork(toAreaId, undefined, null, moved.ref ?? null, {
+        resume: true,
+      });
   };
   /** The owner's choice on "where should this go?". Nothing moved before it. */
   const resolveMove = async (
@@ -678,6 +828,28 @@ export function App() {
     openWork(areaId, undefined, { kind: "output", id: item.id });
     dispatch({ type: "rail", item: null });
   };
+  /** Documents delivered or referenced in one chat, for Library's This chat. */
+  const chatDocumentIds = (areaId: string, chat: string | null) => {
+    const messages =
+      chat === null
+        ? snapshot.messages.filter((message) => message.workAreaId === areaId)
+        : (snapshot.chats.find((item) => item.id === chat)?.messages ?? []);
+    return [
+      ...new Set(
+        messages.flatMap((message) => {
+          const card = message.card as {
+            kind?: string;
+            outputId?: string;
+            documentIds?: string[];
+          } | null;
+          if (card?.kind === "delivered" && card.outputId)
+            return [card.outputId];
+          if (card?.kind === "ask-card") return card.documentIds ?? [];
+          return [];
+        }),
+      ),
+    ];
+  };
   const collapsed = sidebarCollapsed(layout);
   const running = snapshot.activity.filter(
     (item) => item.state === "running",
@@ -696,9 +868,16 @@ export function App() {
       <ActivityPanel snapshot={snapshot} onWork={(id) => openWork(id)} />
     ) : item === "library" ? (
       <LibraryPanel
-        key={(layout.workAreaId ?? "all") + (libraryType ?? "")}
+        key={
+          (layout.workAreaId ?? "all") + (libraryType ?? "") + (chatId ?? "")
+        }
         snapshot={snapshot}
         workAreaId={layout.workAreaId}
+        chatDocuments={
+          layout.route === "work" && layout.workAreaId && !libraryType
+            ? chatDocumentIds(layout.workAreaId, chatId)
+            : null
+        }
         initialType={libraryType}
         extra={downloaded}
         onOpen={openLibraryItem}
@@ -736,26 +915,7 @@ export function App() {
         onNewChat={(areaId) => void startChat(areaId)}
         onSearchChats={() => setChatSearch({ open: true, restoring: false })}
         onMoveChat={(areaId, chat, toAreaId) =>
-          void (async () => {
-            const moved = await workAsync("move-chat", {
-              workAreaId: areaId,
-              chatId: chat,
-              toWorkAreaId: toAreaId,
-            });
-            if (!moved.ok) return setNote(moved.message);
-            const from = `${areaId}:${chat ?? "first"}`;
-            const to = `${toAreaId}:${moved.ref ?? "first"}`;
-            renameKey(from, to);
-            // An explicit move follows the chat to where it went.
-            if (
-              layout.route === "work" &&
-              layout.workAreaId === areaId &&
-              chatId === chat
-            )
-              openWork(toAreaId, undefined, null, moved.ref ?? null, {
-                resume: true,
-              });
-          })()
+          void moveChat(areaId, chat, toAreaId)
         }
         island={
           <Island
@@ -976,6 +1136,7 @@ export function App() {
             onWork={(id) => openWork(id)}
             onAsk={(text, files) => void submit(text, files)}
             onAskAbout={(id, text) => openWork(id, text)}
+            onAskCard={(id) => void askAbout(id)}
           />
         ) : layout.route === "rfps" ? (
           <Rfps
@@ -1108,6 +1269,41 @@ export function App() {
             : null
         }
       />
+      {moving && (
+        <MoveDialog
+          chatTitle={
+            chatLists(
+              snapshot.areas,
+              snapshot.chats,
+              snapshot.messages,
+              null,
+              generalConversationName,
+            ).byKey.get(`${moving.areaId}:${moving.chatId ?? "first"}`)
+              ?.title ?? "this chat"
+          }
+          from={
+            snapshot.areas.find((area) => area.id === moving.areaId)?.name ?? ""
+          }
+          to={
+            snapshot.areas.find((area) => area.id === moving.toAreaId)?.name ??
+            ""
+          }
+          canReassign={
+            snapshot.areas.find((area) => area.id === moving.toAreaId)?.name !==
+            generalConversationName
+          }
+          requests={moving.requests}
+          onCancel={() => setMoving(null)}
+          onMove={(reassign) =>
+            void moveChat(
+              moving.areaId,
+              moving.chatId,
+              moving.toAreaId,
+              reassign,
+            )
+          }
+        />
+      )}
       <ChatSearch
         open={chatSearch.open}
         restoring={chatSearch.restoring}

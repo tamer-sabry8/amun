@@ -227,6 +227,17 @@ export function useReading({
       setNewBelow(false);
     },
     dismissMissing: () => setMissing(false),
+    /** Scrolls to one message and highlights it briefly. */
+    show(messageId: string) {
+      const element = thread.current;
+      const target = element?.querySelector<HTMLElement>(
+        `[data-mid="${CSS.escape(messageId)}"]`,
+      );
+      if (!element || !target) return false;
+      reveal(element, target, "center");
+      setFlash(messageId);
+      return true;
+    },
     /** True while the view is at the bottom, following new content. */
     following: () => following.current,
   };

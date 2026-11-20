@@ -131,6 +131,7 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     memory: { unsynced: 0, disputed: 0, facts: [] },
     messages: [],
     chats: [],
+    requests: [],
     ...extra,
   };
 }

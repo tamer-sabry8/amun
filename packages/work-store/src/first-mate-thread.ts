@@ -86,6 +86,24 @@ export function recordFirstMateReply(
   }
   const trimmed =
     text.length > MESSAGE_LIMIT ? `${text.slice(0, MESSAGE_LIMIT - 1)}…` : text;
+  // A reply that carries a request reference Amun gave goes to the chat of
+  // that request; anything else stays here, in General (owner, 20 November
+  // 2026: never guess from wording or timing).
+  if (/```amun/.test(text)) {
+    const applied = resultOf(
+      store.handle({
+        version: 1,
+        kind: "work",
+        action: "apply-reply",
+        text,
+        workAreaId: areaId,
+        chatId,
+        saveText: true,
+        model,
+      }),
+    );
+    if (applied?.ok === true) return areaId;
+  }
   const saved = resultOf(
     store.handle({
       version: 1,

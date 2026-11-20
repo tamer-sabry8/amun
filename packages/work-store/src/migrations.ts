@@ -1181,4 +1181,24 @@ ALTER TABLE work_chats ADD COLUMN pin_order REAL;
 ALTER TABLE work_chats ADD COLUMN title_by TEXT NOT NULL DEFAULT '';
 ALTER TABLE work_areas ADD COLUMN first_chat_pin_order REAL;
 ALTER TABLE work_areas ADD COLUMN first_chat_title_by TEXT NOT NULL DEFAULT '';`,
+  // 47 · Request references (owner, 20 November 2026). Each request the
+  // owner sends carries a stable Amun reference that Firstmate repeats in its
+  // backlog links, hand-offs and delivery replies. A row keeps the message it
+  // came from, the project Firstmate confirmed it belongs to, the last status
+  // Firstmate confirmed, a change of project the owner asked for, and the
+  // reports already applied, so a repeated report changes nothing.
+  `CREATE TABLE work_requests (
+  ref TEXT PRIMARY KEY NOT NULL,
+  message_id TEXT NOT NULL,
+  project_area_id TEXT,
+  status TEXT NOT NULL DEFAULT 'sent',
+  role TEXT NOT NULL DEFAULT '',
+  detail TEXT NOT NULL DEFAULT '',
+  parts INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  change_to_area_id TEXT,
+  change_state TEXT NOT NULL DEFAULT '',
+  seen_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX work_requests_message ON work_requests(message_id);`,
 ] as const;
