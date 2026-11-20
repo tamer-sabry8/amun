@@ -50,7 +50,7 @@ Withdrawn rules, do not restore:
 | 1   | Every on-screen action goes to Firstmate with the whole card  | Built, tested, pushed. Not run against real Firstmate.                                                |
 | 2   | Tests that enforce it                                         | Built.                                                                                                |
 | 3   | Check Firstmate delegates and only watches                    | Not done. Needs a run on his Mac with real Firstmate. Nothing in Amun was changed that bypasses it.   |
-| 4   | Portfolio as progress cards                                   | Approved in Lavish. Code written, **not committed, not finished** (see "Work in progress").           |
+| 4   | Portfolio as progress cards                                   | Approved and built. Azure DevOps figures are not wired (see "What is built").                         |
 | 5   | RFPs page like his picture                                    | Approved and built. Seen in the preview only.                                                         |
 | 6   | Clicking a card opens a panel over the page (project and RFP) | Both approved and built. Seen in the preview only.                                                    |
 | 7   | Roadmap timeline                                              | **Deferred by Tamer: "ask me later, I will want to redesign the entire page."** Do not touch Roadmap. |
