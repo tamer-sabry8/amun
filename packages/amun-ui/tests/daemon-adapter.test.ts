@@ -295,6 +295,40 @@ describe("daemon contract adapter", () => {
     });
   });
 
+  it("asks Firstmate to close a task marked done, or put it off to a day", async () => {
+    const asked = async (extra: Record<string, unknown>) => {
+      const { adapter, daemon } = make();
+      await adapter.handle({ version: 1, kind: "work", action: "snapshot" });
+      const [result] = await adapter.handle({
+        version: 1,
+        kind: "work",
+        action: "resolve-attention",
+        attentionId: "hold:proto-w1:layout",
+        ...extra,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return {
+        result,
+        sent: daemon.calls.find((c) => c.method === "holds.answer")?.params
+          .answer,
+      };
+    };
+    const done = await asked({ resolution: "done" });
+    expect(done.result).toMatchObject({ ok: true });
+    expect(String(done.sent)).toMatch(
+      /done and no longer needed.*close the task/,
+    );
+    const later = await asked({ resolution: "snooze", until: "2026-11-23" });
+    expect(later.result).toMatchObject({ ok: true });
+    expect(String(later.sent)).toMatch(
+      /Remind the captain on 2026-11-23.*--until 2026-11-23/,
+    );
+    // Snooze with no day sends nothing: Firstmate keeps the hold.
+    const none = await asked({ resolution: "snooze" });
+    expect(none.result).toMatchObject({ ok: false });
+    expect(none.sent).toBeUndefined();
+  });
+
   it("keeps groups, work areas and conversations in the daemon's work store", async () => {
     const { adapter } = make();
     const [added, snap] = await adapter.handle({
@@ -975,10 +1009,15 @@ describe("registering the agents with Firstmate", () => {
         command: "conversation-send",
         argument: JSON.stringify({ text: "hello" }),
       });
-    expect(once()).toHaveLength(1);
-    expect(once()[0]!.params).toMatchObject({
-      space: "alpha",
-      key: "register-agents-v1",
-    });
+    // Once each, however many messages follow: the agents, and the owner's
+    // rule for reminders (draft it, or ask), in the owner's words.
+    expect(once().map((call) => call.params.key)).toEqual([
+      "register-agents-v1",
+      "draft-reminders-v1",
+    ]);
+    expect(once()[0]!.params).toMatchObject({ space: "alpha" });
+    expect(String(once()[1]!.params.text)).toMatch(
+      /draft it or ask me to draft it, or interview me/,
+    );
   });
 });

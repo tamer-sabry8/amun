@@ -3,6 +3,11 @@
 // products and groups. Every product shares the captain's one Firstmate home,
 // so the fleet (agents), captain holds (attention) and the First Mate chat are
 // home-wide and appear once, not once per product.
+import {
+  draftingRule,
+  heldInstruction,
+  heldOutcome,
+} from "../../../domain/src/work/held-tasks.ts";
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   workDelegate,
@@ -522,6 +527,14 @@ export class ContractAdapter {
       .catch(() => {
         this.poolAsked = false;
       });
+    // The owner's rule for reminders, in their words, filed by Firstmate.
+    void this.daemon
+      .request("primary.once", {
+        space,
+        key: "draft-reminders-v1",
+        text: draftingRule,
+      })
+      .catch(() => undefined);
   }
   private poolAsked = false;
 
@@ -1045,15 +1058,38 @@ export class ContractAdapter {
     const found = this.findHold(String(message.attentionId));
     if (!found)
       return [this.result(action, false, "That hold is no longer open.")];
-    if (message.resolution !== "answer" || typeof message.answer !== "string")
+    // Done and "Remind me later" are the owner's answers too, said for them:
+    // Firstmate is asked to close the task, or to put it off to that day.
+    const until =
+      typeof message.until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(message.until)
+        ? message.until
+        : undefined;
+    const said =
+      message.resolution === "done"
+        ? { shown: heldOutcome("done"), sent: heldInstruction("done") }
+        : message.resolution === "snooze" && until
+          ? {
+              shown: heldOutcome("snooze", until),
+              sent: heldInstruction("snooze", until),
+            }
+          : message.resolution === "answer" &&
+              typeof message.answer === "string"
+            ? { shown: message.answer, sent: message.answer }
+            : null;
+    if (!said)
       return [
-        this.result(action, false, "Answer the First Mate to clear this hold."),
+        this.result(
+          action,
+          false,
+          "Firstmate keeps this one. Answer it, mark it done, or choose a day to be reminded.",
+        ),
       ];
     const id = holdId(found);
     const answered: HoldAnswer = {
       signature: holdSignature(found),
       title: found.source === "crew" ? found.summary : found.title,
-      answer: message.answer,
+      answer: said.shown,
       at: this.now(),
       status: "sending",
     };
@@ -1065,7 +1101,7 @@ export class ContractAdapter {
         this.daemon.request("holds.answer", {
           space,
           hold: found,
-          answer: message.answer,
+          answer: said.sent,
         }),
       )
       .then(
@@ -1086,7 +1122,7 @@ export class ContractAdapter {
       this.result(
         action,
         true,
-        `Sent to Firstmate: “${message.answer}”. It is under Done.`,
+        `Sent to Firstmate: “${said.shown}”. It is under Done.`,
       ),
       this.work(),
     ];
