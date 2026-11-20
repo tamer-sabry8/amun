@@ -526,7 +526,17 @@ export const workSnapshot = z.strictObject({
 });
 export type WorkSnapshot = z.infer<typeof workSnapshot>;
 
-const base = { version: z.literal(1), kind: z.literal("work") };
+const base = {
+  version: z.literal(1),
+  kind: z.literal("work"),
+  /**
+   * True when Firstmate already knows about this change: it asked for it in
+   * its reply, or the owner's own message that caused it is being sent to it.
+   * Anything else the owner does on a screen is told to Firstmate afterwards
+   * (see `firstmate-notice.ts`). Never stored.
+   */
+  told: z.boolean().optional(),
+};
 const act = <A extends string, S extends z.ZodRawShape>(action: A, shape: S) =>
   z.strictObject({ ...base, action: z.literal(action), ...shape });
 

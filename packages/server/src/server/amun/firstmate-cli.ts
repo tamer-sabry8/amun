@@ -365,6 +365,7 @@ export function holdAnswerPrompt(hold: CaptainHold, answer: string, until?: stri
         : `${hold.taskId}, open ${hold.verb} "${hold.key}": ${hold.summary}`;
     return [
       `The captain wants to be reminded about ${subject} on ${until}, not now.`,
+      ...(hold.source === "backlog" && hold.reason ? [`What the card said: ${hold.reason}`] : []),
       `Keep it held and put it off to that day with bin/fm-captain-hold.sh hold ${hold.taskId} --reason <its current reason> --until ${until}.`,
       "Do not run bin/fm-captain-hold.sh answer, do not close or release it, and do not raise it again before that day.",
     ].join("\n");

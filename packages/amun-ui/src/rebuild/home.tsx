@@ -97,6 +97,8 @@ export function IntakeCard({
     // "…for client X", read the same way an RFP's client is.
     const client = type === "project" ? rfpDetails(pending.text).client : null;
     const result = await workAsync("create-area", {
+      // The owner's own message follows into this work, so Firstmate knows.
+      told: true,
       groupId,
       type: type as "product" | "project" | "task" | "rfp",
       name,

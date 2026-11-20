@@ -29,7 +29,7 @@ describe("Firstmate hears the owner's choices", () => {
     requestPlanChanges(plan, "Fewer items", q);
     expect(sent[0]).toEqual([
       "request-changes",
-      { planId: "p1", note: "Fewer items" },
+      { planId: "p1", note: "Fewer items", told: true },
     ]);
     const turns = q.claim("w1").send;
     expect(turns).toHaveLength(1);
@@ -54,6 +54,7 @@ describe("Firstmate hears the owner's choices", () => {
         attentionId: "a1",
         resolution: "answer",
         answer: "Add it and accept the risk to the deadline",
+        told: true,
       },
     ]);
     const turns = q.claim("w1").send;
@@ -74,7 +75,7 @@ describe("Firstmate hears the owner's choices", () => {
       answerScope(scope, q);
       expect(sent[0]).toEqual([
         "scope-answer",
-        { workAreaId: "w1", item: "Export to PDF", answer },
+        { workAreaId: "w1", item: "Export to PDF", answer, told: true },
       ]);
       const turns = q.claim("w1").send;
       expect(turns).toHaveLength(1);

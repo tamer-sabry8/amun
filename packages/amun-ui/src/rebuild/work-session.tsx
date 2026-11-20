@@ -1412,8 +1412,18 @@ export function WorkSession({
       ),
   };
 
+  // What Firstmate asked for in its own reply is never told back to it.
+  const toldWork = ((action: string, payload?: object) =>
+    work(action as never, { ...payload, told: true } as never)) as typeof work;
+  const toldWorkAsync = ((action: string, payload?: object) =>
+    workAsync(
+      action as never,
+      { ...payload, told: true } as never,
+    )) as typeof workAsync;
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction) => {
+    const work = toldWork;
+    const workAsync = toldWorkAsync;
     const groupId = context?.area.groupId ?? null;
     if (proposed.do === "document")
       work("save-output", {
@@ -3133,6 +3143,8 @@ export function WorkSession({
                 attentionId: question.id,
                 resolution: "answer",
                 answer: text,
+                // The answer is sent to Firstmate as the next message.
+                told: true,
               });
             setSeed(null);
             void send(text);
