@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Icon } from "../icons.tsx";
 import type { Block, Inline } from "./markdown-view.ts";
 import { parseMarkdown } from "./markdown-view.ts";
 import {
@@ -14,6 +15,58 @@ export type Citations = {
   context: CitationContext;
   onOpen(cite: Cite): void;
 };
+
+type Desktop = {
+  editor?: {
+    openTarget(input: {
+      editorId: string;
+      workspacePath: string;
+      filePath?: string;
+    }): Promise<void>;
+  };
+};
+
+/**
+ * A file or folder Firstmate named, with a small button that shows it in
+ * Finder (owner, 20 November 2026). Amun only asks the Mac to reveal it;
+ * nothing is opened, read or changed.
+ */
+function LocalPath({ path }: { path: string }) {
+  const [missing, setMissing] = useState(false);
+  const desktop = (globalThis as { paseoDesktop?: Desktop }).paseoDesktop;
+  const reveal = () => {
+    const open = desktop?.editor?.openTarget({
+      editorId: "finder",
+      workspacePath: path,
+      filePath: path,
+    });
+    if (!open) return setMissing(true);
+    open.then(
+      () => setMissing(false),
+      () => setMissing(true),
+    );
+  };
+  return (
+    <span className="rb-path">
+      <code>{path}</code>
+      <button
+        type="button"
+        className="rb-path-open"
+        aria-label={`Show ${path} in Finder`}
+        title={missing ? "Finder could not find this" : "Show in Finder"}
+        data-missing={missing || undefined}
+        onClick={reveal}
+      >
+        <Icon name="folder" width={14} height={14} aria-hidden />
+      </button>
+      {missing && (
+        <span className="rb-path-note" role="status">
+          Not found on this Mac
+        </span>
+      )}
+    </span>
+  );
+}
 
 const inline = (
   nodes: Inline[],
@@ -41,6 +94,8 @@ const inline = (
         );
       case "code":
         return <code key={index}>{node.text}</code>;
+      case "path":
+        return <LocalPath key={index} path={node.path} />;
       case "bold":
         return (
           <strong key={index}>

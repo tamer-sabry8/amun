@@ -3274,3 +3274,37 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* A file or folder named in a reply, with a small button to show it in Finder. */
+.rb-path {
+  overflow-wrap: anywhere;
+}
+.rb-path-open {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 22px;
+  margin-inline-start: 4px;
+  padding: 0;
+  vertical-align: -5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+.rb-path-open:hover {
+  background: var(--hover);
+  color: inherit;
+}
+.rb-path-open[data-missing] {
+  opacity: 0.6;
+}
+.rb-path-note {
+  margin-inline-start: 6px;
+  color: var(--muted);
+  font-size: 0.85em;
+}

@@ -52,6 +52,10 @@ const chatTitle = (text: string) => {
   return line.length > 60 ? line.slice(0, 60).trimEnd() + "…" : line;
 };
 
+/** A typed command on its own, such as "/model" or "/sprint refresh". */
+const isTypedCommand = (text: string) =>
+  /^\/[a-z][\w-]*(\s|$)/.test(text.trim());
+
 /**
  * A deleted work is gone from everything Amun shows: the work itself, and
  * whatever was about it (its chat, plans, things waiting, activity, sprint,
@@ -2207,17 +2211,20 @@ export class WorkStore {
           command.workAreaId,
         );
         // A chat is named by the owner's first message in it.
-        if (command.role === "you") {
+        // A typed command such as "/model" says nothing about the subject, so
+        // it never names a chat, and a chat it named earlier is named again
+        // by the first real message (owner, 20 November 2026).
+        if (command.role === "you" && !isTypedCommand(command.text)) {
           const title = chatTitle(command.text);
           if (command.chatId === null)
             this.run(
-              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND first_chat_title IS NULL",
+              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
               title,
               command.workAreaId,
             );
           else
             this.run(
-              "UPDATE work_chats SET title=? WHERE id=? AND title=''",
+              "UPDATE work_chats SET title=? WHERE id=? AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
               title,
               command.chatId,
             );

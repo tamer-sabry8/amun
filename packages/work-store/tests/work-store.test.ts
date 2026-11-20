@@ -1675,6 +1675,21 @@ describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
   const areaOf = (id: string) => snap().areas.find((item) => item.id === id)!;
   const chatOf = (id: string) => snap().chats.find((item) => item.id === id)!;
 
+  it("never names a chat after a typed command such as /model", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Loose");
+    say(id, "you", "/model");
+    expect(areaOf(id).firstChat.title).toBeNull();
+    say(id, "you", "Draft the architecture view.");
+    expect(areaOf(id).firstChat.title).toBe("Draft the architecture view.");
+
+    const chat = send("new-chat", { workAreaId: id }).ref!;
+    say(id, "you", "/sprint refresh", chat);
+    expect(chatOf(chat).title).toBe("");
+    say(id, "you", "Review the sprint.", chat);
+    expect(chatOf(chat).title).toBe("Review the sprint.");
+  });
+
   it("names every chat by the owner's first message in it", () => {
     const { employer } = setup();
     const id = area(employer, "project", "Gitex");
