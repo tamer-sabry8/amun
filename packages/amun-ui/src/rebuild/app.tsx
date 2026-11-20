@@ -34,8 +34,10 @@ import "./rebuild.css";
 import "./motion.css";
 import { Island, Palette, type IslandMove } from "./chrome.tsx";
 import { Sidebar } from "./sidebar.tsx";
+import { ChatSearch } from "./chat-search.tsx";
 import type { ReadingFocus } from "./reading.ts";
 import { renameKey } from "./chat-memory.ts";
+import { chatLists } from "../../../../packages/domain/src/work/chat-lists.ts";
 import {
   chatsOf,
   latestOpenChat,
@@ -122,6 +124,12 @@ export function App() {
   const [chatId, setChatId] = useState<string | null>(null);
   /** Where the open chat should open: a passage, or where reading stopped. */
   const [focus, setFocus] = useState<ReadingFocus | null>(null);
+  const [chatSearch, setChatSearch] = useState({
+    open: false,
+    restoring: false,
+  });
+  /** The open chat came from Search chats, so "Back to results" shows. */
+  const [fromSearch, setFromSearch] = useState(false);
   const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
@@ -335,6 +343,7 @@ export function App() {
     setPane(target);
     setChatId(chat);
     setFocus(at);
+    setFromSearch(false);
     dispatch({ type: "open_work", workAreaId: areaId });
   };
   /** The standing conversation of a group, made when there is none yet. */
@@ -579,6 +588,37 @@ export function App() {
     now,
     layout.route === "work" ? layout.workAreaId : null,
   );
+  // Chats with replies not yet read, newest reply first; the chat on screen
+  // is being read, so it is left out.
+  const replyLists = chatLists(
+    snapshot.areas,
+    snapshot.chats,
+    snapshot.messages,
+    snapshot.setup.activeGroupId,
+    generalConversationName,
+  );
+  const openKey =
+    layout.route === "work" && layout.workAreaId
+      ? `${layout.workAreaId}:${chatId ?? "first"}`
+      : null;
+  const allMessages = [
+    ...snapshot.messages,
+    ...snapshot.chats.flatMap((chat) => chat.messages),
+  ];
+  const unreadReplies = [...replyLists.byKey.values()]
+    .filter((entry) => entry.unread > 0 && entry.key !== openKey)
+    .map((entry) => {
+      const reply = allMessages.find(
+        (message) => message.id === entry.firstUnreadId,
+      );
+      return {
+        key: entry.key,
+        title: entry.title,
+        preview: (reply?.text ?? "").replace(/\s+/g, " ").slice(0, 90),
+        at: reply?.createdAt ?? "",
+      };
+    })
+    .sort((a, b) => b.at.localeCompare(a.at));
   const topRaw = view.island.top
     ? snapshot.attention.find((item) => item.id === view.island.top!.id)
     : undefined;
@@ -694,7 +734,7 @@ export function App() {
         }
         onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
         onNewChat={(areaId) => void startChat(areaId)}
-        onSearchChats={() => dispatch({ type: "palette", open: true })}
+        onSearchChats={() => setChatSearch({ open: true, restoring: false })}
         onMoveChat={(areaId, chat, toAreaId) =>
           void (async () => {
             const moved = await workAsync("move-chat", {
@@ -719,6 +759,14 @@ export function App() {
         }
         island={
           <Island
+            replies={unreadReplies}
+            onReply={(key) => {
+              const entry = replyLists.byKey.get(key);
+              if (entry?.firstUnreadId)
+                openWork(entry.areaId, undefined, null, entry.chatId, {
+                  messageId: entry.firstUnreadId,
+                });
+            }}
             top={view.island.top}
             count={view.island.count}
             held={view.island.held}
@@ -835,6 +883,11 @@ export function App() {
             areaId={layout.workAreaId}
             chatId={chatId}
             focus={focus}
+            onBackToResults={
+              fromSearch
+                ? () => setChatSearch({ open: true, restoring: true })
+                : null
+            }
             onChat={(next) => {
               setFirst(null);
               setFocus(null);
@@ -1054,6 +1107,20 @@ export function App() {
               }
             : null
         }
+      />
+      <ChatSearch
+        open={chatSearch.open}
+        restoring={chatSearch.restoring}
+        snapshot={snapshot as Snapshot}
+        onClose={() => setChatSearch({ open: false, restoring: false })}
+        onOpen={(entry, messageId) => {
+          setChatSearch({ open: false, restoring: false });
+          openWork(entry.areaId, undefined, null, entry.chatId, {
+            messageId,
+            flash: true,
+          });
+          setFromSearch(true);
+        }}
       />
       <AuthPrompt />
     </div>

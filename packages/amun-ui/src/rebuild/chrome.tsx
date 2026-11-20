@@ -302,6 +302,80 @@ export interface IslandMove {
 }
 
 const minimisedKey = "amun.island.minimised";
+/** A chat with a reply the owner has not read. */
+export interface IslandReply {
+  key: string;
+  title: string;
+  /** The first words of the reply. */
+  preview: string;
+}
+
+/** Replies come after decisions: one gets Open reply, several a short list. */
+function Replies({
+  replies,
+  compact,
+  onReply,
+}: {
+  replies: IslandReply[];
+  compact: boolean;
+  onReply(key: string): void;
+}) {
+  const [listed, setListed] = useState(false);
+  if (!replies.length) return null;
+  const one = replies.length === 1 ? replies[0]! : null;
+  if (one && !compact)
+    return (
+      <div className="rb-island rb-island-replies" aria-live="polite">
+        <div className="hd">
+          <FirstmateMark size={22} />
+          <span>
+            Firstmate replied in <strong>{one.title}</strong>
+          </span>
+        </div>
+        {one.preview && <p className="preview">“{one.preview}”</p>}
+        <button className="btn primary" onClick={() => onReply(one.key)}>
+          Open reply
+        </button>
+      </div>
+    );
+  return (
+    <div className="rb-island rb-island-replies" aria-live="polite">
+      <button
+        className="hd toggle"
+        aria-expanded={listed}
+        onClick={() => (one ? onReply(one.key) : setListed((value) => !value))}
+      >
+        <FirstmateMark size={22} />
+        <strong>
+          {one ? `Reply in ${one.title}` : `${replies.length} unread chats`}
+        </strong>
+        {!one && (
+          <Icon
+            name="chevron"
+            width={12}
+            height={12}
+            style={{ rotate: listed ? "90deg" : undefined }}
+          />
+        )}
+      </button>
+      {listed && !one && (
+        <ul className="list">
+          {replies.map((reply) => (
+            <li key={reply.key}>
+              <span className="title" title={reply.title}>
+                {reply.title}
+              </span>
+              <button className="link" onClick={() => onReply(reply.key)}>
+                Open
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Island({
   top,
   count,
@@ -310,7 +384,12 @@ export function Island({
   collapsed,
   actions,
   move = null,
+  replies = [],
+  onReply,
 }: {
+  /** Chats with replies the owner has not read; shown after decisions. */
+  replies?: IslandReply[];
+  onReply?(key: string): void;
   move?: IslandMove | null;
   top: Attention | null;
   count: number;
@@ -349,6 +428,11 @@ export function Island({
     }
     seen.current = top?.id ?? null;
   }, [top?.id]);
+  const replyLine =
+    !collapsed && onReply ? (
+      <Replies replies={replies} compact={!!top} onReply={onReply} />
+    ) : null;
+  if (!top && replyLine && replies.length) return replyLine;
   if (!top)
     // Saying "nothing needs you" beside a chat that is asking would be wrong.
     return collapsed || held > 0 ? null : (
@@ -369,15 +453,18 @@ export function Island({
   const needs = `Firstmate · ${count} ${count === 1 ? "thing needs" : "things need"} you`;
   if (view.mode === "card" && !minimised)
     return (
-      <IslandCard
-        item={top}
-        count={count}
-        options={options}
-        floating={false}
-        actions={actions}
-        move={move}
-        onMinimise={() => minimise(true)}
-      />
+      <>
+        <IslandCard
+          item={top}
+          count={count}
+          options={options}
+          floating={false}
+          actions={actions}
+          move={move}
+          onMinimise={() => minimise(true)}
+        />
+        {replyLine}
+      </>
     );
   if (view.mode === "card")
     // Minimised in the open sidebar: one line that opens the card again.

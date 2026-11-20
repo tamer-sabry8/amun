@@ -273,7 +273,10 @@ const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
   "notion.request": () => [],
   "tools.request": () => [],
   "council.request": () => [],
-  "work.search": () => ({ hits: [], steps: [] }),
+  "work.search": (params) => ({
+    hits: work.search(String(params.query ?? "")),
+    steps: [],
+  }),
   "happened.read": () => ({ available: false, turns: [] }),
   // No products in the preview; the screens under review do not use them.
   "workspace.snapshot": () => null,

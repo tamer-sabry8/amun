@@ -112,7 +112,15 @@ export function Sidebar({
     const row = listRef.current?.querySelector<HTMLElement>(
       `[data-key="${CSS.escape(reveal)}"]`,
     );
-    row?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    if (row && list) {
+      // Only the list scrolls; the window around it never moves.
+      const top =
+        row.getBoundingClientRect().top - list.getBoundingClientRect().top;
+      if (top < 0) list.scrollTop += top - 8;
+      else if (top + row.offsetHeight > list.clientHeight)
+        list.scrollTop += top + row.offsetHeight - list.clientHeight + 8;
+    }
     row?.focus({ preventScroll: true });
     setReveal(null);
   }, [reveal, view]);

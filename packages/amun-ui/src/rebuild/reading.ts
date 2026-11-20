@@ -38,6 +38,23 @@ function markRead(id: string) {
     if (ids.length) work("read-messages", { messageIds: ids });
   }, 400);
 }
+/**
+ * Scrolls only the conversation, never the window around it (scrollIntoView
+ * would move every scrolling ancestor, the app frame included).
+ */
+function reveal(
+  container: HTMLElement,
+  target: HTMLElement,
+  block: "start" | "center",
+) {
+  const offset =
+    target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  const room =
+    block === "center"
+      ? (container.clientHeight - target.offsetHeight) / 2
+      : 12;
+  container.scrollTop += offset - Math.max(room, 0);
+}
 const atBottom = (element: HTMLElement) =>
   element.scrollHeight - element.scrollTop - element.clientHeight < nearBottom;
 
@@ -96,7 +113,7 @@ export function useReading({
     } else if (focus) {
       const target = find(focus.messageId);
       if (target) {
-        target.scrollIntoView({ block: "center" });
+        reveal(element, target, "center");
         if (focus.flash) setFlash(focus.messageId);
       } else {
         // The chat exists, but that passage is gone.
@@ -105,7 +122,7 @@ export function useReading({
       }
     } else if (firstUnread && find(firstUnread)) {
       const mark = element.querySelector<HTMLElement>(".rb-new-replies");
-      (mark ?? find(firstUnread))!.scrollIntoView({ block: "start" });
+      reveal(element, (mark ?? find(firstUnread))!, "start");
     } else restore();
     following.current = atBottom(element);
     // Only on opening; later changes follow the rules below.
@@ -134,7 +151,7 @@ export function useReading({
         : null;
       // A long reply is shown from its start; anything else at the end.
       if (start && start.offsetHeight > element.clientHeight * 0.8)
-        start.scrollIntoView({ block: "start" });
+        reveal(element, start, "start");
       else element.scrollTop = element.scrollHeight;
     } else if (messages.slice(before).some((message) => message.role !== "you"))
       setNewBelow(true);
