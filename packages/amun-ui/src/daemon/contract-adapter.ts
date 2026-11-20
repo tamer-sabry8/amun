@@ -21,7 +21,7 @@ import {
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
 import { NoticeQueue, type NoticeOptions } from "./firstmate-notices.ts";
-import type { AmunTransport } from "./amun-client.ts";
+import { AmunRequestError, type AmunTransport } from "./amun-client.ts";
 import { agentCatalog } from "../../../domain/src/work/agents.ts";
 import { pickByName } from "../../../domain/src/work/shell.ts";
 
@@ -335,6 +335,24 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
   return agents;
 }
 
+const waitingAnswersKey = "amun.waiting-hold-answers";
+function loadWaitingAnswers(): Map<string, HoldAnswer> {
+  try {
+    const raw = JSON.parse(
+      globalThis.localStorage?.getItem(waitingAnswersKey) ?? "{}",
+    ) as Record<string, HoldAnswer>;
+    return new Map(
+      Object.entries(raw).filter(
+        ([, answered]) =>
+          answered?.status === "waiting" &&
+          typeof answered.signature === "string",
+      ),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
 /** What one hold says, so the same task held again is seen as a new hold. */
 export function holdSignature(hold: DaemonHold): string {
   return JSON.stringify(hold);
@@ -352,6 +370,13 @@ export function settleHoldAnswers(
   const present = new Map(holds.map((hold) => [holdId(hold), hold]));
   for (const [id, answered] of answers) {
     const hold = present.get(id);
+    if (answered.status === "waiting") {
+      // Checked before anything is sent again: a hold that is gone was
+      // settled (by this answer or elsewhere); a changed one is asked anew.
+      if (!hold) answers.set(id, { ...answered, status: "settled" });
+      else if (holdSignature(hold) !== answered.signature) answers.delete(id);
+      continue;
+    }
     if (!hold) {
       if (answered.status === "recorded" && !answered.cleared)
         answers.set(id, { ...answered, cleared: true });
@@ -369,9 +394,15 @@ export interface HoldAnswer {
   title: string;
   answer: string;
   at: string;
-  /** "sending" until the First Mate has taken it; "failed" with the reason. */
-  status: "sending" | "recorded" | "failed";
+  /**
+   * "sending" until the First Mate has taken it; "failed" with the reason;
+   * "waiting" when the connection dropped and it is not known whether it
+   * landed; "settled" when the hold was gone by the time Amun could check.
+   */
+  status: "sending" | "recorded" | "failed" | "waiting" | "settled";
   problem?: string;
+  /** For a waiting answer: what to send once the connection is back. */
+  resend?: { sent: string; until?: string };
 }
 
 /**
@@ -391,7 +422,8 @@ export function holdAttention(
       hold.source === "crew"
         ? `${hold.taskId} · ${hold.verb}`
         : `${hold.taskId} · ${hold.reason}`;
-    const done = answered && answered.status !== "failed";
+    const done =
+      answered && answered.status !== "failed" && answered.status !== "waiting";
     return {
       id,
       kind: "question" as const,
@@ -400,9 +432,11 @@ export function holdAttention(
       title: hold.source === "crew" ? hold.summary : hold.title,
       detail: !answered
         ? detail
-        : answered.status === "failed"
-          ? `Your answer did not reach Firstmate (${answered.problem ?? "it could not be sent"}). Answer again. ${detail}`
-          : `You answered: “${answered.answer}”. ${answered.status === "sending" ? "Firstmate is reading it." : "Firstmate has it."}`,
+        : answered.status === "waiting"
+          ? `Waiting to send: “${answered.answer}”. Amun checks with Firstmate when the connection is back, and sends it once if the question is unchanged.`
+          : answered.status === "failed"
+            ? `Your answer did not reach Firstmate (${answered.problem ?? "it could not be sent"}). Answer again. ${detail}`
+            : `You answered: “${answered.answer}”. ${answered.status === "sending" ? "Firstmate is reading it." : "Firstmate has it."}`,
       state: done ? ("done" as const) : ("open" as const),
       ref: hold.taskId,
       options: [],
@@ -413,14 +447,22 @@ export function holdAttention(
   // Answered holds Firstmate has since cleared stay under Done for this run.
   const still = new Set(open.map((item) => item.id));
   const cleared = [...answers]
-    .filter(([id, answered]) => !still.has(id) && answered.status !== "failed")
+    .filter(
+      ([id, answered]) =>
+        !still.has(id) &&
+        answered.status !== "failed" &&
+        answered.status !== "waiting",
+    )
     .map(([id, answered]) => ({
       id,
       kind: "question" as const,
       groupId: null,
       workAreaId: null,
       title: answered.title,
-      detail: `You answered: “${answered.answer}”. Firstmate has it.`,
+      detail:
+        answered.status === "settled"
+          ? `Already settled before your answer “${answered.answer}” could be sent. Check the request for what was recorded.`
+          : `You answered: “${answered.answer}”. Firstmate has it.`,
       state: "done" as const,
       ref: null,
       options: [],
@@ -496,7 +538,7 @@ export class ContractAdapter {
   /** The First Mate's model as the daemon last reported it. */
   private model: string | null = null;
   /** Held questions the owner has answered in this run. */
-  private readonly holdAnswers = new Map<string, HoldAnswer>();
+  private readonly holdAnswers = loadWaitingAnswers();
   /** Told when something changed without a request (an answer landed). */
   onChange: (() => void) | null = null;
 
@@ -595,6 +637,7 @@ export class ContractAdapter {
       workspace: await this.readWorkspace(),
     };
     settleHoldAnswers(this.holdAnswers, holds);
+    this.resendWaitingAnswers(holds, via ?? null);
     await this.ensureGroup();
   }
 
@@ -1205,6 +1248,18 @@ export class ContractAdapter {
         ),
       ];
     const id = holdId(found);
+    // One answer per question: a second click, or a retry while the first is
+    // still on its way or waiting for the connection, sends nothing more.
+    const earlier = this.holdAnswers.get(id);
+    if (
+      earlier &&
+      (earlier.status === "sending" || earlier.status === "waiting") &&
+      earlier.signature === holdSignature(found)
+    )
+      return [
+        this.result(action, true, `Already sent: “${earlier.answer}”.`),
+        this.work(),
+      ];
     const answered: HoldAnswer = {
       signature: holdSignature(found),
       title: found.source === "crew" ? found.summary : found.title,
@@ -1229,11 +1284,27 @@ export class ContractAdapter {
           this.holdAnswers.set(id, { ...answered, status: "recorded" });
         },
         (error: unknown) => {
+          // The connection dropped: whether it landed is unknown, so it waits
+          // and is checked against Firstmate's holds before any retry.
+          const interrupted =
+            error instanceof AmunRequestError &&
+            error.error.code === "interrupted";
           this.holdAnswers.set(id, {
             ...answered,
-            status: "failed",
+            status: interrupted ? "waiting" : "failed",
             problem: error instanceof Error ? error.message : String(error),
+            ...(interrupted
+              ? {
+                  resend: {
+                    sent: said.sent,
+                    ...(message.resolution === "snooze" && until
+                      ? { until }
+                      : {}),
+                  },
+                }
+              : {}),
           });
+          if (interrupted) this.saveWaitingAnswers();
         },
       )
       .then(() => this.refresh().catch(() => undefined))
@@ -1246,6 +1317,63 @@ export class ContractAdapter {
       ),
       this.work(),
     ];
+  }
+
+  /**
+   * Answers that waited out a dropped connection, now that the holds are
+   * known again: one still open and unchanged is sent once more; the rest
+   * were settled or changed (see settleHoldAnswers).
+   */
+  private resendWaitingAnswers(
+    holds: readonly DaemonHold[],
+    space: string | null,
+  ) {
+    if (!space) return;
+    for (const [id, answered] of this.holdAnswers) {
+      if (answered.status !== "waiting" || !answered.resend) continue;
+      const hold = holds.find((item) => holdId(item) === id);
+      if (!hold || holdSignature(hold) !== answered.signature) continue;
+      const again: HoldAnswer = { ...answered, status: "sending" };
+      this.holdAnswers.set(id, again);
+      void this.daemon
+        .request("holds.answer", {
+          space,
+          hold,
+          answer: answered.resend.sent,
+          ...(answered.resend.until ? { until: answered.resend.until } : {}),
+        })
+        .then(
+          () => this.holdAnswers.set(id, { ...again, status: "recorded" }),
+          (error: unknown) =>
+            this.holdAnswers.set(id, {
+              ...again,
+              status:
+                error instanceof AmunRequestError &&
+                error.error.code === "interrupted"
+                  ? "waiting"
+                  : "failed",
+              problem: error instanceof Error ? error.message : String(error),
+            }),
+        )
+        .then(() => {
+          this.saveWaitingAnswers();
+          this.onChange?.();
+        });
+    }
+    this.saveWaitingAnswers();
+  }
+  /** Waiting answers survive a restart of Amun. */
+  private saveWaitingAnswers() {
+    try {
+      const waiting = Object.fromEntries(
+        [...this.holdAnswers].filter(
+          ([, answered]) => answered.status === "waiting",
+        ),
+      );
+      localStorage.setItem(waitingAnswersKey, JSON.stringify(waiting));
+    } catch {
+      // Kept in memory for this run.
+    }
   }
 
   private findHold(attentionId: string): DaemonHold | null {
