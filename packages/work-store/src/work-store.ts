@@ -44,6 +44,7 @@ import { moveStory, resequence } from "../../domain/src/work/planning.ts";
 import {
   readRequestBlocks,
   reportFingerprint,
+  reportWords,
 } from "../../domain/src/work/requests.ts";
 
 type Row = Record<string, unknown>;
@@ -2714,9 +2715,8 @@ export class WorkStore {
       case "apply-reply": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
-        const { visible, reports, documents, moves } = readRequestBlocks(
-          command.text,
-        );
+        const { visible, reports, documents, moves, unmatched } =
+          readRequestBlocks(command.text);
         // Where a request's own message is now, after any move or split.
         const request = (ref: string | null) => {
           if (!ref) return null;
@@ -2751,9 +2751,14 @@ export class WorkStore {
             card: card as never,
             model: role === "firstmate" ? command.model : null,
           } as never);
-        // Reports for a reference Amun gave; any other is left alone.
+        // Reports for a reference Amun gave. Any other changes no request,
+        // but its words are still shown where the reply arrived.
+        const loose = [...unmatched];
         for (const report of reports) {
-          if (!request(report.request)) continue;
+          if (!request(report.request)) {
+            loose.push(report);
+            continue;
+          }
           this.apply({
             version: 1,
             kind: "work",
@@ -2788,8 +2793,16 @@ export class WorkStore {
             accepted: move.accepted,
           } as never);
         }
+        const looseWords = loose.map(reportWords).join("\n");
         // Firstmate's words first, then what it delivered.
-        if (command.saveText && visible) {
+        if (looseWords && !command.saveText) say(here, "firstmate", looseWords);
+        if (command.saveText && looseWords)
+          say(
+            here,
+            "firstmate",
+            [visible, looseWords].filter(Boolean).join("\n\n"),
+          );
+        else if (command.saveText && visible) {
           const places = new Set(
             [
               ...reports.map((report) => report.request),
@@ -2814,15 +2827,43 @@ export class WorkStore {
           // A matched result lands with its request; anything else where the
           // reply arrived, as before.
           const at = known ?? here;
-          // The project card gets it only for a confirmed project.
-          const owner = known ? known.project : command.workAreaId;
+          // The project card gets it only for a confirmed match; an
+          // unmatched document stays in the chat, linked to no card.
+          const owner = known ? known.project : null;
           const group = this.groupOf(owner ?? at.areaId);
-          const same = this.get(
-            owner
-              ? "SELECT o.id,o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND lower(trim(o.title))=lower(trim(?)) ORDER BY o.updated_at DESC LIMIT 1"
-              : "SELECT o.id,o.body FROM library_outputs o WHERE NOT EXISTS (SELECT 1 FROM library_output_links l WHERE l.output_id=o.id) AND lower(trim(o.title))=lower(trim(?)) ORDER BY o.updated_at DESC LIMIT 1",
-            ...(owner ? [owner, document.title] : [document.title]),
-          );
+          // A revision of this same delivery: the same request (or, without
+          // one, the same chat) and title. Other requests are never touched.
+          const earlier = this.all(
+            known
+              ? "SELECT card_json FROM work_messages WHERE role='card' AND instr(card_json,'\"delivered\"')>0 AND instr(card_json,?)>0 ORDER BY created_at DESC,rowid DESC"
+              : `SELECT card_json FROM work_messages WHERE role='card' AND instr(card_json,'"delivered"')>0 AND work_area_id=? AND ${at.chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at DESC,rowid DESC`,
+            ...(known
+              ? [known.ref]
+              : [at.areaId, ...(at.chatId === null ? [] : [at.chatId])]),
+          )
+            .map((row) => {
+              try {
+                return JSON.parse(String(row.card_json)) as {
+                  outputId?: string;
+                  title?: string;
+                  request?: string | null;
+                };
+              } catch {
+                return {};
+              }
+            })
+            .find(
+              (card) =>
+                (card.request ?? null) === (known ? known.ref : null) &&
+                (card.title ?? "").trim().toLowerCase() ===
+                  document.title.trim().toLowerCase(),
+            );
+          const same = earlier?.outputId
+            ? this.get(
+                "SELECT id,body FROM library_outputs WHERE id=?",
+                earlier.outputId,
+              )
+            : undefined;
           const body = this.clean(document.body);
           // The same version delivered again is not a second reply.
           if (same && String(same.body) === body) continue;

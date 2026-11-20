@@ -196,13 +196,20 @@ export function useReading({
       (entries) => {
         if (document.visibilityState !== "visible") return;
         for (const entry of entries)
-          if (entry.isIntersecting) {
+          // Mostly in view; a reply taller than the view counts once it
+          // fills most of it.
+          if (
+            entry.isIntersecting &&
+            (entry.intersectionRatio >= 0.6 ||
+              entry.intersectionRect.height >=
+                (entry.rootBounds?.height ?? Infinity) * 0.6)
+          ) {
             const id = (entry.target as HTMLElement).dataset.mid;
             if (id) markRead(id);
             observer.unobserve(entry.target);
           }
       },
-      { root: element, threshold: 0.6 },
+      { root: element, threshold: [0, 0.01, 0.02, 0.05, 0.1, 0.25, 0.4, 0.6] },
     );
     for (const item of element.querySelectorAll<HTMLElement>(
       '[data-unread="true"]',

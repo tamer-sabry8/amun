@@ -179,6 +179,62 @@ describe("request references", () => {
     expect(card.workAreaId).not.toBe(gitex);
   });
 
+  it("shows a report it cannot match, and changes no request", () => {
+    const { gitex } = setup();
+    ask(gitex, "Write the Gitex PRD.", prd);
+    recordFirstMateReply(
+      store,
+      block({
+        do: "report",
+        request: "amun-r-dddddddddddd",
+        status: "working",
+        role: "Researcher",
+        text: "gathering evidence",
+      }) + block({ do: "report", status: "failed", role: "QA", text: "" }),
+    );
+    expect(snap().requests[0]).toMatchObject({ status: "sent" });
+    expect(allMessages().at(-1)).toMatchObject({
+      role: "firstmate",
+      text: "QA: work did not finish.\nResearcher: gathering evidence.",
+    });
+  });
+
+  it("never links a document without a matching reference to the project it arrived in", () => {
+    const { gitex } = setup();
+    send("apply-reply", {
+      text: block({ do: "document", title: "Notes", type: "doc", body: "x" }),
+      workAreaId: gitex,
+      chatId: null,
+    });
+    expect(deliveries()[0]).toMatchObject({ workAreaId: gitex });
+    expect(snap().library[0]!.workAreaIds).toEqual([]);
+  });
+
+  it("keeps two requests' documents apart even with the same title", () => {
+    const { gitex } = setup();
+    ask(gitex, "Write a summary for the board.", prd);
+    ask(gitex, "Write a summary for the team.", email);
+    for (const ref of [prd, email])
+      recordFirstMateReply(
+        store,
+        block({
+          do: "document",
+          title: "Summary",
+          type: "doc",
+          body: "Same",
+          request: ref,
+        }),
+      );
+    expect(
+      deliveries().map(
+        (message) => (message.card as { request: string }).request,
+      ),
+    ).toEqual([prd, email]);
+    expect(
+      snap().library.filter((item) => item.title === "Summary"),
+    ).toHaveLength(2);
+  });
+
   it("applies a repeated report and a repeated delivery once", () => {
     const { gitex } = setup();
     ask(gitex, "Write the Gitex PRD.", prd);

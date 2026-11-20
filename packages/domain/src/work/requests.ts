@@ -82,12 +82,18 @@ export function readRequestBlocks(reply: string): {
   reports: RequestReport[];
   documents: RequestDocument[];
   moves: RequestMove[];
+  /**
+   * Reports with no reference, or a malformed one: never applied to a
+   * request, but their words are still shown to the owner.
+   */
+  unmatched: RequestReport[];
   /** Every block, for the caller's other uses. */
   blocks: Record<string, unknown>[];
 } {
   const reports: RequestReport[] = [];
   const documents: RequestDocument[] = [];
   const moves: RequestMove[] = [];
+  const unmatched: RequestReport[] = [];
   const blocks: Record<string, unknown>[] = [];
   const visible = reply
     .replace(/```amun\s*\n([\s\S]*?)```/g, (_match, body: string) => {
@@ -97,11 +103,10 @@ export function readRequestBlocks(reply: string): {
         blocks.push(value);
         if (
           value.do === "report" &&
-          isRequestRef(value.request) &&
           statuses.includes(value.status as ReportedStatus)
         )
-          reports.push({
-            request: value.request,
+          (isRequestRef(value.request) ? reports : unmatched).push({
+            request: isRequestRef(value.request) ? value.request : "",
             status: value.status as ReportedStatus,
             role: clip(value.role, 120),
             text: clip(value.text, 400),
@@ -137,7 +142,26 @@ export function readRequestBlocks(reply: string): {
     })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { visible, reports, documents, moves, blocks };
+  return { visible, reports, documents, moves, unmatched, blocks };
+}
+
+/**
+ * A report that cannot be tied to a request, in plain words, so it is still
+ * seen through the ordinary Firstmate channel.
+ */
+export function reportWords(report: RequestReport): string {
+  const said: Record<ReportedStatus, string> = {
+    queued: "is queued",
+    waiting: "is waiting",
+    working: "is in progress",
+    "needs-decision": "needs your decision",
+    failed: "did not finish",
+    delivered: "is done",
+  };
+  const who = report.role ? `${report.role}: ` : "";
+  return `${who}${report.text || `work ${said[report.status]}`}.`
+    .replace(/\.\.$/, ".")
+    .replace(/^./, (first) => first.toUpperCase());
 }
 
 /** The same report repeated (after a reconnect, say) has the same print. */
