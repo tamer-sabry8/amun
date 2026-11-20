@@ -314,6 +314,7 @@ export type AmunAction =
   | { do: "update"; message: string }
   | { do: "rule-case"; situation: string; resolution: string }
   | { do: "rename"; name: string }
+  | { do: "title"; text: string }
   | { do: "client"; name: string | null }
   | { do: "repo"; url: string }
   | {
@@ -440,6 +441,16 @@ function action(raw: unknown): AmunAction | null {
     case "update": {
       const message = text(input.message, 2000);
       return message ? { do: "update", message } : null;
+    }
+    case "title": {
+      // A chat's short topic title: one line, a few words.
+      const value = text(
+        typeof input.text === "string"
+          ? input.text.replace(/\s+/g, " ")
+          : input.text,
+        60,
+      );
+      return value ? { do: "title", text: value } : null;
     }
     case "rename": {
       // One line, no control characters: this becomes the work's title.
@@ -831,6 +842,7 @@ export const amunProtocol = [
   "To raise something in Amun, end your reply with one or more fenced blocks tagged amun, each a single JSON object:",
   '{"do":"document","title":"…","type":"prd|brd|research|update|doc","body":"markdown"} saves a draft beside the conversation.',
   '{"do":"rename","name":"…"} renames the work this conversation is about, straight away. It needs no approval and is never raised as a plan. Say in one short line that it is done and what the new name is.',
+  '{"do":"title","text":"…"} names this chat with a short topic title of two to five words, in your first reply in a chat only. Amun keeps any name the owner gave the chat. Do not mention it in your reply.',
   '{"do":"client","name":"…"} sets the client of this project straight away when the owner says who it is for (for example "for client Acme"); an empty name clears it. It needs no approval and is never raised as a plan. Only for a project. Say in one short line that it is done and who the client is.',
   '{"do":"repo","url":"https://github.com/owner/name"} connects the repository this project\'s code lives in, straight away, when the owner tells you which repository to use. It lets Amun read its pull requests. Your agents can also change code in it, but only in Amun\'s own copy: the owner reads the exact change, and only after they approve does Amun open a pull request. Nothing is ever merged by an agent, and merging always needs the owner\'s approval. Say in one short line that it is connected.',
   '{"do":"objective","title":"what we are measuring or aiming for","baseline":number,"target":number,"due":"YYYY-MM-DD","areas":["names of other work areas in this group to link"]} saves an objective on this Mac straight away when the owner writes "Objective: …", and links it to this work area plus any areas they name. Leave baseline, target and due out unless the owner gave them: never guess a baseline or a date; a missing baseline shows as unknown. {"do":"objective-link","objective":"words from its title","areas":["work area names"]} links an existing objective to more work areas in this group when the owner asks. Neither needs approval or is a plan, and neither changes anything outside Amun. Say in one short line what you saved or linked.',

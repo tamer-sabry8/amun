@@ -1755,7 +1755,10 @@ describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
   it("names every chat by the owner's first message in it", () => {
     const { employer } = setup();
     const id = area(employer, "project", "Gitex");
-    expect(areaOf(id).firstChat).toEqual({ title: null, archivedAt: null });
+    expect(areaOf(id).firstChat).toMatchObject({
+      title: null,
+      archivedAt: null,
+    });
     say(id, "firstmate", "Ahoy.");
     say(id, "you", "Plan the\nbooth for Gitex.");
     say(id, "you", "And the travel.");
@@ -1895,6 +1898,98 @@ describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
     expect(texts(chatOf(target).messages)).toEqual(["SDK pricing ideas."]);
     expect(texts(chatOf(chat).messages)).toEqual(["Continued in AMUN-SDK"]);
     expect(texts(snap().messages)).toEqual(["Existing talk."]);
+  });
+
+  it("keeps Firstmate's replies unread until the owner reads them", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const asked = say(gitex, "you", "Is hall 4 booked?");
+    const reply = say(gitex, "firstmate", "Not yet.");
+    const byId = (id: string) =>
+      snap().messages.find((message) => message.id === id)!;
+    expect(byId(asked).readAt).not.toBeNull();
+    expect(byId(reply).readAt).toBeNull();
+    expect(send("read-messages", { messageIds: [reply] }).ok).toBe(true);
+    const read = byId(reply).readAt;
+    expect(read).not.toBeNull();
+    // Reading again keeps the first time it was read.
+    send("read-messages", { messageIds: [reply] });
+    expect(byId(reply).readAt).toBe(read);
+  });
+
+  it("lets the owner's rename win over Firstmate's suggested title", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const chat = send("new-chat", { workAreaId: gitex }).ref!;
+    say(gitex, "you", "can you check what budget is left for the stand", chat);
+    expect(chatOf(chat).title).toBe(
+      "can you check what budget is left for the stand",
+    );
+    send("suggest-chat-title", {
+      workAreaId: gitex,
+      chatId: chat,
+      title: "Stand budget",
+    });
+    expect(chatOf(chat)).toMatchObject({
+      title: "Stand budget",
+      titleBy: "firstmate",
+    });
+    send("rename-chat", { workAreaId: gitex, chatId: chat, title: "Budget" });
+    send("suggest-chat-title", {
+      workAreaId: gitex,
+      chatId: chat,
+      title: "Late title",
+    });
+    expect(chatOf(chat)).toMatchObject({ title: "Budget", titleBy: "owner" });
+    // The first chat, which has no row, follows the same rule.
+    say(gitex, "you", "Plan the booth.");
+    send("rename-chat", { workAreaId: gitex, chatId: null, title: "Booth" });
+    send("suggest-chat-title", {
+      workAreaId: gitex,
+      chatId: null,
+      title: "Booth plan",
+    });
+    expect(areaOf(gitex).firstChat).toMatchObject({
+      title: "Booth",
+      titleBy: "owner",
+    });
+  });
+
+  it("pins chats to Recent and carries a pin with a whole-chat move", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const amun = area(employer, "product", "Amun");
+    say(amun, "you", "Amun's own talk.");
+    const chat = send("new-chat", { workAreaId: gitex }).ref!;
+    say(gitex, "you", "Launch plan.", chat);
+    send("pin-chat", { workAreaId: gitex, chatId: chat, order: 2 });
+    expect(chatOf(chat).pinOrder).toBe(2);
+    const moved = send("move-chat", {
+      workAreaId: gitex,
+      chatId: chat,
+      toWorkAreaId: amun,
+    }).ref!;
+    expect(chatOf(moved).pinOrder).toBe(2);
+    expect(chatOf(chat).pinOrder).toBeNull();
+    send("pin-chat", { workAreaId: amun, chatId: moved, order: null });
+    expect(chatOf(moved).pinOrder).toBeNull();
+  });
+
+  it("leaves the pin with the original chat when a part splits off", () => {
+    const { employer } = setup();
+    const gitex = area(employer, "project", "Gitex");
+    const sdk = area(employer, "product", "AMUN-SDK");
+    say(gitex, "you", "Plan the booth.");
+    const drift = say(gitex, "you", "Now the SDK vision.");
+    send("pin-chat", { workAreaId: gitex, chatId: null, order: 1 });
+    send("move-chat", {
+      workAreaId: gitex,
+      chatId: null,
+      fromMessageId: drift,
+      toWorkAreaId: sdk,
+    });
+    expect(areaOf(gitex).firstChat.pinOrder).toBe(1);
+    expect(areaOf(sdk).firstChat.pinOrder ?? null).toBeNull();
   });
 
   it("refuses a move that would do nothing or go nowhere", () => {

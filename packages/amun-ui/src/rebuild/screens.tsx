@@ -2007,6 +2007,7 @@ export function Portfolio({
   onWork,
   onAsk,
   onAskAbout,
+  onAskCard,
 }: {
   snapshot: Snapshot;
   model: string | null;
@@ -2016,6 +2017,8 @@ export function Portfolio({
   onAsk(text: string, files: string[]): void;
   /** Opens a work's conversation with a message for Firstmate. */
   onAskAbout?(areaId: string, text: string): void;
+  /** "Ask about …": a fresh chat with the card attached. */
+  onAskCard?(areaId: string): void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [type, setTypeState] = useState(portfolioFilters.type);
@@ -2176,6 +2179,7 @@ export function Portfolio({
           onAsk={(areaId, text) =>
             onAskAbout ? onAskAbout(areaId, text) : onWork(areaId)
           }
+          {...(onAskCard && { onAskAbout: onAskCard })}
         />
       )}
       {areas.length ? (

@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { bridge } from "../bridge.ts";
 import {
@@ -28,6 +29,7 @@ import { Icon } from "../icons.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { takeOff } from "./motion.ts";
 import { useDismiss } from "./use-dismiss.ts";
+import { draftOf, setDraft as rememberDraft } from "./chat-memory.ts";
 import { firstmateCommands } from "../composer-command.ts";
 import { runAppCommand } from "./app-commands.ts";
 import { themeNames } from "./theme-names.ts";
@@ -77,6 +79,8 @@ export function Composer({
   pickNonce = 0,
   skills = false,
   onBoard,
+  draftKey,
+  above,
 }: {
   placeholder?: string;
   chips?: string[];
@@ -100,6 +104,13 @@ export function Composer({
   skills?: boolean;
   /** Opens a Bearings board; without it the board link is left out. */
   onBoard?(url: string): void;
+  /**
+   * Where unsent words are kept, so they survive leaving the screen and
+   * restarting Amun. Sending clears them.
+   */
+  draftKey?: string;
+  /** Shown above the text inside the box, e.g. a card being asked about. */
+  above?: ReactNode;
 }) {
   const commands = useFirstmateCommands();
   const workspace = useSyncExternalStore(
@@ -117,7 +128,12 @@ export function Composer({
       )
     : [];
   const wantedSkill = useRef<string | null>(null);
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(
+    () => initial || (draftKey ? draftOf(draftKey) : ""),
+  );
+  useEffect(() => {
+    if (draftKey) rememberDraft(draftKey, draft);
+  }, [draftKey, draft]);
   const [own, setFiles] = useState<string[]>([]);
   const files = attached ?? own;
   const [plus, setPlus] = useState(false);
@@ -417,6 +433,7 @@ export function Composer({
             ))}
           </div>
         )}
+        {above}
         <label className="sr-only" htmlFor="rb-composer-input">
           Message Firstmate
         </label>

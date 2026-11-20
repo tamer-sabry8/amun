@@ -107,6 +107,21 @@ export const setupPatch = z.strictObject({
 });
 
 export const documentAuthor = z.enum(["owner", "firstmate", "agent"]);
+/**
+ * Where a request stands, as Firstmate reported it. "sent" is Amun's own:
+ * Firstmate took the message and has reported nothing since.
+ */
+export const requestStatus = z.enum([
+  "sent",
+  "queued",
+  "waiting",
+  "working",
+  "needs-decision",
+  "failed",
+  "delivered",
+]);
+export type RequestStatus = z.infer<typeof requestStatus>;
+
 export const workSnapshot = z.strictObject({
   version: z.literal(1),
   kind: z.literal("work-snapshot"),
@@ -152,6 +167,10 @@ export const workSnapshot = z.strictObject({
       firstChat: z.strictObject({
         title: z.string().nullable(),
         archivedAt: stamp.nullable(),
+        /** Place among the chats pinned to Recent; null when not pinned. */
+        pinOrder: z.number().nullable().optional(),
+        /** Who named it: "owner" (a rename), "firstmate" or "" (first words). */
+        titleBy: z.string().optional(),
       }),
     }),
   ),
@@ -507,6 +526,8 @@ export const workSnapshot = z.strictObject({
       /** The model that wrote a Firstmate reply; empty on older messages. */
       model: z.string().max(200).nullable().optional(),
       createdAt: stamp,
+      /** When the owner saw it; null is an unread reply. */
+      readAt: stamp.nullable().optional(),
     }),
   ),
   /**
@@ -527,6 +548,10 @@ export const workSnapshot = z.strictObject({
         /** The chat it came from; null is the main chat. */
         fromChatId: id.nullable(),
         createdAt: stamp,
+        /** Place among the chats pinned to Recent; null when not pinned. */
+        pinOrder: z.number().nullable().optional(),
+        /** Who named it: "owner" (a rename), "firstmate" or "" (first words). */
+        titleBy: z.string().optional(),
         messages: z.array(
           z.strictObject({
             id,
@@ -536,8 +561,32 @@ export const workSnapshot = z.strictObject({
             card: z.json().nullable(),
             model: z.string().max(200).nullable().optional(),
             createdAt: stamp,
+            readAt: stamp.nullable().optional(),
           }),
         ),
+      }),
+    )
+    .default([]),
+  /**
+   * The owner's requests, each with the stable reference Firstmate repeats,
+   * and the last status Firstmate confirmed for it.
+   */
+  requests: z
+    .array(
+      z.strictObject({
+        ref: z.string().max(64),
+        messageId: id,
+        /** The project Firstmate confirmed; null for none (General). */
+        projectAreaId: id.nullable(),
+        status: requestStatus,
+        role: z.string().max(120),
+        detail: z.string().max(400),
+        /** How many documents Firstmate said it will deliver; 0 if unsaid. */
+        parts: z.int().min(0).max(20),
+        updatedAt: stamp,
+        /** A change of project the owner asked Firstmate for. */
+        changeToAreaId: id.nullable(),
+        changeState: z.enum(["", "requested", "refused"]),
       }),
     )
     .default([]),
@@ -957,6 +1006,62 @@ export const workCommand = z.discriminatedUnion("action", [
     chatId: id.nullable(),
     fromMessageId: id.optional(),
     toWorkAreaId: id,
+  }),
+  /** Pin a chat to Recent at `order`, or unpin it (null). */
+  act("pin-chat", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    order: z.number().nullable(),
+  }),
+  /** The owner has seen these replies. */
+  act("read-messages", { messageIds: z.array(id).min(1).max(500) }),
+  /** Firstmate's short topic title; never replaces the owner's own name. */
+  act("suggest-chat-title", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    title: name,
+  }),
+  /** A request the owner sent, under its stable reference. */
+  act("register-request", {
+    ref: z.string().min(8).max(64),
+    messageId: id,
+    projectAreaId: id.nullable(),
+  }),
+  /**
+   * A status Firstmate reported for a request. Unknown references are
+   * refused; a report already applied (same fingerprint) changes nothing.
+   */
+  act("request-report", {
+    ref: z.string().min(8).max(64),
+    status: requestStatus.exclude(["sent"]),
+    role: z.string().max(120).default(""),
+    detail: z.string().max(400).default(""),
+    parts: z.int().min(0).max(20).default(0),
+    fingerprint: z.string().min(1).max(128),
+  }),
+  /**
+   * Firstmate's report and document blocks from a reply. A result is linked
+   * to a request only when its reference matches one Amun gave; anything
+   * else stays where the reply arrived (`workAreaId`, `chatId`). With
+   * `saveText`, the reply's own words are kept too: in the chat of the
+   * request it is about, when every reference points to the same chat.
+   */
+  act("apply-reply", {
+    text: z.string().max(200000),
+    workAreaId: id,
+    chatId: id.nullable(),
+    saveText: z.boolean().default(false),
+    model: z.string().max(200).nullable().default(null),
+  }),
+  /** The owner asked Firstmate to move a request to another project. */
+  act("request-change", {
+    ref: z.string().min(8).max(64),
+    toAreaId: id.nullable(),
+  }),
+  /** Firstmate confirmed (or refused) the change of project. */
+  act("request-change-result", {
+    ref: z.string().min(8).max(64),
+    accepted: z.boolean(),
   }),
   /** "Keep it here": this name belongs inside this work; do not ask again. */
   act("keep-here", { workAreaId: id, name }),

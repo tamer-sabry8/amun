@@ -41,6 +41,11 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
+import {
+  readRequestBlocks,
+  reportFingerprint,
+  reportWords,
+} from "../../domain/src/work/requests.ts";
 
 type Row = Record<string, unknown>;
 type Step = Parameters<typeof JSON.stringify>[0];
@@ -233,6 +238,12 @@ export class WorkStore {
       firstChat: {
         title: (row.first_chat_title as string | null) ?? null,
         archivedAt: (row.first_chat_archived_at as string | null) ?? null,
+        pinOrder:
+          row.first_chat_pin_order === null ||
+          row.first_chat_pin_order === undefined
+            ? null
+            : Number(row.first_chat_pin_order),
+        titleBy: String(row.first_chat_title_by ?? ""),
       },
     }));
   }
@@ -580,12 +591,32 @@ export class WorkStore {
         },
         messages: this.chatMessages(null),
         chats: this.all(
-          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.kind,c.archived_at AS archivedAt,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
+          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.kind,c.archived_at AS archivedAt,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt,c.pin_order AS pinOrder,c.title_by AS titleBy FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
         ).map((chat) => ({
           ...chat,
           // A chat the owner started has no fork point.
           forkedFrom: chat.forkedFrom ? String(chat.forkedFrom) : null,
+          pinOrder: chat.pinOrder === null ? null : Number(chat.pinOrder),
+          titleBy: String(chat.titleBy ?? ""),
           messages: this.chatMessages(String(chat.id)),
+        })),
+        requests: this.all(
+          "SELECT ref,message_id,project_area_id,status,role,detail,parts,updated_at,change_to_area_id,change_state FROM work_requests ORDER BY updated_at,ref",
+        ).map((row) => ({
+          ref: String(row.ref),
+          messageId: String(row.message_id),
+          projectAreaId: (row.project_area_id as string | null) ?? null,
+          status: String(
+            row.status,
+          ) as WorkSnapshot["requests"][number]["status"],
+          role: String(row.role),
+          detail: String(row.detail),
+          parts: Number(row.parts),
+          updatedAt: String(row.updated_at),
+          changeToAreaId: (row.change_to_area_id as string | null) ?? null,
+          changeState: String(
+            row.change_state,
+          ) as WorkSnapshot["requests"][number]["changeState"],
         })),
       }),
     );
@@ -757,7 +788,7 @@ export class WorkStore {
   /** One chat's messages in order; null is every work's main chat. */
   private chatMessages(chatId: string | null) {
     return this.all(
-      `SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages WHERE ${chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at,rowid`,
+      `SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt,read_at AS readAt FROM work_messages WHERE ${chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at,rowid`,
       ...(chatId === null ? [] : [chatId]),
     ).map(({ card_json, ...row }) => ({
       ...row,
@@ -2321,7 +2352,7 @@ export class WorkStore {
           throw new WorkError("That chat no longer exists.");
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at,read_at) VALUES (?,?,?,?,?,?,?,?,?)",
           id,
           command.workAreaId,
           command.chatId,
@@ -2330,6 +2361,8 @@ export class WorkStore {
           command.card === null ? null : JSON.stringify(command.card),
           command.role === "firstmate" ? command.model : null,
           now,
+          // Only a reply from Firstmate waits to be read.
+          command.role === "firstmate" ? null : now,
         );
         this.run(
           "UPDATE work_areas SET last_context_at=? WHERE id=?",
@@ -2344,13 +2377,13 @@ export class WorkStore {
           const title = chatTitle(command.text);
           if (command.chatId === null)
             this.run(
-              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
+              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND first_chat_title_by='' AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
               title,
               command.workAreaId,
             );
           else
             this.run(
-              "UPDATE work_chats SET title=? WHERE id=? AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
+              "UPDATE work_chats SET title=? WHERE id=? AND title_by='' AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
               title,
               command.chatId,
             );
@@ -2440,15 +2473,59 @@ export class WorkStore {
         const title = chatTitle(this.clean(command.title));
         if (command.chatId === null)
           this.run(
-            "UPDATE work_areas SET first_chat_title=? WHERE id=?",
+            "UPDATE work_areas SET first_chat_title=?,first_chat_title_by='owner' WHERE id=?",
             title,
             command.workAreaId,
           );
         else
           this.run(
-            "UPDATE work_chats SET title=? WHERE id=?",
+            "UPDATE work_chats SET title=?,title_by='owner' WHERE id=?",
             title,
             command.chatId,
+          );
+        return {};
+      }
+      case "suggest-chat-title": {
+        this.requireChat(command.workAreaId, command.chatId);
+        // The owner's own name always wins, even mid-reply.
+        const title = chatTitle(this.clean(command.title));
+        if (!title) return {};
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_title=?,first_chat_title_by='firstmate' WHERE id=? AND first_chat_title_by<>'owner'",
+            title,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET title=?,title_by='firstmate' WHERE id=? AND title_by<>'owner'",
+            title,
+            command.chatId,
+          );
+        return {};
+      }
+      case "pin-chat": {
+        this.requireChat(command.workAreaId, command.chatId);
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_pin_order=? WHERE id=?",
+            command.order,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET pin_order=? WHERE id=?",
+            command.order,
+            command.chatId,
+          );
+        return {};
+      }
+      case "read-messages": {
+        for (const id of command.messageIds)
+          this.run(
+            "UPDATE work_messages SET read_at=? WHERE id=? AND read_at IS NULL",
+            now,
+            id,
           );
         return {};
       }
@@ -2533,6 +2610,48 @@ export class WorkStore {
             target,
             row.id,
           );
+        // A whole chat keeps its pin and whoever named it; a part that splits
+        // off leaves the pin with the chat it came from (owner, 20 November 2026).
+        if (!command.fromMessageId) {
+          const source =
+            command.chatId === null
+              ? this.get(
+                  "SELECT first_chat_pin_order AS pin,first_chat_title_by AS by,first_chat_title AS title FROM work_areas WHERE id=?",
+                  command.workAreaId,
+                )
+              : this.get(
+                  "SELECT pin_order AS pin,title_by AS by,title FROM work_chats WHERE id=?",
+                  command.chatId,
+                );
+          const by = String(source?.by ?? "");
+          const keptTitle = by && source?.title ? String(source.title) : null;
+          if (target === null)
+            this.run(
+              "UPDATE work_areas SET first_chat_pin_order=?,first_chat_title_by=?,first_chat_title=coalesce(?,first_chat_title) WHERE id=?",
+              source?.pin ?? null,
+              by,
+              keptTitle,
+              command.toWorkAreaId,
+            );
+          else
+            this.run(
+              "UPDATE work_chats SET pin_order=?,title_by=?,title=coalesce(?,title) WHERE id=?",
+              source?.pin ?? null,
+              by,
+              keptTitle,
+              target,
+            );
+          if (command.chatId === null)
+            this.run(
+              "UPDATE work_areas SET first_chat_pin_order=NULL WHERE id=?",
+              command.workAreaId,
+            );
+          else
+            this.run(
+              "UPDATE work_chats SET pin_order=NULL WHERE id=?",
+              command.chatId,
+            );
+        }
         // The chat they left says where the conversation went.
         this.run(
           "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,'card',?,?,NULL,?)",
@@ -2555,6 +2674,261 @@ export class WorkStore {
           command.toWorkAreaId,
         );
         return target ? { ref: target } : {};
+      }
+      case "register-request": {
+        if (
+          !this.get("SELECT 1 FROM work_messages WHERE id=?", command.messageId)
+        )
+          throw new WorkError("That message is no longer there.");
+        // A retry registers the same reference again; nothing changes.
+        this.run(
+          "INSERT OR IGNORE INTO work_requests(ref,message_id,project_area_id,updated_at) VALUES (?,?,?,?)",
+          command.ref,
+          command.messageId,
+          command.projectAreaId,
+          now,
+        );
+        return { ref: command.ref };
+      }
+      case "request-report": {
+        const row = this.get(
+          "SELECT seen_json FROM work_requests WHERE ref=?",
+          command.ref,
+        );
+        // Never guess: a report for a reference Amun never gave is refused,
+        // and the request it might belong to keeps its confirmed status.
+        if (!row) throw new WorkError("No request has that reference.");
+        const seen: string[] = list(row.seen_json).map(String);
+        if (seen.includes(command.fingerprint)) return { ref: command.ref };
+        this.run(
+          "UPDATE work_requests SET status=?,role=?,detail=?,parts=max(parts,?),updated_at=?,seen_json=? WHERE ref=?",
+          command.status,
+          this.clean(command.role),
+          this.clean(command.detail),
+          command.parts,
+          now,
+          JSON.stringify([...seen, command.fingerprint].slice(-50)),
+          command.ref,
+        );
+        return { ref: command.ref };
+      }
+      case "apply-reply": {
+        if (!this.live(command.workAreaId))
+          throw new WorkError("That work area no longer exists.");
+        const { visible, reports, documents, moves, unmatched } =
+          readRequestBlocks(command.text);
+        // Where a request's own message is now, after any move or split.
+        const request = (ref: string | null) => {
+          if (!ref) return null;
+          const row = this.get(
+            "SELECT r.ref,r.project_area_id,m.work_area_id,m.chat_id FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
+            ref,
+          );
+          return row
+            ? {
+                ref: String(row.ref),
+                project: (row.project_area_id as string | null) ?? null,
+                areaId: String(row.work_area_id),
+                chatId: (row.chat_id as string | null) ?? null,
+              }
+            : null;
+        };
+        const here = { areaId: command.workAreaId, chatId: command.chatId };
+        const say = (
+          at: { areaId: string; chatId: string | null },
+          role: "firstmate" | "card",
+          text: string,
+          card: unknown = null,
+        ) =>
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "message",
+            workAreaId: at.areaId,
+            chatId: at.chatId,
+            role,
+            text,
+            card: card as never,
+            model: role === "firstmate" ? command.model : null,
+          } as never);
+        // Reports for a reference Amun gave. Any other changes no request,
+        // but its words are still shown where the reply arrived.
+        const loose = [...unmatched];
+        for (const report of reports) {
+          if (!request(report.request)) {
+            loose.push(report);
+            continue;
+          }
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "request-report",
+            ref: report.request,
+            status: report.status,
+            role: report.role,
+            detail: report.text,
+            parts: report.parts,
+            fingerprint: reportFingerprint(report),
+          } as never);
+        }
+        // Firstmate's answer to a change of project the owner asked for. It
+        // settles only a change that is waiting, for the project asked for.
+        for (const move of moves) {
+          const row = this.get(
+            "SELECT r.change_state,a.name FROM work_requests r LEFT JOIN work_areas a ON a.id=r.change_to_area_id WHERE r.ref=?",
+            move.request,
+          );
+          if (!row || row.change_state !== "requested") continue;
+          const asked = row.name === null ? "" : String(row.name);
+          if (
+            move.accepted &&
+            asked.trim().toLowerCase() !== move.project.trim().toLowerCase()
+          )
+            continue;
+          this.apply({
+            version: 1,
+            kind: "work",
+            action: "request-change-result",
+            ref: move.request,
+            accepted: move.accepted,
+          } as never);
+        }
+        const looseWords = loose.map(reportWords).join("\n");
+        // Firstmate's words first, then what it delivered.
+        if (looseWords && !command.saveText) say(here, "firstmate", looseWords);
+        if (command.saveText && looseWords)
+          say(
+            here,
+            "firstmate",
+            [visible, looseWords].filter(Boolean).join("\n\n"),
+          );
+        else if (command.saveText && visible) {
+          const places = new Set(
+            [
+              ...reports.map((report) => report.request),
+              ...documents.flatMap((document) =>
+                document.request ? [document.request] : [],
+              ),
+            ].flatMap((ref) => {
+              const known = request(ref);
+              return known ? [`${known.areaId}:${known.chatId ?? ""}`] : [];
+            }),
+          );
+          const only = places.size === 1 ? [...places][0]! : null;
+          const [areaId, chatId] = only ? only.split(":") : [];
+          say(
+            only ? { areaId: areaId!, chatId: chatId || null } : here,
+            "firstmate",
+            visible,
+          );
+        }
+        for (const document of documents) {
+          const known = request(document.request);
+          // A matched result lands with its request; anything else where the
+          // reply arrived, as before.
+          const at = known ?? here;
+          // The project card gets it only for a confirmed match; an
+          // unmatched document stays in the chat, linked to no card.
+          const owner = known ? known.project : null;
+          const group = this.groupOf(owner ?? at.areaId);
+          // A revision of this same delivery: the same request (or, without
+          // one, the same chat) and title. Other requests are never touched.
+          const earlier = this.all(
+            known
+              ? "SELECT card_json FROM work_messages WHERE role='card' AND instr(card_json,'\"delivered\"')>0 AND instr(card_json,?)>0 ORDER BY created_at DESC,rowid DESC"
+              : `SELECT card_json FROM work_messages WHERE role='card' AND instr(card_json,'"delivered"')>0 AND work_area_id=? AND ${at.chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at DESC,rowid DESC`,
+            ...(known
+              ? [known.ref]
+              : [at.areaId, ...(at.chatId === null ? [] : [at.chatId])]),
+          )
+            .map((row) => {
+              try {
+                return JSON.parse(String(row.card_json)) as {
+                  outputId?: string;
+                  title?: string;
+                  request?: string | null;
+                };
+              } catch {
+                return {};
+              }
+            })
+            .find(
+              (card) =>
+                (card.request ?? null) === (known ? known.ref : null) &&
+                (card.title ?? "").trim().toLowerCase() ===
+                  document.title.trim().toLowerCase(),
+            );
+          const same = earlier?.outputId
+            ? this.get(
+                "SELECT id,body FROM library_outputs WHERE id=?",
+                earlier.outputId,
+              )
+            : undefined;
+          const body = this.clean(document.body);
+          // The same version delivered again is not a second reply.
+          if (same && String(same.body) === body) continue;
+          const saved = this.apply({
+            version: 1,
+            kind: "work",
+            action: "save-output",
+            ...(same ? { outputId: String(same.id) } : {}),
+            groupId: group,
+            type: document.type,
+            title: document.title,
+            body,
+            status: "Draft",
+            workAreaIds: owner ? [owner] : [],
+            author: "firstmate",
+          } as never);
+          const outputId = String(saved.ref);
+          const version = Number(
+            this.get(
+              "SELECT max(version) AS v FROM library_output_versions WHERE output_id=?",
+              outputId,
+            )?.v ?? 1,
+          );
+          say(at, "card", document.title, {
+            kind: "delivered",
+            outputId,
+            title: document.title,
+            version,
+            request: known ? known.ref : null,
+          });
+        }
+        return {};
+      }
+      case "request-change": {
+        if (!this.get("SELECT 1 FROM work_requests WHERE ref=?", command.ref))
+          throw new WorkError("No request has that reference.");
+        this.run(
+          "UPDATE work_requests SET change_to_area_id=?,change_state='requested',updated_at=? WHERE ref=?",
+          command.toAreaId,
+          now,
+          command.ref,
+        );
+        return { ref: command.ref };
+      }
+      case "request-change-result": {
+        const row = this.get(
+          "SELECT change_to_area_id,change_state FROM work_requests WHERE ref=?",
+          command.ref,
+        );
+        if (!row || row.change_state !== "requested")
+          throw new WorkError("No change of project is waiting for that.");
+        if (command.accepted)
+          this.run(
+            "UPDATE work_requests SET project_area_id=?,change_to_area_id=NULL,change_state='',updated_at=? WHERE ref=?",
+            row.change_to_area_id,
+            now,
+            command.ref,
+          );
+        else
+          this.run(
+            "UPDATE work_requests SET change_state='refused',updated_at=? WHERE ref=?",
+            now,
+            command.ref,
+          );
+        return { ref: command.ref };
       }
       case "keep-here": {
         const area = this.get(
