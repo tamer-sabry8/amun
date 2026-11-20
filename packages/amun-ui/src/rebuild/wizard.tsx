@@ -44,6 +44,12 @@ export const providers = [
     note: "Use your ChatGPT subscription",
   },
   {
+    provider: "anthropic",
+    type: "oauth",
+    label: "Claude Pro/Max",
+    note: "Use your Claude subscription",
+  },
+  {
     provider: "github-copilot",
     type: "oauth",
     label: "GitHub Copilot",

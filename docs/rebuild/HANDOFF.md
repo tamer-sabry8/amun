@@ -64,6 +64,13 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
   - Waiting on Tamer: how a model switch in chat should reach the crew (recommended: a card asking "Use this for the whole crew too?", since his crew models are per-job rules in `config/crew-dispatch.json` with a Copilot credit limit); whether Home should show his last chat; the screens for the seven chat rules; archive for chats.
   - Not verified with real Firstmate: the one-time registration of the twenty agents, the Notion helper, and whether Firstmate keeps forks apart.
 
+### Update, 20 November 2026 (after pull request 44): Claude subscription and old holds
+
+- **Claude Pro/Max through Pi.** Tamer withdrew the 6 November rule. Accounts and models now has a "Claude Pro/Max" row (`providers` in `packages/amun-ui/src/rebuild/wizard.tsx`, `anthropic` in `oauthProviders` and `modelLoginOptions` in `packages/contracts/src/auth.ts`). Its status comes from `pi auth check --provider anthropic`, the same path as the other providers; Pi was already signed in. He was told Anthropic's terms may limit a subscription to Claude Code and Anthropic's own apps, and chose this. The rule is in `AGENTS.md`, "Claude subscription".
+- **Codex and Claude Code on the Tools list.** Tamer could not tell they were on and signed in: the card says "Installed" and "Turn off" only. Both were on and signed in on 20 November (`codex login status`, `claude auth status`). Showing that on the card is not built; it needs his approval.
+- **Old Firstmate holds under Needs your attention** (14 on his Mac, from sessions before Amun). Snooze does nothing for them: `answerHold` in `contract-adapter.ts` refuses anything but an answer, and the screen does not show the refusal. Only Firstmate can close or defer a hold (`fm-captain-hold.sh answer --release`, `reconcile close`, `hold --until`). The proposed fix, asked and not yet answered: "No longer needed" and "Remind me later" in the item's menu, each a request to Firstmate.
+- **"Data Access Blocked".** macOS blocked Amun from another app's data after the new test DMG. Ad-hoc signing gives each build a new identity, so permissions are asked again. Which file was blocked is not known: this session could not read the privacy log. He was given the Settings path and a `log show` command to find it.
+
 ### Update, 20 November 2026 (pull request 44): chats that group themselves
 
 Read this section first if your work touches chats, folders, the sidebar or Firstmate's card. Branch `claude/amun-handoff-work`, pull request 44. The plan and the stress test of Tamer's research are in `docs/plans/2026-11-20-auto-grouped-chats.md`. The approved pictures are in `docs/preview/2026-11-20-auto-grouped-chats/index.html`.

@@ -15,6 +15,7 @@ const base = { version: z.literal(1), kind: z.literal("auth") };
 // Code on this Mac, never as a sign-in here (docs/TASKS.md, T009).
 const oauthProviders = [
   "openai-codex",
+  "anthropic",
   "github-copilot",
   "openrouter",
   "xai",
@@ -139,6 +140,9 @@ export const modelLoginOptions: readonly {
   label: string;
 }[] = [
   { provider: "openai-codex", type: "oauth", label: "OpenAI / Codex" },
+  // The owner's Claude Pro/Max subscription through Pi's own sign-in (owner,
+  // 20 November 2026; this replaces the 6 November rule that kept it out).
+  { provider: "anthropic", type: "oauth", label: "Claude Pro/Max" },
   { provider: "github-copilot", type: "oauth", label: "GitHub Copilot" },
   { provider: "openrouter", type: "oauth", label: "OpenRouter" },
   { provider: "xai", type: "oauth", label: "xAI (Grok)" },

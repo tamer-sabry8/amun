@@ -84,7 +84,7 @@ These are the ones that have caused rework when missed. `AGENTS.md` has the full
 3. **Design preferences.** Keep existing screens as they are and add as little as possible. Reuse a pattern already on that screen before drawing anything new. Add nothing to the prompt box; the one exception is the model picker, which the owner asked for. Write messages and buttons in plain, friendly words, never technical ones. The owner rejected four designs in a row that added controls or technical wording.
 4. **The owner talks only to Firstmate.** Never offer other agents as something to address directly. Firstmate decides who helps.
 5. **Sign-ins are the owner's.** Never type credentials. Launch the development app and ask the owner to sign in.
-6. **No Claude subscription sign-in through Pi.** A Claude subscription is used through the Claude Code tool on the Mac. A test enforces this.
+6. ~~**No Claude subscription sign-in through Pi.**~~ Withdrawn by the owner on 20 November 2026: Claude Pro/Max is offered through Pi's own sign-in (see `AGENTS.md`, "Claude subscription").
 7. **Live-test destinations.** Azure DevOps: project `TahalufCollection / POCs` only (https://devops.tahaluf.ae/TahalufCollection/POCs). Stories go to the `POCs Team` board, level `Backlog items`. Repository and wiki tests use the `tamer-test1` repository there. The read-only sprint check uses `POCs\2021-Q1\Sprint 5`. Notion: child pages under the page "test for Amun to use".
 8. **Report honestly.** Say what you ran, what you did not, and what is unverified.
 9. **Pull request 10 is closed by the owner's decision.** Do not reopen it, merge it, or bring it up.
