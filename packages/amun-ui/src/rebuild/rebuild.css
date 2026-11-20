@@ -596,6 +596,30 @@
   background: var(--hover);
 }
 
+/* A Firstmate task filed under a project: a tick box before it. */
+.rb-att.task {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.rb-att .tick {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.rb-att .ticked .title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.rb-att .ticked .link {
+  color: var(--accent);
+}
+.rb-menu .more {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 .rb-att .label {
   font-size: 12.5px;
   color: var(--muted);

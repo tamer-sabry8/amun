@@ -150,6 +150,24 @@ describe("Firstmate snapshot mapping", () => {
     expect(prompt).toContain("Answer: One page");
   });
 
+  it("puts a reminder off without asking Firstmate to answer and close it", () => {
+    const backlog = holdAnswerPrompt(
+      { source: "backlog", taskId: "moca-ticketing", title: "Ticketing", reason: "Which system?", until: null },
+      "Not now",
+      "2026-11-23",
+    );
+    expect(backlog).toContain("hold moca-ticketing --reason <its current reason> --until 2026-11-23");
+    expect(backlog).toContain("Do not run bin/fm-captain-hold.sh answer");
+    expect(backlog).not.toContain("Record it with bin/fm-captain-hold.sh answer");
+    const crew = holdAnswerPrompt(
+      { source: "crew", taskId: "proto-w1", key: "layout", verb: "needs-decision", summary: "?" },
+      "Not now",
+      "2026-11-23",
+    );
+    expect(crew).not.toContain("--resolve-key");
+    expect(crew).toContain("--until 2026-11-23");
+  });
+
   it("reads a live snapshot from the vendored fm-fleet-snapshot.sh", async () => {
     const space = await new ProductSpaceStore(paths).create({ name: "Live" });
     const snapshot = await readFleetSnapshot({ root: paths.firstmateRoot, fmHome: space.fmHome });

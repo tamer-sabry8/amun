@@ -693,6 +693,11 @@ export const workCommand = z.discriminatedUnion("action", [
     attentionId: id,
     resolution: z.enum(["done", "snooze", "answer", "accept"]),
     answer: z.string().max(16384).optional(),
+    /** For a Firstmate reminder put off: the day it comes back, YYYY-MM-DD. */
+    until: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   }),
   act("raise-blocker", {
     areaId: id,

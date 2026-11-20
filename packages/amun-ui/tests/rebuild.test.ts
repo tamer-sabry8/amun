@@ -1773,3 +1773,46 @@ describe("code changes with no connected repository", () => {
     expect(html).toContain("Approve and open pull request");
   });
 });
+
+describe("Firstmate's reminders on Home (owner, 20 November 2026)", () => {
+  it("gives a project's task a tick box and a three-choice menu", () => {
+    const state = snapshot({
+      areas: [area("moca", { name: "MoCA Ecabinet", type: "product" })],
+      attention: [
+        attention("hold:moca-pilot-group", {
+          kind: "question",
+          title: "MoCA: decide who is in the pilot group",
+          workAreaId: null,
+        }),
+        attention("hold:emails", {
+          kind: "question",
+          title: "Captain reminder: email about the AI Strategy for 2027",
+          workAreaId: null,
+        }),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      createElement(Home, {
+        snapshot: state as never,
+        now,
+        model: null,
+        pending: null,
+        note: "",
+        connected: [],
+        onSend: () => undefined,
+        onResubmit: () => undefined,
+        onOpen: () => undefined,
+        onPortfolio: () => undefined,
+        onPendingDone: () => undefined,
+        onNote: () => undefined,
+      }),
+    );
+    expect(html).toContain("Task · MoCA");
+    expect(html).toContain(
+      'aria-label="Mark complete: MoCA: decide who is in the pilot group"',
+    );
+    // A reminder that belongs to no project has no box.
+    expect(html).toContain(">Reminder<");
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+  });
+});

@@ -2,7 +2,8 @@
 // were away" line, Needs your attention, compact Your work, composer.
 import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
 import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { tickedTasks, type Ticked } from "./ticked-tasks.ts";
 import { type AttentionRow } from "../../../../packages/domain/src/work/home.ts";
 import { welcomeCards } from "../../../../packages/domain/src/work/shell.ts";
 import {
@@ -15,6 +16,12 @@ import {
   type Gate,
 } from "../../../../packages/domain/src/work/permissions.ts";
 import { reminderTime } from "../../../../packages/domain/src/work/reminders.ts";
+import {
+  heldProject,
+  helpRequest,
+  isHeld,
+  laterDays,
+} from "../../../../packages/domain/src/work/held-tasks.ts";
 import { BlockerRow } from "./blocker-row.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
@@ -376,22 +383,44 @@ export function IntakeCard({
   return null;
 }
 
+/** Ticked Firstmate tasks, kept while the owner is on other screens. */
+const ticks = tickedTasks((attentionId) =>
+  work("resolve-attention", { attentionId, resolution: "done" }),
+);
+
 function Row({
   snapshot,
   row,
   expanded,
+  ticked,
   onToggle,
   onOpen,
   onAccepted,
+  onTick,
+  onHelp,
 }: {
   snapshot: Snapshot;
   row: AttentionRow;
   expanded: boolean;
+  /** Set while a ticked task is still shown in the open list. */
+  ticked: Ticked | null;
   onToggle(): void;
   onOpen(): void;
   onAccepted(note: string): void;
+  /** Ticks or unticks a Firstmate task; nothing is sent until Undo has passed. */
+  onTick(done: boolean): void;
+  /** "Help me do it": the request goes to Firstmate in a chat. */
+  onHelp(): void;
 }) {
   const [menu, setMenu] = useState(false);
+  const [later, setLater] = useState(false);
+  const held = isHeld(row.id);
+  // A Firstmate reminder filed under a project is that project's task.
+  const project = held ? heldProject(row.title, snapshot.areas) : null;
+  const label = held ? (project ? `Task · ${project}` : "Reminder") : row.label;
+  const overflow = held
+    ? ["Done, close it", "Remind me later", "Help me do it"]
+    : row.overflow;
   const [all, setAll] = useState(false);
   const tray = expanded ? trayFor(snapshot, row.id) : null;
   const primary = () => {
@@ -412,9 +441,20 @@ function Row({
     <>
       {/* The whole row opens the conversation for a pointer; the title is the
           control for keyboard and assistive technology. It never approves. */}
-      <div className="rb-att" onClick={onOpen}>
-        <div>
-          <div className="label">{row.label}</div>
+      <div className={"rb-att" + (project ? " task" : "")} onClick={onOpen}>
+        {project && (
+          <input
+            type="checkbox"
+            className="tick"
+            aria-label={`Mark complete: ${row.title}`}
+            checked={!!ticked}
+            disabled={!!ticked?.sent}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => onTick(event.target.checked)}
+          />
+        )}
+        <div className={ticked ? "ticked" : undefined}>
+          <div className="label">{label}</div>
           <button
             className="title"
             onClick={(event) => {
@@ -424,7 +464,27 @@ function Row({
           >
             {row.title}
           </button>
-          {row.detail && <div className="detail">{row.detail}</div>}
+          {ticked ? (
+            <div className="detail" role="status">
+              Done. Firstmate is closing it.
+              {!ticked.sent && (
+                <>
+                  {" "}
+                  <button
+                    className="link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onTick(false);
+                    }}
+                  >
+                    Undo
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            row.detail && <div className="detail">{row.detail}</div>
+          )}
         </div>
         <div
           className="row"
@@ -432,7 +492,7 @@ function Row({
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          {row.primary && (
+          {row.primary && !held && (
             <button
               className="btn"
               aria-expanded={row.tray ? expanded : undefined}
@@ -441,40 +501,81 @@ function Row({
               {row.primary}
             </button>
           )}
-          <button
-            className="btn icon-btn"
-            aria-label={`More actions for ${row.title}`}
-            aria-expanded={menu}
-            onClick={() => setMenu(!menu)}
-            onBlur={() => setTimeout(() => setMenu(false), 120)}
-          >
-            <Icon name="more" width={18} height={18} />
-          </button>
+          {!ticked && overflow.length > 0 && (
+            <button
+              className="btn icon-btn"
+              aria-label={`More actions for ${row.title}`}
+              aria-expanded={menu}
+              onClick={() => {
+                setMenu(!menu);
+                setLater(false);
+              }}
+              onBlur={() =>
+                setTimeout(() => {
+                  setMenu(false);
+                  setLater(false);
+                }, 120)
+              }
+            >
+              <Icon name="more" width={18} height={18} />
+            </button>
+          )}
           {menu && (
             <div
               className="rb-menu"
               role="menu"
-              style={{ right: 0, top: "calc(100% + 4px)" }}
+              style={{ right: 0, top: "calc(100% + 4px)", minWidth: 220 }}
             >
-              {row.overflow.map((action) => (
-                <button
-                  key={action}
-                  role="menuitem"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setMenu(false);
-                    if (action === "Open project") onOpen();
-                    else
-                      work("resolve-attention", {
-                        attentionId: row.id,
-                        resolution:
-                          action === "Acknowledge" ? "done" : "snooze",
-                      });
-                  }}
-                >
-                  {action}
-                </button>
-              ))}
+              {later
+                ? laterDays(new Date()).map((option) => (
+                    <button
+                      key={option.day}
+                      role="menuitem"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setMenu(false);
+                        setLater(false);
+                        work("resolve-attention", {
+                          attentionId: row.id,
+                          resolution: "snooze",
+                          until: option.day,
+                        });
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))
+                : overflow.map((action) => (
+                    <button
+                      key={action}
+                      role="menuitem"
+                      aria-haspopup={
+                        action === "Remind me later" ? "menu" : undefined
+                      }
+                      className={
+                        action === "Remind me later" ? "more" : undefined
+                      }
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        if (action === "Remind me later") return setLater(true);
+                        setMenu(false);
+                        if (action === "Open project") onOpen();
+                        else if (action === "Done, close it") onTick(true);
+                        else if (action === "Help me do it") onHelp();
+                        else
+                          work("resolve-attention", {
+                            attentionId: row.id,
+                            resolution:
+                              action === "Acknowledge" ? "done" : "snooze",
+                          });
+                      }}
+                    >
+                      {action}
+                      {action === "Remind me later" && (
+                        <Icon name="chevron" width={12} height={12} />
+                      )}
+                    </button>
+                  ))}
             </div>
           )}
         </div>
@@ -561,7 +662,24 @@ export function Home({
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(
     null,
   );
-  const rows = (filter === "open" ? view.rows : view.done).filter((row) => {
+  // Firstmate tasks the owner ticked: shown struck through for a while, with
+  // Undo until the request goes to Firstmate, then they move to Done.
+  const ticked = useSyncExternalStore(ticks.subscribe, ticks.get, ticks.get);
+  const tick = (id: string, done: boolean) =>
+    done ? ticks.tick(id) : ticks.undo(id);
+  // A ticked task stays in the open list until its time is up.
+  const stillShown = (row: { id: string }) => row.id in ticked;
+  const listed =
+    filter === "open"
+      ? [
+          ...view.rows,
+          ...view.done.filter(
+            (row) =>
+              stillShown(row) && !view.rows.some((open) => open.id === row.id),
+          ),
+        ]
+      : view.done.filter((row) => !stillShown(row));
+  const rows = listed.filter((row) => {
     if (!kinds) return true;
     const item = snapshot.attention.find((entry) => entry.id === row.id);
     return item ? kinds.includes(item.kind) : false;
@@ -774,11 +892,14 @@ export function Home({
                     : row
                 }
                 expanded={expanded === row.id}
+                ticked={filter === "open" ? (ticked[row.id] ?? null) : null}
                 onToggle={() =>
                   setExpanded(expanded === row.id ? null : row.id)
                 }
                 onOpen={() => openRow(row.id)}
                 onAccepted={onNote}
+                onTick={(done) => tick(row.id, done)}
+                onHelp={() => onSend(helpRequest(row.title), [])}
               />
             ))
           ) : blocked.length || reminders.length ? null : (
