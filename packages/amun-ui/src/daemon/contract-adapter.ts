@@ -8,12 +8,19 @@ import {
   heldInstruction,
   heldOutcome,
 } from "../../../domain/src/work/held-tasks.ts";
+import {
+  firstmateNotice,
+  type FirstmateNotice,
+} from "../../../domain/src/work/firstmate-notice.ts";
+import { generalConversationName } from "../../../domain/src/work/model.ts";
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
+  workCommand,
   workDelegate,
   workSnapshot,
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
+import { NoticeQueue, type NoticeOptions } from "./firstmate-notices.ts";
 import type { AmunTransport } from "./amun-client.ts";
 import { agentCatalog } from "../../../domain/src/work/agents.ts";
 import { pickByName } from "../../../domain/src/work/shell.ts";
@@ -151,6 +158,37 @@ export function describeAdo(view: DaemonConnection): string {
   return names.length
     ? `Connected to Azure DevOps${who}. It can read ${names.length} project${names.length === 1 ? "" : "s"}: ${shown}${more}. Write access is confirmed the first time you approve a change.`
     : `Connected to Azure DevOps${who}, but the token can't see any projects yet.`;
+}
+
+/**
+ * The day a hold was put off to, when it was. Firstmate keeps a deferred
+ * hold in its lists: a task records the day, and a crew member's open
+ * question only says so in its words ("Deferred by the captain to
+ * 2026-11-23."). Either way the owner asked not to see it before then.
+ */
+export function heldUntil(hold: DaemonHold): string | null {
+  if (hold.source === "backlog" && hold.until) {
+    const day = /\d{4}-\d{2}-\d{2}/.exec(hold.until);
+    if (day) return day[0];
+  }
+  const words = hold.source === "backlog" ? hold.reason : hold.summary;
+  const said =
+    /\b(?:deferred|put off|postponed|snoozed)\b[^.]*?\b(?:to|until|till)\s+(\d{4}-\d{2}-\d{2})/i.exec(
+      words,
+    );
+  return said ? said[1]! : null;
+}
+
+/** Holds the owner should see today: not the ones put off to a later day. */
+export function holdsDue(
+  holds: readonly DaemonHold[],
+  now: string,
+): DaemonHold[] {
+  const today = now.slice(0, 10);
+  return holds.filter((hold) => {
+    const until = heldUntil(hold);
+    return !until || until <= today;
+  });
 }
 
 export function holdId(hold: DaemonHold): string {
@@ -462,10 +500,59 @@ export class ContractAdapter {
   /** Told when something changed without a request (an answer landed). */
   onChange: (() => void) | null = null;
 
+  /** The owner's on-screen actions, on their way to Firstmate. */
+  private readonly notices: NoticeQueue;
+
   constructor(
     private readonly daemon: AmunTransport,
     private readonly now: () => string = () => new Date().toISOString(),
-  ) {}
+    notices: NoticeOptions = {},
+  ) {
+    this.notices = new NoticeQueue(
+      async (text) => {
+        const space = await this.ensureSpace();
+        const answer = await this.daemon.request<{ reply?: string }>(
+          "primary.send",
+          { space, text },
+        );
+        return answer.reply ?? "";
+      },
+      (reply, told) => this.fileNoticeReply(reply, told),
+      notices,
+    );
+  }
+
+  /**
+   * Firstmate had something to say about what the owner did on a screen. It
+   * is kept in that work's conversation, or in the chats with no folder.
+   */
+  private async fileNoticeReply(
+    reply: string,
+    told: FirstmateNotice[],
+  ): Promise<void> {
+    const areas = this.view.work?.areas ?? [];
+    const named = told.find(
+      (notice) =>
+        notice.workAreaId &&
+        areas.some((area) => area.id === notice.workAreaId),
+    )?.workAreaId;
+    const workAreaId =
+      named ??
+      areas.find((area) => area.name === generalConversationName)?.id ??
+      null;
+    if (!workAreaId) return;
+    await this.daemon.request("work.command", {
+      command: {
+        action: "message",
+        workAreaId,
+        role: "firstmate",
+        text: reply.slice(0, 16384),
+        model: this.model,
+      },
+    });
+    await this.refresh().catch(() => undefined);
+    this.onChange?.();
+  }
 
   /** The First Mate needs a product to talk through; make the first one. */
   private async ensureSpace(): Promise<string> {
@@ -486,7 +573,7 @@ export class ContractAdapter {
     ]);
     // Any product reaches the shared home; ask once.
     const via = spaces[0]?.slug;
-    const [snapshot, holds] = via
+    const [snapshot, everyHold] = via
       ? await Promise.all([
           this.daemon
             .request<{ tasks: DaemonFleetTask[] }>("fleet.snapshot", {
@@ -498,6 +585,8 @@ export class ContractAdapter {
             .catch(() => [] as DaemonHold[]),
         ])
       : [{ tasks: [] as DaemonFleetTask[] }, [] as DaemonHold[]];
+    // A reminder put off to a later day stays away until that day.
+    const holds = holdsDue(everyHold, this.now());
     this.view = {
       spaces,
       fleet: snapshot.tasks,
@@ -962,16 +1051,22 @@ export class ContractAdapter {
       const command = { ...message };
       delete command.version;
       delete command.kind;
+      // `told` only says whether Firstmate already knows; it is never stored.
+      const told = command.told === true;
+      delete command.told;
+      const before = this.view.work ?? null;
       const events = await this.daemon.request<Record<string, unknown>[]>(
         "work.command",
         { command },
       );
       if (ask) await this.askFirstMate(ask).catch(() => undefined);
-      return events.map((event) => {
+      const sent = events.map((event) => {
         if (event.kind !== "work-snapshot") return event;
         this.view = { ...this.view, work: event as unknown as WorkSnapshot };
         return this.work();
       });
+      if (!told) this.tellFirstmate(message, before, events);
+      return sent;
     } catch (error) {
       return [
         this.result(
@@ -981,6 +1076,30 @@ export class ContractAdapter {
         ),
       ];
     }
+  }
+
+  /**
+   * The owner did this on a screen: Firstmate is told what was done and what
+   * the card held, in the background (owner's rule, 20 November 2026). Which
+   * actions are told is decided in `firstmate-notice.ts`.
+   */
+  private tellFirstmate(
+    message: Message,
+    before: WorkSnapshot | null,
+    events: Record<string, unknown>[],
+  ): void {
+    const result = events.find((event) => event.kind === "work-result");
+    if (result?.ok === false) return;
+    const rest = { ...message };
+    delete rest.told;
+    const parsed = workCommand.safeParse(rest);
+    if (!parsed.success) return;
+    const notice = firstmateNotice(parsed.data, {
+      before,
+      after: this.view.work ?? null,
+      ref: typeof result?.ref === "string" ? result.ref : null,
+    });
+    if (notice) this.notices.add(notice);
   }
 
   private agentRole(agentId: string): string | null {

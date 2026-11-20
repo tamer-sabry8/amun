@@ -22,7 +22,9 @@ import {
   plainCrewDetail,
   poolRegistrationRequest,
   ContractAdapter,
+  heldUntil,
   holdId,
+  holdsDue,
   holdSignature,
   settleHoldAnswers,
   type HoldAnswer,
@@ -1019,5 +1021,44 @@ describe("registering the agents with Firstmate", () => {
     expect(String(once()[1]!.params.text)).toMatch(
       /draft it or ask me to draft it, or interview me/,
     );
+  });
+});
+
+describe("a reminder put off to a later day", () => {
+  const crew = {
+    source: "crew" as const,
+    taskId: "prd",
+    key: "captain-hold-ai-personal-assistant-q2-1",
+    verb: "needs-decision",
+    summary:
+      "captain hold ai-personal-assistant-q2: waiting on answer to firstmate: Which context is correct? Deferred by the captain to 2026-11-23.",
+  };
+  const task = {
+    source: "backlog" as const,
+    taskId: "moca-brd",
+    title: "MoCA: share the BRD",
+    reason: "Captain action",
+    until: "2026-12-01",
+  };
+  const open = {
+    source: "backlog" as const,
+    taskId: "moca-ticketing",
+    title: "MoCA: ticketing",
+    reason: "Captain reminder",
+    until: null,
+  };
+  it("reads the day from Firstmate's record or from its words", () => {
+    expect(heldUntil(crew)).toBe("2026-11-23");
+    expect(heldUntil(task)).toBe("2026-12-01");
+    expect(heldUntil(open)).toBeNull();
+    expect(
+      heldUntil({ ...crew, summary: "Moved from 26 Oct at captain's request" }),
+    ).toBeNull();
+  });
+  it("stays away until that day, then comes back", () => {
+    const all = [crew, task, open];
+    expect(holdsDue(all, "2026-11-20T10:00:00Z")).toEqual([open]);
+    expect(holdsDue(all, "2026-11-23T05:00:00Z")).toEqual([crew, open]);
+    expect(holdsDue(all, "2026-12-02T05:00:00Z")).toEqual(all);
   });
 });

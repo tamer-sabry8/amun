@@ -3,7 +3,9 @@ export type Inline =
   | { kind: "code"; text: string }
   | { kind: "bold"; children: Inline[] }
   | { kind: "italic"; children: Inline[] }
-  | { kind: "link"; url: string; children: Inline[] };
+  | { kind: "link"; url: string; children: Inline[] }
+  /** A file or folder on this Mac, shown with a way to open it in Finder. */
+  | { kind: "path"; path: string };
 
 export type ListItem = {
   content: Inline[];
@@ -34,16 +36,50 @@ export const safeUrl = (value: string): string | null => {
   }
 };
 
+/**
+ * A path on this Mac: under the home folder (~/…) or one of the top folders
+ * macOS has. Anything else that starts with a slash (a typed command, a web
+ * path) is left alone.
+ */
+const LOCAL_PATH =
+  /(?<![\w/.:~-])(?:~|\/(?:Users|Applications|Library|Volumes|private|tmp|var|opt|usr|etc))(?:\/[^\s"'`<>()[\]{}|*?]+)+/g;
+
+/** The whole of `text` when it is one local path, as written in code marks. */
+export function localPath(text: string): string | null {
+  const found = text.trim().match(LOCAL_PATH);
+  return found?.length === 1 && found[0] === text.trim() ? found[0] : null;
+}
+
+/** Splits plain text into text and the local paths written in it. */
+function withPaths(text: string): Inline[] {
+  const out: Inline[] = [];
+  let last = 0;
+  for (const match of text.matchAll(LOCAL_PATH)) {
+    // A sentence's own full stop or comma is not part of the path.
+    const path = match[0].replace(/[.,;:!]+$/, "");
+    const at = match.index ?? 0;
+    if (at > last) out.push({ kind: "text", text: text.slice(last, at) });
+    out.push({ kind: "path", path });
+    last = at + path.length;
+  }
+  if (last < text.length) out.push({ kind: "text", text: text.slice(last) });
+  return out;
+}
+
 export function parseInline(source: string): Inline[] {
   const out: Inline[] = [];
   let last = 0;
   for (const match of source.matchAll(TOKEN)) {
     const at = match.index ?? 0;
-    if (at > last) out.push({ kind: "text", text: source.slice(last, at) });
+    if (at > last) out.push(...withPaths(source.slice(last, at)));
     if (match[1] !== undefined)
       out.push({ kind: "bold", children: parseInline(match[1]) });
-    else if (match[2] !== undefined) out.push({ kind: "code", text: match[2] });
-    else if (match[3] !== undefined) {
+    else if (match[2] !== undefined) {
+      const path = localPath(match[2]);
+      out.push(
+        path ? { kind: "path", path } : { kind: "code", text: match[2] },
+      );
+    } else if (match[3] !== undefined) {
       const url = safeUrl(match[4] ?? "");
       const children = parseInline(match[3]);
       if (url) out.push({ kind: "link", url, children });
@@ -55,8 +91,7 @@ export function parseInline(source: string): Inline[] {
       });
     last = at + match[0].length;
   }
-  if (last < source.length)
-    out.push({ kind: "text", text: source.slice(last) });
+  if (last < source.length) out.push(...withPaths(source.slice(last)));
   return out;
 }
 

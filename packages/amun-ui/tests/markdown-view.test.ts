@@ -240,3 +240,34 @@ describe("Firstmate reply markdown", () => {
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
+
+describe("files and folders named in a reply", () => {
+  const report =
+    "/Users/tamersabry/.treehouse/firstmate-8bf1b0/14/firstmate/data/blueprint-architecture-20261120/report.md";
+  it("finds a path in a sentence and leaves the full stop out", () => {
+    expect(parseInline(`The draft is at ${report}.`)).toEqual([
+      { kind: "text", text: "The draft is at " },
+      { kind: "path", path: report },
+      { kind: "text", text: "." },
+    ]);
+  });
+  it("finds a path written in code marks, and one under the home folder", () => {
+    expect(parseInline("See `~/Downloads/plan.pdf` now")).toEqual([
+      { kind: "text", text: "See " },
+      { kind: "path", path: "~/Downloads/plan.pdf" },
+      { kind: "text", text: " now" },
+    ]);
+  });
+  it("leaves typed commands, web addresses and other code alone", () => {
+    for (const text of [
+      "Type /model to choose",
+      "Open https://example.com/Users/a/b",
+      "Either/or, and 3/4 of it",
+      "`npm run build`",
+    ])
+      expect(
+        parseInline(text).some((node) => node.kind === "path"),
+        text,
+      ).toBe(false);
+  });
+});

@@ -56,14 +56,8 @@ import {
   LibraryPanel,
   Rail,
 } from "./rail.tsx";
-import {
-  Agents,
-  Council,
-  Portfolio,
-  Rfps,
-  Roadmap,
-  Sprints,
-} from "./screens.tsx";
+import { Agents, Council, Portfolio, Roadmap, Sprints } from "./screens.tsx";
+import { Rfps } from "./rfps.tsx";
 import type { SettingsSection } from "./settings.tsx";
 import { Settings } from "./lazy.tsx";
 import {
@@ -345,6 +339,8 @@ export function App() {
     );
     if (standing) return standing.id;
     const made = await workAsync("create-area", {
+      // The owner's own message follows into this work, so Firstmate knows.
+      told: true,
       groupId,
       type: "task",
       name: generalConversationName,
@@ -427,6 +423,8 @@ export function App() {
             )
           : typedName || offer.request.name;
       const made = await workAsync("create-area", {
+        // The owner's own message follows into this work, so Firstmate knows.
+        told: true,
         groupId: source?.groupId ?? snapshot.setup.activeGroupId,
         type: offer.request.type,
         name,
@@ -502,6 +500,8 @@ export function App() {
         });
     if (routed.route === "create" && group) {
       const made = await workAsync("create-area", {
+        // The owner's own message follows into this work, so Firstmate knows.
+        told: true,
         groupId: group,
         type: routed.request.type,
         name: routed.request.name,
@@ -887,6 +887,7 @@ export function App() {
             model={model}
             onWork={(id) => openWork(id)}
             onAsk={(text, files) => void submit(text, files)}
+            onAskAbout={(id, text) => openWork(id, text)}
           />
         ) : layout.route === "rfps" ? (
           <Rfps

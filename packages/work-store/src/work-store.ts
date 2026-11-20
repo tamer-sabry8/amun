@@ -52,6 +52,10 @@ const chatTitle = (text: string) => {
   return line.length > 60 ? line.slice(0, 60).trimEnd() + "…" : line;
 };
 
+/** A typed command on its own, such as "/model" or "/sprint refresh". */
+const isTypedCommand = (text: string) =>
+  /^\/[a-z][\w-]*(\s|$)/.test(text.trim());
+
 /**
  * A deleted work is gone from everything Amun shows: the work itself, and
  * whatever was about it (its chat, plans, things waiting, activity, sprint,
@@ -411,22 +415,44 @@ export class WorkStore {
           resolvedAt: (row.resolved_at as string | null) ?? null,
         })),
         reminders: this.reminders.list(),
-        rfps: this.all("SELECT * FROM rfps ORDER BY work_area_id").map(
-          (row) => ({
-            id: String(row.work_area_id),
-            client: String(row.client),
-            stage: row.stage,
-            deadline: (row.deadline as string | null) ?? null,
-            responseOwner: (row.response_owner as string | null) ?? null,
-            accountOwner: (row.account_owner as string | null) ?? null,
-            presales: (row.presales as string | null) ?? null,
-            proposalSigned: bool(row.proposal_signed),
-            brdApproved: bool(row.brd_approved),
-            deliveryProjectId:
-              (row.delivery_project_id as string | null) ?? null,
-            lossReason: (row.loss_reason as string | null) ?? null,
-          }),
-        ),
+        rfps: this.all(
+          "SELECT r.*, a.created_at AS area_created_at FROM rfps r JOIN work_areas a ON a.id=r.work_area_id ORDER BY r.work_area_id",
+        ).map((row) => ({
+          id: String(row.work_area_id),
+          client: String(row.client),
+          stage: row.stage,
+          deadline: (row.deadline as string | null) ?? null,
+          responseOwner: (row.response_owner as string | null) ?? null,
+          accountOwner: (row.account_owner as string | null) ?? null,
+          presales: (row.presales as string | null) ?? null,
+          proposalSigned: bool(row.proposal_signed),
+          brdApproved: bool(row.brd_approved),
+          deliveryProjectId: (row.delivery_project_id as string | null) ?? null,
+          lossReason: (row.loss_reason as string | null) ?? null,
+          value: (row.value as number | null) ?? null,
+          nextStep: (row.next_step as string | null) ?? null,
+          nextStepAt: (row.next_step_at as string | null) ?? null,
+          heldAt: (row.held_at as string | null) ?? null,
+          holdReason: (row.hold_reason as string | null) ?? null,
+          requirements: String(row.requirements ?? ""),
+          source: (row.source as string | null) ?? null,
+          // An RFP tracked before this was kept arrived when it was added.
+          receivedAt:
+            (row.received_at as string | null) ??
+            (row.area_created_at as string | null) ??
+            null,
+          clarificationsBy: (row.clarifications_by as string | null) ?? null,
+          team: list(row.team_json) as string[],
+          closedAt: (row.closed_at as string | null) ?? null,
+          summaries: this.all(
+            "SELECT id,text,created_at FROM rfp_summaries WHERE work_area_id=? ORDER BY created_at DESC, rowid DESC",
+            row.work_area_id as string,
+          ).map((note) => ({
+            id: String(note.id),
+            text: String(note.text),
+            createdAt: String(note.created_at),
+          })),
+        })),
         roadmap: this.roadmap(),
         sprints: this.all("SELECT * FROM work_sprints ORDER BY start,id").map(
           (row) => ({
@@ -1430,13 +1456,22 @@ export class WorkStore {
           throw new WorkError(
             "An RFP is handed to delivery once the proposal is signed and the BRD is approved.",
           );
+        // Moving an RFP takes it off hold. The day it was decided is kept.
+        const decided = ["won", "lost", "withdrawn"].includes(command.stage);
         this.run(
-          "UPDATE rfps SET stage=?,loss_reason=? WHERE work_area_id=?",
+          "UPDATE rfps SET stage=?,loss_reason=?,held_at=NULL,hold_reason=NULL,closed_at=? WHERE work_area_id=?",
           command.stage,
           command.stage === "lost" && command.lossReason
             ? this.clean(command.lossReason)
             : command.stage === "lost"
               ? rfp.loss_reason
+              : null,
+          decided
+            ? rfp.stage === command.stage && rfp.closed_at
+              ? rfp.closed_at
+              : now
+            : command.stage === "handed_to_delivery"
+              ? rfp.closed_at
               : null,
           command.areaId,
         );
@@ -1446,6 +1481,101 @@ export class WorkStore {
           command.areaId,
         );
         return {};
+      }
+      case "update-rfp": {
+        const rfp = this.get(
+          "SELECT work_area_id FROM rfps WHERE work_area_id=?",
+          command.areaId,
+        );
+        if (!rfp) throw new WorkError("That RFP no longer exists.");
+        const { patch } = command;
+        const columns: [string, unknown][] = [];
+        const words = (value: string | null) =>
+          value && value.trim() ? this.clean(value) : null;
+        if (patch.value !== undefined) columns.push(["value", patch.value]);
+        if (patch.nextStep !== undefined)
+          columns.push(["next_step", words(patch.nextStep)]);
+        if (patch.nextStepAt !== undefined)
+          columns.push(["next_step_at", patch.nextStepAt]);
+        if (patch.requirements !== undefined)
+          columns.push(["requirements", this.clean(patch.requirements)]);
+        if (patch.source !== undefined)
+          columns.push(["source", words(patch.source)]);
+        if (patch.receivedAt !== undefined)
+          columns.push(["received_at", patch.receivedAt]);
+        if (patch.clarificationsBy !== undefined)
+          columns.push(["clarifications_by", patch.clarificationsBy]);
+        if (patch.team !== undefined)
+          columns.push([
+            "team_json",
+            JSON.stringify([
+              ...new Set(patch.team.map((person) => this.clean(person))),
+            ]),
+          ]);
+        if (columns.length) {
+          this.run(
+            `UPDATE rfps SET ${columns.map(([name]) => `${name}=?`).join(",")} WHERE work_area_id=?`,
+            ...columns.map(([, value]) => value),
+            command.areaId,
+          );
+          this.run(
+            "UPDATE work_areas SET last_context_at=? WHERE id=?",
+            now,
+            command.areaId,
+          );
+        }
+        return { ref: command.areaId };
+      }
+      case "hold-rfp": {
+        const rfp = this.get(
+          "SELECT * FROM rfps WHERE work_area_id=?",
+          command.areaId,
+        );
+        if (!rfp) throw new WorkError("That RFP no longer exists.");
+        if (
+          command.held &&
+          !["received", "in_response", "submitted"].includes(String(rfp.stage))
+        )
+          throw new WorkError(
+            "Only an RFP that is still open can be put on hold.",
+          );
+        this.run(
+          "UPDATE rfps SET held_at=?,hold_reason=? WHERE work_area_id=?",
+          command.held ? ((rfp.held_at as string | null) ?? now) : null,
+          command.held && command.reason.trim()
+            ? this.clean(command.reason)
+            : null,
+          command.areaId,
+        );
+        this.run(
+          "UPDATE work_areas SET last_context_at=? WHERE id=?",
+          now,
+          command.areaId,
+        );
+        return { ref: command.areaId };
+      }
+      case "add-rfp-summary": {
+        if (
+          !this.get(
+            "SELECT work_area_id FROM rfps WHERE work_area_id=?",
+            command.areaId,
+          )
+        )
+          throw new WorkError("That RFP no longer exists.");
+        const summaryId = randomUUID();
+        this.run(
+          "INSERT INTO rfp_summaries(id,work_area_id,text,created_at) VALUES (?,?,?,?)",
+          summaryId,
+          command.areaId,
+          this.clean(command.text),
+          now,
+        );
+        this.run(
+          "UPDATE work_areas SET last_context_at=? WHERE id=?",
+          now,
+          command.areaId,
+        );
+        return { ref: summaryId };
       }
       case "rfp-readiness":
         this.run(
@@ -2207,17 +2337,20 @@ export class WorkStore {
           command.workAreaId,
         );
         // A chat is named by the owner's first message in it.
-        if (command.role === "you") {
+        // A typed command such as "/model" says nothing about the subject, so
+        // it never names a chat, and a chat it named earlier is named again
+        // by the first real message (owner, 20 November 2026).
+        if (command.role === "you" && !isTypedCommand(command.text)) {
           const title = chatTitle(command.text);
           if (command.chatId === null)
             this.run(
-              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND first_chat_title IS NULL",
+              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
               title,
               command.workAreaId,
             );
           else
             this.run(
-              "UPDATE work_chats SET title=? WHERE id=? AND title=''",
+              "UPDATE work_chats SET title=? WHERE id=? AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
               title,
               command.chatId,
             );

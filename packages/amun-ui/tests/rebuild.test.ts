@@ -16,11 +16,11 @@ import {
   AgentOutput,
   Agents,
   Portfolio,
-  Rfps,
   Roadmap,
   Sprints,
   SprintTimeline,
 } from "../src/rebuild/screens.tsx";
+import { Rfps } from "../src/rebuild/rfps.tsx";
 import { receive, workStore } from "../src/rebuild/store.ts";
 import {
   agentNews,
@@ -176,6 +176,22 @@ const active = () =>
     ],
     plans: [plan()],
   });
+/** The RFP fields added on 20 November 2026, empty. */
+const rfpExtras = {
+  value: null,
+  nextStep: null,
+  nextStepAt: null,
+  heldAt: null,
+  holdReason: null,
+  requirements: "",
+  source: null,
+  receivedAt: null,
+  clarificationsBy: null,
+  team: [],
+  closedAt: null,
+  summaries: [],
+};
+
 const noop = () => undefined;
 const text = (html: string) =>
   html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
@@ -252,6 +268,7 @@ describe("view model", () => {
           brdApproved: false,
           deliveryProjectId: null,
           lossReason: null,
+          ...rfpExtras,
         },
       ],
       attention: [
@@ -813,7 +830,7 @@ describe("destinations", () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*><span class="rb-avatar"/);
     expect(plain).not.toMatch(/terminal/i);
   });
-  it("RFPs is a tracking pipeline with the proposed stages", () => {
+  it("RFPs shows the figures, what needs attention and the five columns", () => {
     const state = snapshot({
       areas: [area("rfp", { type: "rfp", name: "Smart Inspection" })],
       rfps: [
@@ -829,6 +846,7 @@ describe("destinations", () => {
           brdApproved: false,
           deliveryProjectId: null,
           lossReason: null,
+          ...rfpExtras,
         },
       ],
     });
@@ -842,20 +860,22 @@ describe("destinations", () => {
         }),
       ),
     );
-    for (const stage of [
-      "Received",
-      "In response",
-      "Submitted",
+    for (const column of [
+      "Total RFPs",
+      "Win rate",
+      "Needs attention",
+      "Pipeline",
+      "New",
+      "In progress",
+      "On hold",
       "Won",
-      "Handed to delivery",
-      "Lost and withdrawn (0)",
+      "Lost",
     ])
-      expect(html).toContain(stage);
+      expect(html).toContain(column);
     expect(html).toContain("Due in 5 days");
+    expect(html).toContain("Submission due in 5 days");
     expect(html).toContain("No response owner");
-    expect(html).toContain(
-      "Writing the response belongs to a separate product",
-    );
+    expect(html).toContain("Track every RFP from receipt to award.");
   });
   it("Sprints shows progress, flags and the preview footer", () => {
     const state = snapshot({

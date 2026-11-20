@@ -25,7 +25,12 @@ export function acceptOffer(
   queue = pendingOffers,
 ) {
   if (item.state !== "open") return { note: outcomeNotes.draft, areaId: null };
-  work("resolve-attention", { attentionId: item.id, resolution: "accept" });
+  work("resolve-attention", {
+    attentionId: item.id,
+    resolution: "accept",
+    // With a work to draft in, the request itself goes to Firstmate next.
+    told: !!item.workAreaId,
+  });
   if (!item.workAreaId)
     return {
       note: "Marked as wanted. It belongs to no work yet, so nothing is being drafted. Open the work and ask for it there.",
@@ -48,7 +53,12 @@ export function requestPlanChanges(
   note = "",
   queue = pendingOffers,
 ) {
-  work("request-changes", { planId: plan.id, note });
+  work("request-changes", {
+    planId: plan.id,
+    note,
+    // With a work to revise it in, the request itself goes to Firstmate next.
+    told: !!plan.workAreaId,
+  });
   if (plan.workAreaId)
     queue.queue({
       id: "changes:" + plan.id,
@@ -67,6 +77,8 @@ export function answerQuestion(
     attentionId: question.id,
     resolution: "answer",
     answer,
+    // With a work to answer in, the answer itself goes to Firstmate next.
+    told: !!question.workAreaId,
   });
   if (question.workAreaId)
     queue.queue({
@@ -85,6 +97,8 @@ export function answerScope(
     workAreaId: scope.areaId,
     item: scope.item,
     answer: scope.answer,
+    // The choice itself goes to Firstmate next.
+    told: true,
   });
   queue.queue({
     id: "scope:" + scope.areaId + ":" + scope.item,

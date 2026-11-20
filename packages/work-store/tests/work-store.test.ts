@@ -795,6 +795,68 @@ describe("RFP tracking and handoff (F7)", () => {
     }).ref!;
     return { employer, id, row: () => snap().rfps[0]! };
   }
+  it("keeps value, next step, people and dated summaries on an RFP", () => {
+    const { id, row } = rfp();
+    expect(row()).toMatchObject({
+      value: null,
+      heldAt: null,
+      team: [],
+      summaries: [],
+    });
+    expect(row().receivedAt).not.toBeNull();
+    send("update-rfp", {
+      areaId: id,
+      patch: {
+        value: 1_400_000,
+        nextStep: "Finish the technical proposal",
+        nextStepAt: "2026-11-23T00:00:00Z",
+        team: ["Sara", "Sara", "Omar"],
+      },
+    });
+    // Only the fields given change.
+    send("update-rfp", { areaId: id, patch: { source: "Existing client" } });
+    expect(row()).toMatchObject({
+      value: 1_400_000,
+      nextStep: "Finish the technical proposal",
+      nextStepAt: "2026-11-23T00:00:00Z",
+      team: ["Sara", "Omar"],
+      source: "Existing client",
+      client: "DMT",
+    });
+    send("add-rfp-summary", { areaId: id, text: "First note." });
+    send("add-rfp-summary", { areaId: id, text: "Second note." });
+    expect(row().summaries.map((item) => item.text)).toEqual([
+      "Second note.",
+      "First note.",
+    ]);
+    expect(send("update-rfp", { areaId: "gone", patch: {} }).ok).toBe(false);
+  });
+  it("puts an open RFP on hold and keeps its stage underneath", () => {
+    const { id, row } = rfp();
+    send("move-rfp", { areaId: id, stage: "in_response" });
+    send("hold-rfp", { areaId: id, held: true, reason: "Waiting for data" });
+    expect(row()).toMatchObject({
+      stage: "in_response",
+      holdReason: "Waiting for data",
+    });
+    const since = row().heldAt;
+    expect(since).not.toBeNull();
+    // Changing the reason does not restart the clock.
+    send("hold-rfp", { areaId: id, held: true, reason: "Still waiting" });
+    expect(row()).toMatchObject({ heldAt: since, holdReason: "Still waiting" });
+    send("hold-rfp", { areaId: id, held: false });
+    expect(row()).toMatchObject({
+      stage: "in_response",
+      heldAt: null,
+      holdReason: null,
+    });
+    // Moving it takes it off hold, and deciding it records the day.
+    send("hold-rfp", { areaId: id, held: true, reason: "Paused" });
+    send("move-rfp", { areaId: id, stage: "won" });
+    expect(row()).toMatchObject({ stage: "won", heldAt: null });
+    expect(row().closedAt).not.toBeNull();
+    expect(send("hold-rfp", { areaId: id, held: true }).ok).toBe(false);
+  });
   it("captures the RFP as a tracking record", () => {
     const { id, row } = rfp();
     expect(row()).toMatchObject({
@@ -1674,6 +1736,21 @@ describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
     messages.map((message) => message.text);
   const areaOf = (id: string) => snap().areas.find((item) => item.id === id)!;
   const chatOf = (id: string) => snap().chats.find((item) => item.id === id)!;
+
+  it("never names a chat after a typed command such as /model", () => {
+    const { employer } = setup();
+    const id = area(employer, "task", "Loose");
+    say(id, "you", "/model");
+    expect(areaOf(id).firstChat.title).toBeNull();
+    say(id, "you", "Draft the architecture view.");
+    expect(areaOf(id).firstChat.title).toBe("Draft the architecture view.");
+
+    const chat = send("new-chat", { workAreaId: id }).ref!;
+    say(id, "you", "/sprint refresh", chat);
+    expect(chatOf(chat).title).toBe("");
+    say(id, "you", "Review the sprint.", chat);
+    expect(chatOf(chat).title).toBe("Review the sprint.");
+  });
 
   it("names every chat by the owner's first message in it", () => {
     const { employer } = setup();
