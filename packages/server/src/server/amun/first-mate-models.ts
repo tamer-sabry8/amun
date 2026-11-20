@@ -129,5 +129,10 @@ export async function checkPiAccount(provider: string, runPi: RunPi): Promise<Ac
   const reason = typeof answer.reason === "string" ? answer.reason : null;
   if (answer.status === "ready") return { provider, status: "ready", reason: null };
   if (reason === "credentials_not_configured") return { provider, status: "missing", reason };
+  // Pi holds a sign-in it could not renew with the provider (seen with Claude
+  // Pro/Max on 20 November 2026: the stored sign-in passes a check that does
+  // not renew it, and fails one that does). The owner has to sign in again;
+  // the provider is not down.
+  if (answer.status === "invalid") return { provider, status: "missing", reason: reason ?? "invalid" };
   return { provider, status: "error", reason };
 }

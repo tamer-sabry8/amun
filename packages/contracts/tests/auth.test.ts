@@ -18,6 +18,15 @@ it("accepts explicit connection/login actions and rejects extra secret output fi
       provider: "anthropic",
       type: "oauth",
     }).success,
+  ).toBe(true);
+  expect(
+    authCommand.safeParse({
+      version: 1,
+      kind: "auth",
+      action: "login",
+      provider: "radius",
+      type: "oauth",
+    }).success,
   ).toBe(false);
   expect(
     authCommand.safeParse({

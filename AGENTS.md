@@ -85,6 +85,10 @@ Live-test destinations chosen by the owner:
 
 Several agents work in this repository at once, including a crash investigation on other branches. Stay on your own branch and worktree; do not touch other worktrees or branches.
 
+## Claude subscription
+
+Owner decision, 20 November 2026. Claude Pro/Max is offered under Accounts and models through Pi's own sign-in (provider `anthropic`, OAuth), like ChatGPT and Copilot. This withdraws the 6 November rule that a Claude subscription is used only through Claude Code, and AD-10 in `docs/plans/product-and-r1-plan.md`. The owner was told on 20 November 2026 that Anthropic's terms may limit a Claude subscription to Claude Code and Anthropic's own apps, and chose this anyway. Do not restore the old rule unless the owner asks.
+
 ## Firstmate principles (captain → Firstmate → crew)
 
 Owner instruction, 15 November 2026. Amun follows upstream Firstmate (github.com/kunchenguid/firstmate): the owner is the captain and talks only to Firstmate. Firstmate knows the work, orchestrates and delegates all real work to its crew (agents/secondmates), supervises them, and the crew report back to Firstmate, which reports plain outcomes to the captain.

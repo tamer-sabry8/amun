@@ -888,7 +888,7 @@ export class ContractAdapter {
     if (action === "login")
       return [
         this.notice(
-          "Signing in from Amun is not ready yet. Sign in to this provider in Pi, then open this page again.",
+          "Signing in from Amun is not ready yet. Open Pi in Terminal, type /login and choose this provider, then open this page again.",
         ),
         ...(await this.accountStatus(String(message.provider))),
       ];

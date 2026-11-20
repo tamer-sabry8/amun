@@ -438,7 +438,7 @@ RICE = Reach × Impact × Confidence ÷ Effort. Reach period, impact scale, conf
 | AD-7 | **Amun-scoped Pi config dir** via `PI_CODING_AGENT_DIR` | Separates Amun credentials/settings from personal Pi setup (verified) |
 | AD-8 | **Governed actions: the agent proposes, the connector executes** | Enforcement sits in the component that performs the write |
 | AD-9 | **Server-side protection for Git** (branch policies, scoped tokens); **connector-side protection for Boards/Notion** (approval binding, revision checks, reconciliation) | Different systems need different enforcement |
-| AD-10 | **No Claude subscription sign-in inside Amun** | Anthropic does not permit third-party apps to offer Claude.ai login; Claude Code workers keep their own login |
+| AD-10 | **No Claude subscription sign-in inside Amun** (withdrawn by the owner on 20 November 2026; see `AGENTS.md`, "Claude subscription") | Anthropic does not permit third-party apps to offer Claude.ai login; Claude Code workers keep their own login |
 
 ### 8.2 System architecture (Mermaid)
 
