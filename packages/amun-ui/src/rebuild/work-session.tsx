@@ -90,7 +90,23 @@ import {
 } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
 import { work as storeWork, workAsync as storeWorkAsync } from "./store.ts";
-import { forkNote, forkPoint } from "./fork.ts";
+import { chatNote, chatRecap, forkNote, forkPoint } from "./fork.ts";
+import {
+  generalConversationName,
+  routeNewWork,
+  sameWorkName,
+} from "../../../../packages/domain/src/work/model.ts";
+import {
+  asMoveOffer,
+  asMovedLine,
+  isMoveQuestion,
+  moveQuestion,
+  sendAsTyped,
+  takeAsTyped,
+  type MoveOffer,
+} from "./move-offers.ts";
+import { askWhereItGoes, localDay } from "./move-ask.ts";
+import { chatsOf } from "../../../../packages/domain/src/work/chats.ts";
 import {
   answerQuestion,
   answerScope,
@@ -1194,6 +1210,52 @@ function MessageActions({
   );
 }
 
+/**
+ * What a chat shows where a message is waiting on "where should this go?",
+ * or where its messages were moved to another folder.
+ */
+function MoveLine({
+  card,
+  onOpen,
+}: {
+  card: unknown;
+  onOpen(areaId: string, chatId: string | null): void;
+}) {
+  const offer = asMoveOffer(card);
+  const moved = asMovedLine(card);
+  const to = moved
+    ? {
+        workAreaId: moved.toWorkAreaId,
+        chatId: moved.toChatId,
+        name: moved.name,
+      }
+    : offer?.state === "moved"
+      ? (offer.to ?? null)
+      : null;
+  if (to)
+    return (
+      <p className="muted small">
+        Continued in <strong>{to.name}</strong>.{" "}
+        <button
+          className="link"
+          onClick={() => onOpen(to.workAreaId, to.chatId)}
+        >
+          Open
+        </button>
+      </p>
+    );
+  if (offer?.state === "open" && offer.held !== null)
+    return (
+      <div className="rb-turn you">
+        <div className="rb-msg you held">{offer.held}</div>
+        <span className="rb-held-note">
+          Not sent yet. Firstmate’s card on the left asks where it goes.
+        </span>
+      </div>
+    );
+  return null;
+}
+
 export function WorkSession({
   snapshot,
   workspace,
@@ -1206,6 +1268,7 @@ export function WorkSession({
   expanded,
   first,
   onChat,
+  onWork,
   onPane,
   onResize,
   onExpand,
@@ -1226,6 +1289,8 @@ export function WorkSession({
   first: string | null;
   /** Opens another chat of this work (after "Fork from here"). */
   onChat(chatId: string | null): void;
+  /** Opens a chat in another folder, optionally sending it a first message. */
+  onWork(areaId: string, chatId: string | null, first?: string): void;
   onPane(target: PaneTarget): void;
   onResize(ratio: number): void;
   onExpand(): void;
@@ -1382,7 +1447,56 @@ export function WorkSession({
             card: { kind: "plan-refused" },
           });
       })();
-    else if (proposed.do === "question" || proposed.do === "offer")
+    else if (proposed.do === "move") {
+      // Firstmate thinks the latest messages belong in another folder. The
+      // owner is asked on Firstmate's card; nothing moves without their yes.
+      const snap = latest.current.snapshot;
+      const here = snap.areas.find((item) => item.id === areaId);
+      const said = (
+        savedIn
+          ? (snap.chats.find((item) => item.id === savedIn)?.messages ?? [])
+          : snap.messages.filter((item) => item.workAreaId === areaId)
+      ) as { id: string; role: string; card: unknown }[];
+      const from = said
+        .filter((item) => item.role === "you")
+        .at(-proposed.messages);
+      const twin = snap.areas.find(
+        (item) =>
+          item.name !== generalConversationName &&
+          sameWorkName(item.name, proposed.name),
+      );
+      const asking = said.some(
+        (item) => asMoveOffer(item.card)?.state === "open",
+      );
+      if (
+        here &&
+        from &&
+        !asking &&
+        twin?.id !== areaId &&
+        !here.keptHere.some((kept) => sameWorkName(kept, proposed.name))
+      ) {
+        const offer: MoveOffer = {
+          kind: "move-offer",
+          state: "open",
+          held: null,
+          fromMessageId: from.id,
+          request: {
+            type: proposed.type,
+            name: proposed.name,
+            priority: null,
+            dueDate: null,
+          },
+          existingAreaId: twin?.id ?? null,
+          workAreaId: areaId,
+          chatId: savedIn,
+        };
+        void askWhereItGoes(
+          offer,
+          moveQuestion(offer, here.name, twin?.name ?? null),
+          here.groupId,
+        );
+      }
+    } else if (proposed.do === "question" || proposed.do === "offer")
       work("attention", {
         attentionKind: proposed.do,
         groupId: null,
@@ -1770,25 +1884,85 @@ export function WorkSession({
     setSettled(next);
     writeSettledStops(next);
   };
-  const forkedAt = chat ? forkPoint(chat) : null;
+  // Only a fork has a fork point; a chat the owner started is a fresh topic.
+  const fork = chat?.kind === "fork" ? chat : null;
+  const forkedAt = fork ? forkPoint(fork) : null;
   const stopOffer =
-    chat && forkedAt
+    fork && forkedAt
       ? (snapshot.activity.find(
           (item) =>
             item.workAreaId === areaId &&
             item.state === "running" &&
             item.createdAt > forkedAt &&
-            item.createdAt < chat.createdAt &&
-            !settled.includes(`${chat.id}:${item.id}`),
+            item.createdAt < fork.createdAt &&
+            !settled.includes(`${fork.id}:${item.id}`),
         ) ?? null)
       : null;
   const send = async (typed: string) => {
     if ((!typed.trim() && !attachments.files.length) || !context) return;
+    // A request for new work that belongs in a folder of its own is not sent
+    // from here: Amun files it, or holds it and asks on Firstmate's card. A
+    // message the owner already chose to keep here is sent as typed.
+    const decided = attachments.files.length ? null : takeAsTyped(typed);
+    if (!attachments.files.length && !decided) {
+      const here = context.area;
+      const loose = here.name === generalConversationName;
+      const routed = routeNewWork({
+        text: typed,
+        today: localDay(Date.now()),
+        areas: snapshot.areas.filter(
+          (item) =>
+            item.name !== generalConversationName &&
+            (!here.groupId || !item.groupId || item.groupId === here.groupId),
+        ),
+        inside: loose ? null : { id: areaId, keptHere: here.keptHere },
+      });
+      if (routed.route === "create") {
+        const made = await storeWorkAsync("create-area", {
+          groupId: here.groupId,
+          type: routed.request.type,
+          name: routed.request.name,
+          ...(routed.request.priority
+            ? { priority: routed.request.priority }
+            : {}),
+          ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
+        });
+        if (made.ok && made.ref) {
+          sendAsTyped(typed);
+          return onWork(made.ref, null, typed.trim());
+        }
+      }
+      if (routed.route === "existing" || routed.route === "offer_move") {
+        const offer: MoveOffer = {
+          kind: "move-offer",
+          state: "open",
+          held: typed.trim(),
+          fromMessageId: null,
+          request: routed.request,
+          existingAreaId: routed.areaId,
+          workAreaId: areaId,
+          chatId: savedIn,
+        };
+        const existing = snapshot.areas.find(
+          (item) => item.id === routed.areaId,
+        );
+        if (
+          await askWhereItGoes(
+            offer,
+            moveQuestion(offer, here.name, existing?.name ?? null),
+            here.groupId,
+          )
+        )
+          return;
+        // The question could not be saved: the message goes where it was typed.
+      }
+    }
     // A reminder is kept by Amun and answered here; it is not sent on to
     // Firstmate's model and creates no work.
     if (!attachments.files.length && reminderIntent(typed)) {
       const text = typed.trim();
       await workAsync("message", { workAreaId: areaId, role: "you", text });
+      decided?.();
       const result = await workAsync("reminder", { text, workAreaId: areaId });
       await workAsync("message", {
         workAreaId: areaId,
@@ -1809,6 +1983,7 @@ export function WorkSession({
         role: "you",
         text: typed.trim(),
       });
+      decided?.();
       if (retry.kind === "retry")
         bridge.send({
           version: 1,
@@ -1836,10 +2011,15 @@ export function WorkSession({
     setWaiting(null);
     lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
+    // The owner's words are saved here now, so their question can be settled.
+    decided?.();
     // A conversation that has not been told Amun's rules gets them with this
     // message: the first one for a work area, and the first after Firstmate's
     // conversation was started afresh.
     const briefing = !context.messages.length || needsBriefing();
+    // A Firstmate whose memory has started fresh is given this chat's recap
+    // with the message, without showing anything.
+    const recap = needsBriefing() ? chatRecap(context.messages) : "";
     // Read before this message is added: what agents finished since the
     // owner last wrote goes to Firstmate with it.
     const news = agentNews(context.messages);
@@ -1874,10 +2054,31 @@ export function WorkSession({
       failedPublicationLines(snapshot, areaId, reasons),
     );
     // In a fork, Firstmate is told which chat this is and what to set aside.
-    const fork = chat ? forkNote(chat, context.messages) + "\n" : "";
+    // In a fork or a chat of its own, Firstmate is told which chat this is.
+    const siblings = chatsOf(context.area, snapshot.chats, snapshot.messages);
+    const which = !chat
+      ? // The first chat is named too once the folder has others, so
+        // "continue with that" is never read as another chat's.
+        siblings.some((item) => item.chatId !== null && !item.empty)
+        ? chatNote(
+            context.area.firstChat.title ??
+              text.replace(/\s+/g, " ").slice(0, 60),
+            true,
+            [],
+          ) + "\n"
+        : ""
+      : chat.kind === "fork"
+        ? forkNote(chat, context.messages) + "\n"
+        : chatNote(
+            chat.title || text.replace(/\s+/g, " ").slice(0, 60),
+            context.messages.some((message) => message.role === "you"),
+            siblings
+              .filter((item) => item.chatId !== chat.id && !item.empty)
+              .map((item) => item.title),
+          ) + "\n";
     const scoped = briefing
-      ? `${amunProtocol}\n\n${header}${fork}${text}`
-      : `${header}${fork}${text}`;
+      ? `${amunProtocol}\n\n${header}${which}${recap}${text}`
+      : `${header}${which}${text}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -2003,7 +2204,9 @@ export function WorkSession({
     (item) =>
       item.kind === "question" &&
       item.state === "open" &&
-      item.workAreaId === areaId,
+      item.workAreaId === areaId &&
+      // "Where should this go?" is asked on Firstmate's card.
+      !isMoveQuestion(item),
   );
   // Firstmate hands work to its crew; name who is working while it is busy.
   const crewAtWork = snapshot.agents
@@ -2387,12 +2590,15 @@ export function WorkSession({
         <div className="rb-thread">
           <div className="inner">
             <div className="msgs">
-              {chat && (
+              {fork && (
                 <p className="muted small">
                   Forked from{" "}
-                  {chat.fromChatId ? "another chat" : "the main chat"}.{" "}
-                  <button className="link" onClick={() => onChat(null)}>
-                    Back to main chat
+                  {fork.fromChatId ? "another chat" : "the first chat"}.{" "}
+                  <button
+                    className="link"
+                    onClick={() => onChat(fork.fromChatId)}
+                  >
+                    Back to that chat
                   </button>
                 </p>
               )}
@@ -2471,7 +2677,13 @@ export function WorkSession({
                 </div>
               )}
               {context.messages.map((message, position) =>
-                message.role === "card" ? (
+                asMoveOffer(message.card) || asMovedLine(message.card) ? (
+                  <MoveLine
+                    key={message.id}
+                    card={message.card}
+                    onOpen={(to, chatId) => onWork(to, chatId)}
+                  />
+                ) : message.role === "card" ? (
                   message.id === lastReplyId ? (
                     <div key={message.id} ref={latestReply}>
                       <InlineCard
@@ -2543,7 +2755,7 @@ export function WorkSession({
                   </div>
                 ),
               )}
-              {chat && stopOffer && (
+              {fork && stopOffer && (
                 <div
                   className="rb-inline amber"
                   role="group"
@@ -2562,7 +2774,7 @@ export function WorkSession({
                       className="btn"
                       disabled={busy}
                       onClick={() => {
-                        settleStop(chat.id, stopOffer.id);
+                        settleStop(fork.id, stopOffer.id);
                         void send(
                           `Please stop this work: “${stopOffer.text}”. I am trying a different direction in this chat.`,
                         );
@@ -2572,7 +2784,7 @@ export function WorkSession({
                     </button>
                     <button
                       className="btn quiet"
-                      onClick={() => settleStop(chat.id, stopOffer.id)}
+                      onClick={() => settleStop(fork.id, stopOffer.id)}
                     >
                       Leave it running
                     </button>

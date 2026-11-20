@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   asksForNewWork,
   newWorkNamed,
+  routeNewWork,
+  sameWorkName,
+  statedDueDate,
+  statedPriority,
   classifyMaterial,
   inferWorkArea,
   intake,
@@ -916,5 +920,133 @@ describe("a message that asks for new work by name (owner's trace, 19 November 2
       kind: "record",
       type: "interview",
     });
+  });
+});
+
+describe("grouping chats by Amun's own rules (owner, 20 November 2026)", () => {
+  const today = "2026-11-20";
+  const gitex = { id: "a-gitex", name: "Gitex" };
+
+  it("reads the name after 'for', the priority and the day", () => {
+    const text =
+      "Create a new project for Gitex to be high priority and ready on Dec 6";
+    expect(newWorkNamed(text)).toEqual({ type: "project", name: "Gitex" });
+    expect(routeNewWork({ text, today, areas: [], inside: null })).toEqual({
+      route: "create",
+      request: {
+        type: "project",
+        name: "Gitex",
+        priority: "high",
+        dueDate: "2026-12-06",
+      },
+    });
+  });
+
+  it("names nothing when 'for' is followed by ordinary words", () => {
+    expect(newWorkNamed("Create a new product for the pilot")).toBeNull();
+    expect(newWorkNamed("Create a new task for me to review")).toBeNull();
+    expect(
+      routeNewWork({
+        text: "Create a landing page for Gitex",
+        today,
+        areas: [gitex],
+        inside: null,
+      }),
+    ).toEqual({ route: "none" });
+  });
+
+  it("only stores a priority the owner said", () => {
+    expect(statedPriority("make it high priority")).toBe("high");
+    expect(statedPriority("priority: low")).toBe("low");
+    expect(statedPriority("top-priority work")).toBe("urgent");
+    expect(statedPriority("this is urgent")).toBe("urgent");
+    expect(statedPriority("ready on Dec 6")).toBeNull();
+  });
+
+  it("takes the next day that has not passed, and never invents one", () => {
+    expect(statedDueDate("ready on Dec 6", today)).toBe("2026-12-06");
+    expect(statedDueDate("due 6th of December", today)).toBe("2026-12-06");
+    expect(statedDueDate("by Nov 20", today)).toBe("2026-11-20");
+    expect(statedDueDate("by Nov 3", today)).toBe("2027-11-03");
+    expect(statedDueDate("by March 3, 2028", today)).toBe("2028-03-03");
+    expect(statedDueDate("due 2026-12-06", today)).toBe("2026-12-06");
+    expect(statedDueDate("on Feb 30", today)).toBeNull();
+    expect(statedDueDate("as soon as possible", today)).toBeNull();
+    expect(statedDueDate("in May we may start", today)).toBeNull();
+    // A start or kickoff day is not a deadline (review of pull request 44).
+    expect(statedDueDate("It starts on Dec 6 and is due Dec 20", today)).toBe(
+      "2026-12-20",
+    );
+    expect(statedDueDate("Kickoff is on Dec 6", today)).toBeNull();
+    expect(statedDueDate("It starts 2026-12-06", today)).toBeNull();
+    expect(statedDueDate("deadline: 20 December", today)).toBe("2026-12-20");
+    expect(statedDueDate("no later than Dec 20", today)).toBe("2026-12-20");
+  });
+
+  it("treats spelling variants as the same folder", () => {
+    expect(sameWorkName("Amun SDK", "AMUN-SDK")).toBe(true);
+    expect(sameWorkName("AmunSDK", "amun.sdk")).toBe(true);
+    expect(sameWorkName("Gitex", "Gitex 2026")).toBe(false);
+    expect(sameWorkName("--", "")).toBe(false);
+  });
+
+  it("asks before making a twin of an existing folder", () => {
+    expect(
+      routeNewWork({
+        text: "Create a new project called gitex",
+        today,
+        areas: [gitex],
+        inside: null,
+      }),
+    ).toMatchObject({ route: "existing", areaId: "a-gitex" });
+  });
+
+  it("holds a request for other work typed inside a folder", () => {
+    const text =
+      "Create a new product called Amun-SDK and help me build the vision and problem statement for it";
+    expect(
+      routeNewWork({
+        text,
+        today,
+        areas: [gitex],
+        inside: { id: "a-gitex", keptHere: [] },
+      }),
+    ).toEqual({
+      route: "offer_move",
+      request: {
+        type: "product",
+        name: "Amun-SDK",
+        priority: null,
+        dueDate: null,
+      },
+      areaId: null,
+    });
+    expect(
+      routeNewWork({
+        text,
+        today,
+        areas: [gitex, { id: "a-sdk", name: "AMUN SDK" }],
+        inside: { id: "a-gitex", keptHere: [] },
+      }),
+    ).toMatchObject({ route: "offer_move", areaId: "a-sdk" });
+  });
+
+  it("does not ask again once the owner kept that name here", () => {
+    expect(
+      routeNewWork({
+        text: "Create a new product called Amun-SDK",
+        today,
+        areas: [gitex],
+        inside: { id: "a-gitex", keptHere: ["amun sdk"] },
+      }),
+    ).toEqual({ route: "none" });
+    expect(
+      routeNewWork({
+        text: "Create a new task for Gitex",
+        today,
+        areas: [gitex],
+        inside: { id: "a-gitex", keptHere: [] },
+      }),
+    ).toEqual({ route: "none" });
   });
 });

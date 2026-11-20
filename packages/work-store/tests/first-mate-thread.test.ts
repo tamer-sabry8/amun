@@ -55,6 +55,45 @@ describe("a First Mate reply nobody asked for", () => {
     work.close();
   });
 
+  it("goes to General's most recent chat, and never into an archived one", () => {
+    const work = opened();
+    const act = (action: string, extra: object) =>
+      (
+        work.store
+          .handle({ version: 1, kind: "work", action, ...extra })
+          .find(
+            (event) => (event as { kind?: string }).kind === "work-result",
+          ) as { ref: string | null }
+      ).ref;
+    recordFirstMateReply(work.store, "First.");
+    const general = work.store
+      .snapshot()
+      .areas.find((area) => area.name === standing)!.id;
+    const chat = act("new-chat", { workAreaId: general })!;
+    act("message", {
+      workAreaId: general,
+      chatId: chat,
+      role: "you",
+      text: "A newer topic.",
+    });
+    recordFirstMateReply(work.store, "Heartbeat.");
+    const texts = () =>
+      work.store
+        .snapshot()
+        .chats.map((item) => item.messages.map((message) => message.text));
+    expect(texts()).toEqual([["A newer topic.", "Heartbeat."]]);
+
+    // Both chats archived: the reply starts a new chat.
+    act("archive-chat", { workAreaId: general, chatId: chat, archived: true });
+    act("archive-chat", { workAreaId: general, chatId: null, archived: true });
+    recordFirstMateReply(work.store, "Later.");
+    expect(texts()).toEqual([["A newer topic.", "Heartbeat."], ["Later."]]);
+    expect(threadOf(work, general).map((message) => message.text)).toEqual([
+      "First.",
+    ]);
+    work.close();
+  });
+
   it("is cut to the store's limit rather than lost", () => {
     const work = opened();
     const id = recordFirstMateReply(work.store, "x".repeat(20_000));

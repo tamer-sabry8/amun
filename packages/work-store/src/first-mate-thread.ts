@@ -1,6 +1,7 @@
-// Where a First Mate reply nobody asked for is kept: the standing
-// "Chat with Firstmate" conversation the Home chat already uses.
+// Where a First Mate reply nobody asked for is kept: General's most recent
+// chat, the one the Home chat already uses.
 import { generalConversationName } from "../../domain/src/work/model.ts";
+import { latestOpenChat } from "../../domain/src/work/chats.ts";
 import type { WorkSnapshot } from "../../contracts/src/work.ts";
 
 /** The part of the work store this needs. */
@@ -30,9 +31,10 @@ function resultOf(events: unknown[]): WorkResult | null {
 
 /**
  * Saves a First Mate reply that Amun did not ask for (a heartbeat, a wake) in
- * the standing conversation. The one used most recently wins; with none yet,
- * one is made in the first group, as Home does. Returns the message id, or
- * null when there is no group to put it in.
+ * General. The General used most recently wins, and inside it the chat used
+ * most recently that is not archived; with every chat archived a new one is
+ * started. With no General yet, one is made in the first group, as Home does.
+ * Returns the message id, or null when there is no group to put it in.
  */
 export function recordFirstMateReply(
   store: FirstMateThreadStore,
@@ -48,6 +50,10 @@ export function recordFirstMateReply(
       ),
     )[0];
   let areaId = standing?.id ?? null;
+  // A General that was just made has only its first chat.
+  let chatId: string | null | undefined = standing
+    ? latestOpenChat(standing, snapshot.chats, snapshot.messages)
+    : null;
   if (!areaId) {
     const group = [...snapshot.groups].sort(
       (a, b) => a.position - b.position,
@@ -66,6 +72,18 @@ export function recordFirstMateReply(
     if (created?.ok !== true || typeof created.ref !== "string") return null;
     areaId = created.ref;
   }
+  if (chatId === undefined) {
+    const started = resultOf(
+      store.handle({
+        version: 1,
+        kind: "work",
+        action: "new-chat",
+        workAreaId: areaId,
+      }),
+    );
+    if (started?.ok !== true || typeof started.ref !== "string") return null;
+    chatId = started.ref;
+  }
   const trimmed =
     text.length > MESSAGE_LIMIT ? `${text.slice(0, MESSAGE_LIMIT - 1)}…` : text;
   const saved = resultOf(
@@ -74,6 +92,7 @@ export function recordFirstMateReply(
       kind: "work",
       action: "message",
       workAreaId: areaId,
+      chatId,
       role: "firstmate",
       text: trimmed,
       model,

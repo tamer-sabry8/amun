@@ -3,7 +3,7 @@
 // switched off and how to restore it.
 import {
   asksForNewWork,
-  newWorkNamed,
+  routeNewWork,
   generalConversationName,
 } from "../../../../packages/domain/src/work/model.ts";
 import {
@@ -32,7 +32,21 @@ import "../tokens.css";
 import "../shell.css";
 import "./rebuild.css";
 import "./motion.css";
-import { Island, Palette, Sidebar } from "./chrome.tsx";
+import { Island, Palette, Sidebar, type IslandMove } from "./chrome.tsx";
+import {
+  chatsOf,
+  latestOpenChat,
+} from "../../../../packages/domain/src/work/chats.ts";
+import {
+  anotherName,
+  findMoveOffer,
+  moveCardId,
+  moveQuestion,
+  sendAsTyped,
+  type MoveChoice,
+  type MoveOffer,
+} from "./move-offers.ts";
+import { askWhereItGoes, localDay } from "./move-ask.ts";
 import { useFirstmateModel } from "./firstmate.ts";
 import { Home, type IntakeStep } from "./home.tsx";
 import {
@@ -322,18 +336,206 @@ export function App() {
     setChatId(chat);
     dispatch({ type: "open_work", workAreaId: areaId });
   };
+  /** The standing conversation of a group, made when there is none yet. */
+  const looseArea = async (groupId: string | null) => {
+    const standing = snapshot.areas.find(
+      (area) =>
+        area.name === generalConversationName &&
+        (groupId === null || area.groupId === groupId),
+    );
+    if (standing) return standing.id;
+    const made = await workAsync("create-area", {
+      groupId,
+      type: "task",
+      name: generalConversationName,
+    });
+    return made.ok ? made.ref : null;
+  };
+  /** The chat a message with no folder goes to: the latest one still open. */
+  const looseChat = async (groupId: string | null) => {
+    const areaId = await looseArea(groupId);
+    if (!areaId) return null;
+    const area = snapshot.areas.find((item) => item.id === areaId);
+    const latest = area
+      ? latestOpenChat(area, snapshot.chats, snapshot.messages)
+      : null;
+    if (latest !== undefined) return { areaId, chatId: latest };
+    const made = await workAsync("new-chat", { workAreaId: areaId });
+    return made.ok && made.ref ? { areaId, chatId: made.ref } : null;
+  };
+  /** "New chat" on a folder, or in the Chats list (no folder). */
+  const startChat = async (folderId: string | null) => {
+    const areaId =
+      folderId ??
+      (await looseArea(
+        snapshot.setup.activeGroupId ?? snapshot.groups[0]?.id ?? null,
+      ));
+    if (!areaId) return;
+    // A chat nobody has written in yet is the new chat; a second is not made.
+    const area = snapshot.areas.find((item) => item.id === areaId);
+    const unused = area
+      ? chatsOf(area, snapshot.chats, snapshot.messages).find(
+          (chat) => chat.empty && chat.archivedAt === null,
+        )
+      : undefined;
+    if (unused || !area)
+      return openWork(areaId, undefined, null, unused?.chatId ?? null);
+    const made = await workAsync("new-chat", { workAreaId: areaId });
+    if (made.ok && made.ref) openWork(areaId, undefined, null, made.ref);
+    else setNote(made.message);
+  };
+  /** The owner's choice on "where should this go?". Nothing moved before it. */
+  const resolveMove = async (
+    item: Attention,
+    choice: MoveChoice,
+    typedName: string,
+  ) => {
+    const raw = snapshot.attention.find((entry) => entry.id === item.id);
+    const offer = findMoveOffer(snapshot, raw?.ref);
+    const cardId = moveCardId(raw?.ref);
+    const done = () =>
+      workAsync("resolve-attention", {
+        attentionId: item.id,
+        resolution: "done",
+      });
+    if (!offer || !cardId) return void done();
+    if (choice === "keep") {
+      await workAsync("keep-here", {
+        workAreaId: offer.workAreaId,
+        name: offer.request.name,
+      });
+      const settle = async () => {
+        await workAsync("settle-card", {
+          messageId: cardId,
+          card: { ...offer, state: "kept" } as never,
+        });
+        await done();
+      };
+      if (offer.held === null) return void settle();
+      // The question stays open until the message is saved in this chat.
+      sendAsTyped(offer.held, () => void settle());
+      return openWork(offer.workAreaId, offer.held, null, offer.chatId);
+    }
+    const source = snapshot.areas.find((area) => area.id === offer.workAreaId);
+    let targetId = choice === "existing" ? offer.existingAreaId : null;
+    if (!targetId) {
+      const name =
+        choice === "another"
+          ? anotherName(
+              offer.request.name,
+              snapshot.areas.map((area) => area.name),
+            )
+          : typedName || offer.request.name;
+      const made = await workAsync("create-area", {
+        groupId: source?.groupId ?? snapshot.setup.activeGroupId,
+        type: offer.request.type,
+        name,
+        ...(offer.request.priority ? { priority: offer.request.priority } : {}),
+        ...(offer.request.dueDate ? { dueAt: offer.request.dueDate } : {}),
+      });
+      if (!made.ok || !made.ref) return setNote(made.message);
+      targetId = made.ref;
+    }
+    const target = snapshot.areas.find((area) => area.id === targetId);
+    const name =
+      target?.name ??
+      (choice === "new" && typedName ? typedName : offer.request.name);
+    if (offer.held === null) {
+      // Messages already sent are re-filed as a chat in that folder.
+      const moved = await workAsync("move-chat", {
+        workAreaId: offer.workAreaId,
+        chatId: offer.chatId,
+        ...(offer.fromMessageId ? { fromMessageId: offer.fromMessageId } : {}),
+        toWorkAreaId: targetId,
+      });
+      if (!moved.ok) return setNote(moved.message);
+      await workAsync("settle-card", {
+        messageId: cardId,
+        card: { ...offer, state: "kept" } as never,
+      });
+      await done();
+      return openWork(targetId, undefined, null, moved.ref);
+    }
+    // A held message becomes a chat of its own in that folder.
+    const used =
+      !!target &&
+      chatsOf(target, snapshot.chats, snapshot.messages).some(
+        (chat) => chat.kind === "first" && !chat.empty,
+      );
+    const chat = used
+      ? (await workAsync("new-chat", { workAreaId: targetId })).ref
+      : null;
+    // The question stays open, with the owner's words on its card, until the
+    // message is saved in the folder it moved to.
+    const to = { workAreaId: targetId, chatId: chat, name };
+    sendAsTyped(offer.held, () => {
+      void (async () => {
+        await workAsync("settle-card", {
+          messageId: cardId,
+          card: { ...offer, state: "moved", to } as never,
+        });
+        await done();
+      })();
+    });
+    openWork(targetId, offer.held, null, chat);
+  };
   const submit = async (text: string, files: string[], groupId?: string) => {
     setNote("");
-    // "Create a new product named Atlas and interview me": make it and start.
-    const named = files.length ? null : newWorkNamed(text);
-    const group = groupId ?? snapshot.setup.activeGroupId;
-    if (named && (group || snapshot.groups.length === 1)) {
+    // "Create a new project for Gitex, high priority, ready on Dec 6": make
+    // the folder with what was said and start there. A name a folder already
+    // has is asked about first, on Firstmate's card.
+    const group =
+      groupId ??
+      snapshot.setup.activeGroupId ??
+      (snapshot.groups.length === 1 ? snapshot.groups[0]!.id : null);
+    const routed = files.length
+      ? ({ route: "none" } as const)
+      : routeNewWork({
+          text,
+          today: localDay(now),
+          areas: snapshot.areas.filter(
+            (area) =>
+              area.name !== generalConversationName &&
+              (!group || !area.groupId || area.groupId === group),
+          ),
+          inside: null,
+        });
+    if (routed.route === "create" && group) {
       const made = await workAsync("create-area", {
-        groupId: group ?? snapshot.groups[0]!.id,
-        type: named.type,
-        name: named.name,
+        groupId: group,
+        type: routed.request.type,
+        name: routed.request.name,
+        ...(routed.request.priority
+          ? { priority: routed.request.priority }
+          : {}),
+        ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
       });
       if (made.ok && made.ref) return openWork(made.ref, text);
+    }
+    if (routed.route === "existing") {
+      const general = await looseChat(group);
+      if (general) {
+        const existing = snapshot.areas.find(
+          (area) => area.id === routed.areaId,
+        );
+        const offer: MoveOffer = {
+          kind: "move-offer",
+          state: "open",
+          held: text,
+          fromMessageId: null,
+          request: routed.request,
+          existingAreaId: routed.areaId,
+          workAreaId: general.areaId,
+          chatId: general.chatId,
+        };
+        const asked = await askWhereItGoes(
+          offer,
+          moveQuestion(offer, null, existing?.name ?? routed.request.name),
+          group,
+        );
+        if (asked)
+          return openWork(general.areaId, undefined, null, general.chatId);
+      }
     }
     const result = await workAsync("intake", {
       text,
@@ -358,22 +560,9 @@ export function App() {
     // straight to Firstmate, who answers from what was said. Only a message
     // that itself asks for a new product, project, task or RFP is asked about.
     if (step.step === "choose_work" && !asksForNewWork(text)) {
-      const group = step.groupId ?? null;
-      const standing = snapshot.areas.find(
-        (area) =>
-          area.name === generalConversationName &&
-          (group === null || area.groupId === group),
-      );
-      const areaId =
-        standing?.id ??
-        (
-          await workAsync("create-area", {
-            groupId: group,
-            type: "task",
-            name: generalConversationName,
-          })
-        ).ref;
-      if (areaId) return openWork(areaId, text);
+      // It goes to the latest chat that has no folder (owner, 19 November 2026).
+      const loose = await looseChat(step.groupId ?? null);
+      if (loose) return openWork(loose.areaId, text, null, loose.chatId);
     }
     onHome();
     setPending({ ...step, step: step.step ?? "", text, files });
@@ -386,6 +575,19 @@ export function App() {
   const topRaw = view.island.top
     ? snapshot.attention.find((item) => item.id === view.island.top!.id)
     : undefined;
+  const topOffer = findMoveOffer(snapshot, topRaw?.ref);
+  const topMove: IslandMove | null = topOffer
+    ? {
+        question: moveQuestion(
+          topOffer,
+          snapshot.areas.find((area) => area.id === topOffer.workAreaId)
+            ?.name ?? null,
+          snapshot.areas.find((area) => area.id === topOffer.existingAreaId)
+            ?.name ?? null,
+        ),
+        name: topOffer.request.name,
+      }
+    : null;
   const openAttention = (item: Attention) => {
     const raw = snapshot.attention.find((entry) => entry.id === item.id);
     const plan = raw?.ref?.startsWith("plan:") ? raw.ref.slice(5) : null;
@@ -484,6 +686,7 @@ export function App() {
             : null
         }
         onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
+        onNewChat={(areaId) => void startChat(areaId)}
         island={
           <Island
             top={view.island.top}
@@ -491,6 +694,7 @@ export function App() {
             held={view.island.held}
             options={topRaw?.options ?? []}
             collapsed={collapsed}
+            move={topMove}
             actions={{
               onOpen: openAttention,
               onPrimary: (item) => {
@@ -517,6 +721,8 @@ export function App() {
                   resolution: "answer",
                   answer,
                 }),
+              onMove: (item, choice, name) =>
+                void resolveMove(item, choice, name),
             }}
           />
         }
@@ -599,6 +805,9 @@ export function App() {
               setFirst(null);
               setChatId(next);
             }}
+            onWork={(areaId, chat, message) =>
+              openWork(areaId, message, null, chat)
+            }
             now={now}
             model={model}
             pane={pane}

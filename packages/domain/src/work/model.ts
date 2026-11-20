@@ -305,12 +305,158 @@ export function newWorkNamed(
     /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|$)/i.exec(
       first,
     );
-  const name = named?.[1]?.trim();
+  // "Create a new project for Gitex to be high priority": the name follows
+  // "for". Only a proper name counts, so "a product for the pilot" names nothing.
+  const forName =
+    /\b(?:product|project|task|rfp)\s+for\s+(?!(?:the|a|an|my|our|your|this|that|these|those|me|us|it|them|him|her)\b)([A-Z0-9][^"”'.,;\n]{0,79}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bwith\b|\bby\b|\bon\b|\bdue\b|\bready\b|$)/.exec(
+      first,
+    );
+  const name = (named?.[1] ?? forName?.[1])?.trim();
   if (!kind || !name) return null;
   return {
     type: kind[1]!.toLowerCase() as "product" | "project" | "task" | "rfp",
     name,
   };
+}
+
+export type WorkPriority = "low" | "medium" | "high" | "urgent";
+
+/** The priority a message states in so many words; null when it states none. */
+export function statedPriority(text: string): WorkPriority | null {
+  const found =
+    /\b(low|medium|normal|high|top|urgent|critical)[\s-]+priority\b/i.exec(
+      text,
+    ) ??
+    /\bpriority\s*(?:is|of|:|=)?\s*(low|medium|normal|high|top|urgent|critical)\b/i.exec(
+      text,
+    );
+  if (!found) return /\burgent\b/i.test(text) ? "urgent" : null;
+  const word = found[1]!.toLowerCase();
+  if (word === "normal") return "medium";
+  if (word === "top" || word === "critical") return "urgent";
+  return word as WorkPriority;
+}
+
+const monthWord =
+  "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+
+const deadlineLead =
+  "\\b(?:(?:due|deadline|ready|done|finished|completed?|delivered?|live|launch(?:ed)?|ship(?:ped)?)(?:\\s+date)?\\s*(?:is|:|on|by|before)?|by|before|until|no\\s+later\\s+than)\\s*(?:the\\s+)?";
+
+/**
+ * The calendar day a message names as its deadline ("ready on Dec 6",
+ * "by 6 December 2026", "due 2026-12-06"), as YYYY-MM-DD. A day with no year
+ * is the next one that has not passed, counted from `today` (the owner's own
+ * calendar day). Null when no day is named or the day does not exist: a
+ * deadline is never guessed.
+ */
+export function statedDueDate(text: string, today: string): string | null {
+  const day = (year: number, month: number, date: number) => {
+    const made = new Date(Date.UTC(year, month, date));
+    if (
+      made.getUTCFullYear() !== year ||
+      made.getUTCMonth() !== month ||
+      made.getUTCDate() !== date
+    )
+      return null;
+    return made.toISOString().slice(0, 10);
+  };
+  // Only a day the message ties to finishing counts ("due", "ready on",
+  // "by", "before"). A start or kickoff day is not a deadline.
+  const iso = new RegExp(
+    `${deadlineLead}(\\d{4})-(\\d{2})-(\\d{2})\\b`,
+    "i",
+  ).exec(text);
+  if (iso) return day(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const monthFirst = new RegExp(
+    `${deadlineLead}${monthWord}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4})\\b)?`,
+    "i",
+  ).exec(text);
+  const dayFirst = new RegExp(
+    `${deadlineLead}(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${monthWord}\\b\\.?(?:,?\\s+(\\d{4})\\b)?`,
+    "i",
+  ).exec(text);
+  const parts = monthFirst
+    ? { month: monthFirst[1]!, date: monthFirst[2]!, year: monthFirst[3] }
+    : dayFirst
+      ? { month: dayFirst[2]!, date: dayFirst[1]!, year: dayFirst[3] }
+      : null;
+  if (!parts || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null;
+  const month = monthNames.indexOf(parts.month.slice(0, 3).toLowerCase());
+  const date = Number(parts.date);
+  if (parts.year) return day(Number(parts.year), month, date);
+  const thisYear = Number(today.slice(0, 4));
+  const soon = day(thisYear, month, date);
+  if (soon && soon >= today) return soon;
+  return day(thisYear + 1, month, date);
+}
+
+/** Two names for the same folder: case, spaces, dashes and dots do not count. */
+export function sameWorkName(a: string, b: string): boolean {
+  const plain = (value: string) =>
+    value
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "");
+  const left = plain(a);
+  return left.length > 0 && left === plain(b);
+}
+
+export interface NewWorkRequest {
+  type: "product" | "project" | "task" | "rfp";
+  name: string;
+  priority: WorkPriority | null;
+  /** YYYY-MM-DD, only when the message names a day. */
+  dueDate: string | null;
+}
+
+/**
+ * Where an explicit request for new work goes, decided by Amun's own rules
+ * before anything is sent (owner, 20 November 2026). No model is asked.
+ *
+ * - `none`: not a named request for new work; the message goes where it was typed.
+ * - `create`: make the folder and file the message as its first chat.
+ * - `existing`: a folder of that name is already there (archived ones too); ask.
+ * - `offer_move`: typed inside another folder; hold it and ask move or keep.
+ */
+export type NewWorkRoute =
+  | { route: "none" }
+  | { route: "create"; request: NewWorkRequest }
+  | { route: "existing"; request: NewWorkRequest; areaId: string }
+  | {
+      route: "offer_move";
+      request: NewWorkRequest;
+      /** The folder of that name, when there is one. */
+      areaId: string | null;
+    };
+
+export function routeNewWork(input: {
+  text: string;
+  today: string;
+  /** Every folder that is not deleted, archived ones included. */
+  areas: readonly { id: string; name: string }[];
+  /** The folder the message was typed in; null for General, Home and Portfolio. */
+  inside: { id: string; keptHere: readonly string[] } | null;
+}): NewWorkRoute {
+  const named = newWorkNamed(input.text);
+  if (!named) return { route: "none" };
+  const request: NewWorkRequest = {
+    ...named,
+    priority: statedPriority(input.text),
+    dueDate: statedDueDate(input.text, input.today),
+  };
+  const twin = input.areas.find((area) => sameWorkName(area.name, named.name));
+  if (input.inside) {
+    // The owner already said this name belongs here, or it is this folder.
+    if (
+      twin?.id === input.inside.id ||
+      input.inside.keptHere.some((kept) => sameWorkName(kept, named.name))
+    )
+      return { route: "none" };
+    return { route: "offer_move", request, areaId: twin?.id ?? null };
+  }
+  if (twin) return { route: "existing", request, areaId: twin.id };
+  return { route: "create", request };
 }
 
 /** Library › Needs linking and the single Home line when more than ten pile up (Q79). */

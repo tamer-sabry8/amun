@@ -1145,6 +1145,16 @@
   border-radius: 14px 14px 4px 14px;
   padding: 8px 13px;
 }
+/* A message waiting on "where should this go?": written, not sent. */
+.rb-msg.you.held {
+  border-style: dashed;
+  color: var(--muted);
+}
+.rb-held-note {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 .rb-activity-line {
   font-size: 13px;
   color: var(--muted);
@@ -2180,6 +2190,8 @@
   opacity: 0;
 }
 .rb-folders .line:hover .dots,
+/* The open folder keeps its buttons in view, as its chats are listed. */
+.rb-folders .folder[aria-expanded="true"] ~ .dots,
 .rb-folders .dots:focus-visible,
 .rb-folders .dots[aria-expanded="true"] {
   opacity: 1;
@@ -2231,7 +2243,6 @@
 }
 .rb-folders .chat {
   display: block;
-  padding-left: 25px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -2242,8 +2253,52 @@
 .rb-folders .chat.more {
   color: var(--accent);
 }
-.rb-folders > ul > li > .chat.more {
+/* Under a folder a chat lines up with the folder's name; a chat with no
+   folder starts at the edge. */
+.rb-folders .chat {
+  padding-left: 32px;
+}
+.rb-folders .chat.flat {
   padding-left: 8px;
+}
+.rb-folders .chat.archived {
+  font-style: italic;
+}
+.rb-folders .folder {
+  gap: 9px;
+}
+/* "Your work" and "Chats": quiet headings that fold their list. */
+.rb-folders .heading {
+  margin-top: 10px;
+}
+.rb-folders .heading:first-child {
+  margin-top: 0;
+}
+.rb-folders .heading .line:hover,
+.rb-folders .heading .line:focus-within {
+  background: none;
+}
+.rb-folders .section {
+  width: auto;
+  flex: none;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.rb-folders .section:hover {
+  background: none;
+  color: var(--ink);
+}
+.rb-folders .section svg {
+  transition: rotate 160ms var(--ease);
+}
+/* The heading's own buttons sit at the row's far edge and stay in view. */
+.rb-folders .heading .dots {
+  opacity: 1;
+}
+.rb-folders .heading .line > :first-child {
+  flex: none;
+  margin-right: auto;
 }
 
 /* What happened: Firstmate's steps beside the conversation, read only */
@@ -2967,6 +3022,24 @@
   text-align: center;
   font-size: 12px;
   color: var(--muted);
+}
+/* "Where should this go?": the folder's name, then the choices as buttons. */
+.rb-island .name {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rb-island .name input {
+  width: 100%;
+}
+.rb-island .choices {
+  display: grid;
+  gap: 6px;
+}
+.rb-island .choices .btn {
+  justify-content: center;
+  text-align: center;
 }
 /* Minimised: one line in the open sidebar, a small pill in the strip. */
 .rb-island-line {
