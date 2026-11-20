@@ -32,7 +32,10 @@ import "../tokens.css";
 import "../shell.css";
 import "./rebuild.css";
 import "./motion.css";
-import { Island, Palette, Sidebar, type IslandMove } from "./chrome.tsx";
+import { Island, Palette, type IslandMove } from "./chrome.tsx";
+import { Sidebar } from "./sidebar.tsx";
+import type { ReadingFocus } from "./reading.ts";
+import { renameKey } from "./chat-memory.ts";
 import {
   chatsOf,
   latestOpenChat,
@@ -117,6 +120,8 @@ export function App() {
   const [pane, setPane] = useState<PaneTarget>(null);
   /** The fork on screen inside the open work; null is its main chat. */
   const [chatId, setChatId] = useState<string | null>(null);
+  /** Where the open chat should open: a passage, or where reading stopped. */
+  const [focus, setFocus] = useState<ReadingFocus | null>(null);
   const [focusAgent, setFocusAgent] = useState<string | null>(null);
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
@@ -322,12 +327,14 @@ export function App() {
     message?: string,
     target: PaneTarget = null,
     chat: string | null = null,
+    at: ReadingFocus | null = null,
   ) => {
     setPending(null);
     setNote("");
     setFirst(message ?? null);
     setPane(target);
     setChatId(chat);
+    setFocus(at);
     dispatch({ type: "open_work", workAreaId: areaId });
   };
   /** The standing conversation of a group, made when there is none yet. */
@@ -687,6 +694,29 @@ export function App() {
         }
         onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
         onNewChat={(areaId) => void startChat(areaId)}
+        onSearchChats={() => dispatch({ type: "palette", open: true })}
+        onMoveChat={(areaId, chat, toAreaId) =>
+          void (async () => {
+            const moved = await workAsync("move-chat", {
+              workAreaId: areaId,
+              chatId: chat,
+              toWorkAreaId: toAreaId,
+            });
+            if (!moved.ok) return setNote(moved.message);
+            const from = `${areaId}:${chat ?? "first"}`;
+            const to = `${toAreaId}:${moved.ref ?? "first"}`;
+            renameKey(from, to);
+            // An explicit move follows the chat to where it went.
+            if (
+              layout.route === "work" &&
+              layout.workAreaId === areaId &&
+              chatId === chat
+            )
+              openWork(toAreaId, undefined, null, moved.ref ?? null, {
+                resume: true,
+              });
+          })()
+        }
         island={
           <Island
             top={view.island.top}
@@ -787,6 +817,9 @@ export function App() {
             onOpen={(areaId, message) =>
               areaId ? openWork(areaId, message) : go("home")
             }
+            onContinue={(areaId, chat) =>
+              openWork(areaId, undefined, null, chat, { resume: true })
+            }
             onPortfolio={() => go("portfolio")}
             onPendingDone={(text) => {
               setPending(null);
@@ -801,8 +834,10 @@ export function App() {
             workspace={bridgeState.workspace}
             areaId={layout.workAreaId}
             chatId={chatId}
+            focus={focus}
             onChat={(next) => {
               setFirst(null);
+              setFocus(null);
               setChatId(next);
             }}
             onWork={(areaId, chat, message) =>

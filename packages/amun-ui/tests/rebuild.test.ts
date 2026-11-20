@@ -7,7 +7,8 @@ import type { WorkSnapshot } from "../../../packages/contracts/src/work.ts";
 import { agentCatalog } from "../../../packages/domain/src/work/agents.ts";
 import { leaksRuntimeVocabulary } from "../../../packages/domain/src/work/shell.ts";
 import { CodeChangeCards } from "../src/rebuild/code-change-cards.tsx";
-import { Island, Sidebar } from "../src/rebuild/chrome.tsx";
+import { Island } from "../src/rebuild/chrome.tsx";
+import { Sidebar } from "../src/rebuild/sidebar.tsx";
 import { BlockerRow } from "../src/rebuild/blocker-row.tsx";
 import { VersionHistory } from "../src/rebuild/document-versions.tsx";
 import { Home, IntakeCard } from "../src/rebuild/home.tsx";
@@ -362,6 +363,8 @@ describe("shell chrome", () => {
         open: null,
         onChat: noop,
         onNewChat: noop,
+        onSearchChats: noop,
+        onMoveChat: noop,
       }),
     );
     expect(
@@ -395,10 +398,37 @@ describe("shell chrome", () => {
         open: null,
         onChat: noop,
         onNewChat: noop,
+        onSearchChats: noop,
+        onMoveChat: noop,
       }),
     );
     expect(html).toContain('aria-label="Sprints"');
     expect(html).toContain('aria-label="Expand sidebar"');
+  });
+  it("offers New chat, Search chats and the three views in fixed order", () => {
+    const html = renderToStaticMarkup(
+      createElement(Sidebar, {
+        route: "home",
+        collapsed: false,
+        onRoute: noop,
+        onSearch: noop,
+        onToggle: noop,
+        island: null,
+        snapshot: snapshot() as never,
+        open: null,
+        onChat: noop,
+        onNewChat: noop,
+        onSearchChats: noop,
+        onMoveChat: noop,
+      }),
+    );
+    expect(html).toContain("New chat");
+    expect(html).toContain('aria-label="Search chats"');
+    expect(
+      [...html.matchAll(/role="tab"[^>]*aria-label="([^"]+)"/g)].map(
+        (match) => match[1],
+      ),
+    ).toEqual(["Recent", "Folders", "General"]);
   });
   it("shows the Island's single most urgent item with its key button and count", () => {
     const view = homeModel(active(), now);

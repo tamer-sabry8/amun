@@ -152,6 +152,10 @@ export const workSnapshot = z.strictObject({
       firstChat: z.strictObject({
         title: z.string().nullable(),
         archivedAt: stamp.nullable(),
+        /** Place among the chats pinned to Recent; null when not pinned. */
+        pinOrder: z.number().nullable().optional(),
+        /** Who named it: "owner" (a rename), "firstmate" or "" (first words). */
+        titleBy: z.string().optional(),
       }),
     }),
   ),
@@ -507,6 +511,8 @@ export const workSnapshot = z.strictObject({
       /** The model that wrote a Firstmate reply; empty on older messages. */
       model: z.string().max(200).nullable().optional(),
       createdAt: stamp,
+      /** When the owner saw it; null is an unread reply. */
+      readAt: stamp.nullable().optional(),
     }),
   ),
   /**
@@ -527,6 +533,10 @@ export const workSnapshot = z.strictObject({
         /** The chat it came from; null is the main chat. */
         fromChatId: id.nullable(),
         createdAt: stamp,
+        /** Place among the chats pinned to Recent; null when not pinned. */
+        pinOrder: z.number().nullable().optional(),
+        /** Who named it: "owner" (a rename), "firstmate" or "" (first words). */
+        titleBy: z.string().optional(),
         messages: z.array(
           z.strictObject({
             id,
@@ -536,6 +546,7 @@ export const workSnapshot = z.strictObject({
             card: z.json().nullable(),
             model: z.string().max(200).nullable().optional(),
             createdAt: stamp,
+            readAt: stamp.nullable().optional(),
           }),
         ),
       }),
@@ -957,6 +968,20 @@ export const workCommand = z.discriminatedUnion("action", [
     chatId: id.nullable(),
     fromMessageId: id.optional(),
     toWorkAreaId: id,
+  }),
+  /** Pin a chat to Recent at `order`, or unpin it (null). */
+  act("pin-chat", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    order: z.number().nullable(),
+  }),
+  /** The owner has seen these replies. */
+  act("read-messages", { messageIds: z.array(id).min(1).max(500) }),
+  /** Firstmate's short topic title; never replaces the owner's own name. */
+  act("suggest-chat-title", {
+    workAreaId: id,
+    chatId: id.nullable(),
+    title: name,
   }),
   /** "Keep it here": this name belongs inside this work; do not ask again. */
   act("keep-here", { workAreaId: id, name }),

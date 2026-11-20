@@ -145,6 +145,106 @@ for (const rfp of rfps) {
   if (rfp.summary) must("add-rfp-summary", { areaId: id, text: rfp.summary });
 }
 
+// ── Sample chats: folders with several chats, and chats with no folder ──
+const say = (
+  workAreaId: string,
+  chatId: string | null,
+  role: "you" | "firstmate",
+  text: string,
+  unread = false,
+) => {
+  const id = must("message", { workAreaId, chatId, role, text });
+  if (role === "firstmate" && !unread)
+    must("read-messages", { messageIds: [id] });
+  return id;
+};
+const gitex = must("create-area", {
+  groupId: group,
+  type: "project",
+  name: "Gitex",
+  client: "Events",
+  dueAt: day(16),
+});
+say(
+  gitex,
+  null,
+  "you",
+  "Research the Gitex opportunity, then write the product vision and PRD.",
+);
+say(
+  gitex,
+  null,
+  "firstmate",
+  "On it. Researcher is gathering evidence first; the PRD follows once the report is in.",
+);
+for (const [title, ask, answer] of [
+  [
+    "Budget notes",
+    "What budget do we have left for the Gitex stand?",
+    "About AED 180,000 remains after the venue deposit.",
+  ],
+  [
+    "Venue booking",
+    "Has the venue confirmed hall 4?",
+    "Not yet. The venue promised an answer by Thursday.",
+  ],
+  [
+    "Demo script for the Amun booth and the investor walkthrough",
+    "Draft a five-minute demo script for the booth.",
+    "Here is a first draft with three beats.",
+  ],
+] as const) {
+  const chat = must("new-chat", { workAreaId: gitex });
+  say(gitex, chat, "you", ask);
+  say(gitex, chat, "firstmate", answer, title === "Budget notes");
+  must("rename-chat", { workAreaId: gitex, chatId: chat, title });
+  if (title === "Venue booking")
+    must("pin-chat", { workAreaId: gitex, chatId: chat, order: 1 });
+}
+for (let n = 1; n <= 20; n++) {
+  const chat = must("new-chat", { workAreaId: gitex });
+  say(
+    gitex,
+    chat,
+    "you",
+    `Gitex sample question ${n}: booth logistics item ${n}`,
+  );
+}
+const amun = must("create-area", {
+  groupId: group,
+  type: "product",
+  name: "Amun",
+  client: "Internal",
+});
+say(amun, null, "you", "Summarise what shipped in Amun this week.");
+say(
+  amun,
+  null,
+  "firstmate",
+  "Portfolio cards, the RFPs page and card panels shipped.",
+);
+const general = must("create-area", {
+  groupId: group,
+  type: "task",
+  name: "Chat with Firstmate",
+});
+say(general, null, "you", "What changed since yesterday?");
+say(general, null, "firstmate", "Two RFPs moved and one reminder is due.");
+for (const [ask, answer] of [
+  [
+    "Draft a stakeholder update for Friday",
+    "Here is a short update for Friday.",
+  ],
+  [
+    "Which of my RFPs are at risk?",
+    "Arabic citizen chatbot is due in five days.",
+  ],
+] as const) {
+  const chat = must("new-chat", { workAreaId: general });
+  say(general, chat, "you", ask);
+  say(general, chat, "firstmate", answer);
+}
+
 // ── The daemon's answers ──
 const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
   "spaces.list": () => [{ slug: "home", name: "Firstmate home" }],
@@ -180,7 +280,9 @@ const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
   "workspace.command": () => null,
 };
 
-const sockets = new WebSocketServer({ port: 6790, host: "127.0.0.1" });
+const wsPort = Number(process.env.PREVIEW_WS_PORT ?? 6790);
+const httpPort = Number(process.env.PREVIEW_HTTP_PORT ?? 6791);
+const sockets = new WebSocketServer({ port: wsPort, host: "127.0.0.1" });
 sockets.on("connection", (socket) => {
   socket.on("message", (raw) => {
     const { id, method, ...params } = JSON.parse(String(raw)) as {
@@ -239,8 +341,8 @@ createServer((request, response) => {
     "content-type": types[extname(file)] ?? "application/octet-stream",
   });
   createReadStream(file).pipe(response);
-}).listen(6791, "127.0.0.1", () =>
+}).listen(httpPort, "127.0.0.1", () =>
   console.log(
-    "Preview: http://127.0.0.1:6791/index.html?daemon=ws://127.0.0.1:6790/amun",
+    `Preview: http://127.0.0.1:${httpPort}/index.html?daemon=ws://127.0.0.1:${wsPort}/amun`,
   ),
 );

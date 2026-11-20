@@ -4077,3 +4077,426 @@
     align-items: flex-start;
   }
 }
+
+/* ── Chats: New chat and Search chats, three views, folder panel (owner's
+   chat handoff, approved 20 November 2026) ── */
+.rb-newrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+.rb-newrow .new {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 8px;
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.rb-newrow .new:hover,
+.rb-newrow .dots:hover {
+  background: var(--hover);
+}
+.rb-newrow .dots {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  color: var(--muted);
+  border-radius: 7px;
+}
+.rb.collapsed :where(.rb-newrow, .rb-switch) {
+  display: none;
+}
+.rb-folders {
+  margin-top: 8px;
+}
+.rb-folders .chat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-folders .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-folders .folder .title {
+  flex: 0 1 auto;
+}
+.rb-folders .chatline.unread .title {
+  color: var(--ink);
+  font-weight: 650;
+}
+.rb-folders .chatline.current {
+  background: var(--selected);
+}
+.rb-folders .chatline.current .chat {
+  color: var(--ink);
+}
+.rb-folders .chatline .dots {
+  display: none;
+}
+.rb-folders .chatline:hover .dots,
+.rb-folders .chatline:focus-within .dots,
+.rb-folders .chatline .dots[aria-expanded="true"] {
+  display: flex;
+  opacity: 1;
+}
+.rb-folders .where {
+  flex: none;
+  width: auto;
+  max-width: 82px;
+  padding: 1px 6px;
+  margin-right: 4px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.rb-folders .where:hover {
+  color: var(--ink);
+  background: var(--press);
+}
+.rb-folders .chatline:hover .where,
+.rb-folders .chatline:focus-within .where {
+  display: none;
+}
+.rb-folders .pinmark {
+  flex: none;
+  color: var(--muted);
+}
+.rb-folders .draftmark {
+  flex: none;
+  color: var(--accent);
+}
+.rb-folders .unreadmark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.rb-folders .folderline .dots {
+  display: none;
+}
+.rb-folders .folderline:hover .dots,
+.rb-folders .folderline:focus-within .dots,
+.rb-folders .folderline.hov .dots,
+.rb-folders .folderline .dots[aria-expanded="true"] {
+  display: flex;
+  opacity: 1;
+}
+.rb-folders .folderline.hov {
+  background: var(--hover);
+}
+.rb-folders .pinrule {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--line);
+}
+.rb-side-empty {
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.rb-writing {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+.rb-writing i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: rb-writing 1.2s infinite ease-in-out;
+}
+.rb-writing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.rb-writing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes rb-writing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-writing i {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+/* A folder's chats, beside the sidebar while it is pointed at. */
+.rb-folder-panel {
+  position: fixed;
+  z-index: 55;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--float);
+  -webkit-app-region: no-drag;
+}
+.rb-folder-panel .head {
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-folder-panel .scroll {
+  min-height: 0;
+  overflow: auto;
+}
+.rb-folder-panel button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+}
+.rb-folder-panel button:hover,
+.rb-folder-panel button:focus-visible {
+  background: var(--hover);
+}
+.rb-folder-panel button.current {
+  background: var(--selected);
+}
+.rb-folder-panel button.unread .title {
+  font-weight: 650;
+}
+.rb-folder-panel .newc {
+  color: var(--muted);
+}
+.rb-folder-panel .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-folder-panel .age {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+/* Recent, Folders, General: three dots and the name of the one shown. */
+.rb-switch {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+.rb-switch .dot {
+  position: relative;
+  width: 18px;
+  height: 22px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 6px;
+}
+.rb-switch .dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+.rb-switch .dot[aria-selected="true"]::before {
+  background: var(--ink);
+}
+.rb-switch .dot:hover::before {
+  background: color-mix(in srgb, var(--ink) 65%, transparent);
+}
+.rb-switch .tip {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  translate: -50% 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--float);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+.rb-switch .name {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Home: back to the last chat. */
+.rb-continue {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+}
+.rb-continue:hover {
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+}
+.rb-continue .label {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rb-continue .what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-continue .go {
+  flex: none;
+  color: var(--accent);
+  font-size: 13px;
+}
+/* Reading a chat. */
+.rb-new-replies {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rb-new-replies::before,
+.rb-new-replies::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.rb-new-below {
+  position: sticky;
+  bottom: 12px;
+  justify-self: center;
+  z-index: 2;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--float);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.rb-reading-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 24px 0;
+  font-size: 12.5px;
+}
+.rb-turn.flash .rb-msg {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 10px;
+  transition: background 600ms var(--ease);
+}
+/* A card the owner is asking about, above the text. */
+.rb-ask-card {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 2px 0 6px;
+}
+.rb-msg .rb-ask-card {
+  display: flex;
+  margin: 8px 0 0;
+}
+.rb-ask-card .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rb-ask-card .chip span {
+  color: var(--muted);
+}
+.rb-ask-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: 340px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--float);
+  font-size: 13px;
+  white-space: normal;
+}
+.rb-msg .rb-ask-pop {
+  bottom: auto;
+  top: calc(100% + 6px);
+  left: auto;
+  right: 0;
+}
+.rb-ask-pop dl {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+.rb-ask-pop dl div {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 12px;
+}
+.rb-ask-pop dt {
+  color: var(--muted);
+}
+.rb-ask-pop dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.rb-ask-pop .note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -11,7 +11,19 @@ import {
   mentionsAzureDevOps,
   parseQuestion,
 } from "../../../../packages/domain/src/work/question-choices.ts";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { useReading, type ReadingFocus } from "./reading.ts";
+import { AskAttachment, askCardOf } from "./ask-card.tsx";
+import { chatKey } from "../../../../packages/domain/src/work/chat-lists.ts";
+import {
+  askDraftKey,
+  chatDraftKey,
+  folderDraftKey,
+  homeDraftKey,
+  setAsk,
+  setWriting,
+  useChatMemory,
+} from "./chat-memory.ts";
 import { previewResult, type WorkspaceSnapshot } from "@amun/contracts";
 import {
   failureOverflow,
@@ -40,7 +52,9 @@ import { previewSource } from "../../../../packages/domain/src/work/prototype-so
 import { browserBounds, coverSelector } from "./browser-bounds.ts";
 import { copyText } from "./clipboard.ts";
 import { useDismiss } from "./use-dismiss.ts";
-import { latestTurnStart, scrollTarget } from "./scroll-target.ts";
+import { latestTurnStart } from "./scroll-target.ts";
+
+const noMessages: never[] = [];
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { waitParts, waitReason } from "./held-wait.ts";
 import { Icon } from "../icons.tsx";
@@ -1274,6 +1288,8 @@ export function WorkSession({
   onExpand,
   onGroupNeeded,
   onSettings,
+  focus = null,
+  onBackToResults = null,
 }: {
   snapshot: Snapshot;
   workspace: WorkspaceSnapshot | null;
@@ -1296,6 +1312,10 @@ export function WorkSession({
   onExpand(): void;
   onGroupNeeded(): void;
   onSettings(): void;
+  /** Open at a passage (search, Open reply) or where reading stopped. */
+  focus?: ReadingFocus | null;
+  /** Back to the search results this chat was opened from. */
+  onBackToResults?: (() => void) | null;
 }) {
   const mainContext = workContext(snapshot, areaId, now);
   const chat = chatId
@@ -1315,6 +1335,8 @@ export function WorkSession({
   // A message that is waiting or out belongs to the chat it was typed in, so
   // another chat of the same work never picks it up or answers it.
   const threadKey = savedIn ? `${areaId}:${savedIn}` : areaId;
+  // The chat as the sidebar and Amun's memory of it know it.
+  const entryKey = chatKey(areaId, savedIn);
   const work = ((action: string, payload?: object) =>
     storeWork(
       action as never,
@@ -1379,7 +1401,7 @@ export function WorkSession({
   const grid = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const latestReply = useRef<HTMLDivElement>(null);
-  const shown = useRef<{ areaId: string; count: number } | null>(null);
+  const thread = useRef<HTMLDivElement>(null);
   const sentFirst = useRef<string | null>(null);
   /** The owner's latest words, so a brief can carry the length they asked for. */
   const lastRequest = useRef("");
@@ -1522,7 +1544,15 @@ export function WorkSession({
         text: proposed.item,
         card: { kind: "scope", item: proposed.item, brd: proposed.brd },
       });
-    else if (proposed.do === "rename")
+    else if (proposed.do === "title") {
+      // Only the first reply names a chat, and the owner's own name wins.
+      if (!context?.messages.some((message) => message.role === "firstmate"))
+        work("suggest-chat-title", {
+          workAreaId: areaId,
+          chatId: savedIn,
+          title: proposed.text,
+        });
+    } else if (proposed.do === "rename")
       // Done at once: it stays inside Amun and is undone by renaming again.
       work("update-area", { areaId, patch: { name: proposed.name } });
     else if (proposed.do === "client") {
@@ -1781,7 +1811,10 @@ export function WorkSession({
           state: "running",
         })
       ).ref;
+    // The chat's row shows that Firstmate is writing, only while it is.
+    setWriting(entryKey, true);
     const turn = await askFirstmate(scoped, image);
+    setWriting(entryKey, false);
     setBusy(false);
     inFlight.delete(threadKey);
     if (turn.ok) {
@@ -2020,7 +2053,23 @@ export function WorkSession({
     releaseMessage(threadKey);
     setWaiting(null);
     lastRequest.current = text;
-    await workAsync("message", { workAreaId: areaId, role: "you", text });
+    // A chat started from a card carries the card with its first message.
+    const asked = askCard;
+    await workAsync("message", {
+      workAreaId: areaId,
+      role: "you",
+      text,
+      ...(asked
+        ? {
+            card: {
+              kind: "ask-card",
+              label: asked.label,
+              fields: asked.fields,
+            },
+          }
+        : {}),
+    });
+    if (asked) setAsk(entryKey, null);
     // The owner's words are saved here now, so their question can be settled.
     decided?.();
     // A conversation that has not been told Amun's rules gets them with this
@@ -2086,9 +2135,12 @@ export function WorkSession({
               .filter((item) => item.chatId !== chat.id && !item.empty)
               .map((item) => item.title),
           ) + "\n";
+    const about = asked
+      ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
+      : "";
     const scoped = briefing
-      ? `${amunProtocol}\n\n${header}${which}${recap}${text}`
-      : `${header}${which}${text}`;
+      ? `${amunProtocol}\n\n${header}${which}${recap}${text}${about}`
+      : `${header}${which}${text}${about}`;
     const withFiles = files.length
       ? `${scoped}\n\n${attachmentBlock(files)}`
       : scoped;
@@ -2180,20 +2232,29 @@ export function WorkSession({
       void send(first);
     }
   }, [first, areaId, !!context]);
+  const memory = useChatMemory();
+  const askCard = memory.asks[entryKey] ?? null;
+  const isGeneral = context?.area.name === generalConversationName;
+  // Unsent words: a chat's own, or, before its first message, the folder's
+  // draft behind its +, Home's shared draft in General, or a card question's.
+  const draftKey = askCard
+    ? askDraftKey(entryKey)
+    : !context?.messages.length
+      ? isGeneral
+        ? homeDraftKey
+        : folderDraftKey(areaId)
+      : chatDraftKey(entryKey);
+  const reading = useReading({
+    chatKey: entryKey,
+    messages: context?.messages ?? noMessages,
+    thread,
+    focus,
+  });
+  // While waiting for Firstmate, the owner's own message stays in view.
   useEffect(() => {
-    if (!context) return;
-    const seen = shown.current;
-    shown.current = { areaId, count: context.messages.length };
-    const target = scrollTarget(
-      seen?.areaId === areaId ? seen.count : null,
-      context.messages,
-      busy,
-    );
-    if (target === "latest-reply" && latestReply.current)
-      latestReply.current.scrollIntoView({ block: "start" });
-    else if (target === "latest-reply" || target === "end")
-      end.current?.scrollIntoView({ block: "end" });
-  }, [areaId, !!context, context?.messages.length, busy]);
+    if (busy && thread.current && reading.following())
+      thread.current.scrollTop = thread.current.scrollHeight;
+  }, [busy]);
   useEffect(() => {
     work("touch-area", { areaId });
   }, [areaId]);
@@ -2597,7 +2658,21 @@ export function WorkSession({
             )}
           </div>
         )}
-        <div className="rb-thread">
+        {(onBackToResults || reading.missing) && (
+          <div className="rb-reading-bar">
+            {onBackToResults && (
+              <button className="link" onClick={onBackToResults}>
+                ← Back to results
+              </button>
+            )}
+            {reading.missing && (
+              <span className="muted small" role="status">
+                That passage could not be found in this chat any more.
+              </span>
+            )}
+          </div>
+        )}
+        <div className="rb-thread" ref={thread}>
           <div className="inner">
             <div className="msgs">
               {fork && (
@@ -2721,48 +2796,77 @@ export function WorkSession({
                     />
                   )
                 ) : (
-                  <div key={message.id} className={"rb-turn " + message.role}>
+                  <Fragment key={message.id}>
+                    {message.id === reading.divider && (
+                      <div className="rb-new-replies" role="separator">
+                        New replies
+                      </div>
+                    )}
                     <div
-                      ref={message.id === lastReplyId ? latestReply : undefined}
-                      className={"rb-msg " + message.role}
+                      className={
+                        "rb-turn " +
+                        message.role +
+                        (reading.flash === message.id ? " flash" : "")
+                      }
+                      data-mid={message.id}
+                      data-unread={
+                        message.role === "firstmate" && message.readAt === null
+                          ? "true"
+                          : undefined
+                      }
                     >
-                      {/* Firstmate is named where its turn begins, on the left;
+                      <div
+                        ref={
+                          message.id === lastReplyId ? latestReply : undefined
+                        }
+                        className={"rb-msg " + message.role}
+                      >
+                        {/* Firstmate is named where its turn begins, on the left;
                         the owner's own messages sit on the right. */}
-                      {message.role === "firstmate" &&
-                        context.messages[position - 1]?.role !==
-                          "firstmate" && (
-                          <span className="who">
-                            <FirstmateMark size={18} />
-                            Firstmate
-                            {modelDisplay(message.model ?? null) && (
-                              <span className="muted small">
-                                {"· "}
-                                {modelDisplay(message.model ?? null)}
-                              </span>
+                        {message.role === "firstmate" &&
+                          context.messages[position - 1]?.role !==
+                            "firstmate" && (
+                            <span className="who">
+                              <FirstmateMark size={18} />
+                              Firstmate
+                              {modelDisplay(message.model ?? null) && (
+                                <span className="muted small">
+                                  {"· "}
+                                  {modelDisplay(message.model ?? null)}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        {message.role === "firstmate" ? (
+                          <MarkdownMessage
+                            text={message.text}
+                            onLink={(url) => onPane({ kind: "browser", url })}
+                            citations={citations}
+                          />
+                        ) : (
+                          <>
+                            {message.text}
+                            {askCardOf(message.card) && (
+                              <AskAttachment
+                                card={askCardOf(message.card)!}
+                                sent
+                              />
                             )}
-                          </span>
+                          </>
                         )}
-                      {message.role === "firstmate" ? (
-                        <MarkdownMessage
-                          text={message.text}
-                          onLink={(url) => onPane({ kind: "browser", url })}
-                          citations={citations}
-                        />
-                      ) : (
-                        message.text
-                      )}
+                      </div>
+                      <MessageActions
+                        text={message.text}
+                        onFork={async () => {
+                          const made = await storeWorkAsync("fork-chat", {
+                            workAreaId: areaId,
+                            messageId: message.id,
+                          });
+                          if (made.ref) onChat(made.ref);
+                        }}
+                      />
                     </div>
-                    <MessageActions
-                      text={message.text}
-                      onFork={async () => {
-                        const made = await storeWorkAsync("fork-chat", {
-                          workAreaId: areaId,
-                          messageId: message.id,
-                        });
-                        if (made.ref) onChat(made.ref);
-                      }}
-                    />
-                  </div>
+                  </Fragment>
                 ),
               )}
               {fork && stopOffer && (
@@ -3105,13 +3209,20 @@ export function WorkSession({
                   </button>
                 </div>
               )}
+              {reading.newBelow && (
+                <button className="rb-new-below" onClick={reading.jumpDown}>
+                  New reply ↓
+                </button>
+              )}
               <div ref={end} />
             </div>
           </div>
         </div>
         <Composer
-          key={seed?.nonce ?? "composer"}
+          key={(seed?.nonce ?? "composer") + draftKey}
           initial={seed?.text ?? ""}
+          draftKey={draftKey}
+          above={askCard ? <AskAttachment card={askCard} /> : null}
           autoFocus
           skills
           onBoard={(url) => onPane({ kind: "browser", url })}

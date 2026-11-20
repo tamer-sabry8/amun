@@ -233,6 +233,12 @@ export class WorkStore {
       firstChat: {
         title: (row.first_chat_title as string | null) ?? null,
         archivedAt: (row.first_chat_archived_at as string | null) ?? null,
+        pinOrder:
+          row.first_chat_pin_order === null ||
+          row.first_chat_pin_order === undefined
+            ? null
+            : Number(row.first_chat_pin_order),
+        titleBy: String(row.first_chat_title_by ?? ""),
       },
     }));
   }
@@ -580,11 +586,13 @@ export class WorkStore {
         },
         messages: this.chatMessages(null),
         chats: this.all(
-          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.kind,c.archived_at AS archivedAt,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
+          "SELECT c.id,c.work_area_id AS workAreaId,c.title,c.kind,c.archived_at AS archivedAt,c.forked_from AS forkedFrom,c.from_chat_id AS fromChatId,c.created_at AS createdAt,c.pin_order AS pinOrder,c.title_by AS titleBy FROM work_chats c JOIN work_areas a ON a.id=c.work_area_id WHERE a.status<>'deleted' ORDER BY c.created_at,c.rowid",
         ).map((chat) => ({
           ...chat,
           // A chat the owner started has no fork point.
           forkedFrom: chat.forkedFrom ? String(chat.forkedFrom) : null,
+          pinOrder: chat.pinOrder === null ? null : Number(chat.pinOrder),
+          titleBy: String(chat.titleBy ?? ""),
           messages: this.chatMessages(String(chat.id)),
         })),
       }),
@@ -757,7 +765,7 @@ export class WorkStore {
   /** One chat's messages in order; null is every work's main chat. */
   private chatMessages(chatId: string | null) {
     return this.all(
-      `SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt FROM work_messages WHERE ${chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at,rowid`,
+      `SELECT id,work_area_id AS workAreaId,role,text,card_json,model,created_at AS createdAt,read_at AS readAt FROM work_messages WHERE ${chatId === null ? "chat_id IS NULL" : "chat_id=?"} ORDER BY created_at,rowid`,
       ...(chatId === null ? [] : [chatId]),
     ).map(({ card_json, ...row }) => ({
       ...row,
@@ -2321,7 +2329,7 @@ export class WorkStore {
           throw new WorkError("That chat no longer exists.");
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at,read_at) VALUES (?,?,?,?,?,?,?,?,?)",
           id,
           command.workAreaId,
           command.chatId,
@@ -2330,6 +2338,8 @@ export class WorkStore {
           command.card === null ? null : JSON.stringify(command.card),
           command.role === "firstmate" ? command.model : null,
           now,
+          // Only a reply from Firstmate waits to be read.
+          command.role === "firstmate" ? null : now,
         );
         this.run(
           "UPDATE work_areas SET last_context_at=? WHERE id=?",
@@ -2344,13 +2354,13 @@ export class WorkStore {
           const title = chatTitle(command.text);
           if (command.chatId === null)
             this.run(
-              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
+              "UPDATE work_areas SET first_chat_title=? WHERE id=? AND first_chat_title_by='' AND (first_chat_title IS NULL OR (first_chat_title GLOB '/[a-z]*' AND first_chat_title NOT LIKE '% %'))",
               title,
               command.workAreaId,
             );
           else
             this.run(
-              "UPDATE work_chats SET title=? WHERE id=? AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
+              "UPDATE work_chats SET title=? WHERE id=? AND title_by='' AND (title='' OR (title GLOB '/[a-z]*' AND title NOT LIKE '% %'))",
               title,
               command.chatId,
             );
@@ -2440,15 +2450,59 @@ export class WorkStore {
         const title = chatTitle(this.clean(command.title));
         if (command.chatId === null)
           this.run(
-            "UPDATE work_areas SET first_chat_title=? WHERE id=?",
+            "UPDATE work_areas SET first_chat_title=?,first_chat_title_by='owner' WHERE id=?",
             title,
             command.workAreaId,
           );
         else
           this.run(
-            "UPDATE work_chats SET title=? WHERE id=?",
+            "UPDATE work_chats SET title=?,title_by='owner' WHERE id=?",
             title,
             command.chatId,
+          );
+        return {};
+      }
+      case "suggest-chat-title": {
+        this.requireChat(command.workAreaId, command.chatId);
+        // The owner's own name always wins, even mid-reply.
+        const title = chatTitle(this.clean(command.title));
+        if (!title) return {};
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_title=?,first_chat_title_by='firstmate' WHERE id=? AND first_chat_title_by<>'owner'",
+            title,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET title=?,title_by='firstmate' WHERE id=? AND title_by<>'owner'",
+            title,
+            command.chatId,
+          );
+        return {};
+      }
+      case "pin-chat": {
+        this.requireChat(command.workAreaId, command.chatId);
+        if (command.chatId === null)
+          this.run(
+            "UPDATE work_areas SET first_chat_pin_order=? WHERE id=?",
+            command.order,
+            command.workAreaId,
+          );
+        else
+          this.run(
+            "UPDATE work_chats SET pin_order=? WHERE id=?",
+            command.order,
+            command.chatId,
+          );
+        return {};
+      }
+      case "read-messages": {
+        for (const id of command.messageIds)
+          this.run(
+            "UPDATE work_messages SET read_at=? WHERE id=? AND read_at IS NULL",
+            now,
+            id,
           );
         return {};
       }
@@ -2533,6 +2587,48 @@ export class WorkStore {
             target,
             row.id,
           );
+        // A whole chat keeps its pin and whoever named it; a part that splits
+        // off leaves the pin with the chat it came from (owner, 20 November 2026).
+        if (!command.fromMessageId) {
+          const source =
+            command.chatId === null
+              ? this.get(
+                  "SELECT first_chat_pin_order AS pin,first_chat_title_by AS by,first_chat_title AS title FROM work_areas WHERE id=?",
+                  command.workAreaId,
+                )
+              : this.get(
+                  "SELECT pin_order AS pin,title_by AS by,title FROM work_chats WHERE id=?",
+                  command.chatId,
+                );
+          const by = String(source?.by ?? "");
+          const keptTitle = by && source?.title ? String(source.title) : null;
+          if (target === null)
+            this.run(
+              "UPDATE work_areas SET first_chat_pin_order=?,first_chat_title_by=?,first_chat_title=coalesce(?,first_chat_title) WHERE id=?",
+              source?.pin ?? null,
+              by,
+              keptTitle,
+              command.toWorkAreaId,
+            );
+          else
+            this.run(
+              "UPDATE work_chats SET pin_order=?,title_by=?,title=coalesce(?,title) WHERE id=?",
+              source?.pin ?? null,
+              by,
+              keptTitle,
+              target,
+            );
+          if (command.chatId === null)
+            this.run(
+              "UPDATE work_areas SET first_chat_pin_order=NULL WHERE id=?",
+              command.workAreaId,
+            );
+          else
+            this.run(
+              "UPDATE work_chats SET pin_order=NULL WHERE id=?",
+              command.chatId,
+            );
+        }
         // The chat they left says where the conversation went.
         this.run(
           "INSERT INTO work_messages(id,work_area_id,chat_id,role,text,card_json,model,created_at) VALUES (?,?,?,'card',?,?,NULL,?)",

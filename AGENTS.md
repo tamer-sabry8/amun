@@ -123,3 +123,17 @@ Owner decisions, 20 November 2026 (they replace "Nothing starts one automaticall
 Owner instruction, 15 November 2026. Amun's Council follows upstream Roast Room (github.com/nateherkai/roast-room). The Chair reads the decision, asks for missing facts, recommends a council (recommended / default board / everyone / other) and the owner confirms before it runs. The seated advisors argue in rounds. The owner gets a scored verdict and a downloadable PDF. "Ask <seat>" gets one seat's answer. Board settings are ask/auto/default.
 
 - Do not change this flow or remove the Chair's confirmation step.
+
+## Chat workflow (20 November 2026 chat UX handoff)
+
+The owner's chat UX handoff is `AMUN-CHAT-UX-CLAUDE-HANDOFF.md` in the owner's Amun releases folder. The owner approved its review page, `docs/preview/2026-11-20-chat-ux/index.html` ("approved all", 20 November 2026).
+
+Request references (owner decision, 20 November 2026):
+
+- Every captain request gets a stable, unique Amun request reference. It goes in the Firstmate briefing and is carried through existing backlog links, handoffs and delivery replies.
+- The reference stays the same across retries, chat moves and request reassignments. Firstmate's code is unchanged.
+- A report with a missing or unknown reference stays visible through the existing Firstmate channel, and the request keeps its last confirmed status.
+- Never guess a match from wording or timing. Never mark a request Ready, and never link a deliverable to a project card, without a confirmed match.
+- Live acceptance: two requests in one chat that finish out of order. It passes only if each result links back to the exact message that requested it.
+
+Installed size (owner instruction, 20 November 2026): the installed Amun.app must stay at about 537.7 MB (537,733,552 bytes for 0.16.1, the size Finder shows). This is the installed app, not the DMG. Measure each new build the same way and report the difference.

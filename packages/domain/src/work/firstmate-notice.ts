@@ -152,6 +152,9 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   "new-chat": { local: chats },
   "rename-chat": { local: chats },
   "archive-chat": { local: chats },
+  "pin-chat": { local: chats },
+  "read-messages": { local: "Reading a reply is the owner's own bookkeeping." },
+  "suggest-chat-title": { own: "Firstmate suggested this title itself." },
   "move-chat": { local: chats },
   "keep-here": { local: chats },
 

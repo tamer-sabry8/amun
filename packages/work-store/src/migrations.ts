@@ -1170,4 +1170,15 @@ CREATE TABLE rfp_summaries (
   created_at TEXT NOT NULL
 );
 CREATE INDEX rfp_summaries_area ON rfp_summaries(work_area_id, created_at);`,
+  // 46 · Reading and pins (owner, 20 November 2026 chat handoff). A message
+  // Firstmate wrote is unread until the owner has seen it; every message
+  // already stored counts as read. A chat can be pinned to Recent in the
+  // owner's own order. A chat's name remembers who gave it: the owner's
+  // rename always wins over Firstmate's suggested title.
+  `ALTER TABLE work_messages ADD COLUMN read_at TEXT;
+UPDATE work_messages SET read_at=created_at;
+ALTER TABLE work_chats ADD COLUMN pin_order REAL;
+ALTER TABLE work_chats ADD COLUMN title_by TEXT NOT NULL DEFAULT '';
+ALTER TABLE work_areas ADD COLUMN first_chat_pin_order REAL;
+ALTER TABLE work_areas ADD COLUMN first_chat_title_by TEXT NOT NULL DEFAULT '';`,
 ] as const;
