@@ -1903,7 +1903,8 @@ export function WorkSession({
     // A request for new work that belongs in a folder of its own is not sent
     // from here: Amun files it, or holds it and asks on Firstmate's card. A
     // message the owner already chose to keep here is sent as typed.
-    if (!attachments.files.length && !takeAsTyped(typed)) {
+    const decided = attachments.files.length ? null : takeAsTyped(typed);
+    if (!attachments.files.length && !decided) {
       const here = context.area;
       const loose = here.name === generalConversationName;
       const routed = routeNewWork({
@@ -1961,6 +1962,7 @@ export function WorkSession({
     if (!attachments.files.length && reminderIntent(typed)) {
       const text = typed.trim();
       await workAsync("message", { workAreaId: areaId, role: "you", text });
+      decided?.();
       const result = await workAsync("reminder", { text, workAreaId: areaId });
       await workAsync("message", {
         workAreaId: areaId,
@@ -1981,6 +1983,7 @@ export function WorkSession({
         role: "you",
         text: typed.trim(),
       });
+      decided?.();
       if (retry.kind === "retry")
         bridge.send({
           version: 1,
@@ -2008,6 +2011,8 @@ export function WorkSession({
     setWaiting(null);
     lastRequest.current = text;
     await workAsync("message", { workAreaId: areaId, role: "you", text });
+    // The owner's words are saved here now, so their question can be settled.
+    decided?.();
     // A conversation that has not been told Amun's rules gets them with this
     // message: the first one for a work area, and the first after Firstmate's
     // conversation was started afresh.
@@ -2050,14 +2055,24 @@ export function WorkSession({
     );
     // In a fork, Firstmate is told which chat this is and what to set aside.
     // In a fork or a chat of its own, Firstmate is told which chat this is.
+    const siblings = chatsOf(context.area, snapshot.chats, snapshot.messages);
     const which = !chat
-      ? ""
+      ? // The first chat is named too once the folder has others, so
+        // "continue with that" is never read as another chat's.
+        siblings.some((item) => item.chatId !== null && !item.empty)
+        ? chatNote(
+            context.area.firstChat.title ??
+              text.replace(/\s+/g, " ").slice(0, 60),
+            true,
+            [],
+          ) + "\n"
+        : ""
       : chat.kind === "fork"
         ? forkNote(chat, context.messages) + "\n"
         : chatNote(
             chat.title || text.replace(/\s+/g, " ").slice(0, 60),
             context.messages.some((message) => message.role === "you"),
-            chatsOf(context.area, snapshot.chats, snapshot.messages)
+            siblings
               .filter((item) => item.chatId !== chat.id && !item.empty)
               .map((item) => item.title),
           ) + "\n";

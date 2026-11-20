@@ -404,16 +404,17 @@ export function App() {
         workAreaId: offer.workAreaId,
         name: offer.request.name,
       });
-      await workAsync("settle-card", {
-        messageId: cardId,
-        card: { ...offer, state: "kept" } as never,
-      });
-      await done();
-      if (offer.held !== null) {
-        sendAsTyped(offer.held);
-        openWork(offer.workAreaId, offer.held, null, offer.chatId);
-      }
-      return;
+      const settle = async () => {
+        await workAsync("settle-card", {
+          messageId: cardId,
+          card: { ...offer, state: "kept" } as never,
+        });
+        await done();
+      };
+      if (offer.held === null) return void settle();
+      // The question stays open until the message is saved in this chat.
+      sendAsTyped(offer.held, () => void settle());
+      return openWork(offer.workAreaId, offer.held, null, offer.chatId);
     }
     const source = snapshot.areas.find((area) => area.id === offer.workAreaId);
     let targetId = choice === "existing" ? offer.existingAreaId : null;
@@ -464,16 +465,18 @@ export function App() {
     const chat = used
       ? (await workAsync("new-chat", { workAreaId: targetId })).ref
       : null;
-    await workAsync("settle-card", {
-      messageId: cardId,
-      card: {
-        ...offer,
-        state: "moved",
-        to: { workAreaId: targetId, chatId: chat, name },
-      } as never,
+    // The question stays open, with the owner's words on its card, until the
+    // message is saved in the folder it moved to.
+    const to = { workAreaId: targetId, chatId: chat, name };
+    sendAsTyped(offer.held, () => {
+      void (async () => {
+        await workAsync("settle-card", {
+          messageId: cardId,
+          card: { ...offer, state: "moved", to } as never,
+        });
+        await done();
+      })();
     });
-    await done();
-    sendAsTyped(offer.held);
     openWork(targetId, offer.held, null, chat);
   };
   const submit = async (text: string, files: string[], groupId?: string) => {

@@ -340,6 +340,9 @@ export function statedPriority(text: string): WorkPriority | null {
 const monthWord =
   "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 
+const deadlineLead =
+  "\\b(?:(?:due|deadline|ready|done|finished|completed?|delivered?|live|launch(?:ed)?|ship(?:ped)?)(?:\\s+date)?\\s*(?:is|:|on|by|before)?|by|before|until|no\\s+later\\s+than)\\s*(?:the\\s+)?";
+
 /**
  * The calendar day a message names as its deadline ("ready on Dec 6",
  * "by 6 December 2026", "due 2026-12-06"), as YYYY-MM-DD. A day with no year
@@ -358,14 +361,19 @@ export function statedDueDate(text: string, today: string): string | null {
       return null;
     return made.toISOString().slice(0, 10);
   };
-  const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(text);
+  // Only a day the message ties to finishing counts ("due", "ready on",
+  // "by", "before"). A start or kickoff day is not a deadline.
+  const iso = new RegExp(
+    `${deadlineLead}(\\d{4})-(\\d{2})-(\\d{2})\\b`,
+    "i",
+  ).exec(text);
   if (iso) return day(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
   const monthFirst = new RegExp(
-    `\\b${monthWord}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4})\\b)?`,
+    `${deadlineLead}${monthWord}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4})\\b)?`,
     "i",
   ).exec(text);
   const dayFirst = new RegExp(
-    `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${monthWord}\\b\\.?(?:,?\\s+(\\d{4})\\b)?`,
+    `${deadlineLead}(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${monthWord}\\b\\.?(?:,?\\s+(\\d{4})\\b)?`,
     "i",
   ).exec(text);
   const parts = monthFirst

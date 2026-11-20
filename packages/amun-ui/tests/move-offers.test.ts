@@ -89,10 +89,17 @@ describe("asking where a message goes", () => {
     expect(anotherName("Gitex", ["Gitex", "gitex 2"])).toBe("Gitex 3");
   });
 
-  it("sends a kept message as typed exactly once", () => {
-    sendAsTyped(" Create a new product called Amun-SDK ");
-    expect(takeAsTyped("Create a new product called Amun-SDK")).toBe(true);
-    expect(takeAsTyped("Create a new product called Amun-SDK")).toBe(false);
+  it("sends a decided message as typed exactly once, settling after it is saved", () => {
+    let settled = 0;
+    sendAsTyped(" Create a new product called Amun-SDK ", () => {
+      settled += 1;
+    });
+    const onSaved = takeAsTyped("Create a new product called Amun-SDK");
+    // Nothing is settled until the caller has saved the message.
+    expect(settled).toBe(0);
+    onSaved!();
+    expect(settled).toBe(1);
+    expect(takeAsTyped("Create a new product called Amun-SDK")).toBeNull();
   });
 
   it("is asked on Firstmate's card even while its own chat is open", () => {

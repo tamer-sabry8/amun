@@ -169,8 +169,17 @@ export function anotherName(name: string, taken: readonly string[]): string {
   }
 }
 
-// A message the owner chose to keep where it was typed is sent as it is, once,
-// without being asked about again.
-const decided = new Set<string>();
-export const sendAsTyped = (text: string) => void decided.add(text.trim());
-export const takeAsTyped = (text: string) => decided.delete(text.trim());
+// A message the owner has decided about is sent as it is, once, without being
+// asked about again. What settles its question runs only after the message is
+// saved in the chat it goes to: if Amun closes before that, the question is
+// still open and the owner's words are still on its card.
+const decided = new Map<string, () => void>();
+export const sendAsTyped = (text: string, onSaved: () => void = () => {}) =>
+  void decided.set(text.trim(), onSaved);
+/** Null when the message was not decided about; otherwise what to run once it is saved. */
+export function takeAsTyped(text: string): (() => void) | null {
+  const key = text.trim();
+  const onSaved = decided.get(key) ?? null;
+  decided.delete(key);
+  return onSaved;
+}

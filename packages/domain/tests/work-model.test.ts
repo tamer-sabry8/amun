@@ -973,6 +973,14 @@ describe("grouping chats by Amun's own rules (owner, 20 November 2026)", () => {
     expect(statedDueDate("on Feb 30", today)).toBeNull();
     expect(statedDueDate("as soon as possible", today)).toBeNull();
     expect(statedDueDate("in May we may start", today)).toBeNull();
+    // A start or kickoff day is not a deadline (review of pull request 44).
+    expect(statedDueDate("It starts on Dec 6 and is due Dec 20", today)).toBe(
+      "2026-12-20",
+    );
+    expect(statedDueDate("Kickoff is on Dec 6", today)).toBeNull();
+    expect(statedDueDate("It starts 2026-12-06", today)).toBeNull();
+    expect(statedDueDate("deadline: 20 December", today)).toBe("2026-12-20");
+    expect(statedDueDate("no later than Dec 20", today)).toBe("2026-12-20");
   });
 
   it("treats spelling variants as the same folder", () => {
