@@ -31,7 +31,10 @@ export function DeliveredReply({
   request,
   onOpen,
   onRequest,
+  named = true,
 }: {
+  /** False when Firstmate's reply right above already carries its name. */
+  named?: boolean;
   card: DeliveredCard;
   /** False when the document is no longer in the Library. */
   available: boolean;
@@ -43,10 +46,12 @@ export function DeliveredReply({
   return (
     <div className="rb-turn firstmate">
       <div className="rb-msg firstmate rb-delivered">
-        <span className="who">
-          <FirstmateMark size={18} />
-          Firstmate
-        </span>
+        {named && (
+          <span className="who">
+            <FirstmateMark size={18} />
+            Firstmate
+          </span>
+        )}
         <button
           className="doc"
           onClick={onOpen}
@@ -54,7 +59,7 @@ export function DeliveredReply({
           title={available ? `Open ${card.title}, version ${card.version}` : ""}
         >
           <span className="ic" aria-hidden="true">
-            <Icon name="artifacts" width={18} height={18} />
+            <Icon name="prd" width={18} height={18} />
           </span>
           <span className="what">
             <strong>{card.title}</strong>

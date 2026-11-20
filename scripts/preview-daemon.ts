@@ -12,6 +12,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { openWorkStore } from "../packages/work-store/src/index.ts";
+import { recordFirstMateReply } from "../packages/work-store/src/first-mate-thread.ts";
 
 const build = fileURLToPath(
   new URL("../packages/amun-ui/build/", import.meta.url),
@@ -268,7 +269,50 @@ const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
     reason: null,
   }),
   "primary.start": () => ({ agentId: "preview" }),
-  "primary.send": () => ({ reply: "Noted." }),
+  // A stand-in for Firstmate's request reports, for looking at the screens
+  // only: a request is reported as being worked on, and its document arrives
+  // later in a reply nobody asked for. A message that mentions a PRD takes
+  // longer, so two requests in one chat finish out of order.
+  "primary.send": (params) => {
+    const text = String(params.text ?? "");
+    const ref = /\[Amun request (amun-r-[0-9a-f]{12})\]/.exec(text)?.[1];
+    if (!ref) return { reply: "Noted." };
+    const ask = text.slice(text.indexOf(ref) + ref.length + 2).split("\n")[0]!;
+    const prd = /\bprd\b/i.test(ask);
+    const role = prd ? "Product Manager" : "Product Marketing";
+    const block = (value: object) =>
+      "```amun\n" + JSON.stringify(value) + "\n```";
+    setTimeout(
+      () => {
+        recordFirstMateReply(
+          work,
+          `${prd ? "The PRD" : "The draft"} is ready.\n` +
+            block({
+              do: "document",
+              title: prd ? "Gitex PRD" : "Launch email",
+              type: prd ? "prd" : "doc",
+              body: `# ${prd ? "Gitex PRD" : "Launch email"}\n\nA sample document.`,
+              request: ref,
+            }) +
+            block({ do: "report", request: ref, status: "delivered", role, text: "done" }),
+        );
+        for (const client of sockets.clients)
+          client.send(JSON.stringify({ event: "work.updated" }));
+      },
+      prd ? 12_000 : 5_000,
+    );
+    return {
+      reply:
+        `On it. ${role} has it.\n` +
+        block({
+          do: "report",
+          request: ref,
+          status: "working",
+          role,
+          text: prd ? "drafting the PRD" : "drafting the email",
+        }),
+    };
+  },
   "primary.once": () => ({ asked: true }),
   "notion.request": () => [],
   "tools.request": () => [],

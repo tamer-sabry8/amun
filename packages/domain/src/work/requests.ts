@@ -38,7 +38,7 @@ export const requestLine = (ref: string) => `[Amun request ${ref}]`;
 
 /** What Firstmate is told, once per conversation, with Amun's rules. */
 export const requestProtocol = [
-  "Each message from the owner starts with a line like [Amun request amun-r-0123456789ab]. That is the request's reference. Keep it with the request for its whole life:",
+  "Each message from the owner starts with a line [Amun request …], where … is the request's reference (amun-r- and twelve letters and digits). Keep it with the request for its whole life:",
   "- When you file or update a backlog item for it, add amun-request:<reference> to the item's links.",
   "- Put the reference in every brief you hand to a crewmate or second mate for it, and ask them to keep it in their report back to you.",
   '- When you report on it, now or in a later turn, add {"do":"report","request":"<reference>","status":"queued|waiting|working|needs-decision|failed|delivered","role":"who has it, e.g. Researcher","text":"a few plain words, e.g. gathering evidence","parts":2}; "parts" is how many documents the request will deliver, when you know. Use queued only when the work waits for a crewmate who is busy, and waiting when it waits for another result.',

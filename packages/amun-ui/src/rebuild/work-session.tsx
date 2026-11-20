@@ -2850,6 +2850,9 @@ export function WorkSession({
                     className={reading.flash === message.id ? "flash" : ""}
                   >
                     <DeliveredReply
+                      named={
+                        context.messages[position - 1]?.role !== "firstmate"
+                      }
                       card={deliveredOf(message.card)!}
                       available={snapshot.library.some(
                         (item) =>

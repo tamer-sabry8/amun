@@ -143,3 +143,61 @@ describe("pin order", () => {
     expect(pinOrderAt(pins, 3)).toBe(5);
   });
 });
+
+import {
+  newRequestRef,
+  readRequestBlocks,
+  requestProtocol,
+  requestRefPattern,
+  requestStatusLine,
+} from "../src/work/requests.ts";
+
+describe("request references", () => {
+  it("are unique, well formed and never appear in the briefing itself", () => {
+    const ref = newRequestRef();
+    expect(ref).toMatch(/^amun-r-[0-9a-f]{12}$/);
+    expect(newRequestRef()).not.toBe(ref);
+    // An example in the briefing must never be mistaken for a real one.
+    expect(requestProtocol.match(requestRefPattern)).toBeNull();
+  });
+  it("reads reports and documents and hides the blocks", () => {
+    const read = readRequestBlocks(
+      'Working on it.\n```amun\n{"do":"report","request":"amun-r-aaaaaaaaaaaa","status":"working","role":"Researcher","text":"gathering evidence","parts":2}\n```\n```amun\nnot json\n```',
+    );
+    expect(read.visible).toBe("Working on it.");
+    expect(read.reports).toEqual([
+      {
+        request: "amun-r-aaaaaaaaaaaa",
+        status: "working",
+        role: "Researcher",
+        text: "gathering evidence",
+        parts: 2,
+      },
+    ]);
+  });
+  it("words the status from what was reported", () => {
+    const line = (status: never, role = "", detail = "") =>
+      requestStatusLine({ status, role, detail });
+    expect(line("working" as never, "Researcher", "gathering evidence")).toBe(
+      "Researcher is gathering evidence",
+    );
+    expect(line("queued" as never, "Product Manager")).toBe(
+      "Queued for Product Manager",
+    );
+    expect(line("waiting" as never, "", "the research report")).toBe(
+      "Waiting for the research report",
+    );
+    expect(line("delivered" as never)).toBe("Ready · View reply");
+    expect(
+      requestStatusLine(
+        {
+          status: "working",
+          role: "Product Manager",
+          detail: "drafting the PRD",
+        },
+        1,
+        2,
+      ),
+    ).toBe("1 of 2 ready · Product Manager is drafting the PRD");
+  });
+});

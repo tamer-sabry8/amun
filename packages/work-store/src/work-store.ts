@@ -2788,10 +2788,29 @@ export class WorkStore {
             accepted: move.accepted,
           } as never);
         }
-        const linked = new Set<string>();
+        // Firstmate's words first, then what it delivered.
+        if (command.saveText && visible) {
+          const places = new Set(
+            [
+              ...reports.map((report) => report.request),
+              ...documents.flatMap((document) =>
+                document.request ? [document.request] : [],
+              ),
+            ].flatMap((ref) => {
+              const known = request(ref);
+              return known ? [`${known.areaId}:${known.chatId ?? ""}`] : [];
+            }),
+          );
+          const only = places.size === 1 ? [...places][0]! : null;
+          const [areaId, chatId] = only ? only.split(":") : [];
+          say(
+            only ? { areaId: areaId!, chatId: chatId || null } : here,
+            "firstmate",
+            visible,
+          );
+        }
         for (const document of documents) {
           const known = request(document.request);
-          if (known) linked.add(`${known.areaId}:${known.chatId ?? ""}`);
           // A matched result lands with its request; anything else where the
           // reply arrived, as before.
           const at = known ?? here;
@@ -2834,22 +2853,6 @@ export class WorkStore {
             version,
             request: known ? known.ref : null,
           });
-        }
-        if (command.saveText && visible) {
-          const places = new Set([
-            ...linked,
-            ...reports.flatMap((report) => {
-              const known = request(report.request);
-              return known ? [`${known.areaId}:${known.chatId ?? ""}`] : [];
-            }),
-          ]);
-          const only = places.size === 1 ? [...places][0]! : null;
-          const [areaId, chatId] = only ? only.split(":") : [];
-          say(
-            only ? { areaId: areaId!, chatId: chatId || null } : here,
-            "firstmate",
-            visible,
-          );
         }
         return {};
       }

@@ -82,7 +82,9 @@ export function Sidebar({
   );
   const openKey = open ? `${open.areaId}:${open.chatId ?? "first"}` : null;
   // The open chat stays under its folder for the rest of this visit.
-  if (open && openKey && lists.byKey.get(openKey)?.folder)
+  // A chat gets its row once something is sent in it.
+  const openEntry = openKey ? lists.byKey.get(openKey) : undefined;
+  if (open && openKey && openEntry?.folder && !openEntry.empty)
     visited.set(open.areaId, openKey);
   // Folders listed in full by a click on their name.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -499,7 +501,10 @@ export function Sidebar({
     const childEntry = child ? lists.byKey.get(child) : undefined;
     const listed = full
       ? [...item.chats, ...(archivedShown[item.areaId] ? item.archived : [])]
-      : childEntry && !childEntry.archived && childEntry.areaId === item.areaId
+      : childEntry &&
+          !childEntry.archived &&
+          !childEntry.empty &&
+          childEntry.areaId === item.areaId
         ? [childEntry]
         : [];
     const draft = !!memory.drafts[folderDraftKey(item.areaId)];

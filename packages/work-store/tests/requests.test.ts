@@ -129,10 +129,10 @@ describe("request references", () => {
     expect(chatMessages.map((message) => message.text)).toEqual([
       "Write the Gitex PRD.",
       "Draft the launch email.",
-      "Launch email",
       "The launch email is ready.",
-      "Gitex PRD",
+      "Launch email",
       "The PRD is ready.",
+      "Gitex PRD",
     ]);
     const requests = snap().requests;
     expect(requests.find((item) => item.ref === prd)).toMatchObject({
