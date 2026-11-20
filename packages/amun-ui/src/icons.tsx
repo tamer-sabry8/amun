@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   skills: "m12 2 3 6 7 1-5 5 1 8-6-4-6 4 1-8-5-5 7-1z",
   chevron: "m8 4 8 8-8 8",
   close: "m6 6 12 12 M18 6 6 18",
+  arrowRight: "M5 12h14 M13 6l6 6-6 6",
   send: "m3 3 18 9-18 9 4-9z M7 12h14",
   focus: "M8 3H3v5 M16 3h5v5 M21 16v5h-5 M8 21H3v-5 M9 9h6v6H9z",
   pin: "m9 3 6 0-1 6 4 4H6l4-4z M12 13v9",

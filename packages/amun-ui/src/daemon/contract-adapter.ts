@@ -160,6 +160,37 @@ export function describeAdo(view: DaemonConnection): string {
     : `Connected to Azure DevOps${who}, but the token can't see any projects yet.`;
 }
 
+/**
+ * The day a hold was put off to, when it was. Firstmate keeps a deferred
+ * hold in its lists: a task records the day, and a crew member's open
+ * question only says so in its words ("Deferred by the captain to
+ * 2026-11-23."). Either way the owner asked not to see it before then.
+ */
+export function heldUntil(hold: DaemonHold): string | null {
+  if (hold.source === "backlog" && hold.until) {
+    const day = /\d{4}-\d{2}-\d{2}/.exec(hold.until);
+    if (day) return day[0];
+  }
+  const words = hold.source === "backlog" ? hold.reason : hold.summary;
+  const said =
+    /\b(?:deferred|put off|postponed|snoozed)\b[^.]*?\b(?:to|until|till)\s+(\d{4}-\d{2}-\d{2})/i.exec(
+      words,
+    );
+  return said ? said[1]! : null;
+}
+
+/** Holds the owner should see today: not the ones put off to a later day. */
+export function holdsDue(
+  holds: readonly DaemonHold[],
+  now: string,
+): DaemonHold[] {
+  const today = now.slice(0, 10);
+  return holds.filter((hold) => {
+    const until = heldUntil(hold);
+    return !until || until <= today;
+  });
+}
+
 export function holdId(hold: DaemonHold): string {
   return hold.source === "crew"
     ? `hold:${hold.taskId}:${hold.key}`
@@ -542,7 +573,7 @@ export class ContractAdapter {
     ]);
     // Any product reaches the shared home; ask once.
     const via = spaces[0]?.slug;
-    const [snapshot, holds] = via
+    const [snapshot, everyHold] = via
       ? await Promise.all([
           this.daemon
             .request<{ tasks: DaemonFleetTask[] }>("fleet.snapshot", {
@@ -554,6 +585,8 @@ export class ContractAdapter {
             .catch(() => [] as DaemonHold[]),
         ])
       : [{ tasks: [] as DaemonFleetTask[] }, [] as DaemonHold[]];
+    // A reminder put off to a later day stays away until that day.
+    const holds = holdsDue(everyHold, this.now());
     this.view = {
       spaces,
       fleet: snapshot.tasks,

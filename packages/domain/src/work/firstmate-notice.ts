@@ -382,6 +382,26 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [c.areaId, look.at.ref],
     }),
   },
+  "update-rfp": {
+    tell: (c, look) => ({
+      what: `changed the RFP ${look.area(c.areaId)}: ${changes(c.patch)}`,
+      ids: [c.areaId],
+    }),
+  },
+  "hold-rfp": {
+    tell: (c, look) => ({
+      what: c.held
+        ? `put the RFP ${look.area(c.areaId)} on hold${c.reason ? `: ${said(c.reason)}` : ""}`
+        : `took the RFP ${look.area(c.areaId)} off hold`,
+      ids: [c.areaId],
+    }),
+  },
+  "add-rfp-summary": {
+    tell: (c, look) => ({
+      what: `wrote a summary on the RFP ${look.area(c.areaId)}: ${said(c.text)}`,
+      ids: [c.areaId],
+    }),
+  },
   "save-roadmap-item": {
     tell: (c, look) => ({
       what: `${c.itemId ? "changed" : "added"} the roadmap item “${c.title}” for ${look.area(c.workAreaId)} (${c.horizon})`,
@@ -513,6 +533,17 @@ export function firstmateNotice(
   if (!told) return null;
   const ids = [...new Set((told.ids ?? []).filter((id): id is string => !!id))];
   const card = ids.flatMap((id) => look.records(id));
+  // Leaving a field as it was changes nothing, so there is nothing to tell.
+  if (at.before && at.after) {
+    const only = (snapshot: WorkSnapshot) => {
+      const one = new Look({ before: null, after: snapshot, ref: null });
+      return ids.flatMap((id) => one.records(id));
+    };
+    const was = only(at.before);
+    const is = only(at.after);
+    if (was.length && is.length && JSON.stringify(was) === JSON.stringify(is))
+      return null;
+  }
   let workAreaId: string | null = null;
   for (const id of ids) {
     workAreaId = look.areaOf(id);

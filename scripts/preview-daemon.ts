@@ -51,28 +51,98 @@ for (const [type, name, client, due] of [
     client,
     ...(due === null ? {} : { dueAt: day(due) }),
   });
-const rfps: [string, string, number, string, string | null][] = [
-  ["Smart parking analytics", "Example client A", 24, "received", null],
-  ["Arabic citizen chatbot", "Example client B", 5, "in_response", null],
-  ["Document AI for permits", "Example client C", 35, "submitted", null],
-  ["Video analytics for public safety", "Example client D", -18, "won", null],
-  [
-    "HR assistant",
-    "Example client E",
-    -32,
-    "lost",
-    "Price was about 20% above the winning bid.",
-  ],
+const rfps: {
+  name: string;
+  client: string;
+  due: number;
+  stage: string;
+  value?: number;
+  next?: [string, number];
+  team?: string[];
+  owner: string;
+  hold?: string;
+  loss?: string;
+  summary?: string;
+}[] = [
+  {
+    name: "Smart parking analytics",
+    client: "Example client A",
+    due: 24,
+    stage: "received",
+    value: 900_000,
+    next: ["Review the RFP documents", 2],
+    owner: "Solution Architect",
+    summary:
+      "Reviewing the RFP documents; clarification questions go out this week.",
+  },
+  {
+    name: "Arabic citizen chatbot",
+    client: "Example client B",
+    due: 5,
+    stage: "in_response",
+    value: 1_400_000,
+    next: ["Finish the technical proposal", 3],
+    owner: "Project Manager",
+    team: ["Data Scientist", "Solution Architect"],
+    summary: "Client confirmed on-premises deployment only, no cloud.",
+  },
+  {
+    name: "Document AI for permits",
+    client: "Example client C",
+    due: 35,
+    stage: "in_response",
+    next: ["Follow up with the client IT team", 4],
+    owner: "Data Scientist",
+    hold: "Waiting for the client to share data samples",
+    summary:
+      "Waiting for the client to share data samples. Followed up by email.",
+  },
+  {
+    name: "Video analytics for public safety",
+    client: "Example client D",
+    due: -18,
+    stage: "won",
+    value: 2_100_000,
+    owner: "Solution Architect",
+    team: ["Project Manager"],
+    summary: "Strongest technical score and a working demo.",
+  },
+  {
+    name: "HR assistant",
+    client: "Example client E",
+    due: -32,
+    stage: "lost",
+    value: 600_000,
+    owner: "Project Manager",
+    loss: "Price was about 20% above the winning bid.",
+  },
 ];
-for (const [name, client, due, stage, lossReason] of rfps) {
+for (const rfp of rfps) {
   const id = must("save-rfp", {
     groupId: group,
-    name,
-    client,
-    deadline: day(due),
-    responseOwner: "Solution Architect",
+    name: rfp.name,
+    client: rfp.client,
+    deadline: day(rfp.due),
+    responseOwner: rfp.owner,
   });
-  must("move-rfp", { areaId: id, stage, lossReason });
+  must("move-rfp", {
+    areaId: id,
+    stage: rfp.stage,
+    lossReason: rfp.loss ?? null,
+  });
+  must("update-rfp", {
+    areaId: id,
+    patch: {
+      ...(rfp.value ? { value: rfp.value } : {}),
+      ...(rfp.next
+        ? { nextStep: rfp.next[0], nextStepAt: day(rfp.next[1]) }
+        : {}),
+      ...(rfp.team ? { team: rfp.team } : {}),
+      source: "Existing client",
+    },
+  });
+  if (rfp.hold) must("hold-rfp", { areaId: id, held: true, reason: rfp.hold });
+  if (rfp.summary) must("add-rfp-summary", { areaId: id, text: rfp.summary });
 }
 
 // ── The daemon's answers ──

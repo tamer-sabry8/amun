@@ -1148,4 +1148,26 @@ UPDATE work_areas SET first_chat_title=(
   WHERE m.work_area_id=work_areas.id AND m.chat_id IS NULL AND m.role='you'
   ORDER BY m.created_at,m.rowid LIMIT 1
 );`,
+  // 45 · What the owner tracks on an RFP beyond its stage (20 November 2026):
+  // its value, the next step, why it is paused, what was asked for, where it
+  // came from, the people on the bid, and dated summaries. "On hold" is a mark
+  // on an open RFP, not a stage, so taking it off hold returns it where it was.
+  `ALTER TABLE rfps ADD COLUMN value REAL;
+ALTER TABLE rfps ADD COLUMN next_step TEXT;
+ALTER TABLE rfps ADD COLUMN next_step_at TEXT;
+ALTER TABLE rfps ADD COLUMN held_at TEXT;
+ALTER TABLE rfps ADD COLUMN hold_reason TEXT;
+ALTER TABLE rfps ADD COLUMN requirements TEXT NOT NULL DEFAULT '';
+ALTER TABLE rfps ADD COLUMN source TEXT;
+ALTER TABLE rfps ADD COLUMN received_at TEXT;
+ALTER TABLE rfps ADD COLUMN clarifications_by TEXT;
+ALTER TABLE rfps ADD COLUMN team_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE rfps ADD COLUMN closed_at TEXT;
+CREATE TABLE rfp_summaries (
+  id TEXT PRIMARY KEY NOT NULL,
+  work_area_id TEXT NOT NULL REFERENCES work_areas(id),
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX rfp_summaries_area ON rfp_summaries(work_area_id, created_at);`,
 ] as const;

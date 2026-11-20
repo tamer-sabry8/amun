@@ -56,14 +56,8 @@ import {
   LibraryPanel,
   Rail,
 } from "./rail.tsx";
-import {
-  Agents,
-  Council,
-  Portfolio,
-  Rfps,
-  Roadmap,
-  Sprints,
-} from "./screens.tsx";
+import { Agents, Council, Portfolio, Roadmap, Sprints } from "./screens.tsx";
+import { Rfps } from "./rfps.tsx";
 import type { SettingsSection } from "./settings.tsx";
 import { Settings } from "./lazy.tsx";
 import {
@@ -893,6 +887,7 @@ export function App() {
             model={model}
             onWork={(id) => openWork(id)}
             onAsk={(text, files) => void submit(text, files)}
+            onAskAbout={(id, text) => openWork(id, text)}
           />
         ) : layout.route === "rfps" ? (
           <Rfps

@@ -7,10 +7,6 @@ import {
   agentProfile,
 } from "../../../../packages/domain/src/work/agents.ts";
 import {
-  rfpDetails,
-  rfpFromRequest,
-} from "../../../../packages/domain/src/work/model.ts";
-import {
   blockerLine,
   openBlockers,
 } from "../../../../packages/domain/src/work/blockers.ts";
@@ -41,18 +37,8 @@ import {
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
 import {
-  filterRfps,
-  rfpCard,
-  rfpClosed,
-  rfpDrop,
-  rfpHandoff,
-  rfpOwners,
-  rfpStageLabels,
-  rfpStages,
-  rfpAuthoringBoundary,
   objectiveLine,
   trackerName,
-  type RfpStage,
 } from "../../../../packages/domain/src/work/flows.ts";
 import {
   parseCouncilCommand,
@@ -60,6 +46,8 @@ import {
   suggestFullCouncil,
 } from "../../../../packages/domain/src/work/council.ts";
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
+import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
+import { ProgressCard, WorkSheet } from "./work-cards.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -88,6 +76,7 @@ function Page({
   children,
   footer,
   fixed,
+  wide,
 }: {
   title: string;
   context?: string;
@@ -97,10 +86,12 @@ function Page({
   footer?: ReactNode;
   /** Keeps the page still so panes inside it scroll on their own. */
   fixed?: boolean;
+  /** Room for card grids on a desktop window. */
+  wide?: boolean;
 }) {
   return (
     <div className={fixed ? "rb-scroll fixed" : "rb-scroll"}>
-      <div className="rb-page">
+      <div className={wide ? "rb-page wide" : "rb-page"}>
         <header className="rb-head">
           {context && <span className="context">{context}</span>}
           <h1>{title}</h1>
@@ -2012,15 +2003,21 @@ const portfolioFilters = { type: "", status: "", group: "" };
 export function Portfolio({
   snapshot,
   model,
+  now = Date.now(),
   onWork,
   onAsk,
+  onAskAbout,
 }: {
   snapshot: Snapshot;
   model: string | null;
+  now?: number;
   onWork(areaId: string): void;
   /** Sends a message to Firstmate, the same way Home does. */
   onAsk(text: string, files: string[]): void;
+  /** Opens a work's conversation with a message for Firstmate. */
+  onAskAbout?(areaId: string, text: string): void;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
   const [type, setTypeState] = useState(portfolioFilters.type);
   const [status, setStatusState] = useState(portfolioFilters.status);
   const [group, setGroupState] = useState(portfolioFilters.group);
@@ -2044,6 +2041,16 @@ export function Portfolio({
       (!group || area.groupId === group),
   );
   const statuses = [...new Set(all.map((area) => area.status))];
+  // Products and projects get the progress card, at risk first; the rest
+  // keep the small card.
+  const tracked = portfolioOrder(
+    areas.filter((area) => area.type === "product" || area.type === "project"),
+    now,
+  );
+  const others = areas.filter(
+    (area) => area.type !== "product" && area.type !== "project",
+  );
+  const current = all.find((area) => area.id === open) ?? null;
   const objectives = snapshot.objectives.filter(
     (item) =>
       (!group || item.groupId === group) &&
@@ -2053,7 +2060,8 @@ export function Portfolio({
   return (
     <Page
       title="Portfolio"
-      line="Every product, project, task and RFP. Open one to continue its conversation."
+      wide
+      line="Every product, project, task and RFP. Open one to see where it stands."
       footer={
         <Composer
           placeholder="Ask Firstmate. Its answer opens in the conversation."
@@ -2139,9 +2147,40 @@ export function Portfolio({
           ))}
         </div>
       )}
+      {tracked.length > 0 && (
+        <>
+          <p className="muted small rb-count" role="status">
+            {tracked.length} shown · at risk first, then by nearest date
+          </p>
+          <div className="rb-pgrid">
+            {tracked.map((area) => (
+              <ProgressCard
+                key={area.id}
+                area={area}
+                snapshot={snapshot}
+                now={now}
+                onOpen={() => setOpen(area.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      {current && (
+        <WorkSheet
+          key={current.id}
+          area={current}
+          snapshot={snapshot}
+          now={now}
+          onClose={() => setOpen(null)}
+          onWork={onWork}
+          onAsk={(areaId, text) =>
+            onAskAbout ? onAskAbout(areaId, text) : onWork(areaId)
+          }
+        />
+      )}
       {areas.length ? (
         <div className="rb-work">
-          {areas.map((area) => {
+          {others.map((area) => {
             const waiting = snapshot.attention.filter(
               (item) => item.workAreaId === area.id && item.state === "open",
             ).length;
@@ -2181,440 +2220,6 @@ export function Portfolio({
             ? "Nothing matches these filters."
             : "Work you start appears here."}
         </p>
-      )}
-    </Page>
-  );
-}
-
-/** The two facts a handoff waits for. Ticks respond at once, then persist. */
-function Readiness({
-  signed,
-  approved,
-  onChange,
-}: {
-  signed: boolean;
-  approved: boolean;
-  onChange(signed: boolean, approved: boolean): void;
-}) {
-  const [value, setValue] = useState({ signed, approved });
-  const set = (next: { signed: boolean; approved: boolean }) => {
-    setValue(next);
-    onChange(next.signed, next.approved);
-  };
-  return (
-    <>
-      <label className="row">
-        <input
-          type="checkbox"
-          checked={value.signed}
-          onChange={(event) => set({ ...value, signed: event.target.checked })}
-        />
-        Proposal signed
-      </label>
-      <label className="row">
-        <input
-          type="checkbox"
-          checked={value.approved}
-          onChange={(event) =>
-            set({ ...value, approved: event.target.checked })
-          }
-        />
-        BRD approved
-      </label>
-    </>
-  );
-}
-
-// ── RFPs ─────────────────────────────────────────────────────────────────────
-export function Rfps({
-  snapshot,
-  now,
-  model,
-  onWork,
-}: {
-  snapshot: Snapshot;
-  now: number;
-  model: string | null;
-  onWork(areaId: string): void;
-}) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [closed, setClosed] = useState(false);
-  const [over, setOver] = useState<string | null>(null);
-  const [note, setNote] = useState("");
-  const allowed = new Set(areasInScope(snapshot).map((area) => area.id));
-  const tracked = snapshot.rfps.filter((rfp) => allowed.has(rfp.id));
-  const name = (id: string) => areaOf(snapshot, id)?.name ?? "RFP";
-  const [search, setSearch] = useState("");
-  const [owner, setOwner] = useState("");
-  const [stageFilter, setStageFilter] = useState<RfpStage | "">("");
-  const rfps = filterRfps(tracked, {
-    text: search,
-    owner,
-    stage: stageFilter,
-    name,
-  });
-  const filtering = Boolean(search.trim() || owner || stageFilter);
-  const current = tracked.find((rfp) => rfp.id === selected) ?? null;
-  const move = async (id: string, stage: RfpStage) => {
-    if (stage === "handed_to_delivery") {
-      const result = await workAsync("handoff-rfp", { areaId: id });
-      setNote(
-        result.ok ? "Handed to delivery. The RFP is kept." : result.message,
-      );
-      return;
-    }
-    const result = await workAsync("move-rfp", { areaId: id, stage });
-    setNote(result.ok ? "" : result.message);
-  };
-  const card = (rfp: (typeof rfps)[number]) => {
-    const view = rfpCard(rfp, now);
-    return (
-      <button
-        key={rfp.id}
-        className="rb-tile"
-        draggable
-        aria-pressed={selected === rfp.id}
-        onDragStart={(event) =>
-          event.dataTransfer.setData("text/plain", rfp.id)
-        }
-        onClick={() => setSelected(selected === rfp.id ? null : rfp.id)}
-        style={{ justifyContent: "stretch" }}
-      >
-        <span className="name">{name(rfp.id)}</span>
-        <span className="meta">{rfp.client || "Client not set"}</span>
-        <span className="row wrap">
-          {view.countdown && (
-            <span className={"tag " + (view.atRisk ? "bad" : "")}>
-              {view.countdown}
-            </span>
-          )}
-          {view.missingOwner && (
-            <span className="tag warn">No response owner</span>
-          )}
-          {view.subline && <span className="tag">{view.subline}</span>}
-        </span>
-      </button>
-    );
-  };
-  const handoff = current ? rfpHandoff(current) : null;
-  const field = (
-    label: string,
-    key: "responseOwner" | "accountOwner" | "presales" | "client",
-  ) =>
-    current && (
-      <label className="field">
-        {label}
-        <input
-          type="text"
-          defaultValue={current[key] ?? ""}
-          key={current.id + key}
-          maxLength={200}
-          onBlur={(event) =>
-            work("save-rfp", {
-              areaId: current.id,
-              groupId: null,
-              name: name(current.id),
-              client: current.client,
-              deadline: current.deadline,
-              responseOwner: current.responseOwner,
-              accountOwner: current.accountOwner,
-              presales: current.presales,
-              [key]:
-                event.target.value.trim() || (key === "client" ? "" : null),
-            })
-          }
-        />
-      </label>
-    );
-  return (
-    <Page
-      title="RFPs"
-      line={rfpAuthoringBoundary}
-      footer={
-        <>
-          {note && (
-            <p className="muted small" role="status">
-              {note}
-            </p>
-          )}
-          <Composer
-            placeholder="Track an RFP, e.g. Smart Inspection for DMT, due 17 November"
-            chips={["Track an RFP"]}
-            model={model}
-            onSend={async (text) => {
-              const request = rfpFromRequest(text, snapshot.groups);
-              if (!request.name)
-                return setNote("Name the RFP you want to track.");
-              const facts = rfpDetails(text, new Date(now));
-              const parsed = request.due
-                ? Date.parse(request.due + " " + new Date(now).getFullYear())
-                : NaN;
-              const result = await workAsync("save-rfp", {
-                // Only a group the request names; otherwise the one in use.
-                groupId: request.groupId ?? snapshot.setup.activeGroupId,
-                client: request.client ?? facts.client ?? "",
-                name: request.name,
-                deadline:
-                  facts.deadline ??
-                  (Number.isNaN(parsed)
-                    ? null
-                    : new Date(parsed).toISOString()),
-                responseOwner: facts.responseOwner,
-                accountOwner: facts.accountOwner,
-                presales: facts.presales,
-              });
-              setNote(result.ok ? "" : result.message);
-              if (result.ref) setSelected(result.ref);
-            }}
-          />
-        </>
-      }
-    >
-      <div className="row wrap" style={{ marginBottom: 12 }}>
-        <input
-          type="text"
-          className="grow"
-          aria-label="Search RFPs"
-          placeholder="Search RFPs by name, client or owner"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <select
-          aria-label="Filter by owner"
-          value={owner}
-          onChange={(event) => setOwner(event.target.value)}
-        >
-          <option value="">Any owner</option>
-          {rfpOwners(tracked).map((person) => (
-            <option key={person} value={person}>
-              {person}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by stage"
-          value={stageFilter}
-          onChange={(event) =>
-            setStageFilter(event.target.value as RfpStage | "")
-          }
-        >
-          <option value="">Any stage</option>
-          {[...rfpStages, ...rfpClosed].map((stage) => (
-            <option key={stage} value={stage}>
-              {rfpStageLabels[stage]}
-            </option>
-          ))}
-        </select>
-        {filtering && (
-          <button
-            className="link small"
-            onClick={() => {
-              setSearch("");
-              setOwner("");
-              setStageFilter("");
-            }}
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-      <div className="rb-board">
-        {rfpStages.map((stage) => (
-          <section
-            key={stage}
-            className={"rb-col" + (over === stage ? " over" : "")}
-            aria-label={rfpStageLabels[stage]}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setOver(stage);
-            }}
-            onDragLeave={() => setOver(null)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setOver(null);
-              const id = event.dataTransfer.getData("text/plain");
-              const dropped = tracked.find((rfp) => rfp.id === id);
-              if (!dropped) return;
-              const action = rfpDrop(dropped.stage, stage);
-              if (action === "move") void move(id, stage);
-              if (action === "use_handoff") {
-                setSelected(id);
-                setNote(
-                  "Use Hand to delivery on the RFP card once the proposal is signed and the BRD is approved.",
-                );
-              }
-            }}
-          >
-            <header>
-              {rfpStageLabels[stage]}
-              <span className="count">
-                {rfps.filter((rfp) => rfp.stage === stage).length}
-              </span>
-            </header>
-            {rfps.filter((rfp) => rfp.stage === stage).map(card)}
-          </section>
-        ))}
-      </div>
-      {!tracked.length && (
-        <p className="muted">
-          No RFPs are being tracked. Tell Firstmate about one below.
-        </p>
-      )}
-      {tracked.length > 0 && !rfps.length && (
-        <p className="muted" role="status">
-          No RFPs match. Clear the filters to see them all.
-        </p>
-      )}
-      <button
-        className="link small"
-        style={{ justifySelf: "start", marginTop: 12 }}
-        aria-expanded={closed}
-        onClick={() => setClosed(!closed)}
-      >
-        Lost and withdrawn (
-        {
-          rfps.filter((rfp) =>
-            (rfpClosed as readonly string[]).includes(rfp.stage),
-          ).length
-        }
-        )
-      </button>
-      {closed && (
-        <div className="rb-work" style={{ marginTop: 8 }}>
-          {rfps
-            .filter((rfp) =>
-              (rfpClosed as readonly string[]).includes(rfp.stage),
-            )
-            .map(card)}
-        </div>
-      )}
-      {current && (
-        <section
-          className="rb-panel"
-          aria-label={name(current.id)}
-          style={{ marginTop: 20 }}
-        >
-          <header>
-            <h2>{name(current.id)}</h2>
-            <span className="tag">{rfpStageLabels[current.stage]}</span>
-            <span className="grow" />
-            <button className="btn" onClick={() => onWork(current.id)}>
-              Open conversation
-            </button>
-          </header>
-          <div style={{ padding: "0 18px 18px", display: "grid", gap: 14 }}>
-            <div className="rb-route">
-              {field("Client", "client")}
-              <label className="field">
-                Response deadline
-                <input
-                  type="date"
-                  key={current.id + "deadline"}
-                  defaultValue={current.deadline?.slice(0, 10) ?? ""}
-                  onChange={(event) =>
-                    work("save-rfp", {
-                      areaId: current.id,
-                      groupId: null,
-                      name: name(current.id),
-                      client: current.client,
-                      responseOwner: current.responseOwner,
-                      accountOwner: current.accountOwner,
-                      presales: current.presales,
-                      deadline: event.target.value
-                        ? new Date(event.target.value).toISOString()
-                        : null,
-                    })
-                  }
-                />
-              </label>
-              {field("Response owner", "responseOwner")}
-              {field("Sales or account owner", "accountOwner")}
-              {field("Pre-sales contact", "presales")}
-              <label className="field">
-                Stage
-                <select
-                  value={current.stage}
-                  onChange={(event) =>
-                    move(current.id, event.target.value as RfpStage)
-                  }
-                >
-                  {[...rfpStages, ...rfpClosed].map((stage) => (
-                    <option
-                      key={stage}
-                      value={stage}
-                      disabled={
-                        stage === "handed_to_delivery" &&
-                        !current.deliveryProjectId
-                      }
-                    >
-                      {rfpStageLabels[stage]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {current.stage === "lost" && (
-              <label className="field">
-                Loss reason, if known
-                <input
-                  type="text"
-                  key={current.id + "loss"}
-                  defaultValue={current.lossReason ?? ""}
-                  maxLength={400}
-                  onBlur={(event) =>
-                    work("move-rfp", {
-                      areaId: current.id,
-                      stage: "lost",
-                      lossReason: event.target.value.trim() || null,
-                    })
-                  }
-                />
-              </label>
-            )}
-            {(current.stage === "won" ||
-              current.stage === "handed_to_delivery") && (
-              <div style={{ display: "grid", gap: 8 }}>
-                <Readiness
-                  key={current.id}
-                  signed={current.proposalSigned}
-                  approved={current.brdApproved}
-                  onChange={(proposalSigned, brdApproved) =>
-                    work("rfp-readiness", {
-                      areaId: current.id,
-                      proposalSigned,
-                      brdApproved,
-                    })
-                  }
-                />
-                <div className="row">
-                  {handoff?.step === "reuse" ? (
-                    <button
-                      className="btn"
-                      onClick={() => onWork(handoff.projectId)}
-                    >
-                      Open delivery project
-                    </button>
-                  ) : (
-                    <button
-                      className="btn primary"
-                      disabled={handoff?.step !== "create"}
-                      onClick={() => move(current.id, "handed_to_delivery")}
-                    >
-                      Hand to delivery
-                    </button>
-                  )}
-                  {handoff?.step === "wait" && (
-                    <span className="muted small">
-                      {handoff.pending === "signature"
-                        ? "Waiting for the signed proposal."
-                        : "Waiting for the approved BRD."}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
       )}
     </Page>
   );

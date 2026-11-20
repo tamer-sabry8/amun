@@ -314,6 +314,24 @@ export const workSnapshot = z.strictObject({
       brdApproved: z.boolean(),
       deliveryProjectId: id.nullable(),
       lossReason: z.string().nullable(),
+      /** Estimated value, in dirhams. */
+      value: z.number().nullable().default(null),
+      nextStep: z.string().nullable().default(null),
+      nextStepAt: stamp.nullable().default(null),
+      /** Set while the RFP is on hold; its stage is kept underneath. */
+      heldAt: stamp.nullable().default(null),
+      holdReason: z.string().nullable().default(null),
+      requirements: z.string().default(""),
+      source: z.string().nullable().default(null),
+      receivedAt: stamp.nullable().default(null),
+      clarificationsBy: stamp.nullable().default(null),
+      team: z.array(z.string()).default([]),
+      /** When it was won, lost or withdrawn. */
+      closedAt: stamp.nullable().default(null),
+      /** Dated notes on where the RFP stands, newest first. */
+      summaries: z
+        .array(z.strictObject({ id, text: z.string(), createdAt: stamp }))
+        .default([]),
     }),
   ),
   roadmap: z.array(
@@ -741,6 +759,27 @@ export const workCommand = z.discriminatedUnion("action", [
     brdApproved: z.boolean(),
   }),
   act("handoff-rfp", { areaId: id }),
+  /** Changes only the fields given; the rest of the RFP is left as it is. */
+  act("update-rfp", {
+    areaId: id,
+    patch: z.strictObject({
+      value: z.number().nonnegative().max(1e12).nullable().optional(),
+      nextStep: text.nullable().optional(),
+      nextStepAt: stamp.nullable().optional(),
+      requirements: longText.optional(),
+      source: text.nullable().optional(),
+      receivedAt: stamp.nullable().optional(),
+      clarificationsBy: stamp.nullable().optional(),
+      team: z.array(z.string().trim().min(1).max(200)).max(32).optional(),
+    }),
+  }),
+  /** Puts an open RFP on hold with a reason, or takes it off hold. */
+  act("hold-rfp", {
+    areaId: id,
+    held: z.boolean(),
+    reason: text.default(""),
+  }),
+  act("add-rfp-summary", { areaId: id, text: text.min(1) }),
   act("save-roadmap-item", {
     itemId: id.optional(),
     workAreaId: id,

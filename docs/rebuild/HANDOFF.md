@@ -51,14 +51,14 @@ Withdrawn rules, do not restore:
 | 2   | Tests that enforce it                                         | Built.                                                                                                |
 | 3   | Check Firstmate delegates and only watches                    | Not done. Needs a run on his Mac with real Firstmate. Nothing in Amun was changed that bypasses it.   |
 | 4   | Portfolio as progress cards                                   | Approved in Lavish. Code written, **not committed, not finished** (see "Work in progress").           |
-| 5   | RFPs page like his picture                                    | Approved. Code written and seen in the preview, **not committed**.                                    |
-| 6   | Clicking a card opens a panel over the page (project and RFP) | Both approved. RFP panel written and seen; project panel written, not wired. **Not committed.**       |
+| 5   | RFPs page like his picture                                    | Approved and built. Seen in the preview only.                                                         |
+| 6   | Clicking a card opens a panel over the page (project and RFP) | Both approved and built. Seen in the preview only.                                                    |
 | 7   | Roadmap timeline                                              | **Deferred by Tamer: "ask me later, I will want to redesign the entire page."** Do not touch Roadmap. |
 | 8   | A better GitHub connection than pasting a token               | Investigated only; a recommendation is waiting for him (below).                                       |
 | 9   | File paths in replies open in Finder                          | Built, pushed. Not seen in the running app.                                                           |
 | 10  | "Why is the chat named /model?"                               | Fixed, pushed.                                                                                        |
 | 11  | Hooks review should open inside Amun, not in a terminal       | Not started. Needs a preview and his approval.                                                        |
-| 12  | A reminder put off to a later day still showed on Home        | Fixed in the working tree, **not committed**.                                                         |
+| 12  | A reminder put off to a later day still showed on Home        | Fixed, pushed. Not seen on his Mac.                                                                   |
 | 13  | The "Notion MCP connected…" banner                            | Explained to him. A rewording was proposed, not approved, not changed.                                |
 
 #### Every on-screen action is told to Firstmate
@@ -129,19 +129,27 @@ Decisions inside the approved design:
 - Tasks and RFPs keep the small Portfolio card; the progress card is for products and projects.
 - Sample names only in committed previews. His real colleagues' names are not put in the repository.
 
-#### Work in progress on this branch (not committed when this was written)
+#### What is built on this branch, and what is not
 
-Pushed commits: `bedb07f` (notes to Firstmate), `c72c0c0` (Finder button, chat naming), `ab15dd9` (`AGENTS.md`), and the review page and preview server.
+Everything below is committed and pushed. Locally, 1,151 tests, both type-checks, lint, the format check and the impeccable detector pass.
 
-In the working tree only, of the worktree `amun-setup-handoff-28f090`:
+- **RFPs screen and its panel** (`packages/amun-ui/src/rebuild/rfps.tsx`: `Rfps`, `RfpSheet`). The old `Rfps` and `Readiness` were removed from `screens.tsx`. Migration 45, the contract, the store (`update-rfp`, `hold-rfp`, `add-rfp-summary`) and the rules in `flows.ts` carry it. Seen in the preview with sample RFPs: tiles, Needs attention, five columns, drag between columns, the panel's three tabs.
+- **Portfolio progress cards and the project panel** (`packages/amun-ui/src/rebuild/work-cards.tsx`: `ProgressCard`, `WorkSheet`; rules in `packages/domain/src/work/portfolio.ts`). `Portfolio` in `screens.tsx` shows them for products and projects, at risk first; tasks and RFPs keep the small card under them. "Ask Firstmate for a summary" opens the work's conversation with that request. Seen in the preview.
+- **A reminder put off to a later day stays off Home until that day** (`heldUntil`, `holdsDue` in `contract-adapter.ts`).
 
-- Migration 45, the contract and store changes, the RFP rules, and three new notice rules.
-- `packages/amun-ui/src/rebuild/rfps.tsx`: the new RFPs screen and `RfpSheet`. The old `Rfps` and `Readiness` were removed from `screens.tsx`; `app.tsx` imports from `rfps.tsx`. Seen working in the preview; the status pill and one attention card were just restyled and not re-checked.
-- `packages/domain/src/work/portfolio.ts` and `packages/amun-ui/src/rebuild/work-cards.tsx` (`ProgressCard`, `WorkSheet`): written, **not yet used by `Portfolio` in `screens.tsx`**, and their styles (`rb-pcard`, `rb-pill`, `rb-chip`, `rb-ring`, `rb-sheet-top`, `rb-flags`, `rb-teambox`, `rb-sum-head`, `btn.solid`) are **not written**.
-- `heldUntil` and `holdsDue` in `contract-adapter.ts`: a hold put off to a later day stays off Home until that day (item 12). Tested.
-- Known red: `packages/amun-ui/tests/rebuild.test.ts` builds RFP fixtures without the new fields (type errors at two places) and one test expects the old RFP stage names and the old page line. Tests for the new RFP rules, the portfolio rules and migration 45 are not written. The impeccable detector has not been run on the new screens.
+Not built, and why:
 
-If that worktree is gone when you read this, the pushed commits are the whole of what exists; rebuild the rest from the approved review page.
+- **Done %, story counts, pull requests, the team list and the "Azure DevOps" button** on the cards and the project panel. They need a reading from Azure DevOps per product, which is not wired; `workProgress` in `work-cards.tsx` returns null, so the ring is empty and "Done" shows a dash. Wire it there: return `{ donePercent, line }` and the cards, the order and the at-risk rule already use it.
+- Tech lead, project manager and product manager on the project panel: not stored anywhere.
+- The card foot shows "Firstmate is working on it" or "Nothing running" and how many things wait for the owner, not the faces and story bar from his picture, for the same reason.
+- Estimated value is kept in dirhams only.
+
+Not checked:
+
+- None of it in the packaged app or against real Firstmate. The preview has no Firstmate.
+- Dragging a card onto "On hold" marks it held and opens its panel for the reason; tried only by reading the code path, not by hand.
+- The light themes. Colours come from the theme tokens, and "On hold" purple is mixed from the text colour, but only "Amun dark" was looked at.
+- The daemon must be rebuilt (`npm run build:server`) to pick up migration 45.
 
 #### Small fixes in this pull request
 
