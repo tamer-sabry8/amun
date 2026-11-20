@@ -69,23 +69,17 @@ h3{font-size:13px;font-weight:600;color:var(--pmuted);margin:28px 0 10px}
 .attn{display:flex;gap:12px;margin-bottom:28px}
 .attn div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;width:300px}
 .attn b{display:flex;align-items:center;gap:8px} .attn b i{width:8px;height:8px;border-radius:50%} .attn span{color:var(--muted);font-size:13px}
-.pipe{display:flex;flex-direction:column;gap:10px}
-.col{background:color-mix(in srgb,var(--ink) 4%,transparent);border-radius:14px;padding:12px;display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 12px;align-items:start}
-.col .rcard{grid-column:2}
-.col h4{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:0 6px;align-self:center} .col h4 i{width:7px;height:7px;border-radius:50%} .col h4 span{color:var(--muted);font-weight:400}
-.rcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:13px;display:grid;grid-template-columns:300px minmax(0,1fr) 300px;column-gap:28px;align-content:center;align-items:center}
-.rcard>*{min-width:0}
-.rcard header{grid-column:1;grid-row:1;margin:0;justify-content:flex-start;gap:10px}
-.rcard h5{grid-column:1;grid-row:2;margin:4px 0 0}
-.rcard p{grid-column:2;margin:0}
-.rcard p+p{margin-top:4px}
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.col{background:color-mix(in srgb,var(--ink) 4%,transparent);border-radius:14px;padding:10px}
+.col h4{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin:4px 6px 10px} .col h4 i{width:7px;height:7px;border-radius:50%} .col h4 span{margin-left:auto;color:var(--muted);font-weight:400}
+.rcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12.5px}
 .rcard header{display:flex;justify-content:space-between;gap:6px;color:var(--muted);font-size:12px;margin-bottom:6px}
 .cl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .due{border-radius:999px;padding:1px 8px;background:color-mix(in srgb,var(--ink) 7%,transparent);white-space:nowrap} .due.soon{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);font-weight:600}
 .rcard h5{font-size:14px;font-weight:600;margin:0 0 6px} .rcard p{margin:0 0 6px} .mut{color:var(--muted)} .holdr{color:var(--hold)}
 .nx{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:4px}
-.rcard footer{grid-column:3;grid-row:1/span 2;display:flex;flex-direction:row;align-items:center;gap:10px;align-self:stretch;border-left:1px solid var(--line);padding-left:16px;color:var(--muted)}
-.who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0} .rcard footer b{color:var(--ink);white-space:nowrap;font-size:14px;margin-left:auto}
+.rcard footer{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:8px;margin-top:8px;color:var(--muted)}
+.who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0} .rcard footer b{margin-left:auto;color:var(--ink);white-space:nowrap;font-size:12px}
 /* overlays */
 .stage{position:relative;background:var(--canvas);padding:36px;border:1px solid var(--pline);border-radius:12px}
 .stage::before{content:"";position:absolute;inset:0;background:rgb(0 0 0/.55);border-radius:12px}
@@ -165,7 +159,7 @@ h3{font-size:13px;font-weight:600;color:var(--pmuted);margin:28px 0 10px}
 <div class="sec"><h4>Pipeline</h4><div class="sp"><span class="f">Search name or client</span><span class="f">Everyone</span></div></div>
 <div class="pipe"><section class="col"><h4><i style="background:var(--info)"></i>New<span>1</span></h4><article class="rcard"><header><span class="cl">Example client A</span><span class="due ">Due Mon 14 Dec</span></header><h5>Smart parking analytics</h5><p><span class="nx">Next</span> Review the RFP documents · Sun 22 Nov</p><p class="mut">Reviewing the RFP documents; clarification questions go out…</p><footer><span class="avs"><span class="av av0">SA</span></span><span class="who">Solution Architect</span><b>AED 900K</b></footer></article></section><section class="col"><h4><i style="background:var(--warn)"></i>In progress<span>1</span></h4><article class="rcard"><header><span class="cl">Example client B</span><span class="due soon">Due in 5 days</span></header><h5>Arabic citizen chatbot</h5><p><span class="nx">Next</span> Finish the technical proposal · Mon 23 Nov</p><p class="mut">Client confirmed on-premises deployment only, no cloud…</p><footer><span class="avs"><span class="av av0">PM</span><span class="av av1">DS</span><span class="av av2">SA</span></span><span class="who">Project Manager</span><b>AED 1.4M</b></footer></article></section><section class="col"><h4><i style="background:var(--hold)"></i>On hold<span>1</span></h4><article class="rcard"><header><span class="cl">Example client C</span><span class="due ">Due Fri 25 Dec</span></header><h5>Document AI for permits</h5><p class="holdr">Waiting for the client to share data samples</p><p><span class="nx">Next</span> Follow up with the client IT team · Tue 24 Nov</p><footer><span class="avs"><span class="av av0">DS</span></span><span class="who">Data Scientist</span></footer></article></section><section class="col"><h4><i style="background:var(--good)"></i>Won<span>1</span></h4><article class="rcard"><header><span class="cl">Example client D</span><span class="due ">2 Nov</span></header><h5>Video analytics for public safety</h5><p class="mut">Strongest technical score and a working demo…</p><footer><span class="avs"><span class="av av0">SA</span><span class="av av1">PM</span></span><span class="who">Solution Architect</span><b>AED 2.1M</b></footer></article></section><section class="col"><h4><i style="background:var(--bad)"></i>Lost<span>1</span></h4><article class="rcard"><header><span class="cl">Example client E</span><span class="due ">19 Oct</span></header><h5>HR assistant</h5><p class="mut">Price was about 20% above the winning bid…</p><footer><span class="avs"><span class="av av0">PM</span></span><span class="who">Project Manager</span><b>AED 600K</b></footer></article></section></div><div class="composer"><span>Track an RFP, e.g. Smart Inspection for DMT, due 17 November</span><div><span class="ci">＋  /  @</span><span class="send"></span></div></div></div>
 <ul class="notes">
-<li>The pipeline is now one lane per stage, and each RFP is one wide, short row: name and client, next step and note, people and value. A stage with several RFPs lists them one under the other.</li>
+<li>The pipeline is back to five columns of cards, as first proposed and as in your picture.</li>
 <li>New RFPs are still added by telling Firstmate in the box at the bottom, so there is no separate "New RFP" button. Say if you want the button too.</li>
 <li>Needs attention uses a coloured dot, not the coloured side stripe in your picture. Say if you want the stripe.</li>
 <li>The example-data banner from your picture is left out: Amun shows your real RFPs, and an empty page says so in one line.</li>
