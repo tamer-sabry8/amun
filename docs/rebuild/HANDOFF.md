@@ -64,12 +64,58 @@ Pick up here. Branch `claude/amun-handoff-work-20261119`, PR #38: all checks gre
   - Waiting on Tamer: how a model switch in chat should reach the crew (recommended: a card asking "Use this for the whole crew too?", since his crew models are per-job rules in `config/crew-dispatch.json` with a Copilot credit limit); whether Home should show his last chat; the screens for the seven chat rules; archive for chats.
   - Not verified with real Firstmate: the one-time registration of the twenty agents, the Notion helper, and whether Firstmate keeps forks apart.
 
-### Update, 20 November 2026 (after pull request 44): Claude subscription and old holds
+### Update, 20 November 2026 (pull requests 45 and 46): Claude subscription, Firstmate's reminders, Pi 1.5.2
 
-- **Claude Pro/Max through Pi.** Tamer withdrew the 6 November rule. Accounts and models now has a "Claude Pro/Max" row (`providers` in `packages/amun-ui/src/rebuild/wizard.tsx`, `anthropic` in `oauthProviders` and `modelLoginOptions` in `packages/contracts/src/auth.ts`). Its status comes from `pi auth check --provider anthropic`, the same path as the other providers; Pi was already signed in. He was told Anthropic's terms may limit a subscription to Claude Code and Anthropic's own apps, and chose this. The rule is in `AGENTS.md`, "Claude subscription".
-- **Codex and Claude Code on the Tools list.** Tamer could not tell they were on and signed in: the card says "Installed" and "Turn off" only. Both were on and signed in on 20 November (`codex login status`, `claude auth status`). Showing that on the card is not built; it needs his approval.
-- **Old Firstmate holds under Needs your attention** (14 on his Mac, from sessions before Amun). Snooze does nothing for them: `answerHold` in `contract-adapter.ts` refuses anything but an answer, and the screen does not show the refusal. Only Firstmate can close or defer a hold (`fm-captain-hold.sh answer --release`, `reconcile close`, `hold --until`). The proposed fix, asked and not yet answered: "No longer needed" and "Remind me later" in the item's menu, each a request to Firstmate.
-- **"Data Access Blocked".** macOS blocked Amun from another app's data after the new test DMG. Ad-hoc signing gives each build a new identity, so permissions are asked again. Which file was blocked is not known: this session could not read the privacy log. He was given the Settings path and a `log show` command to find it.
+Tamer tested the DMG from pull request 44 on his Mac and raised the items below. Pull requests 45 and 46 are merged into `main` (`32673aa`); a new test DMG was built from that commit. Read this with the chat section that follows.
+
+#### Claude Pro/Max through Pi (pull request 45)
+
+- **Decision (Tamer, 20 November 2026):** withdraw the 6 November rule that a Claude subscription is used only through Claude Code. Claude Pro/Max is offered under Accounts and models through Pi's own sign-in (`anthropic`, OAuth), like ChatGPT and Copilot. He was told first that Anthropic's terms may limit a subscription to Claude Code and Anthropic's own apps, and chose this. Recorded in `AGENTS.md`, "Claude subscription"; the old rule is struck through in `docs/HANDOFF-NEXT-AGENT.md` and AD-10 of `docs/plans/product-and-r1-plan.md`. Do not restore it unless he asks.
+- **Code:** a "Claude Pro/Max" row in `providers` (`packages/amun-ui/src/rebuild/wizard.tsx`); `anthropic` added to `oauthProviders` and `modelLoginOptions` (`packages/contracts/src/auth.ts`); the contract test now accepts it.
+- **"Not working · Service down" on his Mac.** Pi held his Claude sign-in but could not renew it: `pi auth check --provider anthropic --json` answered `{"status":"invalid","reason":"invalid_state"}` (it passed with `--no-refresh`); ChatGPT and Copilot renewed fine. `checkPiAccount` (`packages/server/src/server/amun/first-mate-models.ts`) now reads Pi's `invalid` as signed out, so the row says "Signed out" with "Sign in". The Sign in note says how: open Pi in Terminal, type `/login`, choose the provider.
+- **He signed in again in Pi** the same day; the check then answered `ready`, including the renewal. If renewal fails again later, the likely cause is Anthropic refusing subscription sign-ins outside Claude Code; signing in again would not fix that.
+
+#### Firstmate's reminders on Home (pull request 46)
+
+His Needs your attention held 14 of Firstmate's own reminders ("captain holds"), many from sessions before Amun. Snooze did nothing: `answerHold` in `contract-adapter.ts` refused anything but an answer, and the screen did not say so.
+
+Decisions, approved in `docs/preview/2026-11-20-old-reminders/index.html`:
+
+| #   | What Tamer decided                                                                                                                         | In the code                                                                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A reminder filed under a project is that project's task with a tick box; others are plain reminders.                                       | `heldProject` (`packages/domain/src/work/held-tasks.ts`) reads the project from the title ("MoCA: …" matches "MoCA Ecabinet"). Home labels it "Task · MoCA" or "Reminder".                                                               |
+| 2   | Ticking offers Undo, and the task stays visible for 20 seconds before it moves to Done.                                                    | `tickedTasks` (`packages/amun-ui/src/rebuild/ticked-tasks.ts`): Undo for 5 seconds, then the request goes to Firstmate; shown struck through until 20 seconds. Kept outside Home, so leaving Home does not lose a tick (review finding). |
+| 3   | The menu offers Done, close it; Remind me later (tomorrow morning, next Monday, in two weeks); Help me do it.                              | `Row` in `home.tsx`; `laterDays`. Amun's own attention items keep their old menu.                                                                                                                                                        |
+| 4   | A reminder to write something comes with a draft, or Firstmate interviews him first if it lacks context.                                   | "Help me do it" sends `helpRequest(title)` to Firstmate in his latest chat. Once per home, `draftingRule` is sent in his words with `primary.once` key `draft-reminders-v1`, so Firstmate files the rule itself.                         |
+| 5   | The proposed fix for the "Chat with Firstmate · Task" header in a chat with no folder: "needs investigation and I am not sure we need it." | Not built.                                                                                                                                                                                                                               |
+
+How each choice reaches Firstmate (Amun closes nothing itself):
+
+- **Done:** `resolve-attention` with `resolution: "done"` on a `hold:` id. The adapter sends `heldInstruction("done")` through `holds.answer`, and the Done tab shows "You answered: “Completed”".
+- **Remind me later:** `resolution: "snooze"` with the new optional `until` (YYYY-MM-DD). The adapter passes `until` to `holds.answer`, and `holdAnswerPrompt` (`firstmate-cli.ts`) then asks Firstmate to keep it held with `fm-captain-hold.sh hold <task> --reason <its current reason> --until <day>` and not to run `answer`, which would close it (review finding). A snooze with no day is refused.
+- **Help me do it:** an ordinary message to Firstmate in the latest chat with no folder.
+
+Not checked with his real Firstmate: that it closes a ticked task, defers to the day and keeps it away until then, files the drafting rule, and how a deferred hold looks in the fleet snapshot (it may come back early if its wording changes).
+
+Until this is in his build, a reminder can be closed by telling Firstmate in any chat: "Close the reminder moca-pilot-group: it is done."
+
+#### Tasks under projects, and initiatives (asked, not designed)
+
+Tamer asked for tasks under a project with a tick box to complete them, and tasks that belong to no project ("initiatives"). Today a task in Amun is its own work area beside projects, and Firstmate keeps its own task list (tasks-axi). Pull request 46 only ticks off Firstmate's reminders. Where project tasks live and how they line up with Firstmate's list is a larger change; ask him one question at a time before designing it.
+
+#### Pi updated to 1.5.2
+
+He asked for the Pi update. The test DMG does not contain Pi: Amun runs the `pi` on the Mac's PATH (`piOnPath` in `attach-amun.ts`), the same install his herdr Firstmate uses, so a DMG cannot carry a Pi update and dragging an app to Applications runs no installer. Pi was updated with its own updater: `pi update`, 1.4.0 to 1.5.2. After the update, `pi auth check` answered `ready` for anthropic, openai-codex, github-copilot and openrouter, and `pi --list-models` listed models. Pi sessions already running (his herdr crew, Amun's First Mate) keep the old version until they next start; none was restarted. A First Mate turn on 1.5.2 has not been checked.
+
+#### Other things from his Mac test
+
+- **Codex and Claude Code on the Tools list.** He could not tell they were on and signed in; the card shows "Installed" and "Turn off" only. Both were on and signed in (`codex login status`, `claude auth status`). Showing that on the card is not built; it needs his approval.
+- **"Data Access Blocked".** macOS blocked Amun from another app's data after the new DMG. Ad-hoc signing gives each build a new identity, so permissions are asked again. Which file was blocked is not known: this session could not read the privacy log. He was given the Settings path and a `log show` command; no answer yet.
+
+#### Checked
+
+- Pull requests 45 and 46 each passed CI; every review finding was fixed, answered and resolved. After both merged, `main` passed 1,120 tests, `typecheck:amun`, the server type-check and lint locally.
+- The reminder screens were checked in drawn pictures and unit tests, not against real Firstmate holds: the isolated preview has no Firstmate home.
 
 ### Update, 20 November 2026 (pull request 44): chats that group themselves
 
