@@ -3055,6 +3055,15 @@ export class WorkStore {
             only ? { areaId: areaId!, chatId: chatId || null } : here,
             "firstmate",
             visible,
+            {
+              kind: "request-reply",
+              refs: reports
+                .filter(
+                  (report) =>
+                    report.status === "delivered" && request(report.request),
+                )
+                .map((report) => report.request),
+            },
           );
         }
         for (const document of documents) {

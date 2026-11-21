@@ -315,7 +315,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   } catch (error) {
     input.logger.warn({ err: error }, "Notion for the First Mate not available");
   }
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 12 * 1024 * 1024 });
   const watched = new Map<WebSocket, Set<string>>();
   const lastSent = new Map<string, string>();
 

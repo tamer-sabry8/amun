@@ -43,7 +43,6 @@ export function Sidebar({
   collapsed,
   onRoute,
   onSearch,
-  onSearchChats,
   onToggle,
   island,
   snapshot,
@@ -58,7 +57,6 @@ export function Sidebar({
   /** The ⌘K palette. */
   onSearch(): void;
   /** Search across chat messages. */
-  onSearchChats(): void;
   onToggle(): void;
   island: ReactNode;
   snapshot: Snapshot;
@@ -648,14 +646,6 @@ export function Sidebar({
         <button className="new" onClick={() => onNewChat(null)}>
           <Icon name="compose" width={16} height={16} />
           <span>New chat</span>
-        </button>
-        <button
-          className="dots"
-          aria-label="Search chats"
-          title="Search chats"
-          onClick={onSearchChats}
-        >
-          <Icon name="search" width={16} height={16} />
         </button>
       </div>
       <div

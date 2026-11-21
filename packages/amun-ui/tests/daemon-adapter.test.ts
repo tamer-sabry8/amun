@@ -24,6 +24,8 @@ import {
   ContractAdapter,
   heldUntil,
   holdId,
+  holdAttention,
+  fleetAgents,
   holdsDue,
   holdSignature,
   settleHoldAnswers,
@@ -1062,4 +1064,38 @@ describe("a reminder put off to a later day", () => {
     expect(holdsDue(all, "2026-11-23T05:00:00Z")).toEqual([crew, open]);
     expect(holdsDue(all, "2026-12-02T05:00:00Z")).toEqual(all);
   });
+});
+
+it("shows a keyed PRD decision in attention and marks its parked crewmate blocked", () => {
+  const view = {
+    spaces: [],
+    fleet: [
+      {
+        id: "prd",
+        current_state: {
+          state: "parked",
+          detail: "Finished reading the brief",
+        },
+      },
+    ],
+    holds: [
+      {
+        source: "crew" as const,
+        taskId: "prd",
+        key: "brief-q1",
+        verb: "needs-decision",
+        summary:
+          "corr=b24b353f165ba470 Finished reading the brief. Q1 - How should we plan R1? (A) Keep scope.",
+      },
+    ],
+    work: null,
+  };
+  expect(holdAttention(view, "2026-11-21T11:42:00Z")[0]).toMatchObject({
+    title: "How should we plan R1?",
+    detail: "Product Manager (PRD)",
+    state: "open",
+  });
+  expect(
+    fleetAgents(view).find((agent) => agent.id === "crew:prd")?.state,
+  ).toBe("waiting");
 });

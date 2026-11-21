@@ -103,3 +103,14 @@ it("reports a silent chat start and keeps the user's turn out of the delivery qu
     vi.useRealTimers();
   }
 });
+
+it("retains every follow-up while a provider-blocked head waits again", async () => {
+  const fm = await import("../src/rebuild/firstmate.ts");
+  for (const text of ["one", "two", "three"])
+    fm.holdMessage("queue", { text, scoped: text });
+  const head = fm.releaseMessage("queue")!;
+  fm.holdMessage("queue", { ...head, reason: "provider" }, true);
+  expect(
+    Array.from({ length: 4 }, () => fm.releaseMessage("queue")?.text),
+  ).toEqual(["one", "two", "three", undefined]);
+});

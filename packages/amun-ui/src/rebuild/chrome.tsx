@@ -527,6 +527,7 @@ export function Palette({
   onWork,
   onBrowser,
   onHit,
+  onSearchChats,
 }: {
   open: boolean;
   snapshot: Snapshot;
@@ -535,6 +536,7 @@ export function Palette({
   onWork(areaId: string): void;
   /** Null outside a work session, where there is nowhere to show it. */
   onBrowser: (() => void) | null;
+  onSearchChats(): void;
   onHit(hit: ContentHit): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -645,6 +647,9 @@ export function Palette({
         onChange={(event) => setQuery(event.target.value)}
       />
       <div className="results">
+        <button onClick={onSearchChats}>
+          <Icon name="search" width={16} height={16} /> Search chats…
+        </button>
         {areas.slice(0, 8).map((area) => (
           <button key={area.id} onClick={() => onWork(area.id)}>
             <Icon name="portfolio" width={16} height={16} />

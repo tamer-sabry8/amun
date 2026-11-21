@@ -714,7 +714,9 @@ async function createWindow(
     }),
     webPreferences: {
       preload: getPreloadPath(),
-      additionalArguments: [windowChromeModeArgument(DESKTOP_WINDOW_CHROME_MODE)],
+      additionalArguments: [windowChromeModeArgument(DESKTOP_WINDOW_CHROME_MODE),
+        ...(app.isPackaged && process.platform === "darwin" ? ["--amun-mac-file-access"] : []),
+      ],
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
@@ -987,6 +989,10 @@ async function bootstrap(): Promise<void> {
   });
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
+  ipcMain.handle("amun:open-full-disk-access", async (event) => {
+    if (!app.isPackaged || process.platform !== "darwin" || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith(`${APP_SCHEME}://app/`)) throw Error("Open file access from the Amun app.");
+    await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
+  });
   registerNotificationHandlers();
   const openExternalUrl = createExternalUrlOpener({ open: shell.openExternal });
   ipcMain.handle("paseo:opener:openUrl", (_event, value: unknown) => openExternalUrl(value));

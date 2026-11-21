@@ -113,6 +113,71 @@ function WorkspaceFailure({ reasons }: { reasons: string[] }) {
   );
 }
 
+function FileAccessOffer() {
+  const desktop = (
+    window as Window & {
+      paseoDesktop?: { openFullDiskAccess?(): Promise<void> };
+    }
+  ).paseoDesktop;
+  const key = "amun.mac-file-access-offered";
+  const [visible, setVisible] = useState(() => {
+    try {
+      return !!desktop?.openFullDiskAccess && !localStorage.getItem(key);
+    } catch {
+      return false;
+    }
+  });
+  const [error, setError] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!visible || !dialog.current) return;
+    if (!dialog.current.open) dialog.current.showModal();
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      /* Storage unavailable. */
+    }
+  }, [visible]);
+  return visible ? (
+    <dialog
+      ref={dialog}
+      className="rb-move-dialog"
+      aria-labelledby="file-access-title"
+      onCancel={() => setVisible(false)}
+    >
+      <button
+        className="btn quiet"
+        style={{ float: "right" }}
+        aria-label="Close"
+        onClick={() => setVisible(false)}
+      >
+        ×
+      </button>
+      <h2 id="file-access-title">Allow Amun to read files across your Mac?</h2>
+      <p>
+        Enable Amun in Full Disk Access in System Settings. You can continue
+        with files you choose yourself.
+      </p>
+      <button
+        className="btn primary"
+        onClick={async () => {
+          try {
+            await desktop?.openFullDiskAccess?.();
+            setVisible(false);
+          } catch {
+            setError(
+              "Open System Settings → Privacy & Security → Full Disk Access and enable Amun.",
+            );
+          }
+        }}
+      >
+        Open Full Disk Access
+      </button>
+      {error && <p role="status">{error}</p>}
+    </dialog>
+  ) : null;
+}
+
 export function App() {
   const bridgeState = useSyncExternalStore(
     bridge.subscribe,
@@ -960,6 +1025,7 @@ export function App() {
     layout.rail && layout.railExpanded && layout.rail !== "downloads";
   return (
     <div className={"rb" + (collapsed ? " collapsed" : "")}>
+      <FileAccessOffer />
       <Sidebar
         route={layout.route}
         collapsed={collapsed}
@@ -977,7 +1043,6 @@ export function App() {
         }
         onChat={(areaId, chat) => openWork(areaId, undefined, null, chat)}
         onNewChat={(areaId) => void startChat(areaId)}
-        onSearchChats={() => setChatSearch({ open: true, restoring: false })}
         onMoveChat={(areaId, chat, toAreaId) =>
           void moveChat(areaId, chat, toAreaId)
         }
@@ -1109,9 +1174,6 @@ export function App() {
             }
             onOpen={(areaId, message) =>
               areaId ? openWork(areaId, message) : go("home")
-            }
-            onContinue={(areaId, chat) =>
-              openWork(areaId, undefined, null, chat, { resume: true })
             }
             onPortfolio={() => go("portfolio")}
             onPendingDone={(text) => {
@@ -1328,6 +1390,10 @@ export function App() {
         }}
       />
       <Palette
+        onSearchChats={() => {
+          dispatch({ type: "palette", open: false });
+          setChatSearch({ open: true, restoring: false });
+        }}
         open={layout.palette}
         snapshot={snapshot as Snapshot}
         onClose={() => dispatch({ type: "palette", open: false })}

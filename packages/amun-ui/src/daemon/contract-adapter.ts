@@ -16,6 +16,7 @@ import {
 import { generalConversationName } from "../../../domain/src/work/model.ts";
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
+  workAttachment,
   workCommand,
   workDelegate,
   workSnapshot,
@@ -287,6 +288,7 @@ export function poolRegistrationRequest(): string {
 
 /** "saas-devops" as "Saas Devops": a crewmate's id as a name. */
 export function crewName(id: string): string {
+  if (id.toLowerCase() === "prd") return "Product Manager (PRD)";
   return id
     .split(/[-_]+/)
     .filter(Boolean)
@@ -306,6 +308,15 @@ export function plainCrewDetail(detail: string | null | undefined) {
     .replace(/\[(?:key|at|corr)=[^\]]*\]\s*:?\s*/g, "")
     .replace(/\bcorr=[0-9a-f]+\s*/g, "")
     .trim();
+}
+
+/** Keep the crew's full report on the Agents screen and surface its decision here. */
+function crewQuestion(summary: string) {
+  const clean = plainCrewDetail(summary) ?? "";
+  const question =
+    /(?:^|\s)(?:Q\s*1|Question\s+1)\s*[-–—:]\s*([^?]{1,400}\?)/i.exec(clean);
+  if (question) return question[1]!.trim();
+  return clean.length > 200 ? clean.slice(0, 197).trimEnd() + "…" : clean;
 }
 
 /** The First Mate and its live crew, from Firstmate's fleet snapshot. */
@@ -328,7 +339,11 @@ export function fleetAgents(view: DaemonView): WorkSnapshot["agents"] {
       role: poolRole(task.id) ?? crewName(task.id),
       kind: "temporary",
       launcherId: FIRST_MATE_ID,
-      state: agentState(task),
+      state: view.holds.some(
+        (hold) => hold.source === "crew" && hold.taskId === task.id,
+      )
+        ? "waiting"
+        : agentState(task),
       nowDoing: plainCrewDetail(task.current_state?.detail) || null,
       output: plainCrewDetail(task.hints?.last_event_text) ?? "",
       enabled: true,
@@ -422,7 +437,7 @@ export function holdAttention(
     const answered = answers.get(id);
     const detail =
       hold.source === "crew"
-        ? `${hold.taskId} · ${hold.verb}`
+        ? crewName(hold.taskId)
         : `${hold.taskId} · ${hold.reason}`;
     const done =
       answered && answered.status !== "failed" && answered.status !== "waiting";
@@ -431,7 +446,7 @@ export function holdAttention(
       kind: "question" as const,
       groupId: null,
       workAreaId: null,
-      title: hold.source === "crew" ? hold.summary : hold.title,
+      title: hold.source === "crew" ? crewQuestion(hold.summary) : hold.title,
       detail: !answered
         ? detail
         : answered.status === "waiting"
@@ -652,7 +667,11 @@ export class ContractAdapter {
     return space.slug;
   }
 
+  private refreshSequence = 0;
+  private appliedRefresh = 0;
+
   async refresh(): Promise<void> {
+    const sequence = ++this.refreshSequence;
     const [spaces, work] = await Promise.all([
       this.daemon.request<DaemonSpace[]>("spaces.list"),
       this.daemon.request<WorkSnapshot>("work.snapshot"),
@@ -665,23 +684,32 @@ export class ContractAdapter {
             .request<{ tasks: DaemonFleetTask[] }>("fleet.snapshot", {
               space: via,
             })
-            .catch(() => ({ tasks: [] as DaemonFleetTask[] })),
+            .catch(() => null),
           this.daemon
             .request<DaemonHold[]>("holds.list", { space: via })
-            .catch(() => [] as DaemonHold[]),
+            .catch(() => null),
         ])
       : [{ tasks: [] as DaemonFleetTask[] }, [] as DaemonHold[]];
     // A reminder put off to a later day stays away until that day.
-    const holds = holdsDue(everyHold, this.now());
+    const workspace = await this.readWorkspace();
+    if (sequence < this.appliedRefresh) return;
+    this.appliedRefresh = sequence;
+    const sameHome = via === this.view.spaces[0]?.slug;
+    const holds = holdsDue(
+      everyHold ?? (sameHome ? this.view.holds : []),
+      this.now(),
+    );
     this.view = {
       spaces,
-      fleet: snapshot.tasks,
+      fleet: snapshot?.tasks ?? (sameHome ? this.view.fleet : []),
       holds,
       work,
-      workspace: await this.readWorkspace(),
+      workspace,
     };
-    settleHoldAnswers(this.holdAnswers, holds);
-    this.resendWaitingAnswers(holds, via ?? null);
+    if (everyHold) {
+      settleHoldAnswers(this.holdAnswers, holds);
+      this.resendWaitingAnswers(holds, via ?? null);
+    }
     await this.ensureGroup();
   }
 
@@ -879,6 +907,64 @@ export class ContractAdapter {
         .catch(() => null);
       return report ? [report] : [];
     }
+    if (message.kind === "work-attachment") {
+      const file = workAttachment.parse(message);
+      const header = {
+        version: 1,
+        kind: "work-attachment-result",
+        requestId: file.requestId,
+        name: file.name,
+        portion: null,
+      };
+      try {
+        if (file.bytes.length > 8 * 1024 * 1024)
+          throw Error("Choose a file up to 8 MiB.");
+        const pieces: string[] = [];
+        for (let offset = 0; offset < file.bytes.length; offset += 16384)
+          pieces.push(
+            String.fromCharCode(...file.bytes.subarray(offset, offset + 16384)),
+          );
+        const saved = await this.daemon.request<{
+          text: string;
+          format: string;
+          recordId: string;
+        }>("work.attachment", {
+          areaId: file.workAreaId,
+          name: file.name,
+          content: btoa(pieces.join("")),
+        });
+        void this.refresh()
+          .then(() => this.onChange?.())
+          .catch(() => undefined);
+        return [{ ...header, ...saved, read: "all", note: null }];
+      } catch (error) {
+        return [
+          {
+            ...header,
+            format: "",
+            read: "none",
+            text: "",
+            recordId: null,
+            note:
+              error instanceof Error
+                ? error.message
+                : "Could not read this file.",
+          },
+        ];
+      }
+    }
+    if (message.kind === "tracker-types")
+      return [
+        {
+          version: 1,
+          kind: "tracker-types-result",
+          workAreaId: message.workAreaId,
+          project: null,
+          story: null,
+          task: null,
+          needs: [],
+        },
+      ];
     if (message.kind === "content-search") {
       // Read only: Amun's own store and Firstmate's saved steps.
       const found = await this.daemon
@@ -1372,7 +1458,8 @@ export class ContractAdapter {
       ];
     const answered: HoldAnswer = {
       signature: holdSignature(found),
-      title: found.source === "crew" ? found.summary : found.title,
+      title:
+        found.source === "crew" ? crewQuestion(found.summary) : found.title,
       answer: said.shown,
       at: this.now(),
       status: "sending",

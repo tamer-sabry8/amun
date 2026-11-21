@@ -1,8 +1,6 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
-import { useChatMemory, homeDraftKey } from "./chat-memory.ts";
-import { chatLists } from "../../../../packages/domain/src/work/chat-lists.ts";
-import { generalConversationName } from "../../../../packages/domain/src/work/model.ts";
+import { homeDraftKey } from "./chat-memory.ts";
 import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
 import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
 import { useState, useSyncExternalStore } from "react";
@@ -422,7 +420,14 @@ function Row({
   const held = isHeld(row.id);
   // A Firstmate reminder filed under a project is that project's task.
   const project = held ? heldProject(row.title, snapshot.areas) : null;
-  const label = held ? (project ? `Task · ${project}` : "Reminder") : row.label;
+  const crewQuestion = held && row.id.split(":").length > 2;
+  const label = crewQuestion
+    ? "Question"
+    : held
+      ? project
+        ? `Task · ${project}`
+        : "Reminder"
+      : row.label;
   const overflow = held
     ? ["Done, close it", "Remind me later", "Help me do it"]
     : row.overflow;
@@ -647,7 +652,6 @@ export function Home({
   onPortfolio,
   onPendingDone,
   onNote,
-  onContinue,
 }: {
   snapshot: Snapshot;
   onOpenDecision?(id: string): void;
@@ -662,20 +666,7 @@ export function Home({
   onPortfolio(): void;
   onPendingDone(note?: string): void;
   onNote(note: string): void;
-  /** Back to the last chat opened, where reading stopped. */
-  onContinue?(areaId: string, chatId: string | null): void;
 }) {
-  const memory = useChatMemory();
-  const lists = chatLists(
-    snapshot.areas,
-    snapshot.chats,
-    snapshot.messages,
-    snapshot.setup.activeGroupId,
-    generalConversationName,
-  );
-  // A chat that is gone (deleted, or its folder deleted) is skipped.
-  const last = memory.last ? lists.byKey.get(memory.last) : undefined;
-  const lastShown = last && !last.empty ? last : undefined;
   const view = homeModel(snapshot, now);
   const [filter, setFilter] = useState<"open" | "done">("open");
   const [kinds, setKinds] = useState<string[] | null>(null);
@@ -841,24 +832,6 @@ export function Home({
             <p className="muted small">{view.linkingLine}</p>
           )}
         </header>
-        {lastShown && onContinue && (
-          <button
-            className="rb-continue"
-            onClick={() => onContinue(lastShown.areaId, lastShown.chatId)}
-          >
-            <span className="label">Continue</span>
-            <span className="what">
-              <strong>{lastShown.title}</strong>
-              <span className="muted">
-                {" · "}
-                {lastShown.folder ?? "General"}
-                {lastShown.unread > 0 &&
-                  ` · ${lastShown.unread} new ${lastShown.unread === 1 ? "reply" : "replies"}`}
-              </span>
-            </span>
-            <span className="go">Resume</span>
-          </button>
-        )}
         <section className="rb-panel" aria-labelledby="rb-att-h">
           <header>
             <h2 id="rb-att-h">Needs your attention</h2>

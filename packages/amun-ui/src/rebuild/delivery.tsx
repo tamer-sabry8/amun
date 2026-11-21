@@ -2,7 +2,7 @@
 // 2026): a Firstmate reply at the bottom with the document, opening the exact
 // version it delivered, and a link back to the request it answers when that
 // link is confirmed.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 
@@ -112,12 +112,14 @@ export interface RequestView {
 export function RequestLine({
   request,
   deliveries,
+  replyId,
   line,
   project,
   changeTo,
   onShow,
 }: {
   request: RequestView;
+  replyId: string | null;
   deliveries: { messageId: string; title: string; version: number }[];
   line: string;
   /** The confirmed project's name; null for none. */
@@ -126,13 +128,42 @@ export function RequestLine({
   onShow(messageId: string): void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !wrap.current?.contains(event.target))
+        setOpen(false);
+    };
+    const dismissKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        wrap.current?.querySelector("button")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissKey);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissKey);
+    };
+  }, [open]);
   const change =
     request.changeState === "requested"
       ? `Change requested · ${changeTo ?? "no project"}`
       : request.changeState === "refused"
         ? `Firstmate kept it in ${project ?? "its project"}`
         : null;
-  const text = [line, change].filter(Boolean).join(" · ");
+  const destination =
+    request.status === "delivered"
+      ? (replyId ?? deliveries.at(-1)?.messageId)
+      : null;
+  const text = [
+    request.status === "delivered" && !destination ? "Ready" : line,
+    change,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   if (!text) return null;
   const tone =
     request.status === "delivered"
@@ -145,15 +176,11 @@ export function RequestLine({
             ? "wait"
             : "busy";
   return (
-    <span className="rb-req-wrap">
+    <span className="rb-req-wrap" ref={wrap}>
       <button
         className={"rb-req " + tone}
-        aria-expanded={open}
-        onClick={() =>
-          request.status === "delivered" && deliveries.length && !open
-            ? onShow(deliveries.at(-1)!.messageId)
-            : setOpen(!open)
-        }
+        aria-expanded={destination ? undefined : open}
+        onClick={() => (destination ? onShow(destination) : setOpen(!open))}
       >
         <i aria-hidden="true" />
         <span>{text}</span>
