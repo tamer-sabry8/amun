@@ -452,6 +452,18 @@ export const workspaceSnapshot = z.strictObject({
       routingReviews: z.array(routingReview).default([]),
       storyDecisions: z.array(storyDecision).default([]),
       storyDrafts: z.array(storyDraft).default([]),
+      storyReviews: z
+        .array(
+          z.strictObject({
+            objectiveId: id,
+            version: z.int().positive(),
+            areaId: id,
+            chatId: id.nullable(),
+            ref: id,
+            messageId: id,
+          }),
+        )
+        .optional(),
       comparisons: z.array(prdComparison).optional(),
       priorities: z.array(
         z.strictObject({ id, ...priorityFields, score: z.number().nullable() }),

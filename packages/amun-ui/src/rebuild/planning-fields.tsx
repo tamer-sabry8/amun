@@ -3,6 +3,14 @@ import type { BacklogResult } from "@amun/contracts";
 import type { PlannedMove } from "./planning-draft.ts";
 type Read = Extract<BacklogResult, { view: "cards" }>;
 type Card = Read["cards"][number];
+export const readableCriteria = (html: string) =>
+  html
+    .replace(/<\/(?:div|p|li)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&")
+    .trim();
 export function PlanningFields({
   card,
   pending,
@@ -17,14 +25,6 @@ export function PlanningFields({
   disabled: boolean;
 }) {
   const [wording, setWording] = useState<string | null>(null);
-  const readable = (html: string) =>
-    html
-      .replace(/<\/(?:div|p|li)>|<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]*>/g, "")
-      .replaceAll("&lt;", "<")
-      .replaceAll("&gt;", ">")
-      .replaceAll("&amp;", "&")
-      .trim();
   if (!card.iteration) return null;
   const baseline = {
     id: card.id,
@@ -45,8 +45,10 @@ export function PlanningFields({
               <p>
                 Azure changed the acceptance criteria. Review both versions.
               </p>
-              <p>Originally reviewed · {readable(pending.criteria.from)}</p>
-              <p>Current Azure · {readable(card.criteria ?? "")}</p>
+              <p>
+                Originally reviewed · {readableCriteria(pending.criteria.from)}
+              </p>
+              <p>Current Azure · {readableCriteria(card.criteria ?? "")}</p>
             </div>
           )}
           <label className="field">
@@ -55,7 +57,7 @@ export function PlanningFields({
               value={
                 wording ??
                 pending?.criteria?.text ??
-                readable(card.criteria ?? "")
+                readableCriteria(card.criteria ?? "")
               }
               disabled={disabled}
               onChange={(e) => setWording(e.target.value)}
@@ -72,12 +74,12 @@ export function PlanningFields({
               const text =
                 wording ??
                 pending?.criteria?.text ??
-                readable(card.criteria ?? "");
+                readableCriteria(card.criteria ?? "");
               stage({
                 ...baseline,
                 ...pending,
                 criteria:
-                  text === readable(card.criteria ?? "")
+                  text === readableCriteria(card.criteria ?? "")
                     ? undefined
                     : { from: card.criteria ?? "", text },
               });

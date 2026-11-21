@@ -1,9 +1,11 @@
+import { readableCriteria } from "./planning-fields.tsx";
 import { useState } from "react";
-import type { PlannedStory } from "@amun/contracts";
+import type { BacklogResult, PlannedStory } from "@amun/contracts";
 export function PlannedStoryRow({
   story,
   name,
   matches,
+  people,
   useExisting,
   update,
   remove,
@@ -11,8 +13,19 @@ export function PlannedStoryRow({
 }: {
   story: PlannedStory;
   name: string;
-  matches: readonly { id: number; title: string; outside?: string }[];
-  useExisting(id: number, labels: string[], schedule: boolean): void;
+  matches: readonly (Extract<
+    BacklogResult,
+    { view: "cards" }
+  >["cards"][number] & { outside?: string })[];
+  people: readonly { id: string; name: string }[];
+  useExisting(
+    id: number,
+    rev: number,
+    labels: string[],
+    schedule: boolean,
+    owner: string,
+    criteria: string | null,
+  ): void;
   update(next: PlannedStory): void;
   remove(): void;
   focus: boolean;
@@ -20,6 +33,18 @@ export function PlannedStoryRow({
   const [existing, setExisting] = useState<number | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [schedule, setSchedule] = useState(false);
+  const [rev, setRev] = useState(0);
+  const [owner, setOwner] = useState("");
+  const [wording, setWording] = useState<string | null>(null);
+  const matched = matches.find((m) => m.id === existing);
+  function select(m: (typeof matches)[number], edit: boolean) {
+    setExisting(m.id);
+    setRev(m.rev);
+    setLabels([]);
+    setOwner("");
+    setSchedule(false);
+    setWording(edit ? readableCriteria(m.criteria ?? "") : null);
+  }
   return (
     <article
       className="rb-inline"
@@ -80,26 +105,67 @@ export function PlannedStoryRow({
         <div>
           <h4>Possible duplicates</h4>
           {matches.map((m) => (
-            <p key={m.id}>
+            <div className="rb-inline" key={m.id}>
               #{m.id} {m.title}{" "}
               {m.outside && (
                 <span className="muted small">Outside {m.outside} filter</span>
               )}
+              <p>
+                Existing criteria ·{" "}
+                {m.readableCriteria
+                  ? readableCriteria(m.criteria ?? "") || "Empty"
+                  : "Unavailable"}
+              </p>
+              <p>
+                Draft criteria ·{" "}
+                {story.criteria.filter(Boolean).join(" · ") || "Empty"}
+              </p>
               <button
                 className="btn quiet"
-                onClick={() => {
-                  setExisting(m.id);
-                  setLabels([]);
-                  setSchedule(false);
-                }}
+                disabled={!m.readableCriteria}
+                onClick={() => select(m, true)}
               >
+                Edit existing story #{m.id}
+              </button>
+              <button className="btn quiet" onClick={() => select(m, false)}>
                 Use existing story #{m.id}
               </button>
-            </p>
+            </div>
           ))}
           {matches.some((m) => m.id === existing) && existing !== null && (
             <fieldset>
-              <legend>Review changes to #{existing}</legend>
+              <legend>
+                Review changes to #{existing} · revision {rev}
+              </legend>
+              {wording !== null && (
+                <label className="field">
+                  Reviewed acceptance criteria
+                  <textarea
+                    maxLength={16000}
+                    value={wording}
+                    onChange={(e) => setWording(e.target.value)}
+                  />
+                </label>
+              )}
+              {!!people.length && (
+                <label className="field">
+                  Owner
+                  <select
+                    disabled={!!matched?.assignee && !matched.assigneeId}
+                    value={owner}
+                    onChange={(e) => setOwner(e.target.value)}
+                  >
+                    <option value="">Keep current owner</option>
+                    {people
+                      .filter((p) => p.id !== matched?.assigneeId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
               {[
                 ...new Set(story.labels.map((l) => l.trim()).filter(Boolean)),
               ].map((label) => (
@@ -128,7 +194,22 @@ export function PlannedStoryRow({
               </label>
               <button
                 className="btn"
-                onClick={() => useExisting(existing, labels, schedule)}
+                disabled={!matched || matched.rev !== rev}
+                onClick={() =>
+                  useExisting(
+                    existing,
+                    rev,
+                    labels.filter((l) =>
+                      story.labels.some((s) => s.trim() === l),
+                    ),
+                    schedule,
+                    owner,
+                    wording !== null &&
+                      wording !== readableCriteria(matched?.criteria ?? "")
+                      ? wording
+                      : null,
+                  )
+                }
               >
                 Use #{existing} and discard the new story draft
               </button>

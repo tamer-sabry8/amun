@@ -129,9 +129,12 @@ export async function createPlannedStories(
       marker: "Test-" + story.localId,
       creationLabels: story.labels,
     };
-    db.prepare(
-      "UPDATE sprint_new_stories SET step_json=?,state='unknown',detail='Awaiting independent verification' WHERE ref=? AND local_id=?",
-    ).run(JSON.stringify(step), ref, story.localId);
+    const claim = db
+      .prepare(
+        "UPDATE sprint_new_stories SET step_json=?,state='unknown',detail='Awaiting independent verification' WHERE ref=? AND local_id=? AND state='pending'",
+      )
+      .run(JSON.stringify(step), ref, story.localId);
+    if (!claim.changes) continue;
     try {
       const result = await client.write(step, null);
       db.prepare(

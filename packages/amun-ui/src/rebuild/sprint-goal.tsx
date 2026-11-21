@@ -15,6 +15,7 @@ type Suggestions = NonNullable<
 >;
 export function SprintGoal({
   scope,
+  planningLoad,
   name,
   tag,
   cards,
@@ -24,6 +25,9 @@ export function SprintGoal({
   unavailable,
 }: {
   scope: PlanningScope;
+  planningLoad?:
+    | { teamPoints: number; unestimated: number; localBudget: number | null }
+    | undefined;
   name: string;
   tag: string;
   cards: Read["cards"];
@@ -117,6 +121,7 @@ export function SprintGoal({
       workAreaId: scope.areaId,
       chatId: result.ref,
       goal: goal.trim(),
+      ...(planningLoad ? { planningLoad } : {}),
       tag,
       ref: asked.ref,
       requestId: asked.id,

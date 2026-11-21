@@ -643,12 +643,14 @@ export function Home({
   onSend,
   onResubmit,
   onOpen,
+  onOpenDecision,
   onPortfolio,
   onPendingDone,
   onNote,
   onContinue,
 }: {
   snapshot: Snapshot;
+  onOpenDecision?(id: string): void;
   now: number;
   model: string | null;
   pending: IntakeStep | null;
@@ -711,6 +713,15 @@ export function Home({
       : [];
   const openRow = (id: string) => {
     const item = snapshot.attention.find((entry) => entry.id === id);
+    if (
+      onOpenDecision &&
+      item &&
+      (item.id.startsWith("sprint-held:") ||
+        item.id.startsWith("blocker-review:"))
+    ) {
+      onOpenDecision(item.id);
+      return;
+    }
     onOpen(item?.workAreaId ?? null);
   };
   const card = pending && (

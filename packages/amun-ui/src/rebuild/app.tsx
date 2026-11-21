@@ -809,7 +809,9 @@ export function App() {
         name: topOffer.request.name,
       }
     : null;
-  const openAttention = (item: Attention) => {
+  const openAttention = (
+    item: Pick<Attention, "id" | "workAreaId" | "kind">,
+  ) => {
     const raw = snapshot.attention.find((entry) => entry.id === item.id);
     const held = snapshot.sprintDecisions?.find(
       (d) =>
@@ -1091,6 +1093,10 @@ export function App() {
           </div>
         ) : layout.route === "home" ? (
           <Home
+            onOpenDecision={(id) => {
+              const item = snapshot.attention.find((a) => a.id === id);
+              if (item) openAttention(item);
+            }}
             snapshot={snapshot}
             now={now}
             model={model}
@@ -1190,6 +1196,10 @@ export function App() {
           />
         ) : layout.route === "roadmap" ? (
           <Roadmap
+            onResume={(link) => {
+              go("sprints");
+              setResumePlanning(link);
+            }}
             snapshot={snapshot}
             model={model}
             onReview={(planId, areaId) =>

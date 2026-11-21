@@ -1048,8 +1048,10 @@ export function Roadmap({
   snapshot,
   model,
   onReview,
+  onResume,
 }: {
   snapshot: Snapshot;
+  onResume?(link: SavedPlanningLink): void;
   model: string | null;
   onReview(planId: string, workAreaId: string | null): void;
 }) {
@@ -1215,6 +1217,9 @@ export function Roadmap({
         </>
       }
     >
+      {onResume && areaId && allowed.has(areaId) && (
+        <ResumePlanning areas={new Set([areaId])} open={onResume} />
+      )}
       {!items.length && (
         <p className="muted">
           Nothing on the roadmap yet. Add an item below, or ask Firstmate to

@@ -649,11 +649,13 @@ export function SprintPlanner({
               }))}
               name={name}
               focus={newFocus === story.localId}
-              useExisting={(id, labels, schedule) => {
+              people={fieldOptions.identities ?? []}
+              useExisting={(id, rev, labels, schedule, ownerId, wording) => {
                 const card = cards?.find((c) => c.id === id);
                 if (
                   !fresh ||
                   !card?.iteration ||
+                  card.rev !== rev ||
                   submittedIds.has(id) ||
                   applying.current ||
                   draft.moves.some((m) => m.id === id)
@@ -669,12 +671,29 @@ export function SprintPlanner({
                       (l) => l.toLowerCase() === label.toLowerCase(),
                     ),
                 );
+                const person = fieldOptions.identities?.find(
+                  (p) => p.id === ownerId,
+                );
+                if (
+                  (ownerId &&
+                    (!person || (card.assignee && !card.assigneeId))) ||
+                  (wording !== null && !card.readableCriteria)
+                ) {
+                  setError("The reviewed fields changed. Refresh this story.");
+                  return;
+                }
                 const next = stageMove(draft, {
                   id,
                   rev: card.rev,
                   title: card.title,
                   from: card.iteration,
                   to: schedule ? scope.iteration : card.iteration,
+                  ...(person
+                    ? { owner: { from: card.assigneeId ?? null, to: person } }
+                    : {}),
+                  ...(wording !== null
+                    ? { criteria: { from: card.criteria ?? "", text: wording } }
+                    : {}),
                   ...(addLabels.length ? { addLabels } : {}),
                 });
                 save({
@@ -906,6 +925,17 @@ export function SprintPlanner({
           <h2>{name}</h2>
           <SprintGoal
             key={JSON.stringify([scopedDraftKey(scope), activeTag])}
+            planningLoad={
+              load
+                ? {
+                    teamPoints: load.points,
+                    unestimated:
+                      load.unknown.length +
+                      creates.filter((c) => c.schedule).length,
+                    localBudget: budgetValue,
+                  }
+                : undefined
+            }
             scope={scope}
             name={name}
             tag={activeTag}

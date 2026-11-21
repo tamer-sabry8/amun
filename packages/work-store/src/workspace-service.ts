@@ -119,6 +119,11 @@ export class WorkspaceService {
       },
       tasks: this.reminders.list(productId),
       memoryLinks: this.memorySync.list(productId),
+      storyReviews: this.db
+        .prepare(
+          `SELECT o.objective_id AS objectiveId,o.version,o.area_id AS areaId,o.chat_id AS chatId,o.ref,r.message_id AS messageId FROM prd_review_origins o JOIN work_requests r ON r.ref=o.ref WHERE o.product_id=?`,
+        )
+        .all(productId),
       comparisons: this.db
         .prepare(
           "SELECT result_json FROM prd_comparisons WHERE product_id=? ORDER BY rowid",

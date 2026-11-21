@@ -271,6 +271,13 @@ export const adoOperation = z.discriminatedUnion("action", [
     level: id,
     sprintId: id,
     goal: z.string().trim().min(1).max(2048),
+    planningLoad: z
+      .object({
+        teamPoints: z.number().nonnegative(),
+        unestimated: z.int().nonnegative(),
+        localBudget: z.number().nonnegative().nullable(),
+      })
+      .optional(),
     tag: z.string().max(128).optional(),
   }),
   sprintMoveRequest,

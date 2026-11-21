@@ -673,3 +673,28 @@ it("keeps a freshly verified destination once on the original held receipt", asy
   ).toEqual({ total: 1 });
   db.close();
 });
+it("retires abandoned pre-write claims on inspection and prevents a late Firstmate acknowledgement from writing", async () => {
+  const { db, request, target, reader, client, transport } = fixture();
+  let accept!: (v: string) => void;
+  const ack = new Promise<string>((r) => {
+    accept = r;
+  });
+  const running = applySprintMoves(
+    db,
+    request,
+    target,
+    reader,
+    client,
+    () => true,
+    () => ack,
+  );
+  db.prepare(
+    "UPDATE work_requests SET updated_at='2000-01-01T00:00:00.000Z' WHERE ref=?",
+  ).run(request.ref);
+  const receipt = await inspectSprintSubmission(db, request, target, client);
+  expect(receipt.receipts.map((r) => r.state)).toEqual(["held", "held"]);
+  accept("ACCEPT " + request.ref);
+  expect((await running).receipts).toEqual(receipt.receipts);
+  expect(transport).not.toHaveBeenCalled();
+  db.close();
+});

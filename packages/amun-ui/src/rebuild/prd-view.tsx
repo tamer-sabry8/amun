@@ -1,6 +1,5 @@
-import { PrdCoverage } from "./prd-coverage.tsx";
 import { useReviewOrigin } from "./review-origin.tsx";
-import { StoryDraftEditor } from "./story-draft-editor.tsx";
+import { StoryProposals } from "./story-proposals.tsx";
 // The PRD pane. Same messages and checks as the earlier PRD workspace
 // (understanding, editor with autosave, Firstmate proposals, approval, stories,
 // selection tools); only the view is new. The earlier Research / Write /
@@ -399,15 +398,17 @@ function PrdEditor({
 }
 
 export function PrdView({
+  initialObjective,
   context,
   openPreview,
 }: {
   context: Context;
   openPreview?: ((url: string) => void) | undefined;
+  initialObjective?: string | undefined;
 }) {
   const origin = useReviewOrigin();
   const difficulty = "standard";
-  const [chosen, choose] = useState(""),
+  const [chosen, choose] = useState(initialObjective ?? ""),
     [selection, select] = useState(""),
     [asked, setAsked] = useState(false),
     [sourcesOpen, setSourcesOpen] = useState(false);
@@ -632,35 +633,11 @@ export function PrdView({
             </button>
           </div>
           {storiesReady && (
-            <section aria-label="Story proposals">
-              <h3>Story proposals</h3>
-              <PrdCoverage
-                context={context}
-                objectiveId={objective.id}
-                version={prd.version}
-              />
-              {context.storyDrafts
-                .filter(
-                  (s) =>
-                    s.objectiveId === objective.id &&
-                    s.version === prd.version &&
-                    !s.parentId,
-                )
-                .map((story) => (
-                  <article className="rb-inline" key={story.id}>
-                    <h4>{story.title}</h4>
-                    <p className="muted small">
-                      PRD v{story.version} · {story.requirement}
-                    </p>
-                    <ul>
-                      {story.acceptance.map((criterion, i) => (
-                        <li key={i}>{criterion}</li>
-                      ))}
-                    </ul>
-                    <StoryDraftEditor context={context} story={story} />
-                  </article>
-                ))}
-            </section>
+            <StoryProposals
+              context={context}
+              objectiveId={objective.id}
+              version={prd.version}
+            />
           )}
         </section>
       )}

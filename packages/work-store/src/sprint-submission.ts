@@ -270,7 +270,12 @@ export async function applySprintMoves(
         );
         continue;
       }
-      set(move.id, "unknown", "Awaiting independent verification");
+      const claimed = db
+        .prepare(
+          "UPDATE sprint_submission_items SET state='unknown',detail='Awaiting independent verification' WHERE ref=? AND item_id=? AND state='pending'",
+        )
+        .run(ref, move.id);
+      if (!claimed.changes) continue;
       try {
         const fields: Record<string, string | number> = {};
         if (move.criteria)
@@ -563,6 +568,32 @@ export async function inspectSprintSubmission(
     scope.destination.team !== request.team
   )
     throw Error("The request belongs to another destination.");
+  // Pending rows have never claimed a provider write. An inspection can safely
+  // retire an abandoned pre-dispatch claim, even if a late callback arrives.
+  db.transaction(() => {
+    const stale = db
+      .prepare(
+        "SELECT 1 FROM work_requests WHERE ref=? AND status='working' AND updated_at<?",
+      )
+      .get(request.ref, new Date(Date.now() - 180000).toISOString());
+    if (!stale) return;
+    const detail =
+      "Dispatch interrupted before the Azure write. Review before retrying.";
+    const moves = db
+      .prepare(
+        "UPDATE sprint_submission_items SET state='held',detail=? WHERE ref=? AND state='pending'",
+      )
+      .run(detail, request.ref);
+    const creates = db
+      .prepare(
+        "UPDATE sprint_new_stories SET state='held',detail=? WHERE ref=? AND state='pending' AND step_json IS NULL AND remote_id IS NULL",
+      )
+      .run(detail, request.ref);
+    if (moves.changes || creates.changes)
+      db.prepare(
+        "UPDATE work_requests SET status='needs-decision',detail=?,updated_at=? WHERE ref=?",
+      ).run(detail, new Date().toISOString(), request.ref);
+  }).immediate();
   for (const entry of submissionReceipt(db, request.ref).receipts) {
     if (entry.state !== "unknown") continue;
     const move = scope.moves.find((m) => m.id === entry.remoteId);

@@ -1,4 +1,5 @@
 import { inspectView } from "../daemon/navigation.ts";
+import { StoryProposals } from "./story-proposals.tsx";
 import { ReviewOrigin } from "./review-origin.tsx";
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
@@ -188,7 +189,7 @@ export type PaneTarget =
       version?: number;
     }
   | { kind: "plan"; id: string }
-  | { kind: "prd" }
+  | { kind: "prd"; objectiveId?: string }
   | { kind: "backlog" }
   | { kind: "pulls" }
   | { kind: "browser"; url: string }
@@ -2334,6 +2335,19 @@ export function WorkSession({
       </div>
     );
   const { area } = context;
+  const reviewContext =
+    workspace?.productContext?.productId === area.productId
+      ? workspace.productContext
+      : null;
+  const chatReviews =
+    reviewContext?.storyReviews?.filter(
+      (r) =>
+        r.areaId === areaId &&
+        r.chatId === chatId &&
+        reviewContext.objectives.some(
+          (o) => o.id === r.objectiveId && o.prd?.version === r.version,
+        ),
+    ) ?? [];
   const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
   // Only this work's own questions. The First Mate's standing holds (often a
@@ -2906,7 +2920,11 @@ export function WorkSession({
                   />
                 ) : message.role === "card" ? (
                   message.id === lastReplyId ? (
-                    <div key={message.id} ref={latestReply}>
+                    <div
+                      key={message.id}
+                      data-mid={message.id}
+                      ref={latestReply}
+                    >
                       <InlineCard
                         snapshot={snapshot}
                         areaId={areaId}
@@ -2919,17 +2937,18 @@ export function WorkSession({
                       />
                     </div>
                   ) : (
-                    <InlineCard
-                      key={message.id}
-                      snapshot={snapshot}
-                      areaId={areaId}
-                      card={
-                        (message.card ?? {
-                          kind: "note",
-                          text: message.text,
-                        }) as Card
-                      }
-                    />
+                    <div data-mid={message.id} key={message.id}>
+                      <InlineCard
+                        snapshot={snapshot}
+                        areaId={areaId}
+                        card={
+                          (message.card ?? {
+                            kind: "note",
+                            text: message.text,
+                          }) as Card
+                        }
+                      />
+                    </div>
                   )
                 ) : (
                   <Fragment key={message.id}>
@@ -3003,6 +3022,52 @@ export function WorkSession({
                       />
                       {message.role === "you" && requestLineFor(message.card)}
                     </div>
+                    {reviewContext &&
+                      chatReviews
+                        .filter((r) => r.messageId === message.id)
+                        .map((r) => (
+                          <details
+                            key={r.ref}
+                            className="rb-inline"
+                            onToggle={(e) => {
+                              if (e.currentTarget.open)
+                                inspectView({
+                                  view: "Story proposals",
+                                  areaId,
+                                  record: r.ref,
+                                  source: "Chat",
+                                });
+                            }}
+                          >
+                            <summary>
+                              Review story proposals · PRD v{r.version}
+                            </summary>
+                            <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                              <StoryProposals
+                                context={reviewContext}
+                                objectiveId={r.objectiveId}
+                                version={r.version}
+                              />
+                            </ReviewOrigin.Provider>
+                            <button
+                              className="btn quiet"
+                              onClick={() => {
+                                inspectView({
+                                  view: "Full PRD review",
+                                  areaId,
+                                  record: r.ref,
+                                  source: "Chat",
+                                });
+                                onPane({
+                                  kind: "prd",
+                                  objectiveId: r.objectiveId,
+                                });
+                              }}
+                            >
+                              Open full review
+                            </button>
+                          </details>
+                        ))}
                   </Fragment>
                 ),
               )}
@@ -3793,7 +3858,11 @@ export function WorkSession({
                   pane.kind === "prd" ? (
                     <ReviewOrigin.Provider value={{ areaId, chatId }}>
                       <PrdView
-                        key={workspace.productContext.productId}
+                        initialObjective={pane.objectiveId}
+                        key={JSON.stringify([
+                          workspace.productContext.productId,
+                          pane.objectiveId,
+                        ])}
                         context={workspace.productContext}
                         openPreview={(url) => onPane({ kind: "browser", url })}
                       />
