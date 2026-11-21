@@ -89,6 +89,13 @@ export function stageMove(
   return { ...draft, moves };
 }
 
+export function planningChangeCount(moves: readonly PlannedMove[]) {
+  return moves.reduce(
+    (n, m) => n + Number(m.from !== m.to) + Number(!!m.addLabels?.length),
+    0,
+  );
+}
+
 export interface SavedPlanningLink {
   areaId: string;
   productId: string;
@@ -131,7 +138,7 @@ export function savedPlanningLinks(
           backlog,
           sprintId,
           id: draft.id,
-          count: draft.moves.length,
+          count: planningChangeCount(draft.moves),
         });
     } catch {
       /* Ignore unreadable entries without changing storage. */

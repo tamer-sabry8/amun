@@ -1,5 +1,6 @@
+import { readPlanningCache, savePlanningCache } from "./planning-cache.ts";
 import { plannedLoad, teamBudgetKey } from "./sprint-load.ts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   backlogResult,
   operationResult,
@@ -12,6 +13,7 @@ import { newRequestRef } from "../../../domain/src/work/requests.ts";
 import { inspectView } from "../daemon/navigation.ts";
 import {
   loadDraft,
+  planningChangeCount,
   scopedDraftKey,
   stageMove,
   type PlanningDraft,
@@ -25,14 +27,22 @@ export function SprintPlanner({
   name,
   members,
   destinations = [],
+  refreshMembers,
+  offlineOnly = false,
   openChat,
 }: {
   scope: PlanningScope;
   name: string;
   members: { id: string; title: string }[];
   destinations?: { id: string; name: string; path: string }[];
+  refreshMembers?(): void;
+  offlineOnly?: boolean;
   openChat(chatId: string, requestRef?: string): void;
 }) {
+  const connected = useSyncExternalStore(
+    bridge.subscribe,
+    () => bridge.getSnapshot().status === "Connected",
+  );
   const [carryTo, setCarryTo] = useState("");
   const [carryIds, setCarryIds] = useState<number[]>([]);
   const [budget, setBudget] = useState(() => {
@@ -52,8 +62,15 @@ export function SprintPlanner({
       return null;
     }
   });
-  const [cards, setCards] = useState<Card[] | null>(null);
-  const [backlogPath, setBacklogPath] = useState<string | null>(null);
+  const [cached] = useState(() => readPlanningCache(scope));
+  const [cards, setCards] = useState<Card[] | null>(
+    cached?.result.cards ?? null,
+  );
+  const [checkedAt, setCheckedAt] = useState(cached?.at ?? "");
+  const [fresh, setFresh] = useState(false);
+  const [backlogPath, setBacklogPath] = useState<string | null>(
+    cached?.result.backlogIteration ?? null,
+  );
   const [query, setQuery] = useState("");
   const [detailsQuery, setDetailsQuery] = useState<string | null>(null);
   const searchBacklog = (details: boolean) => {
@@ -88,8 +105,13 @@ export function SprintPlanner({
         inspections.current.delete(result.requestId);
         if (result.requestRef && result.requestRef !== ref) return;
         setReceiptText((prev) => ({ ...prev, [ref]: result.message }));
-        if (result.receipts)
+        if (result.receipts) {
           setReceipts((prev) => ({ ...prev, [ref]: result.receipts! }));
+          if (result.receipts.some((r) => r.state === "confirmed")) {
+            refresh((n) => n + 1);
+            refreshMembers?.();
+          }
+        }
       }),
     [scope.productId],
   );
@@ -120,8 +142,8 @@ export function SprintPlanner({
   const key = scopedDraftKey(scope);
   useEffect(() => {
     const requestId = crypto.randomUUID();
-    setCards(null);
-    setBacklogPath(null);
+    setFresh(false);
+    if (offlineOnly || !connected) return;
     setError("");
     const timer = setTimeout(
       () => setError("The backlog did not answer. Refresh to try again."),
@@ -137,6 +159,16 @@ export function SprintPlanner({
         return;
       clearTimeout(timer);
       if (parsed.data.view === "cards") {
+        const at = new Date().toISOString();
+        setFresh(true);
+        setCheckedAt(at);
+        savePlanningCache(scope, {
+          at,
+          name,
+          iteration: scope.iteration,
+          members,
+          result: parsed.data,
+        });
         setCards(parsed.data.cards);
         setBacklogPath(parsed.data.backlogIteration ?? null);
         setError("");
@@ -158,7 +190,7 @@ export function SprintPlanner({
       clearTimeout(timer);
       stop();
     };
-  }, [key, attempt, detailsQuery]);
+  }, [key, attempt, detailsQuery, offlineOnly, connected]);
   if (!draft)
     return (
       <p role="alert">
@@ -193,26 +225,26 @@ export function SprintPlanner({
         .map((move) => move.id),
     ),
   );
+  const ready = draft.moves.filter(
+    (m) =>
+      !submittedIds.has(m.id) &&
+      cards?.some(
+        (c) => c.id === m.id && c.rev === m.rev && c.iteration === m.from,
+      ),
+  );
+  const readyCount = planningChangeCount(ready),
+    totalCount = planningChangeCount(draft.moves);
   const apply = async () => {
-    if (applying.current || !draft.moves.length) return;
+    if (applying.current || !draft.moves.length || !fresh || offlineOnly)
+      return;
     if (bridge.getSnapshot().status !== "Connected") {
       setError(
         "Waiting for Firstmate. Refresh the backlog and apply when connected.",
       );
       return;
     }
-    if (
-      !cards ||
-      draft.moves.some(
-        (m) =>
-          !cards.some(
-            (c) => c.id === m.id && c.rev === m.rev && c.iteration === m.from,
-          ),
-      )
-    ) {
-      setError(
-        "A staged story changed. Refresh the backlog and review its move.",
-      );
+    if (!cards || !ready.length) {
+      setError("Refresh the changed records before applying this draft.");
       return;
     }
     applying.current = true;
@@ -238,15 +270,27 @@ export function SprintPlanner({
       const batch = {
         ref: newRequestRef(),
         chatId: chat.ref,
-        moves: draft.moves,
+        moves: ready,
       };
-      if (!save({ ...draft, moves: [], submissions: [...submitted, batch] }))
+      if (
+        !save({
+          ...draft,
+          moves: draft.moves.filter((m) => !ready.includes(m)),
+          submissions: [...submitted, batch],
+        })
+      )
         return;
+      const requestId = crypto.randomUUID();
+      inspections.current.set(requestId, batch.ref);
+      setReceiptText((prev) => ({
+        ...prev,
+        [batch.ref]: "Pending Firstmate confirmation",
+      }));
       bridge.send({
         version: 1,
         kind: "ado-operation",
         action: "apply-sprint-moves",
-        requestId: crypto.randomUUID(),
+        requestId,
         ref: batch.ref,
         workAreaId: scope.areaId,
         chatId: chat.ref,
@@ -258,7 +302,6 @@ export function SprintPlanner({
         iteration: scope.iteration,
         moves: batch.moves,
       });
-      openChat(chat.ref);
     } finally {
       applying.current = false;
       setPreparing(false);
@@ -297,7 +340,7 @@ export function SprintPlanner({
           )) ||
         String(card.id).includes(search.replace(/^#/, ""))),
   );
-  const additionsOnly = draft.moves.every(
+  const additionsOnly = ready.every(
     (m) => m.to === scope.iteration && m.from !== m.to && !m.addLabels?.length,
   );
   const load = cards
@@ -311,6 +354,19 @@ export function SprintPlanner({
       : null;
   return (
     <section aria-label="Sprint planning">
+      {(!connected || offlineOnly) && (
+        <p role="status">
+          Waiting for Firstmate · changes stay on this device.
+        </p>
+      )}
+      {checkedAt && (
+        <p className="muted small">
+          {fresh && !offlineOnly
+            ? "Backlog checked"
+            : "Saved backlog · last checked"}{" "}
+          {new Date(checkedAt).toLocaleString()}
+        </p>
+      )}
       <div className="rb-planning-panes">
         <section aria-label="Team backlog">
           <h2>Team backlog</h2>
@@ -654,6 +710,34 @@ export function SprintPlanner({
                     </button>
                   );
                 })}
+              {!!move.addLabels?.length && move.from !== move.to && (
+                <>
+                  <button
+                    className="btn quiet"
+                    disabled={preparing}
+                    onClick={() =>
+                      save(stageMove(draft, { ...move, addLabels: undefined }))
+                    }
+                  >
+                    Undo labels
+                  </button>
+                  <button
+                    className="btn quiet"
+                    disabled={preparing}
+                    onClick={() =>
+                      save(
+                        stageMove(draft, {
+                          ...move,
+                          to: move.from,
+                          targetSprintId: undefined,
+                        }),
+                      )
+                    }
+                  >
+                    Undo move
+                  </button>
+                </>
+              )}
               <button
                 className="btn quiet"
                 onClick={() =>
@@ -816,30 +900,36 @@ export function SprintPlanner({
               </label>
             </section>
           )}
+          {fresh && totalCount > readyCount && (
+            <p role="status">
+              {totalCount - readyCount} waiting for updated records
+            </p>
+          )}
           {draft.moves.length > 0 && (
             <button
               className="btn primary"
-              disabled={preparing || !cards}
+              disabled={
+                preparing || !readyCount || !fresh || offlineOnly || !connected
+              }
               onClick={() => void apply()}
             >
               {additionsOnly
                 ? "Add " +
-                  draft.moves.length +
+                  readyCount +
                   " " +
-                  (draft.moves.length === 1 ? "story" : "stories") +
+                  (readyCount === 1 ? "story" : "stories") +
                   " to " +
                   name
                 : "Apply " +
-                  draft.moves.length +
+                  readyCount +
                   " " +
-                  (draft.moves.length === 1 ? "change" : "changes")}
+                  (readyCount === 1 ? "change" : "changes")}
             </button>
           )}
           {draft.moves.length > 0 && (
             <p role="status">
-              {draft.moves.length}{" "}
-              {draft.moves.length === 1 ? "change" : "changes"} saved on this
-              device
+              {totalCount} {totalCount === 1 ? "change" : "changes"} saved on
+              this device
             </p>
           )}
         </section>

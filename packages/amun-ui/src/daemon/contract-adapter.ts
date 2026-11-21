@@ -580,8 +580,12 @@ export class ContractAdapter {
             throw Error("Could not record navigation.");
           this.onChange?.();
         },
-        send: async (text) => {
-          await this.askFirstMate(text);
+        send: async (prompt, ref) => {
+          const result = await this.daemon.request<{ delivered: boolean }>(
+            "work.inspect",
+            { space: await this.ensureSpace(), ref, prompt },
+          );
+          return result.delivered;
         },
       },
       storage ?? undefined,

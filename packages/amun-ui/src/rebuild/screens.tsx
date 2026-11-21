@@ -1,3 +1,4 @@
+import { readPlanningCache } from "./planning-cache.ts";
 import { SprintBlockers } from "./sprint-blockers.tsx";
 import { ResumePlanning, OfflinePlanning } from "./resume-planning.tsx";
 import type { SavedPlanningLink } from "./planning-draft.ts";
@@ -1623,6 +1624,7 @@ export function Sprints({
       selectedBoard?.level !== selectedDraft.backlog ||
       selectedBoard?.team !== selectedDraft.team)
   ) {
+    const cached = readPlanningCache(selectedDraft);
     return (
       <Page
         title="Sprint planning"
@@ -1634,7 +1636,18 @@ export function Sprints({
           </button>
         }
       >
-        <OfflinePlanning key={selectedDraft.id} link={selectedDraft} />
+        {cached ? (
+          <SprintPlanner
+            key={selectedDraft.id}
+            scope={{ ...selectedDraft, iteration: cached.iteration }}
+            members={cached.members}
+            name={cached.name}
+            offlineOnly
+            openChat={(chat) => onWork(selectedDraft.areaId, undefined, chat)}
+          />
+        ) : (
+          <OfflinePlanning key={selectedDraft.id} link={selectedDraft} />
+        )}
       </Page>
     );
   }
@@ -1736,6 +1749,7 @@ export function Sprints({
               key={JSON.stringify(planner)}
               scope={planner}
               name={current.name}
+              refreshMembers={() => openAzure && openSprint(openAzure)}
               members={current.stories}
               destinations={azure.reply?.sprints ?? []}
               openChat={(chat, ref) => {

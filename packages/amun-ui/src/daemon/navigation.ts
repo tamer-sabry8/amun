@@ -18,7 +18,7 @@ interface Pending {
 type ActivityState = "running" | "finished";
 type Delivery = {
   activity(item: Pending, state: ActivityState): Promise<void>;
-  send(text: string): Promise<void>;
+  send(text: string, ref: string): Promise<void | boolean>;
 };
 const storageKey = "amun.navigation.v1";
 let recordInspection: ((target: Inspection) => void) | undefined;
@@ -93,7 +93,12 @@ export class NavigationQueue {
         const item = this.pending[0]!;
         if (!item.delivered) {
           await this.delivery.activity(item, "running");
-          await this.delivery.send(item.prompt);
+          const delivered = await this.delivery.send(item.prompt, item.ref);
+          if (delivered === false) {
+            this.pending.shift();
+            this.save();
+            continue;
+          }
           item.delivered = true;
           this.save();
         }

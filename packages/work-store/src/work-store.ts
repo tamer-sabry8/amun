@@ -811,6 +811,57 @@ export class WorkStore {
   search(query: string) {
     return searchContent(this.db, query, this.setup().activeGroupId);
   }
+  async inspectNavigation(
+    ref: string,
+    space: string,
+    prompt: string,
+    send: (prompt: string) => Promise<void>,
+  ) {
+    const activity = this.get(
+      "SELECT id,text,state FROM work_activity WHERE ref=?",
+      ref,
+    );
+    if (!activity || activity.text !== this.clean(prompt))
+      throw new WorkError("The navigation request changed.");
+    const claimed = this.run(
+      "INSERT OR IGNORE INTO navigation_dispatches VALUES(?,?,?,'pending')",
+      ref,
+      activity.id,
+      space,
+    ).changes;
+    if (!claimed) {
+      const prior = this.get(
+        "SELECT state FROM navigation_dispatches WHERE ref=? AND space=?",
+        ref,
+        space,
+      );
+      if (!prior)
+        throw new WorkError(
+          "The navigation request belongs to another Firstmate space.",
+        );
+      return { delivered: prior.state === "delivered" };
+    }
+    let delivered = false;
+    try {
+      await send(prompt);
+      delivered = true;
+    } catch {}
+    this.db
+      .transaction(() => {
+        this.run(
+          "UPDATE navigation_dispatches SET state=? WHERE ref=?",
+          delivered ? "delivered" : "unknown",
+          ref,
+        );
+        this.run(
+          "UPDATE work_activity SET state=? WHERE id=?",
+          delivered ? "finished" : "failed",
+          activity.id,
+        );
+      })
+      .immediate();
+    return { delivered };
+  }
   async draftNudge(input: unknown, send: (prompt: string) => Promise<string>) {
     const command = workCommand.parse(input);
     if (command.action !== "draft-blocker-message")

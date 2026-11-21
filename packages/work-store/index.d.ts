@@ -1,5 +1,6 @@
 // Hand-written surface the daemon uses; the bundle in dist/ is built from src/.
 export interface WorkStoreLike {
+  inspectNavigation?(ref: string, space: string, prompt: string, send: (prompt: string) => Promise<void>): Promise<{delivered: boolean}>;
   draftNudge?(input: unknown, send: (prompt: string) => Promise<string>): Promise<unknown>;
   snapshot(): unknown;
   handle(input: unknown): unknown[];

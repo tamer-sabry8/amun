@@ -400,6 +400,13 @@ export class AmunRpcHandler {
         return this.deps.connections.list();
       case "work.snapshot":
         return this.deps.work.snapshot();
+      case "work.inspect": {
+        if (!this.deps.work.inspectNavigation) throw Error("Navigation recording is unavailable.");
+        const space = await this.deps.spaces.get(request.space);
+        return this.deps.work.inspectNavigation(request.ref, request.space, request.prompt, async (prompt) => {
+          await this.deps.primary.send(space, prompt);
+        });
+      }
       case "work.nudge": {
         if (!this.deps.work.draftNudge) throw Error("Blocker message drafting is unavailable.");
         const space = await this.deps.spaces.get(request.space);

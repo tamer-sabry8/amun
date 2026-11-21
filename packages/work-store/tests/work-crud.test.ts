@@ -545,3 +545,37 @@ describe("document versions and approval", () => {
     ).toBe(false);
   });
 });
+
+it("retains one navigation dispatch after loss of acknowledgement and keeps it out of chat", async () => {
+  const areaId = add("project", "Gitex");
+  const ref = "amun-r-abcdef123456",
+    prompt = "Open sprint detail. Read-only.";
+  send("navigation-activity", {
+    ref,
+    workAreaId: areaId,
+    prompt,
+    delivered: false,
+  });
+  let sent = 0;
+  const uncertain = await store.inspectNavigation(
+    ref,
+    "work",
+    prompt,
+    async () => {
+      sent++;
+      throw Error("lost acknowledgement");
+    },
+  );
+  expect(uncertain.delivered).toBe(false);
+  const reopened = new WorkStore(db);
+  expect(
+    await reopened.inspectNavigation(ref, "work", prompt, async () => {
+      sent++;
+    }),
+  ).toEqual({ delivered: false });
+  expect(sent).toBe(1);
+  expect(reopened.snapshot().activity.find((a) => a.ref === ref)).toMatchObject(
+    { text: prompt, state: "failed" },
+  );
+  expect(reopened.snapshot().messages).toHaveLength(0);
+});

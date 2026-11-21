@@ -1213,4 +1213,5 @@ CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submiss
   `ALTER TABLE work_blockers ADD COLUMN sprint_link_json TEXT;`,
   `CREATE TABLE prd_comparison_runs(scope TEXT PRIMARY KEY,ref TEXT NOT NULL);`,
   `CREATE TABLE blocker_nudges(blocker_id TEXT PRIMARY KEY REFERENCES work_blockers(id) ON DELETE CASCADE,ref TEXT NOT NULL UNIQUE,chat_id TEXT NOT NULL,receipt_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);`,
+  `CREATE TABLE navigation_dispatches(ref TEXT PRIMARY KEY,activity_id TEXT NOT NULL REFERENCES work_activity(id) ON DELETE CASCADE,space TEXT NOT NULL,state TEXT NOT NULL);`,
 ] as const;

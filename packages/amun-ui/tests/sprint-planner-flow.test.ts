@@ -62,7 +62,7 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
   const state = bridge.getSnapshot();
   const connection = vi
     .spyOn(bridge, "getSnapshot")
-    .mockReturnValue({ ...state, status: "Reconnecting" });
+    .mockReturnValue({ ...state, status: "Connected" });
   const chat = vi.spyOn(commands, "workAsync").mockResolvedValue({
     action: "new-chat",
     ok: true,
@@ -103,12 +103,15 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
     await act(async () => button("+ Sprint").click());
     expect(button("Add 1 story to Sprint 4")).toBeTruthy();
     await act(async () => root.unmount());
+    connection.mockReturnValue({ ...state, status: "Reconnecting" });
     root = createRoot(container);
     await mount();
     await act(async () => button("Add 1 story to Sprint 4").click());
     expect(container.textContent).toContain("Waiting for Firstmate");
     expect(chat).not.toHaveBeenCalled();
+    expect(button("Add 1 story to Sprint 4").disabled).toBe(true);
     connection.mockReturnValue({ ...state, status: "Connected" });
+    await mount();
     await act(async () => {
       button("Add 1 story to Sprint 4").click();
       button("Add 1 story to Sprint 4").click();
@@ -121,7 +124,16 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
       chatId: "chat",
       moves: [{ id: 24, rev: 3, from: "Gitex", to: "Gitex/Sprint 4" }],
     });
-    expect(openChat).toHaveBeenCalledExactlyOnceWith("chat");
+    expect(openChat).not.toHaveBeenCalled();
+    const link = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.startsWith("View request"),
+    );
+    expect(link).toBeTruthy();
+    await act(async () => link!.click());
+    expect(openChat).toHaveBeenCalledExactlyOnceWith(
+      "chat",
+      expect.stringMatching(/^amun-r-/),
+    );
   } finally {
     await act(async () => root.unmount());
     container.remove();
