@@ -35,6 +35,15 @@ const card = z.object({
   type: z.string(),
   column: z.string().nullable(),
   iteration: z.string().nullable().optional(),
+  rank: z
+    .object({
+      field: z.enum([
+        "Microsoft.VSTS.Common.StackRank",
+        "Microsoft.VSTS.Common.BacklogPriority",
+      ]),
+      value: z.number(),
+    })
+    .optional(),
   prerequisites: z.array(z.int().positive()).optional(),
   assignee: z.string().optional(),
   labels: z.array(z.string()).optional(),
@@ -125,6 +134,10 @@ export const backlogResult = z.discriminatedUnion("view", [
     view: z.literal("cards"),
     columns: z.array(column),
     cards: z.array(card),
+    creationTarget: z
+      .object({ type: id, area: id, backlogIteration: id })
+      .nullable()
+      .optional(),
     backlogIteration: z.string().nullable().optional(),
     canEditBoard: z.boolean(),
   }),
@@ -151,6 +164,29 @@ export const operationItem = z.strictObject({
   type: id,
   fields: z.record(z.string(), value),
 });
+export const reviewedOrder = z.object({
+  beforeId: z.int().positive(),
+  anchorRev: z.int().positive(),
+  oldNext: z.int().positive().nullable(),
+});
+export const plannedStory = z.object({
+  localId: z.uuid(),
+  title: z.string().trim().min(1).max(256),
+  criteria: z.array(z.string().trim().min(1).max(2048)).max(20),
+  labels: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[^;\r\n]+$/),
+    )
+    .max(30),
+  schedule: z.boolean(),
+  separate: z.boolean().optional(),
+});
+export type PlannedStory = z.infer<typeof plannedStory>;
 export const sprintMoveRequest = z.strictObject({
   ...operationContext,
   action: z.literal("apply-sprint-moves"),
@@ -161,6 +197,10 @@ export const sprintMoveRequest = z.strictObject({
   level: id,
   sprintId: id,
   iteration: id,
+  creates: z.array(plannedStory).max(100).optional(),
+  creationTarget: z
+    .object({ type: id, area: id, backlogIteration: id })
+    .optional(),
   moves: z
     .array(
       z.strictObject({
@@ -181,10 +221,10 @@ export const sprintMoveRequest = z.strictObject({
           .max(30)
           .optional(),
         targetSprintId: id.optional(),
+        reorder: reviewedOrder.optional(),
         title: z.string().max(1024),
       }),
     )
-    .min(1)
     .max(100),
 });
 export type SprintMoveRequest = z.infer<typeof sprintMoveRequest>;

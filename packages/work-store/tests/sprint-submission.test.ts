@@ -302,3 +302,149 @@ it("sends a label-only change on the selected backlog record and preserves its o
   expect(calls).toBe(2);
   db.close();
 });
+
+it("verifies creation before attempting assignment and never repeats the create after a rejected move", async () => {
+  const { db, request, target, reader } = fixture();
+  const localId = crypto.randomUUID();
+  request.moves = [];
+  request.creates = [
+    {
+      localId,
+      title: "Print pass",
+      schedule: true,
+      criteria: ["Print on arrival"],
+      labels: ["Conference"],
+    },
+  ];
+  request.creationTarget = {
+    type: "Story",
+    area: "Gitex",
+    backlogIteration: "Gitex",
+  };
+  const send = vi.fn(async () => "ACCEPT " + request.ref);
+  const fields: Record<string, unknown> = {
+    "System.TeamProject": "Gitex",
+    "System.WorkItemType": "Story",
+  };
+  const methods: string[] = [];
+  const client = new AdoWriteClient(
+    target.collection,
+    target.project,
+    async (method, _url, body) => {
+      methods.push(method);
+      if (method === "POST") {
+        for (const patch of body as { path: string; value: unknown }[])
+          fields[patch.path.replace("/fields/", "")] = patch.value;
+      } else if (method === "PATCH") return { status: 403, data: {} };
+      return { status: 200, data: { id: 75, rev: 1, fields } };
+    },
+  );
+  const creationReader = {
+    ...reader,
+    planningCreationTarget: async () => request.creationTarget!,
+    processSchema: async () => ({
+      process: "Agile",
+      areas: ["Gitex"],
+      iterations: [],
+      types: [
+        {
+          name: "Story",
+          states: ["New"],
+          fields: [
+            {
+              name: "Description",
+              referenceName: "System.Description",
+              required: false,
+              allowedValues: [],
+              defaultValue: null,
+            },
+          ],
+        },
+      ],
+    }),
+    cards: async () =>
+      methods.length
+        ? [
+            {
+              id: 75,
+              rev: 1,
+              title: "Print pass",
+              state: "New",
+              type: "Story",
+              column: "New",
+              iteration: "Gitex",
+            },
+          ]
+        : [],
+  };
+  const apply = () =>
+    applySprintMoves(
+      db,
+      request,
+      target,
+      creationReader,
+      client,
+      () => true,
+      send,
+    );
+  const outcome = await apply();
+  expect(outcome.receipts).toMatchObject([
+    { itemId: localId, state: "held", remoteId: 75 },
+  ]);
+  expect(fields["System.IterationPath"]).toBe("Gitex");
+  expect(fields["System.Tags"]).toContain("Conference");
+  expect(await apply()).toEqual(outcome);
+  expect(methods).toEqual(["POST", "GET", "PATCH"]);
+  expect(send).toHaveBeenCalledTimes(1);
+  db.close();
+});
+
+it("moves one record above its anchor in the complete shared order and reads that order back", async () => {
+  const { db, request, target, reader } = fixture();
+  const field = "Microsoft.VSTS.Common.StackRank" as const;
+  const full = [1, 2, 3, 4].map((id) => ({
+    id,
+    title: [
+      "Registration",
+      "Badge printing",
+      "Export attendance",
+      "Offline check-in",
+    ][id - 1]!,
+    rev: 3,
+    rank: { field, value: 10 * id },
+    iteration: "Gitex",
+    state: "New",
+    type: "Story",
+    column: "New",
+  }));
+  request.moves = [
+    {
+      id: 4,
+      title: "Offline check-in",
+      rev: 3,
+      from: "Gitex",
+      to: "Gitex",
+      reorder: { beforeId: 2, anchorRev: 3, oldNext: null },
+    },
+  ];
+  let cards = full;
+  const read = vi.fn(async () => cards);
+  const write = vi.fn(async (step: { fields: Record<string, unknown> }) => {
+    expect(step.fields).toEqual({ [field]: 15 });
+    cards = [full[0]!, full[3]!, full[1]!, full[2]!];
+    return { id: 4, rev: 4 };
+  });
+  const result = await applySprintMoves(
+    db,
+    request,
+    target,
+    { ...reader, cards: read },
+    { write },
+    () => true,
+    async () => "ACCEPT " + request.ref,
+  );
+  expect(result.receipts[0]?.state).toBe("confirmed");
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(read.mock.calls.length).toBeGreaterThanOrEqual(3);
+  db.close();
+});

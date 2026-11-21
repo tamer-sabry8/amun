@@ -181,6 +181,7 @@ export class AdoWriteClient {
         .map((t) => t.trim());
       if (
         !tags.includes(step.marker) ||
+        step.creationLabels?.some((label) => !tags.includes(label)) ||
         (parent &&
           !item.relations?.some(
             (r) =>
@@ -225,7 +226,7 @@ export class AdoWriteClient {
       patch.push({
         op: "add",
         path: "/fields/System.Tags",
-        value: step.marker,
+        value: [step.marker, ...(step.creationLabels ?? [])].join("; "),
       });
       if (parent)
         patch.push({

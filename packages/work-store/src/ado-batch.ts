@@ -9,6 +9,7 @@ export interface AdoDestination {
   team: string;
 }
 export interface AdoStep {
+  creationLabels?: string[];
   draftDigest?: string;
   comparison?: { ref: string; sourceId: string; team: string; level: string };
   itemId: string;

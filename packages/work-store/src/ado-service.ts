@@ -200,7 +200,20 @@ export class AdoService {
         return {
           ...meta,
           kind: "ado-operation-result",
-          ...(await inspectSprintSubmission(this.db, request, target, client)),
+          ...(await inspectSprintSubmission(
+            this.db,
+            request,
+            target,
+            client,
+            async (levelId) => {
+              const level = (await d.levels(request.team)).find(
+                (l) => l.id === levelId,
+              );
+              if (!level) throw Error("Selected backlog unavailable.");
+              const settings = await d.boardSettings(request.team, level.name);
+              return d.cards(request.team, levelId, settings.columnField);
+            },
+          )),
         };
       if (request.action === "apply-sprint-moves") {
         if (!dispatch) throw Error("Firstmate is unavailable.");
@@ -258,6 +271,9 @@ export class AdoService {
       d.boardSettings(request.team, level.name),
       d.columns(request.team, level.name),
     ]);
+    const backlogIteration = request.details
+      ? await d.backlogIteration(request.team).catch(() => null)
+      : null;
     return {
       ...meta,
       view: "cards",
@@ -270,8 +286,13 @@ export class AdoService {
       ),
       ...(request.details
         ? {
-            backlogIteration: await d
-              .backlogIteration(request.team)
+            backlogIteration,
+            creationTarget: await d
+              .planningCreationTarget(
+                request.team,
+                request.level,
+                backlogIteration,
+              )
               .catch(() => null),
           }
         : {}),

@@ -304,6 +304,37 @@ export class BoardDiscovery {
     ).map(summary);
   }
 
+  async planningCreationTarget(
+    team: string,
+    levelId: string,
+    backlogIteration: string | null,
+  ) {
+    if (!backlogIteration) return null;
+    const prefix = this.project + "/" + azurePathSegment(team) + "/_apis/work/";
+    const [config, areas] = await Promise.all([
+      this.get(new URL(prefix + "backlogconfiguration", this.base)),
+      this.get(new URL(prefix + "teamsettings/teamfieldvalues", this.base)),
+    ]);
+    if (
+      !record(config) ||
+      !record(config.requirementBacklog) ||
+      config.requirementBacklog.id !== levelId ||
+      !record(config.requirementBacklog.defaultWorkItemType) ||
+      typeof config.requirementBacklog.defaultWorkItemType.name !== "string" ||
+      !record(areas) ||
+      !record(areas.field) ||
+      areas.field.referenceName !== "System.AreaPath" ||
+      typeof areas.defaultValue !== "string" ||
+      !Array.isArray(areas.values) ||
+      !areas.values.some((v) => record(v) && v.value === areas.defaultValue)
+    )
+      return null;
+    return {
+      type: config.requirementBacklog.defaultWorkItemType.name,
+      area: areas.defaultValue,
+      backlogIteration,
+    };
+  }
   async backlogIteration(team: string): Promise<string | null> {
     const settings = await this.get(
       new URL(
@@ -469,6 +500,12 @@ export class BoardDiscovery {
         blocked?: string | undefined;
         description?: string;
         criteria?: string;
+        rank?: {
+          field:
+            | "Microsoft.VSTS.Common.StackRank"
+            | "Microsoft.VSTS.Common.BacklogPriority";
+          value: number;
+        };
         prerequisites?: number[];
       }
     >();
@@ -506,7 +543,18 @@ export class BoardDiscovery {
           typeof f["System.WorkItemType"] !== "string"
         )
           throw new Error("Invalid Azure item");
+        const rankField = (
+          [
+            "Microsoft.VSTS.Common.StackRank",
+            "Microsoft.VSTS.Common.BacklogPriority",
+          ] as const
+        ).find(
+          (field) => typeof f[field] === "number" && Number.isFinite(f[field]),
+        );
         byId.set(item.id, {
+          ...(details && rankField
+            ? { rank: { field: rankField, value: f[rankField] } }
+            : {}),
           id: item.id,
           rev: item.rev,
           title: f["System.Title"],

@@ -1,3 +1,4 @@
+import { plannedStory, reviewedOrder } from "@amun/contracts";
 import { z } from "zod";
 import type { SelectionStore } from "../backlog-selection.ts";
 
@@ -29,6 +30,7 @@ const move = z.object({
     .min(1)
     .max(30)
     .optional(),
+  reorder: reviewedOrder.optional(),
   targetSprintId: z.string().min(1).optional(),
 });
 export type PlannedMove = z.infer<typeof move>;
@@ -36,11 +38,21 @@ const submission = z.object({
   ref: z.string(),
   chatId: z.string(),
   moves: z.array(move),
+  creates: z.array(plannedStory).optional(),
 });
 const savedDraft = z.object({
   id: z.uuid(),
   moves: z.array(move),
   submissions: z.array(submission).optional(),
+  creates: z
+    .array(
+      plannedStory.extend({
+        title: z.string(),
+        criteria: z.array(z.string()),
+        labels: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 export type PlanningDraft = z.infer<typeof savedDraft>;
 
@@ -76,7 +88,7 @@ export function stageMove(
     ? { ...previous, ...move, rev: previous.rev, from: previous.from }
     : move;
   const moves = draft.moves.filter((entry) => entry.id !== move.id);
-  if (next.from !== next.to || next.addLabels?.length) {
+  if (next.from !== next.to || next.addLabels?.length || next.reorder) {
     if (previous)
       return {
         ...draft,
@@ -91,7 +103,11 @@ export function stageMove(
 
 export function planningChangeCount(moves: readonly PlannedMove[]) {
   return moves.reduce(
-    (n, m) => n + Number(m.from !== m.to) + Number(!!m.addLabels?.length),
+    (n, m) =>
+      n +
+      Number(m.from !== m.to) +
+      Number(!!m.addLabels?.length) +
+      Number(!!m.reorder),
     0,
   );
 }
@@ -129,7 +145,7 @@ export function savedPlanningLinks(
         .parse(JSON.parse(key.slice(prefix.length)));
       if (!areaIds.has(areaId)) continue;
       const draft = savedDraft.parse(JSON.parse(store.getItem(key) ?? "null"));
-      if (draft.moves.length)
+      if (draft.moves.length || draft.creates?.length)
         links.push({
           areaId,
           productId,
@@ -138,7 +154,8 @@ export function savedPlanningLinks(
           backlog,
           sprintId,
           id: draft.id,
-          count: planningChangeCount(draft.moves),
+          count:
+            planningChangeCount(draft.moves) + (draft.creates?.length ?? 0),
         });
     } catch {
       /* Ignore unreadable entries without changing storage. */

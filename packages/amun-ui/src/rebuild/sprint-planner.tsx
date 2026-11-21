@@ -1,3 +1,10 @@
+import {
+  placeBefore,
+  reviewedRank,
+  successor,
+} from "../../../domain/src/work/backlog-order.ts";
+import { PlannedStoryRow } from "./planned-story-row.tsx";
+import { plannedStory, type PlannedStory } from "@amun/contracts";
 import { readPlanningCache, savePlanningCache } from "./planning-cache.ts";
 import { plannedLoad, teamBudgetKey } from "./sprint-load.ts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -52,6 +59,10 @@ export function SprintPlanner({
       return "";
     }
   });
+  const [newFocus, setNewFocus] = useState("");
+  const [creationTarget, setCreationTarget] = useState<NonNullable<
+    Extract<BacklogResult, { view: "cards" }>["creationTarget"]
+  > | null>(null);
   const [editingLabel, setEditingLabel] = useState<number | null>(null);
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
@@ -170,6 +181,7 @@ export function SprintPlanner({
           result: parsed.data,
         });
         setCards(parsed.data.cards);
+        setCreationTarget(parsed.data.creationTarget ?? null);
         setBacklogPath(parsed.data.backlogIteration ?? null);
         setError("");
       }
@@ -228,22 +240,63 @@ export function SprintPlanner({
   const ready = draft.moves.filter(
     (m) =>
       !submittedIds.has(m.id) &&
+      (!m.reorder ||
+        (!submittedIds.has(m.reorder.beforeId) &&
+          !!cards &&
+          !!reviewedRank(cards, m.id, m.reorder))) &&
       cards?.some(
         (c) => c.id === m.id && c.rev === m.rev && c.iteration === m.from,
       ),
   );
-  const readyCount = planningChangeCount(ready),
-    totalCount = planningChangeCount(draft.moves);
+  const creates = draft.creates ?? [];
+  const updateCreated = (story: PlannedStory) =>
+    save({
+      ...draft,
+      creates: creates.map((s) => (s.localId === story.localId ? story : s)),
+    });
+  const normalize = (s: string) =>
+    s
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  const candidates = (title: string) => {
+    const t = normalize(title);
+    return t
+      ? (cards ?? []).filter((c) => {
+          const known = normalize(c.title);
+          return (
+            t === known ||
+            (known.length > 5 &&
+              t.length > 5 &&
+              (known.includes(t) || t.includes(known)))
+          );
+        })
+      : [];
+  };
+  const readyCreates =
+    creationTarget && cards
+      ? creates.flatMap((s) => {
+          const parsed = plannedStory.safeParse({
+            ...s,
+            criteria: s.criteria.map((x) => x.trim()).filter(Boolean),
+            labels: [...new Set(s.labels.map((x) => x.trim()).filter(Boolean))],
+          });
+          return parsed.success && (!candidates(s.title).length || s.separate)
+            ? [parsed.data]
+            : [];
+        })
+      : [];
+  const readyCount = planningChangeCount(ready) + readyCreates.length,
+    totalCount = planningChangeCount(draft.moves) + creates.length;
   const apply = async () => {
-    if (applying.current || !draft.moves.length || !fresh || offlineOnly)
-      return;
+    if (applying.current || !readyCount || !fresh || offlineOnly) return;
     if (bridge.getSnapshot().status !== "Connected") {
       setError(
         "Waiting for Firstmate. Refresh the backlog and apply when connected.",
       );
       return;
     }
-    if (!cards || !ready.length) {
+    if (!cards || !readyCount) {
       setError("Refresh the changed records before applying this draft.");
       return;
     }
@@ -271,11 +324,15 @@ export function SprintPlanner({
         ref: newRequestRef(),
         chatId: chat.ref,
         moves: ready,
+        ...(readyCreates.length ? { creates: readyCreates } : {}),
       };
       if (
         !save({
           ...draft,
           moves: draft.moves.filter((m) => !ready.includes(m)),
+          creates: creates.filter(
+            (s) => !readyCreates.some((r) => r.localId === s.localId),
+          ),
           submissions: [...submitted, batch],
         })
       )
@@ -301,6 +358,9 @@ export function SprintPlanner({
         sprintId: scope.sprintId,
         iteration: scope.iteration,
         moves: batch.moves,
+        ...(readyCreates.length
+          ? { creates: readyCreates, creationTarget }
+          : {}),
       });
     } finally {
       applying.current = false;
@@ -326,23 +386,66 @@ export function SprintPlanner({
     );
   };
   const search = query.trim().toLocaleLowerCase();
-  const filtered = cards?.filter(
-    (card) =>
-      !members.some((s) => s.id === String(card.id)) &&
-      !draft.moves.some((s) => s.id === card.id && s.to !== s.from) &&
-      (card.title.toLocaleLowerCase().includes(search) ||
-        (detailsQuery !== null &&
-          [card.description, card.criteria].some((text) =>
-            text
-              ?.replace(/<[^>]*>/g, " ")
-              .toLocaleLowerCase()
-              .includes(search),
-          )) ||
-        String(card.id).includes(search.replace(/^#/, ""))),
+  const ordered = draft.moves.reduce(
+    (list, m) =>
+      m.reorder ? placeBefore(list, m.id, m.reorder.beforeId) : list,
+    cards ?? [],
   );
-  const additionsOnly = ready.every(
-    (m) => m.to === scope.iteration && m.from !== m.to && !m.addLabels?.length,
-  );
+  const reorder = (id: number, beforeId: number) => {
+    const card = cards?.find((c) => c.id === id),
+      anchor = cards?.find((c) => c.id === beforeId);
+    if (
+      !cards ||
+      !card?.iteration ||
+      !anchor ||
+      id === beforeId ||
+      applying.current
+    )
+      return;
+    const previous = draft.moves.find((m) => m.id === id);
+    const oldNext = successor(cards, id) ?? null;
+    const intent = { beforeId, anchorRev: anchor.rev, oldNext };
+    if (beforeId !== oldNext && !reviewedRank(cards, id, intent)) {
+      setError("The shared backlog order cannot be verified.");
+      return;
+    }
+    save(
+      stageMove(draft, {
+        id,
+        rev: card.rev,
+        title: card.title,
+        from: card.iteration,
+        to: previous?.to ?? card.iteration,
+        reorder: beforeId === oldNext ? undefined : intent,
+      }),
+    );
+  };
+  const filtered =
+    cards &&
+    ordered.filter(
+      (card) =>
+        !members.some((s) => s.id === String(card.id)) &&
+        !draft.moves.some((s) => s.id === card.id && s.to !== s.from) &&
+        (card.title.toLocaleLowerCase().includes(search) ||
+          (detailsQuery !== null &&
+            [card.description, card.criteria].some((text) =>
+              text
+                ?.replace(/<[^>]*>/g, " ")
+                .toLocaleLowerCase()
+                .includes(search),
+            )) ||
+          String(card.id).includes(search.replace(/^#/, ""))),
+    );
+  const additionsOnly =
+    readyCount > 0 &&
+    !readyCreates.length &&
+    ready.every(
+      (m) =>
+        m.to === scope.iteration &&
+        m.from !== m.to &&
+        !m.addLabels?.length &&
+        !m.reorder,
+    );
   const load = cards
     ? plannedLoad(members, cards, draft.moves, scope.iteration)
     : null;
@@ -370,6 +473,55 @@ export function SprintPlanner({
       <div className="rb-planning-panes">
         <section aria-label="Team backlog">
           <h2>Team backlog</h2>
+          <button
+            className="btn"
+            disabled={preparing}
+            onClick={() => {
+              const localId = crypto.randomUUID();
+              if (
+                save({
+                  ...draft,
+                  creates: [
+                    ...creates,
+                    {
+                      localId,
+                      title: "",
+                      criteria: [],
+                      labels: [],
+                      schedule: false,
+                    },
+                  ],
+                })
+              )
+                setNewFocus(localId);
+            }}
+          >
+            + Story
+          </button>
+          {creates.map((story) => (
+            <PlannedStoryRow
+              key={story.localId}
+              story={story}
+              matches={candidates(story.title)}
+              name={name}
+              focus={newFocus === story.localId}
+              update={updateCreated}
+              remove={() =>
+                save({
+                  ...draft,
+                  creates: creates.filter((s) => s.localId !== story.localId),
+                })
+              }
+            />
+          ))}
+          {!!creates.length && (
+            <p className="muted small">
+              {creationTarget
+                ? "Create " + creationTarget.type + " in " + creationTarget.area
+                : "Creation awaits a verified team backlog, area and work item type."}
+            </p>
+          )}
+
           <form
             className="row"
             onSubmit={(e) => {
@@ -405,6 +557,16 @@ export function SprintPlanner({
             <div
               className="rb-line"
               key={card.id}
+              onDragOver={(e) => {
+                if (card.rank) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                reorder(
+                  Number(e.dataTransfer.getData("text/amun-work-item")),
+                  card.id,
+                );
+              }}
               draggable={!!card.iteration}
               onDragStart={(e) =>
                 e.dataTransfer.setData("text/amun-work-item", String(card.id))
@@ -462,6 +624,18 @@ export function SprintPlanner({
               >
                 + Sprint
               </button>
+              {card.rank && filtered && filtered.indexOf(card) > 0 && (
+                <button
+                  className="btn quiet"
+                  disabled={preparing}
+                  aria-label={"Move " + card.title + " up in the backlog"}
+                  onClick={() =>
+                    reorder(card.id, filtered[filtered.indexOf(card) - 1]!.id)
+                  }
+                >
+                  Move up
+                </button>
+              )}
               {card.labels && card.iteration && (
                 <button
                   className="btn quiet"
@@ -534,6 +708,12 @@ export function SprintPlanner({
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
+            const localId = e.dataTransfer.getData("text/amun-draft-story");
+            const local = creates.find((s) => s.localId === localId);
+            if (local) {
+              updateCreated({ ...local, schedule: true });
+              return;
+            }
             const id = Number(e.dataTransfer.getData("text/amun-work-item"));
             const card = filtered?.find((row) => row.id === id);
             if (card) add(card);
@@ -668,6 +848,13 @@ export function SprintPlanner({
                   )}
               </div>
             ))}
+          {creates
+            .filter((s) => s.schedule)
+            .map((s) => (
+              <p key={s.localId}>
+                {s.title || "Untitled story"} · staged for {name}
+              </p>
+            ))}
           {draft.moves.map((move) => (
             <div className="rb-line" key={move.id}>
               <span className="grow">
@@ -678,6 +865,7 @@ export function SprintPlanner({
                   {move.from !== move.to
                     ? move.from + " → " + move.to
                     : move.from}
+                  {move.reorder ? " · Before #" + move.reorder.beforeId : ""}
                   {move.addLabels?.length
                     ? " · Add labels: " + move.addLabels.join(", ")
                     : ""}
@@ -840,6 +1028,53 @@ export function SprintPlanner({
                     </div>
                   );
                 })}
+              {batch.creates?.map((story) => {
+                const receipt = receipts[batch.ref]?.find(
+                  (r) => r.itemId === story.localId,
+                );
+                if (receipt?.state !== "held") return null;
+                const card = cards?.find((c) => c.id === receipt.remoteId);
+                if (receipt.remoteId !== null)
+                  return (
+                    <div className="rb-line" key={story.localId}>
+                      <span>
+                        #{receipt.remoteId} {story.title}
+                      </span>
+                      {story.schedule &&
+                        card?.iteration &&
+                        card.iteration !== scope.iteration && (
+                          <button
+                            className="btn"
+                            disabled={
+                              preparing ||
+                              draft.moves.some((m) => m.id === card.id)
+                            }
+                            onClick={() => add(card)}
+                          >
+                            Stage assignment
+                          </button>
+                        )}
+                    </div>
+                  );
+                return (
+                  <button
+                    key={story.localId}
+                    className="btn quiet"
+                    disabled={
+                      preparing ||
+                      creates.some((s) => s.localId === story.localId)
+                    }
+                    onClick={() =>
+                      save({
+                        ...draft,
+                        creates: [...creates, { ...story, separate: false }],
+                      })
+                    }
+                  >
+                    Review {story.title}
+                  </button>
+                );
+              })}
               {receiptText[batch.ref] && (
                 <p role="status" style={{ whiteSpace: "pre-line" }}>
                   {receiptText[batch.ref]}
@@ -905,7 +1140,7 @@ export function SprintPlanner({
               {totalCount - readyCount} waiting for updated records
             </p>
           )}
-          {draft.moves.length > 0 && (
+          {totalCount > 0 && (
             <button
               className="btn primary"
               disabled={
@@ -913,20 +1148,24 @@ export function SprintPlanner({
               }
               onClick={() => void apply()}
             >
-              {additionsOnly
-                ? "Add " +
-                  readyCount +
-                  " " +
-                  (readyCount === 1 ? "story" : "stories") +
-                  " to " +
-                  name
-                : "Apply " +
-                  readyCount +
-                  " " +
-                  (readyCount === 1 ? "change" : "changes")}
+              {!ready.length &&
+              readyCreates.length === 1 &&
+              readyCreates[0]?.schedule
+                ? "Create story and add to " + name
+                : additionsOnly
+                  ? "Add " +
+                    readyCount +
+                    " " +
+                    (readyCount === 1 ? "story" : "stories") +
+                    " to " +
+                    name
+                  : "Apply " +
+                    readyCount +
+                    " " +
+                    (readyCount === 1 ? "change" : "changes")}
             </button>
           )}
-          {draft.moves.length > 0 && (
+          {totalCount > 0 && (
             <p role="status">
               {totalCount} {totalCount === 1 ? "change" : "changes"} saved on
               this device
