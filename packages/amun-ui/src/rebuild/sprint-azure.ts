@@ -228,6 +228,7 @@ export function useAzureSprints(
     reply,
     run,
     productId,
+    sourceId,
     items,
     openSprint: (sprint: string) =>
       reply ? readItems(reply.team.id, sprint) : undefined,

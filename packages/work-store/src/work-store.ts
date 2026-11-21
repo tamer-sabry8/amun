@@ -2454,12 +2454,25 @@ export class WorkStore {
       case "new-chat": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
+        const sprint = command.sprint;
+        if (sprint) {
+          const existing = this.get(
+            "SELECT id FROM work_chats WHERE work_area_id=? AND sprint_connection=? AND sprint_id=?",
+            command.workAreaId,
+            sprint.connection,
+            sprint.id,
+          );
+          if (existing) return { ref: String(existing.id) };
+        }
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at) VALUES (?,?,'','chat','',NULL,?)",
+          "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at,sprint_connection,sprint_id) VALUES (?,?,?,'chat','',NULL,?,?,?)",
           id,
           command.workAreaId,
+          sprint?.name ?? "",
           now,
+          sprint?.connection ?? null,
+          sprint?.id ?? null,
         );
         this.run(
           "UPDATE work_areas SET last_context_at=? WHERE id=?",

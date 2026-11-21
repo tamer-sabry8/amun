@@ -143,12 +143,20 @@ try {
 } catch {
   // A damaged entry only loses the waiting state, never the message itself.
 }
+const queueListeners = new Set<() => void>();
+export function observeHeldMessages(listener: () => void) {
+  queueListeners.add(listener);
+  return () => {
+    queueListeners.delete(listener);
+  };
+}
 const saveHeld = () => {
   try {
     localStorage.setItem(heldKey, JSON.stringify(Object.fromEntries(held)));
   } catch {
     // Storage is best effort; the in-memory copy still holds for this run.
   }
+  for (const listener of queueListeners) listener();
 };
 /** Work areas with a turn in flight, so a waiting message is never sent twice. */
 export const inFlight = new Set<string>();

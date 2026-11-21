@@ -11,7 +11,13 @@ import {
   mentionsAzureDevOps,
   parseQuestion,
 } from "../../../../packages/domain/src/work/question-choices.ts";
-import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
@@ -94,6 +100,7 @@ import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   heldMessage,
+  observeHeldMessages,
   inFlight,
   holdMessage,
   markBriefed,
@@ -1773,7 +1780,9 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const [waiting, setWaiting] = useState(() => heldMessage(threadKey));
+  const waiting = useSyncExternalStore(observeHeldMessages, () =>
+    heldMessage(threadKey),
+  );
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
@@ -1797,21 +1806,13 @@ export function WorkSession({
           reason: "busy" as const,
         };
         holdMessage(threadKey, queued);
-        setWaiting(queued);
       }
       return;
     }
     inFlight.add(threadKey);
-    // A message that is out stays saved until Firstmate has answered, so a
-    // slow turn, a reload or a retry can never leave the newest one unsaved.
-    if (!retry)
-      holdMessage(threadKey, {
-        text,
-        scoped,
-        activityId,
-        image,
-        reason: "busy" as const,
-      });
+    // Once claimed for dispatch, this message is no longer queued. The
+    // original message remains in chat even if its receipt is interrupted.
+    if (retry) releaseMessage(threadKey);
     setProblem("");
     setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
@@ -1886,28 +1887,16 @@ export function WorkSession({
       // Only the message this turn carried leaves the wait; a newer one stays.
       if (heldMessage(threadKey)?.scoped === scoped) {
         releaseMessage(threadKey);
-        setWaiting(null);
       }
       if (heldMessage(threadKey)) retryWaiting();
-    } else if (turn.needsProvider || retry) {
+    } else if (turn.needsProvider) {
       const newer = heldMessage(threadKey);
       if (newer && newer.scoped !== scoped) {
         // A message queued behind this turn now waits for the provider too.
         if (turn.needsProvider && waitReason(newer) === "busy") {
           const message = { ...newer, reason: "provider" as const };
           holdMessage(threadKey, message);
-          setWaiting(message);
         }
-        return;
-      }
-      if (
-        !turn.needsProvider &&
-        waitReason(heldMessage(threadKey) ?? {}) === "busy"
-      ) {
-        // A message that only queued behind a turn is not a provider wait.
-        releaseMessage(threadKey);
-        setWaiting(null);
-        setProblem(turn.reason);
         return;
       }
       // Kept, not failed: it goes out once a provider is connected.
@@ -1919,7 +1908,6 @@ export function WorkSession({
         reason: "provider" as const,
       };
       holdMessage(threadKey, message);
-      setWaiting(message);
       return;
     } else {
       setProblem(turn.reason);
@@ -2073,7 +2061,6 @@ export function WorkSession({
       typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
     // One message waits at a time; a new one replaces the wait, not the text.
     releaseMessage(threadKey);
-    setWaiting(null);
     lastRequest.current = text;
     // A chat started from a card carries the card with its first message.
     const asked = askCard;
@@ -2244,9 +2231,8 @@ export function WorkSession({
   }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
-    setWaiting(heldMessage(threadKey));
     if (heldMessage(threadKey)) retryWaiting();
-  }, [areaId]);
+  }, [threadKey]);
   useEffect(() => {
     if (!waiting) return;
     // Coming back from sign-in, or a change in the connected providers.
@@ -2262,7 +2248,7 @@ export function WorkSession({
       stop();
       window.removeEventListener("focus", retryWaiting);
     };
-  }, [areaId, !!waiting]);
+  }, [threadKey, !!waiting]);
   useEffect(() => {
     if (first && context && sentFirst.current !== first) {
       sentFirst.current = first;
@@ -3048,7 +3034,6 @@ export function WorkSession({
                           className="btn quiet"
                           onClick={() => {
                             releaseMessage(threadKey);
-                            setWaiting(null);
                           }}
                         >
                           Discard message

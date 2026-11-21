@@ -987,7 +987,10 @@ export const workCommand = z.discriminatedUnion("action", [
   act("fork-chat", { workAreaId: id, messageId: id }),
   act("delete-chat", { chatId: id }),
   /** "New chat" in a folder: an empty chat, named by its first message. */
-  act("new-chat", { workAreaId: id }),
+  act("new-chat", {
+    workAreaId: id,
+    sprint: z.strictObject({ connection: id, id, name }).optional(),
+  }),
   /** `chatId` null is the work's first chat. */
   act("rename-chat", { workAreaId: id, chatId: id.nullable(), title: name }),
   /** Archived chats leave the sidebar, stay searchable and can come back. */

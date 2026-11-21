@@ -525,7 +525,8 @@ describe("sprints (Q35, Q67)", () => {
       "w1",
       "POCs",
     );
-    expect(azure).toHaveLength(1);
+    expect(azure).toHaveLength(2);
+    expect(azure[1]).toMatchObject({ start: "", end: "" });
     expect(azure[0]).toMatchObject({
       id: "ado:a",
       team: "POCs Team",

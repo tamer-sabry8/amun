@@ -1159,7 +1159,9 @@ export function App() {
             snapshot={snapshot}
             now={now}
             model={model}
-            onWork={(id, message) => openWork(id, message)}
+            onWork={(id, message, chat) =>
+              openWork(id, message, null, chat ?? null)
+            }
             onReview={(planId, areaId) =>
               areaId &&
               openWork(areaId, undefined, { kind: "plan", id: planId })

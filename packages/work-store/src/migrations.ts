@@ -1201,4 +1201,8 @@ ALTER TABLE work_areas ADD COLUMN first_chat_title_by TEXT NOT NULL DEFAULT '';`
   seen_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX work_requests_message ON work_requests(message_id);`,
+  `ALTER TABLE work_chats ADD COLUMN sprint_connection TEXT;
+ALTER TABLE work_chats ADD COLUMN sprint_id TEXT;
+CREATE UNIQUE INDEX work_chat_sprint ON work_chats(work_area_id,sprint_connection,sprint_id)
+ WHERE sprint_id IS NOT NULL;`,
 ] as const;

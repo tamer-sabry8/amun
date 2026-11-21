@@ -26,9 +26,8 @@ import {
   riceBadge,
   roadmapViews,
   adoSprints,
-  latestEndedSprint,
+  sprintGroups,
   sprintCommand,
-  sprintOverview,
   sprintRow,
   sprintTabs,
   sprintViews,
@@ -1368,7 +1367,7 @@ export function Sprints({
   snapshot: Snapshot;
   now: number;
   model: string | null;
-  onWork(areaId: string, message?: string): void;
+  onWork(areaId: string, message?: string, chatId?: string): void;
   onReview(planId: string, workAreaId: string | null): void;
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
@@ -1425,9 +1424,7 @@ export function Sprints({
         })
       : [];
   const overview = [...sprints, ...fromAzure];
-  // Azure answered, but nothing is current or upcoming: say what it did return.
-  const lastAzure =
-    azure.reply && fromAzure.length ? latestEndedSprint(fromAzure, now) : null;
+  const groups = sprintGroups(overview, now);
   const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
   const azureDetail = new Map(
     (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
@@ -1498,6 +1495,20 @@ export function Sprints({
       );
     } else setNote(result.message);
   };
+  const discussSprint = async (message?: string) => {
+    if (!current) return;
+    const result = await workAsync("new-chat", {
+      workAreaId: current.workAreaId,
+      sprint: {
+        connection: openAzure ? azure.sourceId : "amun",
+        id: current.id,
+        name: current.name,
+      },
+    });
+    if (result.ok && result.ref)
+      onWork(current.workAreaId, message, result.ref);
+    else setNote(result.message);
+  };
   const footer = (
     <>
       {note && (
@@ -1538,7 +1549,8 @@ export function Sprints({
               }),
             );
           }
-          if (target) onWork(target, text);
+          if (current) void discussSprint(text);
+          else if (target) onWork(target, text);
           else setNote("Choose a work area first.");
         }}
       />
@@ -1563,7 +1575,9 @@ export function Sprints({
         context={context}
         line={[
           current.team,
-          `${shortDate(current.start)} – ${shortDate(current.end)}`,
+          current.start && current.end
+            ? `${shortDate(current.start)} – ${shortDate(current.end)}`
+            : "Dates not set",
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -1571,6 +1585,9 @@ export function Sprints({
           <>
             <button className="btn quiet" onClick={() => setSprintId(null)}>
               All sprints
+            </button>
+            <button className="btn" onClick={() => void discussSprint()}>
+              Discuss sprint
             </button>
             <div className="rb-seg" role="tablist" aria-label="Sprint detail">
               {sprintTabs.map((name) => (
@@ -1721,91 +1738,92 @@ export function Sprints({
     >
       {view === "overview" && (
         <section aria-labelledby="rb-sprints-h">
-          <h2 id="rb-sprints-h">Current and upcoming sprints</h2>
+          <h2 id="rb-sprints-h">Sprints by status</h2>
           <p className="muted small" style={{ margin: "4px 0 12px" }}>
             As of {shortDate(new Date(now).toISOString())} · Select a sprint to
             open it.
           </p>
-          <div className="rb-rows">
-            {sprintOverview(overview, now, areaId || undefined).map(
-              (sprint) => {
-                const row = sprintRow(sprint, now);
-                return (
-                  <button
-                    key={sprint.id}
-                    className="rb-rowitem"
-                    onClick={() => {
-                      setSprintId(sprint.id);
-                      setTab("Summary");
-                    }}
-                  >
-                    <span>
-                      <span className="name">{row.title}</span>
-                      <span
-                        className="muted small"
-                        style={{ display: "block" }}
+          {Object.entries(groups)
+            .filter(([, members]) => members.length)
+            .map(([label, members]) => {
+              const rows = (
+                <div className="rb-rows">
+                  {members.map((sprint) => {
+                    const row = sprintRow(sprint, now);
+                    return (
+                      <button
+                        key={sprint.id}
+                        className="rb-rowitem"
+                        onClick={() => {
+                          setSprintId(sprint.id);
+                          setTab("Summary");
+                        }}
                       >
-                        {[
-                          sprint.team,
-                          `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                      <span
-                        className="muted small"
-                        style={{ display: "block" }}
-                      >
-                        {sprint.goal}
-                      </span>
-                    </span>
-                    <span className="muted">{row.progress}</span>
-                    <span>
-                      <span
-                        className="muted small"
-                        style={{ display: "block" }}
-                      >
-                        {row.timing}
-                      </span>
-                      {row.flags.map((flag) => (
-                        <span
-                          key={flag}
-                          className="small"
-                          style={{
-                            display: "block",
-                            color: "var(--amun-status-signed-out)",
-                          }}
-                        >
-                          {flag}
+                        <span>
+                          <span className="name">{row.title}</span>
+                          <span
+                            className="muted small"
+                            style={{ display: "block" }}
+                          >
+                            {[
+                              sprint.team,
+                              sprint.start && sprint.end
+                                ? `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`
+                                : "Dates not set",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                          <span
+                            className="muted small"
+                            style={{ display: "block" }}
+                          >
+                            {sprint.goal}
+                          </span>
                         </span>
-                      ))}
-                    </span>
-                  </button>
-                );
-              },
-            )}
-          </div>
-          {!sprintOverview(overview, now, areaId || undefined).length &&
-            (lastAzure ? (
-              <p className="muted">
-                {azure.reply?.team.name} has no current or upcoming sprints. Its
-                latest was {lastAzure.name} (ended {shortDate(lastAzure.end)}).{" "}
-                <button
-                  className="link"
-                  onClick={() => {
-                    setSprintId(lastAzure.id);
-                    setTab("Summary");
-                  }}
-                >
-                  Open {lastAzure.name}
-                </button>
-              </p>
-            ) : (
-              <p className="muted">
-                No current or upcoming sprints. Ask Firstmate to plan one with
-                /sprint plan.
-              </p>
-            ))}
+                        <span className="muted">{row.progress}</span>
+                        <span>
+                          <span
+                            className="muted small"
+                            style={{ display: "block" }}
+                          >
+                            {row.timing}
+                          </span>
+                          {row.flags.map((flag) => (
+                            <span
+                              key={flag}
+                              className="small"
+                              style={{
+                                display: "block",
+                                color: "var(--amun-status-signed-out)",
+                              }}
+                            >
+                              {flag}
+                            </span>
+                          ))}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+              return label === "Completed" ? (
+                <details key={label}>
+                  <summary>
+                    {label} ({members.length})
+                  </summary>
+                  {rows}
+                </details>
+              ) : (
+                <section key={label} aria-label={label}>
+                  <h3>{label}</h3>
+                  {rows}
+                </section>
+              );
+            })}
+          {!Object.values(groups).some((members) => members.length) && (
+            <p className="muted">No sprints to show yet.</p>
+          )}
         </section>
       )}
       {view === "timeline" && (

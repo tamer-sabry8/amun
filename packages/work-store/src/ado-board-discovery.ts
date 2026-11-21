@@ -203,8 +203,8 @@ export class BoardDiscovery {
       return x.path;
     });
   }
-  /** Read-only: the team's current and upcoming sprints, soonest first. */
-  async sprints(team: string, limit = 12) {
+  /** Read-only: the team's iterations, including completed and undated ones. */
+  async sprints(team: string, limit?: number) {
     const found: {
       id: string;
       name: string;
@@ -228,18 +228,12 @@ export class BoardDiscovery {
       )
         throw Error("Invalid team iteration");
       const a = record(x.attributes) ? x.attributes : {};
-      if (
-        a.timeFrame === "past" ||
-        typeof a.startDate !== "string" ||
-        typeof a.finishDate !== "string"
-      )
-        continue;
       found.push({
         id: x.id,
         name: x.name,
         path: x.path,
-        start: a.startDate,
-        finish: a.finishDate,
+        start: typeof a.startDate === "string" ? a.startDate : "",
+        finish: typeof a.finishDate === "string" ? a.finishDate : "",
       });
     }
     return found.sort((a, b) => a.start.localeCompare(b.start)).slice(0, limit);
@@ -337,7 +331,7 @@ export class BoardDiscovery {
    * Read-only: the work items in one of the team's sprints, as Azure lists
    * them, with title, type, state and who they are assigned to.
    */
-  async iterationItems(team: string, iteration: string, limit = 200) {
+  async iterationItems(team: string, iteration: string, limit?: number) {
     const data = await this.get(
       new URL(
         this.project +
@@ -351,18 +345,19 @@ export class BoardDiscovery {
     );
     if (!record(data) || !Array.isArray(data.workItemRelations))
       throw new Error("Invalid Azure sprint");
-    const ids: number[] = [];
+    const ids = new Set<number>();
     for (const relation of data.workItemRelations) {
       const id = relation?.target?.id;
       if (!Number.isSafeInteger(id) || id < 1)
         throw new Error("Invalid Azure item reference");
-      if (!ids.includes(id)) ids.push(id);
+      ids.add(id);
     }
-    const wanted = ids.slice(0, limit);
+    const wanted = [...ids].slice(0, limit);
     const byId = new Map<number, SprintItem>();
     for (let offset = 0; offset < wanted.length; offset += 200) {
       const url = new URL(this.project + "/_apis/wit/workitems", this.base);
-      url.searchParams.set("ids", wanted.slice(offset, offset + 200).join(","));
+      const chunk = new Set(wanted.slice(offset, offset + 200));
+      url.searchParams.set("ids", [...chunk].join(","));
       url.searchParams.set(
         "fields",
         [
@@ -379,7 +374,8 @@ export class BoardDiscovery {
         const f = item?.fields;
         if (
           !f ||
-          !wanted.includes(item.id) ||
+          !chunk.has(item.id) ||
+          byId.has(item.id) ||
           typeof f["System.Title"] !== "string" ||
           typeof f["System.State"] !== "string" ||
           typeof f["System.WorkItemType"] !== "string"
@@ -400,9 +396,10 @@ export class BoardDiscovery {
         });
       }
     }
+    if (byId.size !== wanted.length) throw new Error("Incomplete Azure sprint");
     return {
-      items: wanted.flatMap((id) => byId.get(id) ?? []),
-      more: ids.length > wanted.length,
+      items: wanted.map((id) => byId.get(id)!),
+      more: ids.size > wanted.length,
     };
   }
 

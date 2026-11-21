@@ -68,3 +68,15 @@ it("reopens the product session after selection and does not mistake an uncertai
   );
   expect(reply).toMatchObject({ ok: false, needsProvider: false });
 });
+
+it("a remounted queue observer sees a prior turn clear its waiting message", async () => {
+  const fm = await import("../src/rebuild/firstmate.ts");
+  const seen: (string | null)[] = [];
+  fm.holdMessage("gitex", { text: "second", scoped: "second", reason: "busy" });
+  const stop = fm.observeHeldMessages(() =>
+    seen.push(fm.heldMessage("gitex")?.text ?? null),
+  );
+  fm.releaseMessage("gitex");
+  stop();
+  expect(seen).toEqual([null]);
+});
