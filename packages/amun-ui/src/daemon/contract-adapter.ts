@@ -1615,7 +1615,7 @@ export class ContractAdapter {
       let conversation = this.conversation;
       if (!conversation) {
         await this.daemon.request("primary.start", { space });
-        await this.models().catch(() => undefined);
+        // Model discovery belongs to the picker. A slow catalog must not hold a chat turn.
         conversation = {
           sessionId: crypto.randomUUID(),
           text: "",

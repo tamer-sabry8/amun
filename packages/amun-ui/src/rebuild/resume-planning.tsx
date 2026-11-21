@@ -5,7 +5,6 @@ import {
   savedPlanningLinks,
   loadDraft,
   scopedDraftKey,
-  stageMove,
   type SavedPlanningLink,
 } from "./planning-draft.ts";
 export function ResumePlanning({
@@ -67,7 +66,12 @@ export function OfflinePlanning({ link }: { link: SavedPlanningLink }) {
                 #{move.id} {move.title}
               </strong>
               <small>
-                {move.from} → {move.to}
+                {move.from !== move.to
+                  ? move.from + " → " + move.to
+                  : move.from}
+                {move.addLabels?.length
+                  ? " · Add labels: " + move.addLabels.join(", ")
+                  : ""}
               </small>
             </span>
             <button
@@ -85,9 +89,10 @@ export function OfflinePlanning({ link }: { link: SavedPlanningLink }) {
                   if (current)
                     store.setItem(
                       scopedDraftKey(link),
-                      JSON.stringify(
-                        stageMove(latest, { ...current, to: current.from }),
-                      ),
+                      JSON.stringify({
+                        ...latest,
+                        moves: latest.moves.filter((m) => m.id !== current.id),
+                      }),
                     );
                   refresh((v) => v + 1);
                 } catch {

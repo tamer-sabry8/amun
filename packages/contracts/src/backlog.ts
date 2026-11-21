@@ -167,6 +167,19 @@ export const sprintMoveRequest = z.strictObject({
         rev: z.int().positive(),
         from: id,
         to: id,
+        addLabels: z
+          .array(
+            z
+              .string()
+              .trim()
+              .min(1)
+              .max(128)
+              .regex(/^[^;\r\n]+$/),
+          )
+          .min(1)
+          .max(30)
+          .optional(),
+        targetSprintId: id.optional(),
         title: z.string().max(1024),
       }),
     )

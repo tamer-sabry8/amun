@@ -17,6 +17,19 @@ const move = z.object({
   title: z.string(),
   from: z.string().min(1),
   to: z.string().min(1),
+  addLabels: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[^;\r\n]+$/),
+    )
+    .min(1)
+    .max(30)
+    .optional(),
+  targetSprintId: z.string().min(1).optional(),
 });
 export type PlannedMove = z.infer<typeof move>;
 const submission = z.object({
@@ -59,9 +72,11 @@ export function stageMove(
   move: PlannedMove,
 ): PlanningDraft {
   const previous = draft.moves.find((entry) => entry.id === move.id);
-  const next = previous ? { ...previous, to: move.to } : move;
+  const next = previous
+    ? { ...previous, ...move, rev: previous.rev, from: previous.from }
+    : move;
   const moves = draft.moves.filter((entry) => entry.id !== move.id);
-  if (next.from !== next.to) {
+  if (next.from !== next.to || next.addLabels?.length) {
     if (previous)
       return {
         ...draft,

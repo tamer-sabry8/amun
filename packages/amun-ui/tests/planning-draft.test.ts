@@ -1,3 +1,4 @@
+import { plannedLoad } from "../src/rebuild/sprint-load.ts";
 import { expect, it } from "vitest";
 import {
   loadDraft,
@@ -41,4 +42,29 @@ it("restores staged baseline and independent project identity, and undo removes 
     ...draft,
     moves: [],
   });
+});
+
+it("counts the team's point load once and keeps unestimated work separate across carryovers", () => {
+  const cards = [
+    { id: 1, title: "A", estimates: [{ name: "Story points", value: 10 }] },
+    { id: 2, title: "B", estimates: [{ name: "Story points", value: 8 }] },
+    { id: 3, title: "C", estimates: [{ name: "Effort", value: 3 }] },
+  ];
+  const members = [
+    { id: "1", title: "A" },
+    { id: "3", title: "C" },
+  ];
+  const move = { id: 2, rev: 1, title: "B", from: "Root", to: "Sprint 4" };
+  expect(plannedLoad(members, cards, [move], "Sprint 4")).toEqual({
+    points: 18,
+    unknown: ["C"],
+  });
+  expect(
+    plannedLoad(
+      members,
+      cards,
+      [move, { ...move, id: 1, from: "Sprint 4", to: "Sprint 5" }],
+      "Sprint 4",
+    ),
+  ).toEqual({ points: 8, unknown: ["C"] });
 });

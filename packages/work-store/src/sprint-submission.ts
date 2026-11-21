@@ -58,10 +58,10 @@ export async function applySprintMoves(
     throw Error("The sprint conversation or connection has changed.");
   if (
     new Set(moves.map((m) => m.id)).size !== moves.length ||
-    moves.some(
-      (m) =>
-        (m.to !== request.iteration && m.from !== request.iteration) ||
-        m.from === m.to,
+    moves.some((m) =>
+      m.from === m.to
+        ? !m.addLabels?.length || !!m.targetSprintId
+        : m.to !== request.iteration && m.from !== request.iteration,
     )
   )
     throw Error("Review the distinct moves and their destination.");
@@ -154,7 +154,8 @@ export async function applySprintMoves(
   try {
     if (!accepted) throw Error("Waiting for Firstmate confirmation");
     if (!stillMapped()) throw Error("Connection changed after review");
-    const sprint = (await reader.sprints(destination.team)).find(
+    const teamSprints = await reader.sprints(destination.team);
+    const sprint = teamSprints.find(
       (s) => s.id === request.sprintId && s.path === request.iteration,
     );
     const level = (await reader.levels(destination.team)).find(
@@ -162,7 +163,9 @@ export async function applySprintMoves(
     );
     if (!sprint || !level)
       throw Error("The selected sprint or backlog is no longer available");
-    const backlogPath = moves.some((m) => m.to !== sprint.path)
+    const backlogPath = moves.some(
+      (m) => m.to !== m.from && m.to !== sprint.path && !m.targetSprintId,
+    )
       ? await reader.backlogIteration(destination.team).catch(() => null)
       : null;
     const settings = await reader.boardSettings(destination.team, level.name);
@@ -170,6 +173,7 @@ export async function applySprintMoves(
       destination.team,
       level.id,
       settings.columnField,
+      moves.some((m) => m.addLabels?.length),
     );
     const ready = new Set(
       summary()
@@ -181,7 +185,16 @@ export async function applySprintMoves(
       const card = cards.find((c) => c.id === move.id);
       if (
         !stillMapped() ||
-        (move.to !== sprint.path && move.to !== backlogPath) ||
+        (move.targetSprintId
+          ? !teamSprints.some(
+              (s) =>
+                s.id === move.targetSprintId &&
+                s.path === move.to &&
+                move.from === sprint.path,
+            )
+          : move.from !== move.to &&
+            move.to !== sprint.path &&
+            move.to !== backlogPath) ||
         !card ||
         card.rev !== move.rev ||
         card.iteration !== move.from
@@ -195,17 +208,39 @@ export async function applySprintMoves(
       }
       set(move.id, "unknown", "Awaiting independent verification");
       try {
+        const fields: Record<string, string> = {};
+        if (move.from !== move.to) fields["System.IterationPath"] = move.to;
+        if (move.addLabels?.length) {
+          if (!card.labels) {
+            set(move.id, "held", "Azure label access is unavailable");
+            continue;
+          }
+          if (move.addLabels.some((label) => !card.labels!.includes(label)))
+            fields["System.Tags"] = [
+              ...new Set([...card.labels, ...move.addLabels]),
+            ].join("; ");
+        }
+        if (!Object.keys(fields).length) {
+          set(
+            move.id,
+            "confirmed",
+            "Already present at verified revision " + card.rev,
+            card.rev,
+          );
+          continue;
+        }
         const result = await client.write(
           {
             remoteId: move.id,
             itemId: String(move.id),
             type: card.type,
             revision: move.rev,
-            fields: { "System.IterationPath": move.to },
+            fields,
             parentId: null,
             marker: ref,
           },
           null,
+          ...(move.addLabels?.length ? ([true] as const) : []),
         );
         set(
           move.id,
@@ -317,6 +352,13 @@ export async function inspectSprintSubmission(
       if (
         item.rev <= move.rev ||
         item.fields["System.IterationPath"] !== move.to ||
+        move.addLabels?.some(
+          (label) =>
+            !String(item.fields["System.Tags"] ?? "")
+              .split(";")
+              .map((t) => t.trim())
+              .includes(label),
+        ) ||
         item.fields["System.TeamProject"] !== destination.project
       )
         continue;

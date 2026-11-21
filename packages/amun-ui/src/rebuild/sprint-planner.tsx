@@ -1,3 +1,4 @@
+import { plannedLoad, teamBudgetKey } from "./sprint-load.ts";
 import { useEffect, useRef, useState } from "react";
 import {
   backlogResult,
@@ -23,13 +24,26 @@ export function SprintPlanner({
   scope,
   name,
   members,
+  destinations = [],
   openChat,
 }: {
   scope: PlanningScope;
   name: string;
   members: { id: string; title: string }[];
-  openChat(chatId: string): void;
+  destinations?: { id: string; name: string; path: string }[];
+  openChat(chatId: string, requestRef?: string): void;
 }) {
+  const [carryTo, setCarryTo] = useState("");
+  const [carryIds, setCarryIds] = useState<number[]>([]);
+  const [budget, setBudget] = useState(() => {
+    try {
+      return browserStore()?.getItem(teamBudgetKey(scope)) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [editingLabel, setEditingLabel] = useState<number | null>(null);
+  const [label, setLabel] = useState("");
   const [error, setError] = useState("");
   const [draft, setDraft] = useState(() => {
     try {
@@ -270,7 +284,7 @@ export function SprintPlanner({
   const filtered = cards?.filter(
     (card) =>
       !members.some((s) => s.id === String(card.id)) &&
-      !draft.moves.some((s) => s.id === card.id) &&
+      !draft.moves.some((s) => s.id === card.id && s.to !== s.from) &&
       (card.title.toLocaleLowerCase().includes(search) ||
         (detailsQuery !== null &&
           [card.description, card.criteria].some((text) =>
@@ -281,6 +295,18 @@ export function SprintPlanner({
           )) ||
         String(card.id).includes(search.replace(/^#/, ""))),
   );
+  const additionsOnly = draft.moves.every(
+    (m) => m.to === scope.iteration && m.from !== m.to && !m.addLabels?.length,
+  );
+  const load = cards
+    ? plannedLoad(members, cards, draft.moves, scope.iteration)
+    : null;
+  const budgetValue =
+    budget.trim() !== "" &&
+    Number.isFinite(Number(budget)) &&
+    Number(budget) >= 0
+      ? Number(budget)
+      : null;
   return (
     <section aria-label="Sprint planning">
       <div className="rb-planning-panes">
@@ -378,6 +404,70 @@ export function SprintPlanner({
               >
                 + Sprint
               </button>
+              {card.labels && card.iteration && (
+                <button
+                  className="btn quiet"
+                  disabled={preparing || submittedIds.has(card.id)}
+                  onClick={() => {
+                    setLabel("");
+                    setEditingLabel(editingLabel === card.id ? null : card.id);
+                  }}
+                >
+                  Label
+                </button>
+              )}
+              {editingLabel === card.id && (
+                <form
+                  className="row wrap"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const value = label.trim();
+                    if (
+                      !value ||
+                      /[;\r\n]/.test(value) ||
+                      value.length > 128 ||
+                      !card.iteration ||
+                      applying.current
+                    )
+                      return;
+                    const prior = draft.moves.find((m) => m.id === card.id);
+                    if (
+                      [
+                        ...(card.labels ?? []),
+                        ...(prior?.addLabels ?? []),
+                      ].some((l) => l.toLowerCase() === value.toLowerCase())
+                    ) {
+                      setError(
+                        "This label is already on the story or in your draft.",
+                      );
+                      return;
+                    }
+                    if (
+                      save(
+                        stageMove(draft, {
+                          id: card.id,
+                          rev: card.rev,
+                          title: card.title,
+                          from: card.iteration,
+                          to: prior?.to ?? card.iteration,
+                          addLabels: [...(prior?.addLabels ?? []), value],
+                        }),
+                      )
+                    )
+                      setEditingLabel(null);
+                  }}
+                >
+                  <input
+                    aria-label={"Label for " + card.title}
+                    value={label}
+                    maxLength={128}
+                    onChange={(e) => setLabel(e.target.value)}
+                  />
+                  <button className="btn" disabled={!label.trim()}>
+                    Stage label
+                  </button>
+                </form>
+              )}
             </div>
           ))}
         </section>
@@ -393,6 +483,95 @@ export function SprintPlanner({
         >
           <h2>{name}</h2>
           <p className="muted small">{scope.iteration}</p>
+          {destinations.some((s) => s.id !== scope.sprintId) &&
+            members.length > 0 && (
+              <details>
+                <summary
+                  onClick={() =>
+                    inspectView({
+                      view: "Carry stories forward",
+                      source: scope.sourceId,
+                      areaId: scope.areaId,
+                      record: scope.sprintId,
+                    })
+                  }
+                >
+                  Carry stories forward
+                </summary>
+                <label className="field">
+                  Destination sprint
+                  <select
+                    value={carryTo}
+                    onChange={(e) => setCarryTo(e.target.value)}
+                  >
+                    <option value="">Choose a sprint</option>
+                    {destinations
+                      .filter((s) => s.id !== scope.sprintId)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.path}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {cards
+                  ?.filter(
+                    (c) =>
+                      members.some((s) => s.id === String(c.id)) &&
+                      c.iteration === scope.iteration &&
+                      !draft.moves.some((m) => m.id === c.id) &&
+                      !submittedIds.has(c.id),
+                  )
+                  .map((c) => (
+                    <label className="rb-line" key={c.id}>
+                      <input
+                        type="checkbox"
+                        checked={carryIds.includes(c.id)}
+                        onChange={(e) =>
+                          setCarryIds((prev) =>
+                            e.target.checked
+                              ? [...prev, c.id]
+                              : prev.filter((id) => id !== c.id),
+                          )
+                        }
+                      />
+                      <span>
+                        #{c.id} {c.title} · {c.state}
+                      </span>
+                    </label>
+                  ))}
+                <button
+                  className="btn"
+                  disabled={preparing || !carryTo || !carryIds.length}
+                  onClick={() => {
+                    const target = destinations.find(
+                      (s) => s.id === carryTo && s.id !== scope.sprintId,
+                    );
+                    if (!target || !cards || applying.current) return;
+                    let next = draft;
+                    for (const c of cards)
+                      if (
+                        carryIds.includes(c.id) &&
+                        members.some((s) => s.id === String(c.id)) &&
+                        c.iteration === scope.iteration &&
+                        !submittedIds.has(c.id) &&
+                        !draft.moves.some((m) => m.id === c.id)
+                      )
+                        next = stageMove(next, {
+                          id: c.id,
+                          rev: c.rev,
+                          title: c.title,
+                          from: scope.iteration,
+                          to: target.path,
+                          targetSprintId: target.id,
+                        });
+                    if (save(next)) setCarryIds([]);
+                  }}
+                >
+                  Stage selected moves
+                </button>
+              </details>
+            )}
           {members
             .filter(
               (story) => !draft.moves.some((m) => String(m.id) === story.id),
@@ -438,14 +617,22 @@ export function SprintPlanner({
                   #{move.id} {move.title}
                 </strong>
                 <small>
-                  {move.from} → {move.to}
+                  {move.from !== move.to
+                    ? move.from + " → " + move.to
+                    : move.from}
+                  {move.addLabels?.length
+                    ? " · Add labels: " + move.addLabels.join(", ")
+                    : ""}
                 </small>
               </span>
               <button
                 className="btn quiet"
                 onClick={() =>
                   !applying.current &&
-                  save(stageMove(draft, { ...move, to: move.from }))
+                  save({
+                    ...draft,
+                    moves: draft.moves.filter((m) => m.id !== move.id),
+                  })
                 }
               >
                 Undo
@@ -466,7 +653,7 @@ export function SprintPlanner({
                       areaId: scope.areaId,
                       record: batch.ref,
                     });
-                    openChat(batch.chatId);
+                    openChat(batch.chatId, batch.ref);
                   }}
                 >
                   View request · {batch.ref}
@@ -485,14 +672,76 @@ export function SprintPlanner({
               )}
             </section>
           ))}
+          {load && (
+            <section aria-label="Team planning capacity">
+              <p>
+                Team · {load.points} planned points
+                {budgetValue !== null ? " of " + budgetValue : ""}
+              </p>
+              {budgetValue !== null && load.points > budgetValue && (
+                <p className="tag warn">
+                  {load.points - budgetValue} points over budget
+                </p>
+              )}
+              {!!load.unknown.length && (
+                <details>
+                  <summary>
+                    {load.unknown.length} without a point estimate
+                  </summary>
+                  <ul>
+                    {load.unknown.map((title, index) => (
+                      <li key={index}>{title}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <label className="field">
+                Planning budget · kept in Amun
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={budget}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (
+                      value &&
+                      (!Number.isFinite(Number(value)) || Number(value) < 0)
+                    )
+                      return;
+                    try {
+                      const storage = browserStore();
+                      if (!storage) throw Error();
+                      if (value) storage.setItem(teamBudgetKey(scope), value);
+                      else storage.removeItem(teamBudgetKey(scope));
+                      setBudget(value);
+                    } catch {
+                      setError(
+                        "Could not save the planning budget on this device.",
+                      );
+                    }
+                  }}
+                />
+              </label>
+            </section>
+          )}
           {draft.moves.length > 0 && (
             <button
               className="btn primary"
               disabled={preparing || !cards}
               onClick={() => void apply()}
             >
-              Apply {draft.moves.length}{" "}
-              {draft.moves.length === 1 ? "change" : "changes"}
+              {additionsOnly
+                ? "Add " +
+                  draft.moves.length +
+                  " " +
+                  (draft.moves.length === 1 ? "story" : "stories") +
+                  " to " +
+                  name
+                : "Apply " +
+                  draft.moves.length +
+                  " " +
+                  (draft.moves.length === 1 ? "change" : "changes")}
             </button>
           )}
           {draft.moves.length > 0 && (

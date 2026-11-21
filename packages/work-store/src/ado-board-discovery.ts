@@ -368,19 +368,11 @@ export class BoardDiscovery {
     }
     const wanted = [...ids].slice(0, limit);
     const byId = new Map<number, SprintItem>();
+    const ranks = new Map<number, number>();
     for (let offset = 0; offset < wanted.length; offset += 200) {
       const url = new URL(this.project + "/_apis/wit/workitems", this.base);
       const chunk = new Set(wanted.slice(offset, offset + 200));
       url.searchParams.set("ids", [...chunk].join(","));
-      url.searchParams.set(
-        "fields",
-        [
-          "System.Title",
-          "System.State",
-          "System.WorkItemType",
-          "System.AssignedTo",
-        ].join(","),
-      );
       const batch = await this.get(url);
       if (!record(batch) || !Array.isArray(batch.value))
         throw new Error("Invalid Azure items");
@@ -395,6 +387,11 @@ export class BoardDiscovery {
           typeof f["System.WorkItemType"] !== "string"
         )
           throw new Error("Invalid Azure item");
+        const rank =
+          f["Microsoft.VSTS.Common.StackRank"] ??
+          f["Microsoft.VSTS.Common.BacklogPriority"];
+        if (typeof rank === "number" && Number.isFinite(rank))
+          ranks.set(item.id, rank);
         const who = f["System.AssignedTo"];
         byId.set(item.id, {
           id: item.id,
@@ -411,6 +408,8 @@ export class BoardDiscovery {
       }
     }
     if (byId.size !== wanted.length) throw new Error("Incomplete Azure sprint");
+    if (ranks.size === wanted.length)
+      wanted.sort((a, b) => ranks.get(a)! - ranks.get(b)!);
     return {
       items: wanted.map((id) => byId.get(id)!),
       more: ids.size > wanted.length,

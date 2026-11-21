@@ -52,6 +52,24 @@ const typeMissing = (status: number, data: unknown) => {
 };
 /** Azure reports a person as an object; the plan may name them either way. */
 export function sameAdoField(key: string, actual: unknown, expected: unknown) {
+  if (
+    key === "System.Tags" &&
+    typeof actual === "string" &&
+    typeof expected === "string"
+  ) {
+    const tags = (s: string) =>
+      JSON.stringify(
+        [
+          ...new Set(
+            s
+              .split(";")
+              .map((t) => t.trim())
+              .filter(Boolean),
+          ),
+        ].sort(),
+      );
+    return tags(actual) === tags(expected);
+  }
   if (key === "System.AssignedTo" && actual && typeof actual === "object") {
     const who = actual as { uniqueName?: unknown; displayName?: unknown };
     const want = String(expected).trim().toLowerCase();
@@ -191,12 +209,15 @@ export class AdoWriteClient {
     }
     return workItemUrl(this.collection, parent);
   }
-  async write(step: AdoStep, parent: number | null) {
+  async write(step: AdoStep, parent: number | null, reviewedTags = false) {
     const patch: { op: string; path: string; value: unknown }[] = [];
     if (step.remoteId)
       patch.push({ op: "test", path: "/rev", value: step.revision });
     for (const [key, value] of Object.entries(step.fields)) {
-      if (!/^[A-Za-z][A-Za-z0-9_.-]{0,255}$/.test(key) || key === "System.Tags")
+      if (
+        !/^[A-Za-z][A-Za-z0-9_.-]{0,255}$/.test(key) ||
+        (key === "System.Tags" && !(reviewedTags && step.remoteId))
+      )
         throw Error("Invalid work item field");
       patch.push({ op: "add", path: "/fields/" + key, value });
     }

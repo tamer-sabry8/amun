@@ -209,3 +209,96 @@ it.each(["Gitex", "Another team's sprint"])(
     db.close();
   },
 );
+
+it("carries only selected stories to the exact team iteration with one Firstmate request", async () => {
+  const { db, request, target, reader } = fixture();
+  const next = {
+    id: "5",
+    path: "Gitex/Sprint 5",
+    name: "Sprint 5",
+    start: "",
+    finish: "",
+  };
+  const origin = await reader.sprints();
+  reader.sprints = async () => [...origin, next];
+  request.moves = [24, 32].map((id) => ({
+    id,
+    rev: 3,
+    title: "Story " + id,
+    from: request.iteration,
+    to: next.path,
+    targetSprintId: next.id,
+  }));
+  const cards = await reader.cards();
+  reader.cards = async () => [...cards, { ...cards[0]!, id: 33 }];
+  const write = vi.fn(async (step: { remoteId: number | null }) => ({
+    id: step.remoteId!,
+    rev: 4,
+  }));
+  const dispatch = vi.fn(async () => "ACCEPT " + request.ref);
+  const result = await applySprintMoves(
+    db,
+    request,
+    target,
+    reader,
+    { write },
+    () => true,
+    dispatch,
+  );
+  expect(result.receipts.map((r) => r.state)).toEqual([
+    "confirmed",
+    "confirmed",
+  ]);
+  expect(write.mock.calls.map(([s]) => s.remoteId)).toEqual([24, 32]);
+  expect(dispatch).toHaveBeenCalledTimes(1);
+  db.close();
+});
+
+it("sends a label-only change on the selected backlog record and preserves its other labels and sprint", async () => {
+  const { db, request, target, reader } = fixture();
+  request.moves = [
+    { ...request.moves[0]!, to: "Gitex", addLabels: ["Release"] },
+  ];
+  const cards = await reader.cards();
+  reader.cards = async () => cards.map((c) => ({ ...c, labels: ["Gitex"] }));
+  let calls = 0;
+  const client = new AdoWriteClient(
+    target.collection,
+    target.project,
+    async (method, _url, body) => {
+      calls++;
+      if (method === "PATCH") {
+        expect(body).toEqual([
+          { op: "test", path: "/rev", value: 3 },
+          { op: "add", path: "/fields/System.Tags", value: "Gitex; Release" },
+        ]);
+        return { status: 200, data: { id: 24, rev: 4 } };
+      }
+      return {
+        status: 200,
+        data: {
+          id: 24,
+          rev: 4,
+          fields: {
+            "System.WorkItemType": "Story",
+            "System.TeamProject": "Gitex",
+            "System.IterationPath": "Gitex",
+            "System.Tags": "Release; Gitex",
+          },
+        },
+      };
+    },
+  );
+  const result = await applySprintMoves(
+    db,
+    request,
+    target,
+    reader,
+    client,
+    () => true,
+    async () => "ACCEPT " + request.ref,
+  );
+  expect(result.receipts[0]?.state).toBe("confirmed");
+  expect(calls).toBe(2);
+  db.close();
+});

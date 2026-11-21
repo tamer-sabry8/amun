@@ -95,17 +95,17 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
     expect(row.textContent).toContain("Launch");
     expect(chat).not.toHaveBeenCalled();
     await act(async () => button("+ Sprint").click());
-    expect(button("Apply 1 change")).toBeTruthy();
+    expect(button("Add 1 story to Sprint 4")).toBeTruthy();
     await act(async () => root.unmount());
     root = createRoot(container);
     await mount();
-    await act(async () => button("Apply 1 change").click());
+    await act(async () => button("Add 1 story to Sprint 4").click());
     expect(container.textContent).toContain("Waiting for Firstmate");
     expect(chat).not.toHaveBeenCalled();
     connection.mockReturnValue({ ...state, status: "Connected" });
     await act(async () => {
-      button("Apply 1 change").click();
-      button("Apply 1 change").click();
+      button("Add 1 story to Sprint 4").click();
+      button("Add 1 story to Sprint 4").click();
     });
     const applies = send.mock.calls
       .map(([m]) => m as { action: string })

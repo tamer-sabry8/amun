@@ -1379,7 +1379,12 @@ export function Sprints({
   snapshot: Snapshot;
   now: number;
   model: string | null;
-  onWork(areaId: string, message?: string, chatId?: string): void;
+  onWork(
+    areaId: string,
+    message?: string,
+    chatId?: string,
+    messageId?: string,
+  ): void;
   onReview(planId: string, workAreaId: string | null): void;
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
@@ -1464,7 +1469,7 @@ export function Sprints({
   const azureDetail = new Map(
     (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
       String(item.id),
-      `${item.type} · ${item.state}`,
+      item,
     ]),
   );
   const openAzure = current?.id.startsWith("ado:")
@@ -1732,7 +1737,31 @@ export function Sprints({
               scope={planner}
               name={current.name}
               members={current.stories}
-              openChat={(chat) => onWork(current.workAreaId, undefined, chat)}
+              destinations={azure.reply?.sprints ?? []}
+              openChat={(chat, ref) => {
+                const request =
+                  ref && snapshot.requests?.find((r) => r.ref === ref);
+                const message =
+                  request &&
+                  snapshot.chats
+                    .find(
+                      (c) =>
+                        c.id === chat && c.workAreaId === current.workAreaId,
+                    )
+                    ?.messages.find((m) => m.id === request.messageId);
+                if (ref && !message) {
+                  setNote(
+                    "The original request is unavailable. Refresh its receipt.",
+                  );
+                  return;
+                }
+                onWork(
+                  current.workAreaId,
+                  undefined,
+                  chat,
+                  message ? message.id : undefined,
+                );
+              }}
             />
           ) : (
             <p className="muted" role="status">
@@ -1775,7 +1804,7 @@ export function Sprints({
             )}
           </div>
         )}
-        {tab === "Stories" &&
+        {(tab === "Stories" || tab === "Summary") &&
           (openAzure &&
           azure.items?.sprint === openAzure &&
           !current.stories.length ? (
@@ -1790,18 +1819,24 @@ export function Sprints({
             <div className="rb-board">
               {[
                 ...new Set(
-                  current.stories.map((story) => story.owner ?? "Unassigned"),
+                  current.stories.map(
+                    (story) => azureDetail.get(story.id)?.state ?? "Planned",
+                  ),
                 ),
-              ].map((owner) => (
-                <section className="rb-col" key={owner} aria-label={owner}>
-                  <header>{owner}</header>
+              ].map((state) => (
+                <section className="rb-col" key={state} aria-label={state}>
+                  <header>{state}</header>
                   {current.stories
-                    .filter((story) => (story.owner ?? "Unassigned") === owner)
+                    .filter(
+                      (story) =>
+                        (azureDetail.get(story.id)?.state ?? "Planned") ===
+                        state,
+                    )
                     .map((story) => (
                       <div className="rb-tile" key={story.id}>
                         <span className="name">{story.title}</span>
                         <span className="meta">
-                          {azureDetail.get(story.id) ??
+                          {story.owner ??
                             (story.points === null
                               ? "Not sized"
                               : `${story.points} points`)}

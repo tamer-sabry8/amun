@@ -1168,8 +1168,14 @@ export function App() {
             snapshot={snapshot}
             now={now}
             model={model}
-            onWork={(id, message, chat) =>
-              openWork(id, message, null, chat ?? null)
+            onWork={(id, message, chat, messageId) =>
+              openWork(
+                id,
+                message,
+                null,
+                chat ?? null,
+                messageId ? { messageId } : null,
+              )
             }
             onReview={(planId, areaId) =>
               areaId &&
