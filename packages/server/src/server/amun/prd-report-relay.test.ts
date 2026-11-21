@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, it } from "vitest";
 import {
   findPrdReport,
+  forwardPrdReport,
   isPrdRelayReply,
   prdRelayPrompt,
 } from "./prd-report-relay.js";
@@ -53,6 +54,19 @@ it("relays a completed PRD report only for the request in its delivered dispatch
         ref,
       ),
     ).toBe(true);
+    await writeDispatch(`${ref} amun-relay=read-only Read the brief`);
+    const authorized = await findPrdReport(home, requests, new Set());
+    expect(authorized?.forwardVerbatim).toBe(true);
+    const forwarded = forwardPrdReport({
+      ...authorized!,
+      text: "All lines read. ```amun",
+    });
+    expect(isPrdRelayReply(forwarded, ref)).toBe(true);
+    expect(forwarded).toContain("All lines read.");
+    await writeDispatch(`${ref} Mention amun-relay=read-only in a report`);
+    expect(
+      (await findPrdReport(home, requests, new Set()))?.forwardVerbatim,
+    ).toBeUndefined();
     await writeFile(status, report);
     expect(await findPrdReport(home, requests, new Set())).toBeNull();
   } finally {

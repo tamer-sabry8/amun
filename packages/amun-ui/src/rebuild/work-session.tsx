@@ -2189,7 +2189,14 @@ export function WorkSession({
       const about = asked
         ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
         : "";
-      const asks = `${requestLine(ref)}\n${text}\n\nFor crew work, dispatch through Firstmate’s native workflow as soon as the needed inputs are known. Reuse the current session’s startup digest and lock; do not rerun session startup once it has succeeded for this session. Put the request reference at the beginning of the crew brief and ask the crew to include it in the completion report. After dispatch, acknowledge and end this turn so the captain can continue. When the crew returns, relay the result with the same request reference in a fenced amun report, including status delivered for a completed answer (even when there is no document).`;
+      const asks = [
+        requestLine(ref),
+        text,
+        "",
+        "Dispatch crew work through Firstmate’s native workflow as soon as the inputs are known. Reuse a completed session startup. If startup is required, complete it before arming the watcher. Keep the request reference first in the dispatch and in the crew’s completion report. Acknowledge dispatch briefly and end the turn.",
+        `For a read-only PRD review with an exact source and an existing available PRD second mate, send one brief using fm-send.sh prd and let that command enforce its native lease and delivery checks. Follow any lease refusal. Ask PRD to load the document once in full (one Read call if it fits, multiple only when required) and send a concise, captain-ready plain-text answer. If you authorize Amun to forward that exact answer when it arrives, start your dispatch with the literal prefix "${ref} amun-relay=read-only ". Only set this marker for read-only reports, never for approvals or writes.`,
+        "When reporting a result, include the tracked fenced amun status, with delivered for a completed answer even if there is no document.",
+      ].join("\n");
       const scoped = briefing
         ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
         : `${header}${which}${asks}${about}`;

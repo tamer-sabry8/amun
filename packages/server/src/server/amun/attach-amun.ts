@@ -1,4 +1,4 @@
-import { findPrdReport, isPrdRelayReply, prdRelayPrompt } from "./prd-report-relay.js";
+import { findPrdReport, forwardPrdReport, isPrdRelayReply, prdRelayPrompt } from "./prd-report-relay.js";
 import { scheduleBlockerChecks } from "./blocker-checks.js";
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
@@ -475,17 +475,22 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       }
       const report = await findPrdReport(home, getRequests(), new Set(attemptedPrdRelays.keys()), now);
       if (!report || closing || primary.pending(home)) return;
-      const space = (await spaces.list())[0];
-      if (!space || closing || primary.pending(home)) return;
       const isPending = () => getRequests().some((request) =>
         request.ref === report.ref && (request.status === "sent" || request.status === "working"),
       );
       if (!isPending()) return;
+      const safeReport = { ...report, text: work.redactor.text(report.text) };
+      const agentId = primary.agentFor(home);
+      if (!agentId) return;
+      if (report.forwardVerbatim) {
+        attemptedPrdRelays.set(report.ref, now);
+        showUnprompted({ fmHome: home, agentId, text: forwardPrdReport(safeReport) }, true);
+        return;
+      }
+      const space = (await spaces.list())[0];
+      if (!space || closing || primary.pending(home) || !isPending()) return;
       attemptedPrdRelays.set(report.ref, now);
-      const { agentId, reply, followups } = await primary.send(space, prdRelayPrompt({
-        ...report,
-        text: work.redactor.text(report.text),
-      }), true);
+      const { reply, followups } = await primary.send(space, prdRelayPrompt(safeReport), true);
       if (closing) return;
       if (isPrdRelayReply(reply, report.ref) && isPending()) {
         showUnprompted({ fmHome: home, agentId, text: reply }, true);
