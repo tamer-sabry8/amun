@@ -1,3 +1,7 @@
+import {
+  ReviewBacklogPicker,
+  type ReviewBoard,
+} from "./review-backlog-picker.tsx";
 import { useEffect, useRef, useState } from "react";
 import { operationResult, type WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
@@ -18,14 +22,34 @@ export function PrdCoverage({
 }) {
   const origin = useReviewOrigin();
   const sources = context.sources.filter((source) => source.kind === "ado");
-  const sourceId = readSource(
-    browserStore(),
+  const reviewKey = JSON.stringify([
     context.productId,
-    sources.map((s) => s.id),
-  );
-  const board = sourceId
-    ? readBoard(browserStore(), context.productId, sourceId)
-    : undefined;
+    objectiveId,
+    version,
+    origin?.areaId,
+    origin?.chatId,
+  ]);
+  const [choice, setChoice] = useState<{
+    key: string;
+    board: ReviewBoard;
+  } | null>(null);
+  const override =
+    choice?.key === reviewKey &&
+    sources.some((s) => s.id === choice.board.sourceId)
+      ? choice.board
+      : null;
+  const sourceId =
+    override?.sourceId ??
+    readSource(
+      browserStore(),
+      context.productId,
+      sources.map((s) => s.id),
+    );
+  const board =
+    override ??
+    (sourceId
+      ? readBoard(browserStore(), context.productId, sourceId)
+      : undefined);
   const comparison = context.comparisons?.find(
     (c) =>
       c.objectiveId === objectiveId &&
@@ -88,10 +112,21 @@ export function PrdCoverage({
   return (
     <section className="rb-inline" aria-label="Backlog comparison">
       <h4>Backlog comparison</h4>
+      {!!sources.length && !busy && (
+        <ReviewBacklogPicker
+          key={reviewKey}
+          productId={context.productId}
+          sources={sources}
+          choose={(board) => {
+            setChoice({ key: reviewKey, board });
+            setStatus("");
+          }}
+        />
+      )}
       {!board?.level ? (
         <p className="muted">
-          Backlog comparison pending. Select a project, team and level in
-          Backlog.
+          Backlog comparison pending. Choose a connected project, team and
+          backlog.
         </p>
       ) : (
         <>
