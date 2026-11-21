@@ -258,6 +258,13 @@ export class AdoService {
         settings.columnField,
         request.details,
       ),
+      ...(request.details
+        ? {
+            backlogIteration: await d
+              .backlogIteration(request.team)
+              .catch(() => null),
+          }
+        : {}),
       canEditBoard: settings.canEdit,
     };
   }

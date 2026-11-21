@@ -9,6 +9,7 @@ export interface AdoDestination {
   team: string;
 }
 export interface AdoStep {
+  draftDigest?: string;
   itemId: string;
   type: string;
   parentId: string | null;

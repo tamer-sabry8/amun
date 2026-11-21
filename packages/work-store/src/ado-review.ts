@@ -1,7 +1,7 @@
 import type { BoardDiscovery } from "./ado-board-discovery.ts";
 import { prdComparison } from "../../contracts/src/workspace.ts";
 import { appendAzureCriteria } from "./ado-publication-fields.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
 import { AdoBatch, type AdoDestination, type AdoStep } from "./ado-batch.ts";
 import type {
@@ -24,6 +24,25 @@ interface Draft {
   prd_version: number;
   requirement_id: string;
 }
+function draftDigest(row: Draft) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        row.id,
+        row.parent_id,
+        row.type,
+        row.title,
+        row.body,
+        row.acceptance_json,
+        row.remote_id,
+        row.objective_id,
+        row.prd_version,
+        row.requirement_id,
+      ]),
+    )
+    .digest("hex");
+}
+
 export class AdoReview {
   constructor(private db: Database) {}
   private draft(product: string, id: string) {
@@ -162,6 +181,7 @@ export class AdoReview {
             );
           steps.push({
             itemId: row.id,
+            draftDigest: draftDigest(row),
             type: type.name,
             parentId: null,
             remoteId: record.id,
@@ -200,6 +220,7 @@ export class AdoReview {
           throw Error("Required fields: " + missing.join(", "));
         steps.push({
           itemId: row.id,
+          draftDigest: draftDigest(row),
           parentId: row.parent_id,
           remoteId: null,
           revision: 0,
@@ -232,6 +253,7 @@ export class AdoReview {
           fields["System.AssignedTo"] = cmd.assignee.trim();
         steps.push({
           itemId: row.id,
+          draftDigest: draftDigest(row),
           parentId: null,
           remoteId: current.id,
           revision: current.rev,
@@ -248,6 +270,14 @@ export class AdoReview {
       steps,
     );
   }
+  validateDrafts(product: string, steps: AdoStep[]) {
+    for (const step of steps) {
+      if (step.draftDigest !== draftDigest(this.draft(product, step.itemId)))
+        throw Error(
+          "The draft changed after preview. Review its current wording before submitting.",
+        );
+    }
+  }
   validate(
     product: string,
     destination: AdoDestination,
@@ -263,7 +293,6 @@ export class AdoReview {
       p.destination.team !== destination.team
     )
       throw Error("Preview destination or contents changed.");
-    for (const s of p.steps) this.draft(product, s.itemId);
     return p;
   }
 }

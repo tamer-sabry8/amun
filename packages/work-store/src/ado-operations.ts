@@ -161,6 +161,7 @@ export async function runAdoOperation(
       throw Error(
         "Open the reviewed proposals in their project conversation before submitting.",
       );
+    review.validateDrafts(request.productId, p.steps);
     const objectives = p.steps.map(
       (step) =>
         db
@@ -224,6 +225,7 @@ export async function runAdoOperation(
         throw Error("Firstmate did not confirm the reviewed request.");
       check();
       review.validate(request.productId, target, p.id, p.binding);
+      review.validateDrafts(request.productId, p.steps);
       batches.approve(p.id, p.binding);
     } catch (error) {
       publication.workspace.finishStoryReview(

@@ -31,7 +31,7 @@ const savedDraft = z.object({
 });
 export type PlanningDraft = z.infer<typeof savedDraft>;
 
-export function scopedDraftKey(scope: PlanningScope) {
+export function scopedDraftKey(scope: Omit<PlanningScope, "iteration">) {
   return (
     "amun.planning.v1:" +
     JSON.stringify([
@@ -47,7 +47,7 @@ export function scopedDraftKey(scope: PlanningScope) {
 
 export function loadDraft(
   store: SelectionStore | undefined,
-  scope: PlanningScope,
+  scope: Omit<PlanningScope, "iteration">,
 ): PlanningDraft {
   const raw = store?.getItem(scopedDraftKey(scope));
   if (raw) return savedDraft.parse(JSON.parse(raw));

@@ -35,6 +35,12 @@ const card = z.object({
   type: z.string(),
   column: z.string().nullable(),
   iteration: z.string().nullable().optional(),
+  assignee: z.string().optional(),
+  labels: z.array(z.string()).optional(),
+  estimates: z
+    .array(z.object({ name: z.string(), value: z.number() }))
+    .optional(),
+  blocked: z.string().optional(),
   description: z.string().optional(),
   criteria: z.string().optional(),
 });
@@ -118,6 +124,7 @@ export const backlogResult = z.discriminatedUnion("view", [
     view: z.literal("cards"),
     columns: z.array(column),
     cards: z.array(card),
+    backlogIteration: z.string().nullable().optional(),
     canEditBoard: z.boolean(),
   }),
 ]);

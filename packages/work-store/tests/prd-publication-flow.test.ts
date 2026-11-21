@@ -167,6 +167,17 @@ it("compares Gitex, creates one reviewed backlog item, reads it back and records
       workspace,
       dispatch,
     });
+  const original = db
+    .prepare("SELECT body FROM work_items WHERE id='local'")
+    .pluck()
+    .get();
+  db.prepare("UPDATE work_items SET body=? WHERE id='local'").run(
+    "Changed wording",
+  );
+  await expect(submit()).rejects.toThrow("draft changed");
+  expect(dispatch).not.toHaveBeenCalled();
+  expect(transport).not.toHaveBeenCalled();
+  db.prepare("UPDATE work_items SET body=? WHERE id='local'").run(original);
   const result = await submit();
   await submit();
   expect(result).toMatchObject({

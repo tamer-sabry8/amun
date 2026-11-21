@@ -39,6 +39,7 @@ export function SprintPlanner({
     }
   });
   const [cards, setCards] = useState<Card[] | null>(null);
+  const [backlogPath, setBacklogPath] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [detailsQuery, setDetailsQuery] = useState<string | null>(null);
   const searchBacklog = (details: boolean) => {
@@ -106,6 +107,7 @@ export function SprintPlanner({
   useEffect(() => {
     const requestId = crypto.randomUUID();
     setCards(null);
+    setBacklogPath(null);
     setError("");
     const timer = setTimeout(
       () => setError("The backlog did not answer. Refresh to try again."),
@@ -122,6 +124,7 @@ export function SprintPlanner({
       clearTimeout(timer);
       if (parsed.data.view === "cards") {
         setCards(parsed.data.cards);
+        setBacklogPath(parsed.data.backlogIteration ?? null);
         setError("");
       }
       if (parsed.data.view === "error") setError(parsed.data.message);
@@ -135,7 +138,7 @@ export function SprintPlanner({
       sourceId: scope.sourceId,
       team: scope.team,
       level: scope.backlog,
-      details: detailsQuery !== null,
+      details: true,
     });
     return () => {
       clearTimeout(timer);
@@ -323,12 +326,48 @@ export function SprintPlanner({
                 e.dataTransfer.setData("text/amun-work-item", String(card.id))
               }
             >
-              <span className="grow">
-                <strong>
-                  #{card.id} {card.title}
-                </strong>
-                <small>{card.iteration ?? "Iteration unavailable"}</small>
-              </span>
+              <div className="grow">
+                <details
+                  onToggle={(event) => {
+                    if (event.currentTarget.open)
+                      inspectView({
+                        view: "Backlog story details",
+                        areaId: scope.areaId,
+                        record: String(card.id),
+                        source: scope.sourceId,
+                      });
+                  }}
+                >
+                  <summary>
+                    <strong>
+                      #{card.id} {card.title}
+                    </strong>
+                    <small>
+                      {[
+                        card.state,
+                        ...(card.estimates?.length
+                          ? card.estimates.map((e) => e.name + " " + e.value)
+                          : ["Estimate unavailable"]),
+                        card.iteration ?? "Iteration unavailable",
+                        ...(card.blocked ? ["Blocked: " + card.blocked] : []),
+                      ].join(" · ")}
+                    </small>
+                  </summary>
+                  <p>
+                    {card.criteria?.replace(/<[^>]+>/g, " ").trim() ||
+                      "No acceptance criteria available."}
+                  </p>
+                  <p className="muted small">
+                    Owner · {card.assignee || "Unassigned or unavailable"}
+                  </p>
+                  <p className="muted small">
+                    Labels · {card.labels?.join(", ") || "None recorded"}
+                  </p>
+                  <p className="muted small">
+                    Azure · {scope.team} · #{card.id} · revision {card.rev}
+                  </p>
+                </details>
+              </div>
               <button
                 className="btn"
                 disabled={
@@ -354,18 +393,53 @@ export function SprintPlanner({
         >
           <h2>{name}</h2>
           <p className="muted small">{scope.iteration}</p>
-          {members.map((story) => (
-            <div className="rb-line" key={story.id}>
-              {story.title}
-            </div>
-          ))}
+          {members
+            .filter(
+              (story) => !draft.moves.some((m) => String(m.id) === story.id),
+            )
+            .map((story) => (
+              <div className="rb-line" key={story.id}>
+                <span className="grow">{story.title}</span>
+                {backlogPath &&
+                  backlogPath !== scope.iteration &&
+                  cards?.some(
+                    (c) =>
+                      String(c.id) === story.id &&
+                      c.iteration === scope.iteration,
+                  ) && (
+                    <button
+                      className="btn quiet"
+                      disabled={preparing || submittedIds.has(Number(story.id))}
+                      onClick={() => {
+                        const card = cards.find(
+                          (c) => String(c.id) === story.id,
+                        );
+                        if (card && !applying.current)
+                          save(
+                            stageMove(draft, {
+                              id: card.id,
+                              rev: card.rev,
+                              title: card.title,
+                              from: scope.iteration,
+                              to: backlogPath,
+                            }),
+                          );
+                      }}
+                    >
+                      Return to backlog
+                    </button>
+                  )}
+              </div>
+            ))}
           {draft.moves.map((move) => (
             <div className="rb-line" key={move.id}>
               <span className="grow">
                 <strong>
                   #{move.id} {move.title}
                 </strong>
-                <small>Staged from {move.from}</small>
+                <small>
+                  {move.from} → {move.to}
+                </small>
               </span>
               <button
                 className="btn quiet"

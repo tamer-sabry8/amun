@@ -1,6 +1,5 @@
 import { SprintBlockers } from "./sprint-blockers.tsx";
-import { resolveSprintBinding } from "./sprint-binding.ts";
-import { ResumePlanning } from "./resume-planning.tsx";
+import { ResumePlanning, OfflinePlanning } from "./resume-planning.tsx";
 import type { SavedPlanningLink } from "./planning-draft.ts";
 import { useSprintOverview } from "./sprint-azure.ts";
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
@@ -1385,6 +1384,7 @@ export function Sprints({
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
   const [areaId, setAreaId] = useState(resume?.areaId ?? "");
+  const [savedLink, setSavedLink] = useState(resume);
   const [selection, selectSprint] = useState<Pick<
     Sprint,
     "id" | "workAreaId"
@@ -1596,6 +1596,43 @@ export function Sprints({
       </p>
     </>
   );
+  const selectedDraft =
+    savedLink &&
+    allowed.has(savedLink.areaId) &&
+    selection?.workAreaId === savedLink.areaId &&
+    selection.id === "ado:" + savedLink.sprintId &&
+    tab === "Planning"
+      ? savedLink
+      : null;
+  const selectedBoard =
+    selectedDraft &&
+    readBoard(browserStore(), selectedDraft.productId, selectedDraft.sourceId);
+  if (
+    selectedDraft &&
+    (!current ||
+      azure.items?.state !== "ready" ||
+      azure.items.sprint !== selectedDraft.sprintId ||
+      azure.reply?.sourceId !== selectedDraft.sourceId ||
+      azure.productId !== selectedDraft.productId ||
+      azure.reply.team.id !== selectedDraft.team ||
+      selectedBoard?.level !== selectedDraft.backlog ||
+      selectedBoard?.team !== selectedDraft.team)
+  ) {
+    return (
+      <Page
+        title="Sprint planning"
+        context={context}
+        line={areaOf(snapshot, selectedDraft.areaId)?.name ?? ""}
+        actions={
+          <button className="btn quiet" onClick={() => selectSprint(null)}>
+            All sprints
+          </button>
+        }
+      >
+        <OfflinePlanning key={selectedDraft.id} link={selectedDraft} />
+      </Page>
+    );
+  }
   if (current) {
     const row = sprintRow(current, now);
     const sourceId = azure.reply?.sourceId;
@@ -1856,26 +1893,7 @@ export function Sprints({
           )
         }
         open={(link) => {
-          const binding = resolveSprintBinding(
-            browserStore(),
-            areas,
-            link.areaId,
-          );
-          const board = readBoard(
-            browserStore(),
-            link.productId,
-            link.sourceId,
-          );
-          if (
-            binding?.sourceId !== link.sourceId ||
-            binding.team !== link.team ||
-            board?.level !== link.backlog
-          ) {
-            setNote(
-              "Restore the saved connection and backlog to resume this draft.",
-            );
-            return;
-          }
+          setSavedLink(link);
           setAreaId(link.areaId);
           selectSprint({ workAreaId: link.areaId, id: "ado:" + link.sprintId });
           setTab("Planning");

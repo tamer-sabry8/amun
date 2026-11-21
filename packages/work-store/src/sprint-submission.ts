@@ -24,7 +24,7 @@ export async function applySprintMoves(
   destination: AdoDestination,
   reader: Pick<
     BoardDiscovery,
-    "sprints" | "levels" | "boardSettings" | "cards"
+    "sprints" | "levels" | "boardSettings" | "cards" | "backlogIteration"
   >,
   client: Pick<AdoWriteClient, "write">,
   stillMapped: () => boolean,
@@ -58,7 +58,11 @@ export async function applySprintMoves(
     throw Error("The sprint conversation or connection has changed.");
   if (
     new Set(moves.map((m) => m.id)).size !== moves.length ||
-    moves.some((m) => m.to !== request.iteration || m.from === m.to)
+    moves.some(
+      (m) =>
+        (m.to !== request.iteration && m.from !== request.iteration) ||
+        m.from === m.to,
+    )
   )
     throw Error("Review the distinct moves and their destination.");
   const prompt =
@@ -158,6 +162,9 @@ export async function applySprintMoves(
     );
     if (!sprint || !level)
       throw Error("The selected sprint or backlog is no longer available");
+    const backlogPath = moves.some((m) => m.to !== sprint.path)
+      ? await reader.backlogIteration(destination.team).catch(() => null)
+      : null;
     const settings = await reader.boardSettings(destination.team, level.name);
     const cards = await reader.cards(
       destination.team,
@@ -174,6 +181,7 @@ export async function applySprintMoves(
       const card = cards.find((c) => c.id === move.id);
       if (
         !stillMapped() ||
+        (move.to !== sprint.path && move.to !== backlogPath) ||
         !card ||
         card.rev !== move.rev ||
         card.iteration !== move.from
@@ -193,7 +201,7 @@ export async function applySprintMoves(
             itemId: String(move.id),
             type: card.type,
             revision: move.rev,
-            fields: { "System.IterationPath": sprint.path },
+            fields: { "System.IterationPath": move.to },
             parentId: null,
             marker: ref,
           },
@@ -202,7 +210,7 @@ export async function applySprintMoves(
         set(
           move.id,
           "confirmed",
-          "Verified in " + sprint.path + " at revision " + result.rev,
+          "Verified in " + move.to + " at revision " + result.rev,
           result.rev,
         );
       } catch (error) {

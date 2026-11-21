@@ -49,6 +49,7 @@ function fixture() {
     team: "T",
   };
   const reader = {
+    backlogIteration: async () => "Gitex",
     sprints: async () => [
       {
         id: "4",
@@ -176,3 +177,35 @@ it("reconciles a denied read after a successful move without repeating the write
   ]);
   db.close();
 });
+
+it.each(["Gitex", "Another team's sprint"])(
+  "limits returning a story to the verified team backlog path (%s)",
+  async (to) => {
+    const { db, request, target, reader } = fixture();
+    request.moves = [{ ...request.moves[0]!, from: request.iteration, to }];
+    const write = vi.fn(async () => ({ id: 24, rev: 4 }));
+    const result = await applySprintMoves(
+      db,
+      request,
+      target,
+      reader,
+      { write },
+      () => true,
+      async () => "ACCEPT " + request.ref,
+    );
+    if (to === "Gitex") {
+      expect(write).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          fields: { "System.IterationPath": "Gitex" },
+          revision: 3,
+        }),
+        null,
+      );
+      expect(result.receipts[0]?.state).toBe("confirmed");
+    } else {
+      expect(write).not.toHaveBeenCalled();
+      expect(result.receipts[0]?.state).toBe("held");
+    }
+    db.close();
+  },
+);

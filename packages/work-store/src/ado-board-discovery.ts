@@ -304,6 +304,20 @@ export class BoardDiscovery {
     ).map(summary);
   }
 
+  async backlogIteration(team: string): Promise<string | null> {
+    const settings = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(team) +
+          "/_apis/work/teamsettings",
+        this.base,
+      ),
+    );
+    if (!record(settings) || !record(settings.backlogIteration)) return null;
+    const path = settings.backlogIteration.path;
+    return typeof path === "string" && path.trim() ? path : null;
+  }
   async boardSettings(team: string, board: string) {
     const url = new URL(
       this.project +
@@ -450,6 +464,10 @@ export class BoardDiscovery {
         state: string;
         column: string | null;
         iteration: string | null;
+        assignee?: string;
+        labels?: string[];
+        estimates?: { name: string; value: number }[];
+        blocked?: string | undefined;
         description?: string;
         criteria?: string;
       }
@@ -499,6 +517,35 @@ export class BoardDiscovery {
               : null,
           ...(details
             ? {
+                assignee:
+                  typeof f["System.AssignedTo"] === "string"
+                    ? f["System.AssignedTo"]
+                    : f["System.AssignedTo"]?.displayName,
+                labels:
+                  typeof f["System.Tags"] === "string"
+                    ? f["System.Tags"]
+                        .split(";")
+                        .map((t: string) => t.trim())
+                        .filter(Boolean)
+                    : [],
+                estimates: ["StoryPoints", "Effort", "Size"].flatMap(
+                  (field) => {
+                    const value = f["Microsoft.VSTS.Scheduling." + field];
+                    return typeof value === "number"
+                      ? [
+                          {
+                            name:
+                              field === "StoryPoints" ? "Story points" : field,
+                            value,
+                          },
+                        ]
+                      : [];
+                  },
+                ),
+                blocked:
+                  typeof f["Microsoft.VSTS.CMMI.Blocked"] === "string"
+                    ? f["Microsoft.VSTS.CMMI.Blocked"]
+                    : undefined,
                 description:
                   typeof f["System.Description"] === "string"
                     ? f["System.Description"]

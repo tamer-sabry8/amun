@@ -41,7 +41,12 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
               rev: 3,
               title: "Badge printing",
               type: "Story",
-              state: "New",
+              state: "Ready for rehearsal",
+              assignee: "Sam",
+              estimates: [{ name: "Effort", value: 3 }],
+              criteria: "Print the confirmed badge",
+              labels: ["Launch"],
+              blocked: "Yes",
               column: null,
               iteration: "Gitex",
             },
@@ -80,6 +85,15 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
     )!;
   try {
     await mount();
+    const row = container.querySelector("details")!;
+    expect(row.querySelector("summary")?.textContent).toContain(
+      "Ready for rehearsal · Effort 3 · Gitex · Blocked: Yes",
+    );
+    await act(async () => row.querySelector("summary")!.click());
+    expect(row.open).toBe(true);
+    expect(row.textContent).toContain("Print the confirmed badge");
+    expect(row.textContent).toContain("Launch");
+    expect(chat).not.toHaveBeenCalled();
     await act(async () => button("+ Sprint").click());
     expect(button("Apply 1 change")).toBeTruthy();
     await act(async () => root.unmount());
