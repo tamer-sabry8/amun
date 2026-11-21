@@ -307,7 +307,9 @@ it("opens a verified blocker source and sends edited wording once with the origi
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const el = document.createElement("div"),
     root = createRoot(el);
-  const discuss = vi.fn(async (_text: string) => {});
+  const discuss = vi
+    .fn<(text: string) => Promise<void>>()
+    .mockResolvedValue(undefined);
   const url = "https://example.test/C/Gitex/_workitems/edit/24";
   try {
     await act(async () =>
