@@ -811,6 +811,19 @@ export function App() {
     : null;
   const openAttention = (item: Attention) => {
     const raw = snapshot.attention.find((entry) => entry.id === item.id);
+    if (raw?.id.startsWith("blocker-review:") && raw.workAreaId && raw.ref) {
+      const chat = snapshot.chats.find(
+        (c) =>
+          c.workAreaId === raw.workAreaId &&
+          c.messages.some((m) => m.id === raw.ref),
+      );
+      if (chat)
+        openWork(raw.workAreaId, undefined, null, chat.id, {
+          messageId: raw.ref,
+        });
+      else setNote("The original blocker receipt is unavailable.");
+      return;
+    }
     const plan = raw?.ref?.startsWith("plan:") ? raw.ref.slice(5) : null;
     if (item.workAreaId)
       openWork(

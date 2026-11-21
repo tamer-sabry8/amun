@@ -135,7 +135,7 @@ export class ProductAuthoring {
           const read = () => {
             const stored = this.db
               .prepare(
-                "SELECT result_json FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=?",
+                "SELECT c.result_json FROM prd_comparisons c JOIN sources s ON s.id=c.source_id AND s.product_id=c.product_id AND s.kind='ado' WHERE c.product_id=? AND c.objective_id=? AND c.version=? AND c.source_id=? AND c.team=? AND c.level=?",
               )
               .get(...args) as { result_json: string } | undefined;
             const result =

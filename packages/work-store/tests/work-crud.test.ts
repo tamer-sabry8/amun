@@ -596,6 +596,21 @@ describe("blockers", () => {
         { id: 5, state: "reviewed", proposal: "Both passes scan." },
       ],
     });
+    const blocker = snap().blockers[0]!;
+    const decision = snap().attention.find(
+      (a) => a.id === "blocker-review:" + blocker.id,
+    );
+    expect(decision?.state).toBe("open");
+    db.prepare(
+      "INSERT INTO work_attention(id,kind,work_area_id,title,state,created_at) VALUES('separate','risk',?,'Independent approval','open','now')",
+    ).run(areaId);
+    send("resolve-blocker", { blockerId: blocker.id });
+    expect(snap().attention.find((a) => a.id === decision!.id)?.state).toBe(
+      "done",
+    );
+    expect(snap().attention.find((a) => a.id === "separate")?.state).toBe(
+      "open",
+    );
   });
   it("need a work area, and go with it when it is deleted", () => {
     expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(

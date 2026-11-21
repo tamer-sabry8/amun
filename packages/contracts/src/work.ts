@@ -297,6 +297,25 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  sprintCarryovers: z
+    .array(
+      z.strictObject({
+        workAreaId: id,
+        productId: id,
+        sourceId: id,
+        team: id,
+        chatId: id,
+        ref: id,
+        fromId: id,
+        toId: id,
+        title: z.string(),
+        storyId: z.int().positive(),
+        destination: z.string(),
+        revision: z.int().positive(),
+        storyUrl: z.string(),
+      }),
+    )
+    .optional(),
   blockers: z.array(
     z.strictObject({
       id,

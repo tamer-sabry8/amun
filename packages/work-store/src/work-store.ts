@@ -416,6 +416,18 @@ export class WorkStore {
           createdAt: String(row.created_at),
         })),
         plans: this.plans(),
+        sprintCarryovers: this.all(`
+          SELECT m.work_area_id AS workAreaId, m.chat_id AS chatId, s.ref,
+            json_extract(s.scope_json,'$.product') AS productId, json_extract(s.scope_json,'$.source') AS sourceId,
+            json_extract(s.scope_json,'$.destination.team') AS team,
+            json_extract(s.scope_json,'$.sprintId') AS fromId, json_extract(j.value,'$.targetSprintId') AS toId,
+            json_extract(j.value,'$.title') AS title, i.item_id AS storyId, json_extract(j.value,'$.to') AS destination,
+            i.remote_rev AS revision, rtrim(json_extract(s.scope_json,'$.destination.collection'),'/') || '/_workitems/edit/' || i.item_id AS storyUrl
+          FROM sprint_submissions s JOIN work_messages m ON m.id=s.receipt_id
+          JOIN sprint_submission_items i ON i.ref=s.ref AND i.state='confirmed' AND i.remote_rev>0
+          JOIN json_each(s.scope_json,'$.moves') j ON json_extract(j.value,'$.id')=i.item_id
+          WHERE json_extract(j.value,'$.targetSprintId') IS NOT NULL ORDER BY m.created_at,s.ref,i.item_id
+        `),
         blockers: this.all(
           "SELECT n.ref AS nudge_ref,n.text AS nudge_text,n.state AS nudge_state,b.* FROM work_blockers b LEFT JOIN blocker_nudges n ON n.blocker_id=b.id JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
         ).map((row) => ({

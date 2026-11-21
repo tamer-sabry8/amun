@@ -103,6 +103,7 @@ export function AzureWorkReview({
     context.comparisons
       ?.find(
         (c) =>
+          !c.pending &&
           c.objectiveId === draft.objectiveId &&
           c.version === draft.version &&
           c.sourceId === scope.sourceId &&

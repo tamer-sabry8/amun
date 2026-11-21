@@ -284,7 +284,9 @@ export function SprintPlanner({
             !receipts[batch.ref]?.some(
               (r) =>
                 r.itemId === String(move.id) &&
-                (r.state === "confirmed" || r.state === "held"),
+                (r.state === "confirmed" ||
+                  r.state === "held" ||
+                  r.state === "kept"),
             ),
         )
         .map((move) => move.id),
@@ -645,6 +647,44 @@ export function SprintPlanner({
               }))}
               name={name}
               focus={newFocus === story.localId}
+              useExisting={(id, labels, schedule) => {
+                const card = cards?.find((c) => c.id === id);
+                if (
+                  !fresh ||
+                  !card?.iteration ||
+                  submittedIds.has(id) ||
+                  applying.current ||
+                  draft.moves.some((m) => m.id === id)
+                ) {
+                  setError(
+                    "Refresh the existing story and review any staged changes before using it.",
+                  );
+                  return;
+                }
+                const addLabels = labels.filter(
+                  (label) =>
+                    !card.labels?.some(
+                      (l) => l.toLowerCase() === label.toLowerCase(),
+                    ),
+                );
+                const next = stageMove(draft, {
+                  id,
+                  rev: card.rev,
+                  title: card.title,
+                  from: card.iteration,
+                  to: schedule ? scope.iteration : card.iteration,
+                  ...(addLabels.length ? { addLabels } : {}),
+                });
+                save({
+                  ...next,
+                  creates: creates.filter((c) => c.localId !== story.localId),
+                });
+                setError(
+                  "Using existing story #" +
+                    id +
+                    ". Review staged changes before applying.",
+                );
+              }}
               update={updateCreated}
               remove={() =>
                 save({
@@ -1160,6 +1200,33 @@ export function SprintPlanner({
                           {current?.iteration ?? "unavailable"}
                         </small>
                       </span>
+                      {current?.iteration && (
+                        <button
+                          className="btn quiet"
+                          disabled={!fresh || preparing}
+                          onClick={() => {
+                            const requestId = crypto.randomUUID();
+                            inspections.current.set(requestId, batch.ref);
+                            bridge.send({
+                              version: 1,
+                              kind: "ado-operation",
+                              action: "keep-observed-sprint",
+                              requestId,
+                              ref: batch.ref,
+                              workAreaId: scope.areaId,
+                              productId: scope.productId,
+                              sourceId: scope.sourceId,
+                              team: scope.team,
+                              sprintId: scope.sprintId,
+                              itemId: move.id,
+                              rev: current.rev,
+                              iteration: current.iteration,
+                            });
+                          }}
+                        >
+                          Keep in {current.iteration}
+                        </button>
+                      )}
                       <button
                         className="btn quiet"
                         disabled={preparing || !canStage}

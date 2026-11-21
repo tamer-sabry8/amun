@@ -1219,4 +1219,9 @@ CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submiss
   `ALTER TABLE blocker_nudges ADD COLUMN space TEXT;
 CREATE TABLE blocker_comment_reviews(blocker_id TEXT NOT NULL REFERENCES work_blockers(id) ON DELETE CASCADE, comment_id INTEGER NOT NULL,version INTEGER NOT NULL,url TEXT NOT NULL,body TEXT NOT NULL,proposal TEXT,state TEXT NOT NULL,PRIMARY KEY(blocker_id,comment_id,version));`,
   `CREATE TABLE sprint_suggestions(ref TEXT PRIMARY KEY REFERENCES work_requests(ref), scope_json TEXT NOT NULL, receipt_id TEXT NOT NULL, result_json TEXT);`,
+  `CREATE TRIGGER finish_linked_blocker_review AFTER UPDATE OF resolved_at ON work_blockers
+   WHEN OLD.resolved_at IS NULL AND NEW.resolved_at IS NOT NULL BEGIN
+     UPDATE work_attention SET state='done',resolved_at=NEW.resolved_at,snoozed_until=NULL
+     WHERE id='blocker-review:' || NEW.id AND work_area_id=NEW.work_area_id AND state<>'done';
+   END;`,
 ] as const;

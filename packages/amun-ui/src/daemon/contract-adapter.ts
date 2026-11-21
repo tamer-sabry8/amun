@@ -834,6 +834,7 @@ export class ContractAdapter {
       const reply = await this.daemon
         .request<unknown>("ado.request", {
           message:
+            message.action === "keep-observed-sprint" ||
             message.action === "suggest-sprint-stories" ||
             message.action === "apply-sprint-moves" ||
             message.action === "compare-prd" ||
@@ -849,6 +850,8 @@ export class ContractAdapter {
       if (
         reply &&
         (message.action === "apply-sprint-moves" ||
+          message.action === "suggest-sprint-stories" ||
+          message.action === "keep-observed-sprint" ||
           message.action === "inspect-sprint-submission")
       ) {
         await this.refresh().catch(() => undefined);

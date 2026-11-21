@@ -9,7 +9,10 @@ import {
 } from "./sprint-new-stories.ts";
 import type { AdoStep } from "./ado-batch.ts";
 import { randomUUID } from "node:crypto";
-import type { SprintMoveRequest } from "../../contracts/src/backlog.ts";
+import type {
+  AdoOperation,
+  SprintMoveRequest,
+} from "../../contracts/src/backlog.ts";
 import type { Database } from "./sqlite.ts";
 import type { BoardDiscovery } from "./ado-board-discovery.ts";
 import { AdoRejected, AdoWriteClient } from "./ado-governed-writes.ts";
@@ -462,7 +465,7 @@ export async function applySprintMoves(
   db.prepare(
     "UPDATE work_requests SET status=?,detail=?,updated_at=? WHERE ref=?",
   ).run(
-    result.receipts.every((r) => r.state === "confirmed")
+    result.receipts.every((r) => r.state === "confirmed" || r.state === "kept")
       ? "delivered"
       : "needs-decision",
     result.message,
@@ -615,12 +618,128 @@ export async function inspectSprintSubmission(
       request.ref + "\n" + result.message,
       saved.receipt_id,
     );
-    if (result.receipts.every((r) => r.state === "confirmed"))
+    if (
+      result.receipts.every(
+        (r) => r.state === "confirmed" || r.state === "kept",
+      )
+    )
       db.prepare(
         "UPDATE work_requests SET status='delivered', detail=?,updated_at=? WHERE ref=?",
       ).run(result.message, new Date().toISOString(), request.ref);
   }).immediate();
   return result;
+}
+
+export async function keepObservedSprint(
+  db: Database,
+  request: Extract<AdoOperation, { action: "keep-observed-sprint" }>,
+  target: AdoDestination,
+  client: Pick<AdoWriteClient, "item">,
+  mapped: () => boolean,
+  dispatch: FirstmateDispatch,
+) {
+  const { ref, itemId, rev, iteration } = request;
+  const row = db
+    .prepare(
+      `SELECT i.state,i.detail,s.receipt_id FROM sprint_submission_items i JOIN sprint_submissions s ON i.ref=s.ref
+    JOIN work_messages m ON m.id=s.receipt_id JOIN work_areas a ON a.id=m.work_area_id
+    WHERE i.ref=? AND i.item_id=? AND a.id=? AND a.product_id=? AND a.status<>'deleted'
+    AND json_extract(s.scope_json,'$.source')=? AND json_extract(s.scope_json,'$.sprintId')=?
+    AND json_extract(s.scope_json,'$.destination.team')=? AND json_extract(s.scope_json,'$.destination.project')=?
+    AND json_extract(s.scope_json,'$.destination.collection')=? AND json_extract(s.scope_json,'$.space')=?`,
+    )
+    .get(
+      ref,
+      itemId,
+      request.workAreaId,
+      request.productId,
+      request.sourceId,
+      request.sprintId,
+      target.team,
+      target.project,
+      target.collection,
+      request.space,
+    ) as { state: string; detail: string; receipt_id: string } | undefined;
+  if (!row || !mapped())
+    throw Error("The original sprint request is unavailable.");
+  if (row.state === "kept") return submissionReceipt(db, ref);
+  if (row.state !== "held")
+    throw Error("Inspect the original receipt before resolving this story.");
+  const token =
+    "Reviewing observed destination · " +
+    Date.now() +
+    " · " +
+    request.requestId;
+  if (
+    row.detail.startsWith("Reviewing observed destination") &&
+    Date.now() - Number(row.detail.split(" · ")[1]) < 180000
+  )
+    throw Error("Firstmate is already reviewing this decision.");
+  const claim = db
+    .prepare(
+      "UPDATE sprint_submission_items SET detail=? WHERE ref=? AND item_id=? AND state='held' AND detail=?",
+    )
+    .run(token, ref, itemId, row.detail);
+  if (!claim.changes) return submissionReceipt(db, ref);
+  try {
+    const prompt =
+      "Request " +
+      ref +
+      " · Keep the observed destination for this held story and discard its proposed changes. No provider writes. Reply exactly ACCEPT " +
+      ref +
+      ". Reviewed record: " +
+      JSON.stringify({ itemId, rev, iteration, team: request.team });
+    if (
+      (await dispatch(request.space, prompt)).trim() !== "ACCEPT " + ref ||
+      !mapped()
+    )
+      throw Error("Firstmate did not confirm this decision.");
+    const item = await client.item(itemId);
+    if (
+      !mapped() ||
+      item.rev !== rev ||
+      item.fields["System.TeamProject"] !== target.project ||
+      item.fields["System.IterationPath"] !== iteration
+    )
+      throw Error(
+        "The observed story changed. Refresh its destination before deciding.",
+      );
+    return db
+      .transaction(() => {
+        db.prepare(
+          "UPDATE sprint_submission_items SET state='kept',remote_rev=?,detail=? WHERE ref=? AND item_id=? AND state='held' AND detail=?",
+        ).run(
+          rev,
+          "Kept in " + iteration + " at revision " + rev,
+          ref,
+          itemId,
+          token,
+        );
+        const summary = submissionReceipt(db, ref);
+        db.prepare("UPDATE work_messages SET text=? WHERE id=?").run(
+          ref + "\n" + summary.message,
+          row.receipt_id,
+        );
+        db.prepare(
+          "UPDATE work_requests SET status=?,detail=?,updated_at=? WHERE ref=?",
+        ).run(
+          summary.receipts.every(
+            (r) => r.state === "confirmed" || r.state === "kept",
+          )
+            ? "delivered"
+            : "needs-decision",
+          summary.message,
+          new Date().toISOString(),
+          ref,
+        );
+        return summary;
+      })
+      .immediate();
+  } finally {
+    db.prepare(
+      "UPDATE sprint_submission_items SET detail=? WHERE ref=? AND item_id=? AND state='held' AND detail=?",
+    ).run(row.detail, ref, itemId, token);
+  }
 }
 
 function azureCriterion(text: string) {

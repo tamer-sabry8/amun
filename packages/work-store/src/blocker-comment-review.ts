@@ -106,6 +106,24 @@ export async function reviewBlockerComments(
           c.id,
           c.version,
         );
+        if (proposal) {
+          db.prepare(
+            `
+            INSERT OR IGNORE INTO work_attention(id,kind,group_id,work_area_id,title,detail,state,ref,created_at)
+            SELECT ?, 'risk', a.group_id, a.id, ?, ?, 'open', ?, ?
+            FROM work_areas a JOIN work_blockers b ON b.work_area_id=a.id
+            WHERE a.id=? AND b.id=? AND b.resolved_at IS NULL AND a.status<>'deleted'
+          `,
+          ).run(
+            "blocker-review:" + b.id,
+            "Review owner reply · " + b.title,
+            "Open the sprint conversation to review the proposed criterion.",
+            b.receipt_id,
+            new Date().toISOString(),
+            scope.workAreaId,
+            b.id,
+          );
+        }
         db.prepare(
           "UPDATE work_messages SET text=text || ? WHERE id=? AND work_area_id=?",
         ).run(

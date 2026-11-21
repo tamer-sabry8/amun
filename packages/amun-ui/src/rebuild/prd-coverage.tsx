@@ -34,10 +34,24 @@ export function PrdCoverage({
     key: string;
     board: ReviewBoard;
   } | null>(null);
+  const choiceKey = "amun.prd-review.board:" + reviewKey;
+  const remembered = () => {
+    try {
+      const board = JSON.parse(browserStore()?.getItem(choiceKey) ?? "null");
+      return board &&
+        typeof board.team === "string" &&
+        typeof board.level === "string" &&
+        typeof board.sourceId === "string"
+        ? (board as ReviewBoard)
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const selected = choice?.key === reviewKey ? choice.board : remembered();
   const override =
-    choice?.key === reviewKey &&
-    sources.some((s) => s.id === choice.board.sourceId)
-      ? choice.board
+    selected && sources.some((s) => s.id === selected.sourceId)
+      ? selected
       : null;
   const sourceId =
     override?.sourceId ??
@@ -89,6 +103,27 @@ export function PrdCoverage({
     }, 180000);
     return () => clearTimeout(timer);
   }, [busy]);
+  const [gap, setGap] = useState<{ key: string; id: string } | null>(null);
+  const gapState = comparison?.rows.find(
+    (r) => r.draftId === gap?.id,
+  )?.classification;
+  useEffect(() => {
+    if (!gap) return;
+    if (gap.key !== reviewKey || gapState === "edit") {
+      setGap(null);
+      setStatus(
+        gap.key === reviewKey ? "Correction saved in this review." : "",
+      );
+      return;
+    }
+    const timeout = setTimeout(() => {
+      setGap(null);
+      setStatus(
+        "Correction unconfirmed. Check the current draft before trying again.",
+      );
+    }, 90000);
+    return () => clearTimeout(timeout);
+  }, [gap, gapState, reviewKey]);
   const submit = () => {
     if (!origin || !board || !sourceId || pending.current) return;
     pending.current = crypto.randomUUID();
@@ -119,6 +154,9 @@ export function PrdCoverage({
           productId={context.productId}
           sources={sources}
           choose={(board) => {
+            try {
+              browserStore()?.setItem(choiceKey, JSON.stringify(board));
+            } catch {}
             setChoice({ key: reviewKey, board });
             setStatus("");
           }}
@@ -212,10 +250,10 @@ export function PrdCoverage({
                                 !story ||
                                 !model ||
                                 !board ||
-                                form.dataset.sent === "true"
+                                gap
                               )
                                 return;
-                              form.dataset.sent = "true";
+                              setGap({ key: reviewKey, id: story.id });
                               setStatus(
                                 "Firstmate is drafting the missing criterion.",
                               );
@@ -244,20 +282,14 @@ export function PrdCoverage({
                           >
                             <label className="field">
                               Missing case
-                              <textarea
-                                name="gap"
-                                required
-                                maxLength={2048}
-                                onChange={(e) => {
-                                  if (e.target.form)
-                                    delete e.target.form.dataset.sent;
-                                }}
-                              />
+                              <textarea name="gap" required maxLength={2048} />
                             </label>
                             <button
                               className="btn quiet"
                               disabled={
-                                !origin || !context.allowedModels.length
+                                !!gap ||
+                                !origin ||
+                                !context.allowedModels.length
                               }
                             >
                               Draft correction

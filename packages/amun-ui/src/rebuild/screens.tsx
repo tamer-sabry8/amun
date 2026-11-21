@@ -1728,6 +1728,22 @@ export function Sprints({
     const steps = snapshot.activity.filter(
       (item) => item.workAreaId === current.workAreaId,
     );
+    const carryovers = (snapshot.sprintCarryovers ?? []).filter(
+      (c) =>
+        c.workAreaId === current.workAreaId &&
+        c.productId === azure.productId &&
+        c.sourceId === sourceId &&
+        c.team === azure.reply?.team.id,
+    );
+    const outgoing = carryovers.filter((c) => c.fromId === openAzure);
+    const requestLink = (c: (typeof carryovers)[number]) => (
+      <button
+        className="btn quiet"
+        onClick={() => openPlanningChat(c.workAreaId, c.chatId, c.ref)}
+      >
+        View original request
+      </button>
+    );
     const history = [
       ...snapshot.plans.filter(
         (plan) => plan.workAreaId === current.workAreaId,
@@ -1919,6 +1935,17 @@ export function Sprints({
                               ? "Not sized"
                               : `${story.points} points`)}
                         </span>
+                        {carryovers
+                          .filter(
+                            (c) =>
+                              c.toId === openAzure &&
+                              String(c.storyId) === story.id,
+                          )
+                          .map((c) => (
+                            <div key={c.ref}>
+                              Carried forward · {requestLink(c)}
+                            </div>
+                          ))}
                       </div>
                     ))}
                 </section>
@@ -1954,8 +1981,30 @@ export function Sprints({
               Moves, additions and deployments for this sprint will appear here.
             </p>
           ))}
+        {tab === "History" && openAzure && (
+          <section aria-label="Azure iteration history">
+            {current.end && Date.parse(current.end) < now && (
+              <p>
+                Iteration ended on {shortDate(current.end)} according to its
+                Azure dates.
+              </p>
+            )}
+            {outgoing.map((c) => (
+              <article key={c.ref + ":" + c.storyId}>
+                <a href={c.storyUrl} target="_blank" rel="noreferrer">
+                  #{c.storyId} {c.title}
+                </a>
+                <p>
+                  Status at close unknown · Move confirmed to {c.destination} at
+                  revision {c.revision}.
+                </p>
+                {requestLink(c)}
+              </article>
+            ))}
+          </section>
+        )}
         {tab === "History" &&
-          (history.length ? (
+          (!openAzure && history.length ? (
             <div>
               {history.map((plan) => (
                 <div className="rb-line" key={plan.id}>
@@ -1967,7 +2016,11 @@ export function Sprints({
             </div>
           ) : (
             <p className="muted">
-              Approved and published plans for this work will be listed here.
+              {openAzure
+                ? outgoing.length
+                  ? ""
+                  : "No confirmed carry-forward moves recorded for this iteration."
+                : "Approved and published plans for this work will be listed here."}
             </p>
           ))}
       </Page>

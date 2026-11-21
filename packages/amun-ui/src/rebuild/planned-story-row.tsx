@@ -1,8 +1,10 @@
+import { useState } from "react";
 import type { PlannedStory } from "@amun/contracts";
 export function PlannedStoryRow({
   story,
   name,
   matches,
+  useExisting,
   update,
   remove,
   focus,
@@ -10,10 +12,14 @@ export function PlannedStoryRow({
   story: PlannedStory;
   name: string;
   matches: readonly { id: number; title: string; outside?: string }[];
+  useExisting(id: number, labels: string[], schedule: boolean): void;
   update(next: PlannedStory): void;
   remove(): void;
   focus: boolean;
 }) {
+  const [existing, setExisting] = useState<number | null>(null);
+  const [labels, setLabels] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState(false);
   return (
     <article
       className="rb-inline"
@@ -79,8 +85,55 @@ export function PlannedStoryRow({
               {m.outside && (
                 <span className="muted small">Outside {m.outside} filter</span>
               )}
+              <button
+                className="btn quiet"
+                onClick={() => {
+                  setExisting(m.id);
+                  setLabels([]);
+                  setSchedule(false);
+                }}
+              >
+                Use existing story #{m.id}
+              </button>
             </p>
           ))}
+          {matches.some((m) => m.id === existing) && existing !== null && (
+            <fieldset>
+              <legend>Review changes to #{existing}</legend>
+              {[
+                ...new Set(story.labels.map((l) => l.trim()).filter(Boolean)),
+              ].map((label) => (
+                <label key={label}>
+                  <input
+                    type="checkbox"
+                    checked={labels.includes(label)}
+                    onChange={(e) =>
+                      setLabels(
+                        e.target.checked
+                          ? [...labels, label]
+                          : labels.filter((l) => l !== label),
+                      )
+                    }
+                  />{" "}
+                  Add label {label}
+                </label>
+              ))}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={schedule}
+                  onChange={(e) => setSchedule(e.target.checked)}
+                />{" "}
+                Add to {name}
+              </label>
+              <button
+                className="btn"
+                onClick={() => useExisting(existing, labels, schedule)}
+              >
+                Use #{existing} and discard the new story draft
+              </button>
+            </fieldset>
+          )}
           <label>
             <input
               type="checkbox"

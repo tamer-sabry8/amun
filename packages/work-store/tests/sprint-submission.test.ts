@@ -1,3 +1,4 @@
+import { WorkStore } from "../src/work-store.ts";
 import { suggestSprintStories } from "../src/sprint-suggestions.ts";
 import { expect, it, vi } from "vitest";
 import { openDatabase } from "../src/sqlite.ts";
@@ -5,6 +6,7 @@ import { migrate } from "../src/database.ts";
 import {
   applySprintMoves,
   inspectSprintSubmission,
+  keepObservedSprint,
 } from "../src/sprint-submission.ts";
 import type { SprintMoveRequest } from "../../contracts/src/backlog.ts";
 import { AdoWriteClient } from "../src/ado-governed-writes.ts";
@@ -253,6 +255,16 @@ it("carries only selected stories to the exact team iteration with one Firstmate
   ]);
   expect(write.mock.calls.map(([s]) => s.remoteId)).toEqual([24, 32]);
   expect(dispatch).toHaveBeenCalledTimes(1);
+  expect(new WorkStore(db).snapshot().sprintCarryovers).toMatchObject(
+    [24, 32].map((storyId) => ({
+      storyId,
+      ref: request.ref,
+      chatId: "chat",
+      fromId: "4",
+      toId: "5",
+      revision: 4,
+    })),
+  );
   db.close();
 });
 
@@ -614,4 +626,40 @@ it("keeps goal suggestions in one sprint chat, with owners supported by a verifi
   } finally {
     db.close();
   }
+});
+
+it("keeps a freshly verified destination once on the original held receipt", async () => {
+  const { db, request, target, reader, client, transport } = fixture();
+  const send = vi.fn(async () => "ACCEPT " + request.ref);
+  await applySprintMoves(db, request, target, reader, client, () => true, send);
+  const resolve = {
+    ...request,
+    action: "keep-observed-sprint" as const,
+    itemId: 31,
+    rev: 4,
+    iteration: "Gitex/Sprint 6",
+  };
+  const item = vi.fn(async (id: number) => ({
+    id,
+    rev: 4,
+    fields: {
+      "System.TeamProject": "Gitex",
+      "System.IterationPath": "Gitex/Sprint 6",
+    },
+  }));
+  const run = (r = resolve) =>
+    keepObservedSprint(db, r, target, { item }, () => true, send);
+  await expect(run({ ...resolve, sourceId: "other" })).rejects.toThrow(
+    "unavailable",
+  );
+  await expect(run({ ...resolve, rev: 3 })).rejects.toThrow("changed");
+  const result = await run();
+  expect(result.receipts.map((r) => r.state)).toEqual(["confirmed", "kept"]);
+  expect(await run()).toEqual(result);
+  expect(item).toHaveBeenCalledTimes(2);
+  expect(transport.mock.calls.filter(([m]) => m === "PATCH")).toHaveLength(1);
+  expect(
+    db.prepare("SELECT count(*) AS total FROM work_requests").get(),
+  ).toEqual({ total: 1 });
+  db.close();
 });

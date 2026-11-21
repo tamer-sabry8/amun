@@ -13,6 +13,7 @@ export async function runAdoOperation(
     AdoOperation,
     {
       action:
+        | "keep-observed-sprint"
         | "suggest-sprint-stories"
         | "apply-sprint-moves"
         | "inspect-sprint-submission"

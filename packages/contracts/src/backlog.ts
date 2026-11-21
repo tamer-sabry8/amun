@@ -292,6 +292,17 @@ export const adoOperation = z.discriminatedUnion("action", [
     sprintId: id,
     ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
   }),
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("keep-observed-sprint"),
+    space: id,
+    workAreaId: id,
+    sprintId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    itemId: z.int().positive(),
+    rev: z.int().positive(),
+    iteration: id,
+  }),
   z.strictObject({ ...operationContext, action: z.literal("targets") }),
   z.strictObject({
     ...operationContext,
