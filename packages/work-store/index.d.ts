@@ -82,7 +82,7 @@ export declare function openWorkStore(
 export declare function openAdo(
   opened: OpenedWorkStore,
   access: AdoAccess,
-): AdoServiceLike;
+): AdoServiceLike & { refreshLinkedBlockers(): Promise<boolean> };
 /** The Council (Roast Room): status, runs, seats, updates and the room. */
 export interface CouncilLike {
   handle(message: unknown): Promise<unknown[]>;

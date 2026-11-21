@@ -311,8 +311,22 @@ export const workSnapshot = z.strictObject({
         })
         .nullable()
         .optional(),
+      azureIndicator: z
+        .object({
+          rev: z.int().positive(),
+          blocked: z.boolean(),
+          checkedAt: stamp,
+        })
+        .optional(),
+      azureCheckPending: z.boolean().optional(),
       sprintLink: z
-        .object({ sourceId: id, sprintId: id, storyId: id })
+        .object({
+          sourceId: id,
+          sprintId: id,
+          storyId: id,
+          teamId: id.optional(),
+          trackAzureIndicator: z.literal(true).optional(),
+        })
         .nullable()
         .optional(),
       raisedAt: stamp,
@@ -812,6 +826,8 @@ export const workCommand = z.discriminatedUnion("action", [
     sourceId: id,
     sprintId: id,
     storyId: id,
+    teamId: id.optional(),
+    trackAzureIndicator: z.literal(true).optional(),
   }),
   act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
   act("resolve-blocker", { blockerId: id }),

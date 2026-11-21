@@ -389,6 +389,70 @@ describe("blockers", () => {
     send("resolve-blocker", { blockerId });
     expect(send("link-blocker-story", args).ok).toBe(false);
   });
+  it("requires a verified change of the explicitly linked Azure indicator before resolving a blocker", async () => {
+    const { observeSprintBlockers } =
+      await import("../src/sprint-blocker-evidence.ts");
+    const areaId = add("project", "Portal");
+    db.prepare(
+      "INSERT INTO products(id,name,created_at) VALUES('p','Portal','2026-01-01')",
+    ).run();
+    db.prepare("UPDATE work_areas SET product_id='p' WHERE id=?").run(areaId);
+    for (const track of [true, false]) {
+      const blockerId = send("raise-blocker", {
+        areaId,
+        title: track ? "Approval" : "Access",
+      }).ref;
+      expect(
+        send("link-blocker-story", {
+          areaId,
+          blockerId,
+          sourceId: "azure",
+          sprintId: "ado:s",
+          storyId: "24",
+          teamId: "west",
+          ...(track ? { trackAzureIndicator: true } : {}),
+        }).ok,
+      ).toBe(true);
+    }
+    const scope = {
+      workAreaId: areaId,
+      productId: "p",
+      sourceId: "azure",
+      team: "west",
+      sprint: "s",
+    };
+    const first = "2026-10-13T09:00:00.000Z",
+      last = "2026-10-13T10:00:00.000Z";
+    observeSprintBlockers(
+      db,
+      scope,
+      [{ id: 24, indicator: { rev: 2, blocked: true } }],
+      first,
+    );
+    observeSprintBlockers(db, scope, null, last);
+    expect(blockers()[0]).toMatchObject({
+      azureCheckPending: true,
+      azureIndicator: { checkedAt: first },
+      resolvedAt: null,
+    });
+    observeSprintBlockers(
+      db,
+      { ...scope, team: "east" },
+      [{ id: 24, indicator: { rev: 3, blocked: false } }],
+      last,
+    );
+    expect(blockers().every((b) => !b.resolvedAt)).toBe(true);
+    observeSprintBlockers(
+      db,
+      scope,
+      [{ id: 24, indicator: { rev: 3, blocked: false } }],
+      last,
+    );
+    expect(blockers().find((b) => b.title === "Approval")?.resolvedAt).toBe(
+      last,
+    );
+    expect(blockers().find((b) => b.title === "Access")?.resolvedAt).toBeNull();
+  });
   it("keeps one nudge in the sprint conversation and distinguishes manual delivery from resolution", async () => {
     const areaId = add("project", "Gitex");
     const blockerId = send("raise-blocker", {

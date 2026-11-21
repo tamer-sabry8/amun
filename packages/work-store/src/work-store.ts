@@ -430,6 +430,10 @@ export class WorkStore {
                 state: row.nudge_state,
               }
             : null,
+          ...(row.azure_indicator_json
+            ? { azureIndicator: JSON.parse(String(row.azure_indicator_json)) }
+            : {}),
+          ...(row.azure_check_pending ? { azureCheckPending: true } : {}),
           sprintLink: row.sprint_link_json
             ? JSON.parse(String(row.sprint_link_json))
             : null,
@@ -1534,6 +1538,8 @@ export class WorkStore {
           sourceId: command.sourceId,
           sprintId: command.sprintId,
           storyId: command.storyId,
+          ...(command.teamId ? { teamId: command.teamId } : {}),
+          ...(command.trackAzureIndicator ? { trackAzureIndicator: true } : {}),
         });
         if (record.sprint_link_json && record.sprint_link_json !== link)
           throw new WorkError(

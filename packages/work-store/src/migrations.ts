@@ -1215,4 +1215,5 @@ CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submiss
   `CREATE TABLE blocker_nudges(blocker_id TEXT PRIMARY KEY REFERENCES work_blockers(id) ON DELETE CASCADE,ref TEXT NOT NULL UNIQUE,chat_id TEXT NOT NULL,receipt_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);`,
   `CREATE TABLE navigation_dispatches(ref TEXT PRIMARY KEY,activity_id TEXT NOT NULL REFERENCES work_activity(id) ON DELETE CASCADE,space TEXT NOT NULL,state TEXT NOT NULL);`,
   `CREATE TABLE sprint_new_stories(ref TEXT NOT NULL REFERENCES sprint_submissions(ref),local_id TEXT NOT NULL,state TEXT NOT NULL,remote_id INTEGER,remote_rev INTEGER,step_json TEXT,detail TEXT NOT NULL,PRIMARY KEY(ref,local_id));`,
+  `ALTER TABLE work_blockers ADD COLUMN azure_indicator_json TEXT; ALTER TABLE work_blockers ADD COLUMN azure_check_pending INTEGER NOT NULL DEFAULT 0;`,
 ] as const;

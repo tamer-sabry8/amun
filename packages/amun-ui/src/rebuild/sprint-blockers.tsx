@@ -6,7 +6,7 @@ import { workAsync } from "./store.ts";
 import { inspectView } from "../daemon/navigation.ts";
 import { blockerLine } from "../../../domain/src/work/blockers.ts";
 type Blocker = WorkSnapshot["blockers"][number];
-type Story = { id: string; title: string };
+type Story = { id: string; title: string; indicator?: { blocked: boolean } };
 export function SprintBlockers({
   blockers,
   areaId,
@@ -15,6 +15,8 @@ export function SprintBlockers({
   name,
   sourceId,
   stories,
+  teamId,
+  refresh,
   now,
   discuss,
 }: {
@@ -25,6 +27,8 @@ export function SprintBlockers({
   name: string;
   sourceId: string;
   stories: Story[];
+  teamId?: string;
+  refresh?(): void;
   now: number;
   discuss(text: string): Promise<void>;
 }) {
@@ -37,6 +41,7 @@ export function SprintBlockers({
   );
   const unlinked = scoped.filter((b) => !b.sprintLink);
   const [blocker, setBlocker] = useState("");
+  const [trackedStory, trackStory] = useState("");
   const [story, setStory] = useState("");
   const [feedback, say] = useState("");
   return (
@@ -85,7 +90,13 @@ export function SprintBlockers({
                 sourceId,
                 sprintId,
                 storyId: story,
+                ...(teamId ? { teamId } : {}),
+                ...(trackedStory === story &&
+                stories.find((s) => s.id === story)?.indicator?.blocked
+                  ? { trackAzureIndicator: true as const }
+                  : {}),
               });
+              if (result.ok) refresh?.();
               say(result.ok ? "Blocker linked in Amun." : result.message);
             }}
           >
@@ -114,6 +125,16 @@ export function SprintBlockers({
                 ))}
               </select>
             </label>
+            {stories.find((s) => s.id === story)?.indicator?.blocked && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={trackedStory === story}
+                  onChange={(e) => trackStory(e.target.checked ? story : "")}
+                />{" "}
+                Resolve this blocker when Azure clears the story’s Blocked field
+              </label>
+            )}
             <button className="btn" disabled={!blocker || !story}>
               Link in Amun
             </button>
@@ -251,6 +272,16 @@ function BlockerDiscussion({
     <article>
       <h4>{blocker.title}</h4>
       <p className="muted small">{blockerLine(blocker, now)}</p>
+      {blocker.azureIndicator && (
+        <p className="muted small">
+          Azure Blocked field · {blocker.azureIndicator.blocked ? "Yes" : "No"}{" "}
+          · Checked{" "}
+          {new Date(blocker.azureIndicator.checkedAt).toLocaleString()}
+        </p>
+      )}
+      {blocker.azureCheckPending && (
+        <p role="status">Couldn’t verify the linked story’s Blocked field.</p>
+      )}
       <details>
         <summary
           onClick={() =>

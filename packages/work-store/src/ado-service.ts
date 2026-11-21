@@ -1,9 +1,10 @@
+import { observeSprintBlockers } from "./sprint-blocker-evidence.ts";
 import { comparePrd } from "./prd-comparison.ts";
 // Azure DevOps backlog reads and governed writes for a product, ported from
 // Amun Beta 0.9's service (backlog-read and ado-operation messages). The
 // token comes from the daemon's Keychain store and is registered with the
 // redactor before any request, so it never reaches a message or log.
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   adoOperation,
   backlogRead,
@@ -61,6 +62,37 @@ export class AdoService {
     private readonly redactor: Redactor,
   ) {}
 
+  async refreshLinkedBlockers() {
+    const scopes = this.db
+      .prepare(
+        `SELECT DISTINCT a.id AS workAreaId,a.product_id AS productId,
+      json_extract(b.sprint_link_json,'$.sourceId') AS sourceId,
+      json_extract(b.sprint_link_json,'$.teamId') AS team,
+      substr(json_extract(b.sprint_link_json,'$.sprintId'),5) AS sprint
+      FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id
+      WHERE b.resolved_at IS NULL AND a.status<>'deleted' AND a.product_id IS NOT NULL
+      AND json_extract(b.sprint_link_json,'$.teamId') IS NOT NULL
+      AND json_extract(b.sprint_link_json,'$.sprintId') LIKE 'ado:%'`,
+      )
+      .all() as {
+      workAreaId: string;
+      productId: string;
+      sourceId: string;
+      team: string;
+      sprint: string;
+    }[];
+    for (const scope of scopes) {
+      await this.handle({
+        version: 1,
+        kind: "backlog-read",
+        action: "sprint-items",
+        requestId: randomUUID(),
+        ...scope,
+      });
+    }
+    return scopes.length > 0;
+  }
+
   /** Answers a backlog-read or ado-operation message; null if it is neither. */
   async handle(
     message: unknown,
@@ -85,6 +117,12 @@ export class AdoService {
     try {
       return await this.run(request, meta, dispatch);
     } catch (error) {
+      if (request.action === "sprint-items" && request.workAreaId)
+        observeSprintBlockers(
+          this.db,
+          { ...request, workAreaId: request.workAreaId },
+          null,
+        );
       const raw = error instanceof Error ? error.message : "";
       if (request.kind === "ado-operation")
         return {
@@ -254,11 +292,27 @@ export class AdoService {
           team,
           sprints: await d.sprints(team.id),
         };
+      const membership = await d.iterationItems(team.id, request.sprint);
+      if (
+        request.workAreaId &&
+        this.workspace
+          .productSources(request.productId)
+          .some(
+            (current) =>
+              current.id === source.id &&
+              current.reference === source.reference,
+          )
+      )
+        observeSprintBlockers(
+          this.db,
+          { ...request, workAreaId: request.workAreaId },
+          membership.items,
+        );
       return {
         ...meta,
         view: "sprint-items",
         sprint: request.sprint,
-        ...(await d.iterationItems(team.id, request.sprint)),
+        ...membership,
       };
     }
     if (request.action === "options")

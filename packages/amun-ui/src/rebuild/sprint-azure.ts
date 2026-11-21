@@ -98,6 +98,7 @@ export function useAzureSprints(
         version: 1,
         kind: "backlog-read",
         action: "sprint-items",
+        ...(areaId ? { workAreaId: areaId } : {}),
         requestId: id,
         productId,
         sourceId,
@@ -105,7 +106,7 @@ export function useAzureSprints(
         sprint,
       });
     },
-    [productId, sourceId],
+    [productId, sourceId, areaId, say],
   );
 
   // Once per Sprints visit, and again if the bound project changes.
@@ -144,7 +145,11 @@ export function useAzureSprints(
               result.data.productId === productId
             ) {
               itemsPending.current = null;
-              if (result.data.view === "sprint-items") {
+              if (
+                result.data.view === "sprint-items" &&
+                result.data.sprint === asked.sprint
+              ) {
+                bridge.send({ version: 1, kind: "work", action: "snapshot" });
                 setItems({
                   sprint: asked.sprint,
                   state: "ready",
@@ -159,6 +164,7 @@ export function useAzureSprints(
                   items: [],
                   more: false,
                 });
+                bridge.send({ version: 1, kind: "work", action: "snapshot" });
                 say(sprintReplies.itemsLost);
               }
               return;

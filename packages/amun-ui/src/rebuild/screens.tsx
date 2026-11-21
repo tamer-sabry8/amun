@@ -1401,6 +1401,19 @@ export function Sprints({
     resume ? "Planning" : "Summary",
   );
   const [note, setNote] = useState("");
+  function openPlanningChat(workAreaId: string, chat: string, ref?: string) {
+    const request = ref && snapshot.requests?.find((r) => r.ref === ref);
+    const message =
+      request &&
+      snapshot.chats
+        .find((c) => c.id === chat && c.workAreaId === workAreaId)
+        ?.messages.find((m) => m.id === request.messageId);
+    if (ref && !message) {
+      setNote("The original request is unavailable. Refresh its receipt.");
+      return;
+    }
+    onWork(workAreaId, undefined, chat, message ? message.id : undefined);
+  }
   const areas = areasInScope(snapshot).filter(
     (area) => area.type === "product" || area.type === "project",
   );
@@ -1449,7 +1462,8 @@ export function Sprints({
               stories: read.map((item) => ({
                 id: String(item.id),
                 title: `#${item.id} ${item.title}`,
-                points: null,
+                indicator: item.indicator,
+                points: item.points ?? null,
                 owner: item.assignee,
               })),
               out: [],
@@ -1643,7 +1657,9 @@ export function Sprints({
             members={cached.members}
             name={cached.name}
             offlineOnly
-            openChat={(chat) => onWork(selectedDraft.areaId, undefined, chat)}
+            openChat={(chat, ref) =>
+              openPlanningChat(selectedDraft.areaId, chat, ref)
+            }
           />
         ) : (
           <OfflinePlanning key={selectedDraft.id} link={selectedDraft} />
@@ -1766,30 +1782,9 @@ export function Sprints({
               refreshMembers={() => openAzure && openSprint(openAzure)}
               members={current.stories}
               destinations={azure.reply?.sprints ?? []}
-              openChat={(chat, ref) => {
-                const request =
-                  ref && snapshot.requests?.find((r) => r.ref === ref);
-                const message =
-                  request &&
-                  snapshot.chats
-                    .find(
-                      (c) =>
-                        c.id === chat && c.workAreaId === current.workAreaId,
-                    )
-                    ?.messages.find((m) => m.id === request.messageId);
-                if (ref && !message) {
-                  setNote(
-                    "The original request is unavailable. Refresh its receipt.",
-                  );
-                  return;
-                }
-                onWork(
-                  current.workAreaId,
-                  undefined,
-                  chat,
-                  message ? message.id : undefined,
-                );
-              }}
+              openChat={(chat, ref) =>
+                openPlanningChat(current.workAreaId, chat, ref)
+              }
             />
           ) : (
             <p className="muted" role="status">
@@ -1812,6 +1807,10 @@ export function Sprints({
             </p>
             <SprintBlockers
               key={JSON.stringify([current.workAreaId, current.id])}
+              {...(openAzure && azure.reply
+                ? { teamId: azure.reply.team.id }
+                : {})}
+              refresh={() => openAzure && openSprint(openAzure)}
               blockers={snapshot.blockers}
               areaId={current.workAreaId}
               project={current.workAreaName}

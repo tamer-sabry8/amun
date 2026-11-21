@@ -16,6 +16,7 @@ export const backlogRead = z.discriminatedUnion("action", [
     action: z.literal("sprint-items"),
     team: id,
     sprint: id,
+    workAreaId: id.optional(),
   }),
   z.strictObject({ ...context, action: z.literal("options"), team: id }),
   z.strictObject({
@@ -127,6 +128,10 @@ export const backlogResult = z.discriminatedUnion("view", [
         type: z.string(),
         state: z.string(),
         assignee: z.string().nullable(),
+        points: z.number().optional(),
+        indicator: z
+          .object({ rev: z.int().positive(), blocked: z.boolean() })
+          .optional(),
       }),
     ),
     more: z.boolean(),
