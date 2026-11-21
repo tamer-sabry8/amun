@@ -1474,6 +1474,7 @@ export function Sprints({
                 id: String(item.id),
                 title: `#${item.id} ${item.title}`,
                 indicator: item.indicator,
+                ...(item.storyUrl ? { storyUrl: item.storyUrl } : {}),
                 points: item.points ?? null,
                 owner: item.assignee,
               })),

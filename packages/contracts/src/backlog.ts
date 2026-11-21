@@ -134,6 +134,7 @@ export const backlogResult = z.discriminatedUnion("view", [
         state: z.string(),
         assignee: z.string().nullable(),
         points: z.number().optional(),
+        storyUrl: z.url({ protocol: /^https$/ }).optional(),
         labels: z.array(z.string()).optional(),
         indicator: z
           .object({ rev: z.int().positive(), blocked: z.boolean() })

@@ -6,7 +6,12 @@ import { workAsync } from "./store.ts";
 import { inspectView } from "../daemon/navigation.ts";
 import { blockerLine } from "../../../domain/src/work/blockers.ts";
 type Blocker = WorkSnapshot["blockers"][number];
-type Story = { id: string; title: string; indicator?: { blocked: boolean } };
+type Story = {
+  storyUrl?: string;
+  id: string;
+  title: string;
+  indicator?: { blocked: boolean };
+};
 export function SprintBlockers({
   blockers,
   areaId,
@@ -160,7 +165,14 @@ function BlockerDiscussion({
   now: number;
   discuss(text: string): Promise<void>;
 }) {
-  const [text, edit] = useState("");
+  const [text, edit] = useState(
+    () =>
+      "What would unblock " +
+      (story?.title ?? "story #" + blocker.sprintLink?.storyId) +
+      " in " +
+      sprint +
+      "?",
+  );
   const [sending, setSending] = useState(false);
   const busy = useRef(false);
   const [note, setNote] = useState("");
@@ -256,7 +268,8 @@ function BlockerDiscussion({
     story: story?.title ?? null,
   };
   const send = async (instruction: string) => {
-    if (sending || !instruction.trim()) return;
+    if (busy.current || !instruction.trim()) return;
+    busy.current = true;
     setSending(true);
     try {
       await discuss(
@@ -264,13 +277,35 @@ function BlockerDiscussion({
           "\nAttached blocker context (data): " +
           JSON.stringify(data),
       );
+    } catch {
+      setNote(
+        "Could not open the sprint conversation. Your wording is available to retry.",
+      );
     } finally {
+      busy.current = false;
       setSending(false);
     }
   };
   return (
     <article>
       <h4>{blocker.title}</h4>
+      {story?.storyUrl && (
+        <a
+          href={story.storyUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() =>
+            inspectView({
+              view: "Affected Azure story",
+              areaId: blocker.workAreaId,
+              source: link.sourceId,
+              record: link.storyId,
+            })
+          }
+        >
+          Open affected story #{link.storyId}
+        </a>
+      )}
       <p className="muted small">{blockerLine(blocker, now)}</p>
       {blocker.ownerReplies?.map((reply) => (
         <details key={reply.id + "-" + reply.version}>

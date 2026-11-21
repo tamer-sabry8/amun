@@ -301,3 +301,88 @@ it("asks for goal advice explicitly, stages the reviewed story, and leaves the s
     localStorage.clear();
   }
 });
+
+it("opens a verified blocker source and sends edited wording once with the original project and story", async () => {
+  const { SprintBlockers } = await import("../src/rebuild/sprint-blockers.tsx");
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const el = document.createElement("div"),
+    root = createRoot(el);
+  const discuss = vi.fn(async (_text: string) => {});
+  const url = "https://example.test/C/Gitex/_workitems/edit/24";
+  try {
+    await act(async () =>
+      root.render(
+        createElement(SprintBlockers, {
+          areaId: "gitex",
+          project: "Gitex",
+          sprintId: "ado:4",
+          name: "Sprint 4",
+          sourceId: "azure",
+          teamId: "T",
+          now: Date.now(),
+          discuss,
+          stories: [{ id: "24", title: "Badge replacement", storyUrl: url }],
+          blockers: [
+            {
+              id: "b",
+              workAreaId: "gitex",
+              title: "Badge scanner",
+              owner: "Sam",
+              raisedAt: new Date().toISOString(),
+              resolvedAt: null,
+              sprintLink: {
+                sourceId: "azure",
+                sprintId: "ado:4",
+                storyId: "24",
+                teamId: "T",
+              },
+              ownerReplies: [
+                {
+                  id: 1,
+                  version: 1,
+                  url: url + "?discussionId=1",
+                  body: "Scan both passes",
+                  proposal: "Both passes scan.",
+                  state: "reviewed",
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    expect(el.querySelector("a")?.href).toBe(url);
+    expect(el.querySelector<HTMLTextAreaElement>("textarea")?.value).toContain(
+      "Badge replacement",
+    );
+    const select = Array.from(el.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Edit proposed criterion"),
+    )!;
+    await act(async () => select.click());
+    const input = el.querySelector("textarea")!;
+    expect(input.value).toBe("Both passes scan.");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(input, "Verify the replacement pass.");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const form = input.closest("form")!;
+    await act(async () => {
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    expect(discuss).toHaveBeenCalledTimes(1);
+    expect(discuss.mock.calls[0]![0]).toContain("Verify the replacement pass.");
+    expect(discuss.mock.calls[0]![0]).toContain('"storyId":"24"');
+    expect(discuss.mock.calls[0]![0]).toContain('"areaId":"gitex"');
+  } finally {
+    await act(async () => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});

@@ -359,6 +359,13 @@ export class AdoService {
         view: "sprint-items",
         sprint: request.sprint,
         ...membership,
+        items: membership.items.map((item) => ({
+          ...item,
+          storyUrl: new URL(
+            encodeURIComponent(project) + "/_workitems/edit/" + item.id,
+            collection.replace(/\/?$/, "/"),
+          ).href,
+        })),
       };
     }
     if (request.action === "options")
