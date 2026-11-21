@@ -4,6 +4,7 @@ import {
   reviewedOrder,
   statusEdit,
   ownerEdit,
+  criteriaEdit,
 } from "@amun/contracts";
 import { z } from "zod";
 import type { SelectionStore } from "../backlog-selection.ts";
@@ -37,6 +38,7 @@ const move = z.object({
     .max(30)
     .optional(),
   reorder: reviewedOrder.optional(),
+  criteria: criteriaEdit.optional(),
   status: statusEdit.optional(),
   owner: ownerEdit.optional(),
   targetSprintId: z.string().min(1).optional(),
@@ -104,6 +106,7 @@ export function stageMove(
     next.from !== next.to ||
     next.addLabels?.length ||
     next.reorder ||
+    next.criteria ||
     next.status ||
     next.owner
   ) {
@@ -126,6 +129,7 @@ export function planningChangeCount(moves: readonly PlannedMove[]) {
       Number(m.from !== m.to) +
       Number(!!m.addLabels?.length) +
       Number(!!m.reorder) +
+      Number(!!m.criteria) +
       Number(!!m.status) +
       Number(!!m.owner),
     0,

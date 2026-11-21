@@ -55,8 +55,13 @@ const card = z.object({
   blocked: z.string().optional(),
   description: z.string().optional(),
   criteria: z.string().optional(),
+  readableCriteria: z.boolean().optional(),
 });
 export const planningIdentity = z.object({ id, name: id, uniqueName: id });
+export const criteriaEdit = z.object({
+  from: z.string().max(65536),
+  text: z.string().max(16000),
+});
 export const statusEdit = z.object({ from: id, to: id });
 export const ownerEdit = z.object({
   from: id.nullable(),
@@ -239,6 +244,7 @@ export const sprintMoveRequest = z.strictObject({
           .optional(),
         targetSprintId: id.optional(),
         reorder: reviewedOrder.optional(),
+        criteria: criteriaEdit.optional(),
         status: statusEdit.optional(),
         owner: ownerEdit.optional(),
         title: z.string().max(1024),

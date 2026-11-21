@@ -84,7 +84,11 @@ export async function applySprintMoves(
     new Set(moves.map((m) => m.id)).size !== moves.length ||
     moves.some((m) =>
       m.from === m.to
-        ? (!m.addLabels?.length && !m.reorder && !m.status && !m.owner) ||
+        ? (!m.addLabels?.length &&
+            !m.reorder &&
+            !m.status &&
+            !m.owner &&
+            !m.criteria) ||
           !!m.targetSprintId
         : m.to !== request.iteration && m.from !== request.iteration,
     )
@@ -207,7 +211,9 @@ export async function applySprintMoves(
       destination.team,
       level.id,
       settings.columnField,
-      moves.some((m) => m.addLabels?.length || m.reorder || m.owner),
+      moves.some(
+        (m) => m.addLabels?.length || m.reorder || m.owner || m.criteria,
+      ),
     );
     const ready = new Set(
       summary()
@@ -241,7 +247,17 @@ export async function applySprintMoves(
             move.to !== sprint.path &&
             move.to !== backlogPath) ||
         !card ||
-        card.rev !== move.rev ||
+        (move.criteria &&
+          (!card.readableCriteria || card.criteria !== move.criteria.from)) ||
+        (card.rev !== move.rev &&
+          !(
+            move.criteria &&
+            move.from === move.to &&
+            !move.reorder &&
+            !move.addLabels?.length &&
+            !move.owner &&
+            !move.status
+          )) ||
         card.iteration !== move.from
       ) {
         set(
@@ -254,6 +270,10 @@ export async function applySprintMoves(
       set(move.id, "unknown", "Awaiting independent verification");
       try {
         const fields: Record<string, string | number> = {};
+        if (move.criteria)
+          fields["Microsoft.VSTS.Common.AcceptanceCriteria"] = azureCriterion(
+            move.criteria.text,
+          );
         if (move.status) {
           const transitions = await reader.transitions?.(card.type);
           if (
@@ -312,20 +332,53 @@ export async function applySprintMoves(
           );
           continue;
         }
-        const result = await client.write(
-          {
-            remoteId: move.id,
-            itemId: String(move.id),
-            type: card.type,
-            revision: move.rev,
-            fields,
-            ...(move.owner ? { expectedAssigneeId: move.owner.to.id } : {}),
-            parentId: null,
-            marker: ref,
-          },
-          null,
-          ...(move.addLabels?.length ? ([true] as const) : []),
-        );
+        const writeAtRevision = (revision: number) =>
+          client.write(
+            {
+              remoteId: move.id,
+              itemId: String(move.id),
+              type: card.type,
+              revision,
+              fields,
+              ...(move.owner ? { expectedAssigneeId: move.owner.to.id } : {}),
+              parentId: null,
+              marker: ref,
+            },
+            null,
+            ...(move.addLabels?.length ? ([true] as const) : []),
+          );
+        let result;
+        try {
+          result = await writeAtRevision(card.rev);
+        } catch (error) {
+          if (!(
+            error instanceof Error &&
+            error.message === "revision_conflict" &&
+            move.criteria &&
+            Object.keys(fields).length === 1 &&
+            stillMapped()
+          ))
+            throw error;
+          const latest = (
+            await reader.cards(
+              destination.team,
+              level.id,
+              settings.columnField,
+              true,
+            )
+          ).find((c) => c.id === move.id);
+          if (
+            !latest ||
+            latest.rev <= card.rev ||
+            latest.type !== card.type ||
+            latest.iteration !== move.from ||
+            !latest.readableCriteria ||
+            latest.criteria !== move.criteria.from ||
+            !stillMapped()
+          )
+            throw error;
+          result = await writeAtRevision(latest.rev);
+        }
         if (
           move.reorder &&
           successor(
@@ -503,6 +556,9 @@ export async function inspectSprintSubmission(
         (move.owner &&
           (item.fields["System.AssignedTo"] as { id?: string } | undefined)
             ?.id !== move.owner.to.id) ||
+        (move.criteria &&
+          item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] !==
+            azureCriterion(move.criteria.text)) ||
         item.rev <= move.rev ||
         item.fields["System.IterationPath"] !== move.to ||
         move.addLabels?.some(
@@ -565,4 +621,16 @@ export async function inspectSprintSubmission(
       ).run(result.message, new Date().toISOString(), request.ref);
   }).immediate();
   return result;
+}
+
+function azureCriterion(text: string) {
+  return (
+    "<p>" +
+    text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replace(/\r?\n/g, "<br>") +
+    "</p>"
+  );
 }

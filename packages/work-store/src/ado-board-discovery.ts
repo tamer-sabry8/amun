@@ -645,6 +645,7 @@ export class BoardDiscovery {
         estimates?: { name: string; value: number }[];
         blocked?: string | undefined;
         description?: string;
+        readableCriteria?: boolean;
         criteria?: string;
         rank?: {
           field:
@@ -775,6 +776,9 @@ export class BoardDiscovery {
                   typeof f["System.Description"] === "string"
                     ? f["System.Description"]
                     : "",
+                readableCriteria:
+                  typeof f["Microsoft.VSTS.Common.AcceptanceCriteria"] ===
+                  "string",
                 criteria:
                   typeof f["Microsoft.VSTS.Common.AcceptanceCriteria"] ===
                   "string"

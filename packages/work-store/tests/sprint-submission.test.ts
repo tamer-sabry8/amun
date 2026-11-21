@@ -66,7 +66,8 @@ function fixture() {
     }),
     cards: async () =>
       request.moves.map((m) => ({
-        ...m,
+        id: m.id,
+        title: m.title,
         type: "Story",
         column: "To Do",
         state: "New",
@@ -499,3 +500,54 @@ it("stages a permitted status and verified identity without changing sprint memb
   ).toBeNull();
   db.close();
 });
+
+it.each([true, false])(
+  "rechecks approved criteria on a second concurrent revision (wording unchanged: %s)",
+  async (same) => {
+    const { db, request, target, reader } = fixture();
+    const m = request.moves[0]!;
+    request.moves = [
+      {
+        ...m,
+        to: m.from,
+        criteria: { from: "<p>Old</p>", text: "New & reviewed" },
+      },
+    ];
+    let reads = 0;
+    const write = vi
+      .fn()
+      .mockRejectedValueOnce(Error("revision_conflict"))
+      .mockResolvedValue({ id: m.id, rev: 7 });
+    const result = await applySprintMoves(
+      db,
+      request,
+      target,
+      {
+        ...reader,
+        cards: async () => {
+          reads++;
+          return (await reader.cards()).map((c) => ({
+            ...c,
+            rev: reads === 1 ? 5 : 6,
+            readableCriteria: true,
+            criteria:
+              reads === 1 || same ? "<p>Old</p>" : "<p>Other wording</p>",
+          }));
+        },
+      },
+      { write },
+      () => true,
+      async () => "ACCEPT " + request.ref,
+    );
+    expect(result.receipts[0]?.state).toBe(same ? "confirmed" : "held");
+    expect(write).toHaveBeenCalledTimes(same ? 2 : 1);
+    expect(write.mock.calls[0]![0]).toMatchObject({
+      revision: 5,
+      fields: {
+        "Microsoft.VSTS.Common.AcceptanceCriteria": "<p>New &amp; reviewed</p>",
+      },
+    });
+    if (same) expect(write.mock.calls[1]![0].revision).toBe(6);
+    db.close();
+  },
+);

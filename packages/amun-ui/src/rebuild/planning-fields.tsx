@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { BacklogResult } from "@amun/contracts";
 import type { PlannedMove } from "./planning-draft.ts";
 type Read = Extract<BacklogResult, { view: "cards" }>;
@@ -15,6 +16,15 @@ export function PlanningFields({
   stage(move: PlannedMove): void;
   disabled: boolean;
 }) {
+  const [wording, setWording] = useState<string | null>(null);
+  const readable = (html: string) =>
+    html
+      .replace(/<\/(?:div|p|li)>|<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]*>/g, "")
+      .replaceAll("&lt;", "<")
+      .replaceAll("&gt;", ">")
+      .replaceAll("&amp;", "&")
+      .trim();
   if (!card.iteration) return null;
   const baseline = {
     id: card.id,
@@ -27,7 +37,59 @@ export function PlanningFields({
   const people = options.identities ?? [];
   return (
     <details>
-      <summary>Edit status or owner</summary>
+      <summary>Edit story fields</summary>
+      {card.readableCriteria && (
+        <section>
+          {pending?.criteria && pending.criteria.from !== card.criteria && (
+            <div role="status">
+              <p>
+                Azure changed the acceptance criteria. Review both versions.
+              </p>
+              <p>Originally reviewed · {readable(pending.criteria.from)}</p>
+              <p>Current Azure · {readable(card.criteria ?? "")}</p>
+            </div>
+          )}
+          <label className="field">
+            Acceptance criteria
+            <textarea
+              value={
+                wording ??
+                pending?.criteria?.text ??
+                readable(card.criteria ?? "")
+              }
+              disabled={disabled}
+              onChange={(e) => setWording(e.target.value)}
+              maxLength={16000}
+            />
+          </label>
+          <button
+            className="btn quiet"
+            disabled={
+              disabled ||
+              (wording === null && pending?.criteria?.from === card.criteria)
+            }
+            onClick={() => {
+              const text =
+                wording ??
+                pending?.criteria?.text ??
+                readable(card.criteria ?? "");
+              stage({
+                ...baseline,
+                ...pending,
+                criteria:
+                  text === readable(card.criteria ?? "")
+                    ? undefined
+                    : { from: card.criteria ?? "", text },
+              });
+              setWording(null);
+            }}
+          >
+            {pending?.criteria && pending.criteria.from !== card.criteria
+              ? "Stage merged wording"
+              : "Stage wording"}
+          </button>
+        </section>
+      )}
       <label className="field">
         Status
         <select

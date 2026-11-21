@@ -296,7 +296,17 @@ export function SprintPlanner({
           !!cards &&
           !!reviewedRank(cards, m.id, m.reorder))) &&
       cards?.some(
-        (c) => c.id === m.id && c.rev === m.rev && c.iteration === m.from,
+        (c) =>
+          c.id === m.id &&
+          c.iteration === m.from &&
+          (!m.criteria || c.criteria === m.criteria.from) &&
+          (c.rev === m.rev ||
+            (m.criteria &&
+              m.to === m.from &&
+              !m.status &&
+              !m.owner &&
+              !m.reorder &&
+              !m.addLabels?.length)),
       ),
   );
   const creates = draft.creates ?? [];
@@ -533,6 +543,7 @@ export function SprintPlanner({
         m.from !== m.to &&
         !m.addLabels?.length &&
         !m.reorder &&
+        !m.criteria &&
         !m.status &&
         !m.owner,
     );
@@ -996,6 +1007,7 @@ export function SprintPlanner({
                   {move.status
                     ? " · Status: " + move.status.from + " → " + move.status.to
                     : ""}
+                  {move.criteria ? " · Acceptance criteria edited" : ""}
                   {move.owner ? " · Owner: " + move.owner.to.name : ""}
                   {move.reorder ? " · Before #" + move.reorder.beforeId : ""}
                   {move.addLabels?.length
