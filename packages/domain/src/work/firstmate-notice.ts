@@ -342,6 +342,18 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [look.at.ref, c.areaId],
     }),
   },
+  "link-blocker-story": {
+    tell: (c) => ({
+      what:
+        "linked blocker " +
+        c.blockerId +
+        " to story " +
+        c.storyId +
+        " in sprint " +
+        c.sprintId,
+      ids: [c.areaId, c.blockerId, c.sourceId, c.sprintId, c.storyId],
+    }),
+  },
   "set-blocker-owner": {
     tell: (c) => ({
       what: c.owner

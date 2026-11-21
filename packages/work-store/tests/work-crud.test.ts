@@ -364,6 +364,31 @@ describe("blockers", () => {
     );
     expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
   });
+  it("retains a blocker link across reopen and rejects a conflicting sprint or area", () => {
+    const areaId = add("project", "Portal");
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Access needed",
+    }).ref!;
+    const link = {
+      sourceId: "azure-1",
+      sprintId: "iteration-5",
+      storyId: "42",
+    };
+    const args = { areaId, blockerId, ...link };
+    expect(
+      send("link-blocker-story", { ...args, areaId: add("project", "Other") })
+        .ok,
+    ).toBe(false);
+    expect(send("link-blocker-story", args).ok).toBe(true);
+    expect(send("link-blocker-story", args).ok).toBe(true);
+    expect(send("link-blocker-story", { ...args, sprintId: "other" }).ok).toBe(
+      false,
+    );
+    expect(new WorkStore(db).snapshot().blockers[0]?.sprintLink).toEqual(link);
+    send("resolve-blocker", { blockerId });
+    expect(send("link-blocker-story", args).ok).toBe(false);
+  });
   it("need a work area, and go with it when it is deleted", () => {
     expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
       false,

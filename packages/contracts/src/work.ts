@@ -303,6 +303,10 @@ export const workSnapshot = z.strictObject({
       workAreaId: id,
       title: z.string(),
       owner: z.string().nullable(),
+      sprintLink: z
+        .object({ sourceId: id, sprintId: id, storyId: id })
+        .nullable()
+        .optional(),
       raisedAt: stamp,
       resolvedAt: stamp.nullable(),
     }),
@@ -780,6 +784,13 @@ export const workCommand = z.discriminatedUnion("action", [
     areaId: id,
     title: name,
     owner: text.nullable().default(null),
+  }),
+  act("link-blocker-story", {
+    areaId: id,
+    blockerId: id,
+    sourceId: id,
+    sprintId: id,
+    storyId: id,
   }),
   act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
   act("resolve-blocker", { blockerId: id }),

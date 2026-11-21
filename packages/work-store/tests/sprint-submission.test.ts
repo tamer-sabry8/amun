@@ -1,7 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { openDatabase } from "../src/sqlite.ts";
 import { migrate } from "../src/database.ts";
-import { applySprintMoves } from "../src/sprint-submission.ts";
+import {
+  applySprintMoves,
+  inspectSprintSubmission,
+} from "../src/sprint-submission.ts";
 import type { SprintMoveRequest } from "../../contracts/src/backlog.ts";
 import { AdoWriteClient } from "../src/ado-governed-writes.ts";
 
@@ -140,5 +143,36 @@ it("holds all writes when Firstmate returns another request reference", async ()
   );
   expect(result.receipts.map((row) => row.state)).toEqual(["held", "held"]);
   expect(transport).not.toHaveBeenCalled();
+  db.close();
+});
+
+it("reconciles a denied read after a successful move without repeating the write", async () => {
+  const { db, request, target, reader, transport } = fixture();
+  let denyRead = true;
+  const client = new AdoWriteClient(
+    target.collection,
+    target.project,
+    async (method) =>
+      method === "GET" && denyRead
+        ? { status: 403, data: {} }
+        : transport(method),
+  );
+  const result = await applySprintMoves(
+    db,
+    request,
+    target,
+    reader,
+    client,
+    () => true,
+    async () => "ACCEPT " + request.ref,
+  );
+  expect(result.receipts[0]?.state).toBe("unknown");
+  denyRead = false;
+  const checked = await inspectSprintSubmission(db, request, target, client);
+  expect(checked.receipts[0]?.state).toBe("confirmed");
+  expect(transport.mock.calls.map(([method]) => method)).toEqual([
+    "PATCH",
+    "GET",
+  ]);
   db.close();
 });

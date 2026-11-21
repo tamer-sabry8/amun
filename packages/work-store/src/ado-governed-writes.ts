@@ -21,6 +21,7 @@ export class AdoRejected extends Error {
   constructor(
     readonly status: number,
     readonly detail: string,
+    readonly method: string,
   ) {
     super("request_rejected_" + status);
   }
@@ -114,7 +115,7 @@ export class AdoWriteClient {
           },
         );
       if (r.status === 412) throw Error("revision_conflict");
-      throw new AdoRejected(r.status, rejectionDetail(r.data));
+      throw new AdoRejected(r.status, rejectionDetail(r.data), method);
     }
     return r.data;
   }

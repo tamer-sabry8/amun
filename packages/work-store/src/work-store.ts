@@ -422,6 +422,9 @@ export class WorkStore {
           workAreaId: String(row.work_area_id),
           title: String(row.title),
           owner: (row.owner as string | null) ?? null,
+          sprintLink: row.sprint_link_json
+            ? JSON.parse(String(row.sprint_link_json))
+            : null,
           raisedAt: String(row.raised_at),
           resolvedAt: (row.resolved_at as string | null) ?? null,
         })),
@@ -1415,6 +1418,32 @@ export class WorkStore {
           now,
         );
         return { ref: id };
+      }
+      case "link-blocker-story": {
+        const record = this.get(
+          "SELECT sprint_link_json FROM work_blockers WHERE id=? AND work_area_id=? AND resolved_at IS NULL",
+          command.blockerId,
+          command.areaId,
+        );
+        if (!record)
+          throw new WorkError(
+            "The open blocker is unavailable in this work area.",
+          );
+        const link = JSON.stringify({
+          sourceId: command.sourceId,
+          sprintId: command.sprintId,
+          storyId: command.storyId,
+        });
+        if (record.sprint_link_json && record.sprint_link_json !== link)
+          throw new WorkError(
+            "This blocker already has a different story link.",
+          );
+        this.run(
+          "UPDATE work_blockers SET sprint_link_json=? WHERE id=?",
+          link,
+          command.blockerId,
+        );
+        return { ref: command.blockerId };
       }
       case "set-blocker-owner": {
         const owner = command.owner?.trim();

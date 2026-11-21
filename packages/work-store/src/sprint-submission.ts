@@ -208,13 +208,10 @@ export async function applySprintMoves(
       } catch (error) {
         if (
           error instanceof AdoRejected &&
+          error.method === "PATCH" &&
           (error.status === 403 || error.status === 401)
         )
-          set(
-            move.id,
-            "held",
-            "Held · Azure did not allow verification or the change",
-          );
+          set(move.id, "held", "Held · Azure did not allow the change");
         else if (
           error instanceof Error &&
           error.message === "revision_conflict"

@@ -1,3 +1,4 @@
+import { SprintBlockers } from "./sprint-blockers.tsx";
 import { resolveSprintBinding } from "./sprint-binding.ts";
 import { ResumePlanning } from "./resume-planning.tsx";
 import type { SavedPlanningLink } from "./planning-draft.ts";
@@ -1715,6 +1716,20 @@ export function Sprints({
                 </span>
               ))}
             </p>
+            <SprintBlockers
+              key={JSON.stringify([current.workAreaId, current.id])}
+              blockers={snapshot.blockers}
+              areaId={current.workAreaId}
+              project={current.workAreaName}
+              sprintId={current.id}
+              name={current.name}
+              sourceId={
+                openAzure ? (azure.reply?.sourceId ?? azure.sourceId) : "amun"
+              }
+              stories={current.stories}
+              now={now}
+              discuss={discussSprint}
+            />
             {current.changedInAdo && (
               <p className="muted small">
                 Someone changed this sprint in Azure DevOps. Amun shows the
