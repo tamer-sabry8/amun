@@ -21,6 +21,7 @@ export const backlogRead = z.discriminatedUnion("action", [
   z.strictObject({
     ...context,
     action: z.literal("cards"),
+    details: z.boolean().optional(),
     team: id,
     level: id,
   }),
@@ -34,6 +35,8 @@ const card = z.object({
   type: z.string(),
   column: z.string().nullable(),
   iteration: z.string().nullable().optional(),
+  description: z.string().optional(),
+  criteria: z.string().optional(),
 });
 const column = named.extend({
   stateMappings: z.record(z.string(), z.string()),
@@ -138,7 +141,39 @@ export const operationItem = z.strictObject({
   type: id,
   fields: z.record(z.string(), value),
 });
+export const sprintMoveRequest = z.strictObject({
+  ...operationContext,
+  action: z.literal("apply-sprint-moves"),
+  ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  space: id,
+  workAreaId: id,
+  chatId: id,
+  level: id,
+  sprintId: id,
+  iteration: id,
+  moves: z
+    .array(
+      z.strictObject({
+        id: z.int().positive(),
+        rev: z.int().positive(),
+        from: id,
+        to: id,
+        title: z.string().max(1024),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+export type SprintMoveRequest = z.infer<typeof sprintMoveRequest>;
 export const adoOperation = z.discriminatedUnion("action", [
+  sprintMoveRequest,
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("inspect-sprint-submission"),
+    workAreaId: id,
+    sprintId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
   z.strictObject({ ...operationContext, action: z.literal("targets") }),
   z.strictObject({
     ...operationContext,
@@ -181,6 +216,7 @@ export const operationResult = z.object({
   batchId: z.string().optional(),
   binding: z.string().optional(),
   preview: z.string().optional(),
+  requestRef: z.string().optional(),
   receipts: z
     .array(
       z.object({

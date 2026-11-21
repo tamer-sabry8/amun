@@ -7,7 +7,10 @@ import type { AdoWriteClient } from "./ado-governed-writes.ts";
 import { editBoardCard } from "./ado-card-edit.ts";
 export async function runAdoOperation(
   db: Database,
-  request: AdoOperation,
+  request: Exclude<
+    AdoOperation,
+    { action: "apply-sprint-moves" | "inspect-sprint-submission" }
+  >,
   target: AdoDestination,
   reader: BoardDiscovery,
   client: AdoWriteClient,

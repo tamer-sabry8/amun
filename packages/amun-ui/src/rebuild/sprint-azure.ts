@@ -234,3 +234,64 @@ export function useAzureSprints(
       reply ? readItems(reply.team.id, sprint) : undefined,
   };
 }
+
+/** Read all explicitly bound areas in this view. Correlate every response to
+ * its originating project, even if two teams return identical iteration IDs. */
+export function useSprintOverview(
+  areas: readonly SprintArea[],
+  areaId: string,
+  primaryProduct: string,
+) {
+  const requests = areas
+    .filter(
+      (a) => (!areaId || a.id === areaId) && a.productId !== primaryProduct,
+    )
+    .map((a) => ({
+      areaId: a.id,
+      binding: resolveSprintBinding(browserStore(), areas, a.id),
+    }))
+    .filter(
+      (r): r is { areaId: string; binding: NonNullable<typeof r.binding> } =>
+        !!r.binding?.team,
+    );
+  const key = JSON.stringify(requests);
+  const [result, setResult] = useState<{
+    key: string;
+    replies: Record<string, Reply>;
+  }>({ key: "", replies: {} });
+  useEffect(() => {
+    const selected = JSON.parse(key) as typeof requests;
+    const pending = new Map<string, (typeof requests)[number]>();
+    setResult({ key, replies: {} });
+    const stop = bridge.onEvent((event) => {
+      const parsed = backlogResult.safeParse(event);
+      if (!parsed.success || parsed.data.view !== "sprints") return;
+      const reply = parsed.data;
+      const entry = pending.get(reply.requestId);
+      if (
+        !entry ||
+        entry.binding.productId !== reply.productId ||
+        (reply.sourceId && reply.sourceId !== entry.binding.sourceId)
+      )
+        return;
+      pending.delete(reply.requestId);
+      setResult((prev) => ({
+        key,
+        replies: { ...prev.replies, [entry.areaId]: reply },
+      }));
+    });
+    for (const entry of selected) {
+      const requestId = crypto.randomUUID();
+      pending.set(requestId, entry);
+      bridge.send({
+        version: 1,
+        kind: "backlog-read",
+        action: "sprints",
+        requestId,
+        ...entry.binding,
+      });
+    }
+    return stop;
+  }, [key]);
+  return result.key === key ? result.replies : {};
+}

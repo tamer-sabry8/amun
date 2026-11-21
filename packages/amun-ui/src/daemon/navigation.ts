@@ -7,6 +7,7 @@ export interface Inspection {
   project?: string;
   record?: string;
   source?: string;
+  search?: { query: string; details: boolean; backlog: string };
 }
 interface Pending {
   ref: string;
@@ -55,7 +56,23 @@ export class NavigationQueue {
   add(inspection: Inspection) {
     const ref = newRequestRef();
     const location = inspection.project ? ` for ${inspection.project}` : "";
-    const prompt = `Open ${inspection.view}${location}. Show the selected view. This is a read-only navigation click. Perform no changes and reply only with an acknowledgement.\nRequest ${ref}\nSelection data: ${JSON.stringify(inspection)}`;
+    const instruction = inspection.search
+      ? "Search " +
+        inspection.search.backlog +
+        " for " +
+        JSON.stringify(inspection.search.query) +
+        " in " +
+        (inspection.search.details
+          ? "ID, title, description and acceptance criteria"
+          : "ID and title") +
+        "."
+      : "Open " + inspection.view + location + ". Show the selected view.";
+    const prompt =
+      instruction +
+      "\nThis is a read-only inspection. Make no changes. Reply only with an acknowledgement.\nRequest " +
+      ref +
+      "\nSelection data: " +
+      JSON.stringify(inspection);
     this.pending.push({ ref, inspection, prompt, delivered: false });
     this.save();
     void this.flush();

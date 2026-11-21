@@ -1,3 +1,4 @@
+import { newRequestRef } from "../../../domain/src/work/requests.ts";
 // Answers the renderer's existing port contracts (@amun/contracts) from the
 // daemon's /amun RPC, so every screen keeps its current shape. Products become
 // products and groups. Every product shares the captain's one Firstmate home,
@@ -804,11 +805,44 @@ export class ContractAdapter {
       await this.refresh();
       return [this.workspace()];
     }
+    if (message.kind === "product-authoring") {
+      const { origin, ...input } = message;
+      const ref = newRequestRef();
+      const result = await this.daemon
+        .request<unknown>("workspace.author", {
+          space: await this.ensureSpace(),
+          ref,
+          message: input,
+          origin,
+        })
+        .catch(() => ({
+          version: 1,
+          kind: "workspace-error",
+          message:
+            "Firstmate could not complete this draft. Reopen the PRD to check its saved state.",
+        }));
+      this.view = { ...this.view, workspace: await this.readWorkspace() };
+      await this.refresh().catch(() => undefined);
+      return [result, this.workspace(), this.work()];
+    }
     if (message.kind === "workspace") return this.handleWorkspace(message);
     if (message.kind === "backlog-read" || message.kind === "ado-operation") {
       const reply = await this.daemon
-        .request<unknown>("ado.request", { message })
+        .request<unknown>("ado.request", {
+          message:
+            message.action === "apply-sprint-moves"
+              ? { ...message, space: await this.ensureSpace() }
+              : message,
+        })
         .catch(() => null);
+      if (
+        reply &&
+        (message.action === "apply-sprint-moves" ||
+          message.action === "inspect-sprint-submission")
+      ) {
+        await this.refresh().catch(() => undefined);
+        return [reply, this.work()];
+      }
       return reply ? [reply] : [];
     }
     if (message.kind === "council") {

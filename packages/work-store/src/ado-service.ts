@@ -44,6 +44,12 @@ function readFailure(raw: string): string {
   return "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
 }
 
+import {
+  applySprintMoves,
+  inspectSprintSubmission,
+  type FirstmateDispatch,
+} from "./sprint-submission.ts";
+
 export class AdoService {
   private last: { scope: string; reader: BoardDiscovery } | undefined;
 
@@ -55,7 +61,10 @@ export class AdoService {
   ) {}
 
   /** Answers a backlog-read or ado-operation message; null if it is neither. */
-  async handle(message: unknown): Promise<Record<string, unknown> | null> {
+  async handle(
+    message: unknown,
+    dispatch?: FirstmateDispatch,
+  ): Promise<Record<string, unknown> | null> {
     const kind =
       message && typeof message === "object" && "kind" in message
         ? (message as { kind: unknown }).kind
@@ -73,7 +82,7 @@ export class AdoService {
       requestId: request.requestId,
     };
     try {
-      return await this.run(request, meta);
+      return await this.run(request, meta, dispatch);
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
       if (request.kind === "ado-operation")
@@ -92,6 +101,7 @@ export class AdoService {
   private async run(
     request: AdoOperation | ReturnType<typeof backlogRead.parse>,
     meta: { kind: string; productId: string; requestId: string },
+    dispatch?: FirstmateDispatch,
   ): Promise<Record<string, unknown>> {
     const sources = this.workspace.productSources(request.productId);
     const source = sources.find(
@@ -120,23 +130,42 @@ export class AdoService {
         reader: new BoardDiscovery(collection, project, transport()),
       };
     const d = this.last.reader;
-    if (request.kind === "ado-operation")
-      return runAdoOperation(
-        this.db,
-        request,
-        { collection, project, team: request.team },
-        d,
-        new AdoWriteClient(collection, project, transport()),
-        () =>
-          this.workspace
-            .productSources(request.productId)
-            .some(
-              (current) =>
-                current.id === source.id &&
-                current.kind === "ado" &&
-                current.reference === source.reference,
-            ),
-      );
+    if (request.kind === "ado-operation") {
+      const target = { collection, project, team: request.team };
+      const client = new AdoWriteClient(collection, project, transport());
+      const mapped = () =>
+        this.workspace
+          .productSources(request.productId)
+          .some(
+            (current) =>
+              current.id === source.id &&
+              current.kind === "ado" &&
+              current.reference === source.reference,
+          );
+      if (request.action === "inspect-sprint-submission")
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await inspectSprintSubmission(this.db, request, target, client)),
+        };
+      if (request.action === "apply-sprint-moves") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await applySprintMoves(
+            this.db,
+            request,
+            target,
+            d,
+            client,
+            mapped,
+            dispatch,
+          )),
+        };
+      }
+      return runAdoOperation(this.db, request, target, d, client, mapped);
+    }
     if (request.action === "schema")
       return { ...meta, view: "schema", schema: await d.processSchema() };
     if (request.action === "teams")
@@ -176,7 +205,12 @@ export class AdoService {
       ...meta,
       view: "cards",
       columns,
-      cards: await d.cards(request.team, request.level, settings.columnField),
+      cards: await d.cards(
+        request.team,
+        request.level,
+        settings.columnField,
+        request.details,
+      ),
       canEditBoard: settings.canEdit,
     };
   }

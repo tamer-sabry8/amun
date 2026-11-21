@@ -147,9 +147,8 @@ export class LinearAdapter implements DeliveryAdapter {
     const seen = new Set<string>();
     let after: string | null = null;
     for (;;) {
-      const data = await this.gql<{ team: Record<string, {
-        nodes: T[]; pageInfo: { hasNextPage: boolean; endCursor: string | null };
-      }> }>(query, { teamId: this.config.teamId, after });
+      const data: { team: Record<string, { nodes: T[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } }> } =
+        await this.gql(query, { teamId: this.config.teamId, after });
       const page = data.team?.[field];
       if (!page || !Array.isArray(page.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean")
         throw new DeliveryApiError("linear", 200, "Incomplete team response");

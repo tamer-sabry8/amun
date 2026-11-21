@@ -1,3 +1,4 @@
+import { StoryDraftEditor } from "./story-draft-editor.tsx";
 // The Backlog pane. Same messages, remembered choices and checks as the earlier
 // Backlog (story drafts, project, team, level, work items, edits, publishing);
 // only the view is new.
@@ -94,6 +95,7 @@ export function Backlog({ context }: { context: Context }) {
                     </button>
                   </div>
                 )}
+                <StoryDraftEditor story={story} context={context} />
                 <StoryImplementation context={context} story={story.id} />
               </article>
             ))}

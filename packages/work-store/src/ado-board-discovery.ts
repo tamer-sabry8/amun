@@ -411,7 +411,12 @@ export class BoardDiscovery {
     return response.data;
   }
 
-  async cards(team: string, level: string, columnField: string) {
+  async cards(
+    team: string,
+    level: string,
+    columnField: string,
+    details = false,
+  ) {
     if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,255}$/.test(columnField))
       throw new Error("Invalid Azure column field");
     const data = await this.get(
@@ -445,6 +450,8 @@ export class BoardDiscovery {
         state: string;
         column: string | null;
         iteration: string | null;
+        description?: string;
+        criteria?: string;
       }
     >();
     for (let offset = 0; offset < ordered.length; offset += 200) {
@@ -453,16 +460,17 @@ export class BoardDiscovery {
         "ids",
         ordered.slice(offset, offset + 200).join(","),
       );
-      url.searchParams.set(
-        "fields",
-        [
-          "System.Title",
-          "System.State",
-          "System.WorkItemType",
-          "System.IterationPath",
-          columnField,
-        ].join(","),
-      );
+      if (!details)
+        url.searchParams.set(
+          "fields",
+          [
+            "System.Title",
+            "System.State",
+            "System.WorkItemType",
+            "System.IterationPath",
+            columnField,
+          ].join(","),
+        );
       const batch = await this.get(url);
       if (!record(batch) || !Array.isArray(batch.value))
         throw new Error("Invalid Azure items");
@@ -489,6 +497,19 @@ export class BoardDiscovery {
             typeof f["System.IterationPath"] === "string"
               ? f["System.IterationPath"]
               : null,
+          ...(details
+            ? {
+                description:
+                  typeof f["System.Description"] === "string"
+                    ? f["System.Description"]
+                    : "",
+                criteria:
+                  typeof f["Microsoft.VSTS.Common.AcceptanceCriteria"] ===
+                  "string"
+                    ? f["Microsoft.VSTS.Common.AcceptanceCriteria"]
+                    : "",
+              }
+            : {}),
           column: typeof f[columnField] === "string" ? f[columnField] : null,
         });
       }

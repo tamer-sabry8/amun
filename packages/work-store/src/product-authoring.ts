@@ -82,6 +82,76 @@ export class ProductAuthoring {
         throw new AuthoringError(
           "Add a product source before starting the interview.",
         );
+      if (cmd.action === "update-story-draft") {
+        const record = () =>
+          this.db
+            .prepare(
+              `SELECT w.title,w.acceptance_json FROM work_items w JOIN story_drafts d ON w.id=d.item_id WHERE w.id=? AND w.product_id=? AND d.objective_id=? AND d.prd_version=? AND w.remote_id IS NULL AND w.status='draft'`,
+            )
+            .get(
+              cmd.itemId,
+              productId,
+              cmd.objectiveId,
+              cmd.expectedVersion,
+            ) as { title: string; acceptance_json: string } | undefined;
+        const matches = () => {
+          const row = record();
+          const prd = new ProductDocuments(this.db).prd(
+            productId,
+            cmd.objectiveId,
+          );
+          if (
+            !row ||
+            !prd?.approved ||
+            prd.version !== cmd.expectedVersion ||
+            row.title !== cmd.baseline.title ||
+            JSON.stringify(JSON.parse(row.acceptance_json)) !==
+              JSON.stringify(cmd.baseline.acceptance)
+          )
+            throw new AuthoringError(
+              "The source or story changed. Review its current wording before updating.",
+            );
+        };
+        matches();
+        const reply = await firstmate(
+          model,
+          "Update only this local story proposal with the captain’s exact reviewed wording. Amun will save it. Return only JSON with acceptedItemId set to the supplied itemId.",
+          JSON.stringify({
+            itemId: cmd.itemId,
+            baseline: cmd.baseline,
+            reviewed: cmd.reviewed,
+            objectiveId: cmd.objectiveId,
+            version: cmd.expectedVersion,
+          }),
+        );
+        const ack = parseModelJson(reply);
+        if (
+          !ack ||
+          typeof ack !== "object" ||
+          !("acceptedItemId" in ack) ||
+          ack.acceptedItemId !== cmd.itemId
+        )
+          throw new AuthoringError(
+            "Firstmate has not confirmed this story revision.",
+          );
+        this.db
+          .transaction(() => {
+            validate();
+            matches();
+            this.db
+              .prepare(
+                "UPDATE work_items SET title=?,acceptance_json=? WHERE id=? AND product_id=?",
+              )
+              .run(
+                cmd.reviewed.title,
+                JSON.stringify(cmd.reviewed.acceptance),
+                cmd.itemId,
+                productId,
+              );
+          })
+          .immediate();
+        return;
+      }
       if (cmd.action === "story-decision") {
         const decisions = new StoryDecisions(this.db);
         const target = decisions.target(productId, cmd.itemId);

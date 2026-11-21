@@ -1,3 +1,7 @@
+import { resolveSprintBinding } from "./sprint-binding.ts";
+import { ResumePlanning } from "./resume-planning.tsx";
+import type { SavedPlanningLink } from "./planning-draft.ts";
+import { useSprintOverview } from "./sprint-azure.ts";
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
@@ -1338,7 +1342,7 @@ export function SprintTimeline({
                 return (
                   bar && (
                     <button
-                      key={sprint.id}
+                      key={JSON.stringify([sprint.workAreaId, sprint.id])}
                       className={"bar" + (sprint.draft ? " draft" : "")}
                       style={{
                         left: `${bar.left * 100}%`,
@@ -1366,7 +1370,9 @@ export function Sprints({
   model,
   onWork,
   onReview,
+  resume,
 }: {
+  resume?: SavedPlanningLink | null;
   snapshot: Snapshot;
   now: number;
   model: string | null;
@@ -1374,12 +1380,16 @@ export function Sprints({
   onReview(planId: string, workAreaId: string | null): void;
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
-  const [areaId, setAreaId] = useState("");
+  const [areaId, setAreaId] = useState(resume?.areaId ?? "");
   const [selection, selectSprint] = useState<Pick<
     Sprint,
     "id" | "workAreaId"
-  > | null>(null);
-  const [tab, setTab] = useState<(typeof sprintTabs)[number]>("Summary");
+  > | null>(
+    resume ? { id: "ado:" + resume.sprintId, workAreaId: resume.areaId } : null,
+  );
+  const [tab, setTab] = useState<(typeof sprintTabs)[number]>(
+    resume ? "Planning" : "Summary",
+  );
   const [note, setNote] = useState("");
   const areas = areasInScope(snapshot).filter(
     (area) => area.type === "product" || area.type === "project",
@@ -1395,42 +1405,50 @@ export function Sprints({
       ...sprint,
       workAreaName: areaOf(snapshot, sprint.workAreaId)?.name ?? "",
     }));
-  const azure = useAzureSprints(areas, areaId, setNote);
+  const azure = useAzureSprints(
+    areas,
+    selection?.workAreaId ?? areaId,
+    setNote,
+  );
   const boundAreas = areas.filter(
     (area) =>
       area.productId === azure.productId && (!areaId || area.id === areaId),
   );
   const azureArea = boundAreas.length === 1 ? boundAreas[0] : undefined;
-  const fromAzure =
-    azure.reply && azureArea && (!areaId || areaId === azureArea.id)
-      ? adoSprints(
-          azure.reply.sprints,
-          azure.reply.team.name,
-          azureArea.id,
-          azureArea.name,
-        ).map((sprint) => {
-          const read =
-            azure.items?.state === "ready" &&
-            sprint.id === `ado:${azure.items.sprint}`
-              ? azure.items.items
-              : [];
-          return {
-            ...sprint,
-            done: read.filter((item) =>
-              /^(done|closed|completed)$/i.test(item.state),
-            ).length,
-            total: read.length,
-            stories: read.map((item) => ({
-              id: String(item.id),
-              title: `#${item.id} ${item.title}`,
-              points: null,
-              owner: item.assignee,
-            })),
-            out: [],
-            capacity: null,
-          };
-        })
+  const additional = useSprintOverview(areas, areaId, azure.productId);
+  const fromAzure = areas.flatMap((area) => {
+    if (areaId && area.id !== areaId) return [];
+    const reply = boundAreas.some((bound) => bound.id === area.id)
+      ? azure.reply
+      : additional[area.id];
+    return reply
+      ? adoSprints(reply.sprints, reply.team.name, area.id, area.name).map(
+          (sprint) => {
+            const read =
+              selection?.workAreaId === area.id &&
+              azure.items?.state === "ready" &&
+              sprint.id === `ado:${azure.items.sprint}`
+                ? azure.items.items
+                : [];
+            return {
+              ...sprint,
+              done: read.filter((item) =>
+                /^(done|closed|completed)$/i.test(item.state),
+              ).length,
+              total: read.length,
+              stories: read.map((item) => ({
+                id: String(item.id),
+                title: `#${item.id} ${item.title}`,
+                points: null,
+                owner: item.assignee,
+              })),
+              out: [],
+              capacity: null,
+            };
+          },
+        )
       : [];
+  });
   const overview = [...sprints, ...fromAzure];
   const groups = sprintGroups(overview, now);
   const current =
@@ -1451,8 +1469,8 @@ export function Sprints({
   const openSprint = azure.openSprint;
   // Opening an Azure sprint reads its work items (read-only).
   useEffect(() => {
-    if (openAzure) openSprint(openAzure);
-  }, [openAzure]);
+    if (openAzure && azure.reply) openSprint(openAzure);
+  }, [openAzure, azure.reply, selection?.workAreaId]);
   const draft =
     sprints.find(
       (sprint) => sprint.draft && (!areaId || sprint.workAreaId === areaId),
@@ -1662,6 +1680,7 @@ export function Sprints({
               scope={planner}
               name={current.name}
               members={current.stories}
+              openChat={(chat) => onWork(current.workAreaId, undefined, chat)}
             />
           ) : (
             <p className="muted" role="status">
@@ -1801,14 +1820,41 @@ export function Sprints({
       }
       footer={footer}
     >
+      <ResumePlanning
+        areas={
+          new Set(
+            areas.filter((a) => !areaId || a.id === areaId).map((a) => a.id),
+          )
+        }
+        open={(link) => {
+          const binding = resolveSprintBinding(
+            browserStore(),
+            areas,
+            link.areaId,
+          );
+          const board = readBoard(
+            browserStore(),
+            link.productId,
+            link.sourceId,
+          );
+          if (
+            binding?.sourceId !== link.sourceId ||
+            binding.team !== link.team ||
+            board?.level !== link.backlog
+          ) {
+            setNote(
+              "Restore the saved connection and backlog to resume this draft.",
+            );
+            return;
+          }
+          setAreaId(link.areaId);
+          selectSprint({ workAreaId: link.areaId, id: "ado:" + link.sprintId });
+          setTab("Planning");
+        }}
+      />
       {view === "overview" && (
         <section aria-labelledby="rb-sprints-h">
           <h2 id="rb-sprints-h">Sprints by status</h2>
-          {boundAreas.length > 1 && (
-            <p className="muted">
-              Choose a work area to view its connected Azure sprints.
-            </p>
-          )}
           <p className="muted small" style={{ margin: "4px 0 12px" }}>
             As of {shortDate(new Date(now).toISOString())} · Select a sprint to
             open it.
@@ -1822,7 +1868,7 @@ export function Sprints({
                     const row = sprintRow(sprint, now);
                     return (
                       <button
-                        key={sprint.id}
+                        key={JSON.stringify([sprint.workAreaId, sprint.id])}
                         className="rb-rowitem"
                         onClick={() => {
                           inspectView({
@@ -2100,10 +2146,12 @@ export function Portfolio({
   model,
   now = Date.now(),
   onWork,
+  onResume,
   onAsk,
   onAskAbout,
   onAskCard,
 }: {
+  onResume?(link: SavedPlanningLink): void;
   snapshot: Snapshot;
   model: string | null;
   now?: number;
@@ -2252,13 +2300,17 @@ export function Portfolio({
           </p>
           <div className="rb-pgrid">
             {tracked.map((area) => (
-              <ProgressCard
-                key={area.id}
-                area={area}
-                snapshot={snapshot}
-                now={now}
-                onOpen={() => setOpen(area.id)}
-              />
+              <div key={area.id}>
+                <ProgressCard
+                  area={area}
+                  snapshot={snapshot}
+                  now={now}
+                  onOpen={() => setOpen(area.id)}
+                />
+                {onResume && (
+                  <ResumePlanning areas={new Set([area.id])} open={onResume} />
+                )}
+              </div>
             ))}
           </div>
         </>

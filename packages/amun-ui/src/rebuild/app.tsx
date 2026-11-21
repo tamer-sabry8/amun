@@ -1,3 +1,4 @@
+import type { SavedPlanningLink } from "./planning-draft.ts";
 // Amun shell v3 (handoff §4): sidebar · main workspace · rail. Replaces the
 // earlier shell at its mount point; see docs/UX-REBUILD.md for what was
 // switched off and how to restore it.
@@ -123,6 +124,8 @@ export function App() {
   );
   const snapshot = state.snapshot;
   const [layout, dispatch] = useReducer(shellReducer, initialShell);
+  const [resumePlanning, setResumePlanning] =
+    useState<SavedPlanningLink | null>(null);
   const [pane, setPane] = useState<PaneTarget>(null);
   /** The fork on screen inside the open work; null is its main chat. */
   const [chatId, setChatId] = useState<string | null>(null);
@@ -350,6 +353,7 @@ export function App() {
   const go = (route: Exclude<Route, "work" | "setup">) => {
     setPane(null);
     setFirst(null);
+    setResumePlanning(null);
     dispatch({ type: "go", route });
   };
   const openWork = (
@@ -1160,6 +1164,7 @@ export function App() {
           />
         ) : layout.route === "sprints" ? (
           <Sprints
+            resume={resumePlanning}
             snapshot={snapshot}
             now={now}
             model={model}
@@ -1173,6 +1178,10 @@ export function App() {
           />
         ) : layout.route === "portfolio" ? (
           <Portfolio
+            onResume={(link) => {
+              go("sprints");
+              setResumePlanning(link);
+            }}
             snapshot={snapshot}
             model={model}
             onWork={(id) => openWork(id)}

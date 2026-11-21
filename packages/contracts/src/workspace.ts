@@ -83,7 +83,19 @@ export const storyDraft = z.object({
   status: z.string(),
   acceptance: z.array(z.string()),
 });
+const reviewedStory = z.object({
+  title: z.string().trim().min(1).max(256),
+  acceptance: z.array(z.string().trim().min(1).max(2048)).min(1).max(20),
+});
 export const productAuthoring = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...modelBase,
+    ...docTarget,
+    action: z.literal("update-story-draft"),
+    itemId: id,
+    baseline: reviewedStory,
+    reviewed: reviewedStory,
+  }),
   z.strictObject({
     ...modelBase,
     action: z.literal("story-decision"),

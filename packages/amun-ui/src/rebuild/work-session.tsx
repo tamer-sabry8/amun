@@ -1,3 +1,4 @@
+import { ReviewOrigin } from "./review-origin.tsx";
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { BlockerRow } from "./blocker-row.tsx";
@@ -3749,16 +3750,20 @@ export function WorkSession({
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
                   pane.kind === "prd" ? (
-                    <PrdView
-                      key={workspace.productContext.productId}
-                      context={workspace.productContext}
-                      openPreview={(url) => onPane({ kind: "browser", url })}
-                    />
+                    <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                      <PrdView
+                        key={workspace.productContext.productId}
+                        context={workspace.productContext}
+                        openPreview={(url) => onPane({ kind: "browser", url })}
+                      />
+                    </ReviewOrigin.Provider>
                   ) : (
-                    <Backlog
-                      key={workspace.productContext.productId}
-                      context={workspace.productContext}
-                    />
+                    <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                      <Backlog
+                        key={workspace.productContext.productId}
+                        context={workspace.productContext}
+                      />
+                    </ReviewOrigin.Provider>
                   )
                 ) : (
                   <p className="muted" role="status">

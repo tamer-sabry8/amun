@@ -19,7 +19,16 @@ const move = z.object({
   to: z.string().min(1),
 });
 export type PlannedMove = z.infer<typeof move>;
-const savedDraft = z.object({ id: z.uuid(), moves: z.array(move) });
+const submission = z.object({
+  ref: z.string(),
+  chatId: z.string(),
+  moves: z.array(move),
+});
+const savedDraft = z.object({
+  id: z.uuid(),
+  moves: z.array(move),
+  submissions: z.array(submission).optional(),
+});
 export type PlanningDraft = z.infer<typeof savedDraft>;
 
 export function scopedDraftKey(scope: PlanningScope) {
@@ -63,4 +72,55 @@ export function stageMove(
     moves.push(next);
   }
   return { ...draft, moves };
+}
+
+export interface SavedPlanningLink {
+  areaId: string;
+  productId: string;
+  sourceId: string;
+  team: string;
+  backlog: string;
+  sprintId: string;
+  id: string;
+  count: number;
+}
+export function savedPlanningLinks(
+  store: (SelectionStore & Pick<Storage, "key" | "length">) | undefined,
+  areaIds: ReadonlySet<string>,
+) {
+  const links: SavedPlanningLink[] = [];
+  if (!store) return links;
+  const prefix = "amun.planning.v1:";
+  for (let i = 0; i < store.length; i++) {
+    const key = store.key(i);
+    if (!key?.startsWith(prefix)) continue;
+    try {
+      const [areaId, productId, sourceId, team, backlog, sprintId] = z
+        .tuple([
+          z.string(),
+          z.string(),
+          z.string(),
+          z.string(),
+          z.string(),
+          z.string(),
+        ])
+        .parse(JSON.parse(key.slice(prefix.length)));
+      if (!areaIds.has(areaId)) continue;
+      const draft = savedDraft.parse(JSON.parse(store.getItem(key) ?? "null"));
+      if (draft.moves.length)
+        links.push({
+          areaId,
+          productId,
+          sourceId,
+          team,
+          backlog,
+          sprintId,
+          id: draft.id,
+          count: draft.moves.length,
+        });
+    } catch {
+      /* Ignore unreadable entries without changing storage. */
+    }
+  }
+  return links;
 }

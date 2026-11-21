@@ -1205,4 +1205,7 @@ CREATE INDEX work_requests_message ON work_requests(message_id);`,
 ALTER TABLE work_chats ADD COLUMN sprint_id TEXT;
 CREATE UNIQUE INDEX work_chat_sprint ON work_chats(work_area_id,sprint_connection,sprint_id)
  WHERE sprint_id IS NOT NULL;`,
+  `CREATE TABLE sprint_submissions(ref TEXT PRIMARY KEY REFERENCES work_requests(ref), scope_json TEXT NOT NULL, receipt_id TEXT NOT NULL REFERENCES work_messages(id));
+CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submissions(ref), item_id INTEGER NOT NULL, state TEXT NOT NULL, remote_rev INTEGER, detail TEXT NOT NULL, PRIMARY KEY(ref,item_id));`,
+  `CREATE TABLE prd_review_origins(product_id TEXT NOT NULL REFERENCES products(id),objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,ref TEXT NOT NULL REFERENCES work_requests(ref),area_id TEXT NOT NULL REFERENCES work_areas(id),chat_id TEXT REFERENCES work_chats(id), PRIMARY KEY(product_id,objective_id,version));`,
 ] as const;
