@@ -47,6 +47,7 @@ export function SprintPlanner({
   refreshMembers,
   offlineOnly = false,
   openBlockers,
+  focus,
   openChat,
 }: {
   scope: PlanningScope;
@@ -56,6 +57,7 @@ export function SprintPlanner({
   refreshMembers?(): void;
   offlineOnly?: boolean;
   openBlockers?: Record<string, number>;
+  focus?: { ref: string; storyId: number } | undefined;
   openChat(chatId: string, requestRef?: string): void;
 }) {
   const connected = useSyncExternalStore(
@@ -1192,12 +1194,27 @@ export function SprintPlanner({
                     !draft.moves.some((m) => m.id === move.id) &&
                     !submittedIds.has(move.id);
                   return (
-                    <div className="rb-line" key={move.id}>
+                    <div
+                      className="rb-line"
+                      key={move.id}
+                      tabIndex={-1}
+                      ref={(node) => {
+                        if (
+                          node &&
+                          focus?.ref === batch.ref &&
+                          focus.storyId === move.id &&
+                          !node.dataset.focused
+                        ) {
+                          node.dataset.focused = "true";
+                          node.focus();
+                        }
+                      }}
+                    >
                       <span className="grow">
                         #{move.id} {move.title}
                         <small>
-                          Reviewed from {move.from} · currently{" "}
-                          {current?.iteration ?? "unavailable"}
+                          Proposed {move.to} · reviewed from {move.from} ·
+                          currently {current?.iteration ?? "unavailable"}
                         </small>
                       </span>
                       {current?.iteration && (

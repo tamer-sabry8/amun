@@ -811,6 +811,28 @@ export function App() {
     : null;
   const openAttention = (item: Attention) => {
     const raw = snapshot.attention.find((entry) => entry.id === item.id);
+    const held = snapshot.sprintDecisions?.find(
+      (d) =>
+        raw?.id === "sprint-held:" + d.ref + ":" + d.storyId &&
+        d.workAreaId === raw.workAreaId,
+    );
+    if (held) {
+      inspectView({
+        view: "Sprint decision",
+        areaId: held.workAreaId,
+        record: held.ref,
+        source: "Island",
+      });
+      go("sprints");
+      setResumePlanning({
+        ...held,
+        areaId: held.workAreaId,
+        id: raw!.id,
+        count: 0,
+        focus: { ref: held.ref, storyId: held.storyId },
+      });
+      return;
+    }
     if (raw?.id.startsWith("blocker-review:") && raw.workAreaId && raw.ref) {
       const chat = snapshot.chats.find(
         (c) =>
@@ -1177,6 +1199,7 @@ export function App() {
           />
         ) : layout.route === "sprints" ? (
           <Sprints
+            key={resumePlanning?.id ?? "sprints"}
             resume={resumePlanning}
             snapshot={snapshot}
             now={now}

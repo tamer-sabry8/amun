@@ -297,6 +297,21 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  sprintDecisions: z
+    .array(
+      z.strictObject({
+        ref: id,
+        workAreaId: id,
+        chatId: id,
+        productId: id,
+        sourceId: id,
+        team: id,
+        backlog: id,
+        sprintId: id,
+        storyId: z.int().positive(),
+      }),
+    )
+    .optional(),
   sprintCarryovers: z
     .array(
       z.strictObject({

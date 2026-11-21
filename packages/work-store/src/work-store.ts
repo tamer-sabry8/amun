@@ -416,6 +416,13 @@ export class WorkStore {
           createdAt: String(row.created_at),
         })),
         plans: this.plans(),
+        sprintDecisions: this
+          .all(`SELECT s.ref,m.work_area_id AS workAreaId,m.chat_id AS chatId,
+          json_extract(s.scope_json,'$.product') AS productId,json_extract(s.scope_json,'$.source') AS sourceId,
+          json_extract(s.scope_json,'$.destination.team') AS team,json_extract(s.scope_json,'$.level') AS backlog,
+          json_extract(s.scope_json,'$.sprintId') AS sprintId,i.item_id AS storyId
+          FROM sprint_submissions s JOIN sprint_submission_items i ON i.ref=s.ref AND i.state='held'
+          JOIN work_messages m ON m.id=s.receipt_id JOIN work_attention d ON d.id='sprint-held:'||s.ref||':'||i.item_id AND d.state<>'done'`),
         sprintCarryovers: this.all(`
           SELECT m.work_area_id AS workAreaId, m.chat_id AS chatId, s.ref,
             json_extract(s.scope_json,'$.product') AS productId, json_extract(s.scope_json,'$.source') AS sourceId,

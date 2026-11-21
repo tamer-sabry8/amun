@@ -649,12 +649,22 @@ it("keeps a freshly verified destination once on the original held receipt", asy
   }));
   const run = (r = resolve) =>
     keepObservedSprint(db, r, target, { item }, () => true, send);
+  expect(new WorkStore(db).snapshot().sprintDecisions).toMatchObject([
+    {
+      ref: request.ref,
+      storyId: 31,
+      chatId: "chat",
+      workAreaId: "gitex",
+      sprintId: "4",
+    },
+  ]);
   await expect(run({ ...resolve, sourceId: "other" })).rejects.toThrow(
     "unavailable",
   );
   await expect(run({ ...resolve, rev: 3 })).rejects.toThrow("changed");
   const result = await run();
   expect(result.receipts.map((r) => r.state)).toEqual(["confirmed", "kept"]);
+  expect(new WorkStore(db).snapshot().sprintDecisions).toEqual([]);
   expect(await run()).toEqual(result);
   expect(item).toHaveBeenCalledTimes(2);
   expect(transport.mock.calls.filter(([m]) => m === "PATCH")).toHaveLength(1);

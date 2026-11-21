@@ -458,6 +458,25 @@ export async function applySprintMoves(
             : "Held · the selected Azure scope could not be verified",
         );
   }
+  db.transaction(() => {
+    for (const row of summary().receipts) {
+      const move = moves.find((m) => String(m.id) === row.itemId);
+      if (row.state !== "held" || !move) continue;
+      db.prepare(
+        `INSERT OR IGNORE INTO work_attention(id,kind,group_id,work_area_id,title,detail,state,ref,created_at)
+        SELECT ?, 'risk', a.group_id, a.id, a.name || ' · ' || ?, ?, 'open', ?, ? FROM work_areas a WHERE a.id=? AND a.status<>'deleted'`,
+      ).run(
+        "sprint-held:" + ref + ":" + move.id,
+        "Story #" + move.id + " needs your decision",
+        "Review the proposed destination " +
+          move.to +
+          " and the current Azure record.",
+        ref,
+        now(),
+        workAreaId,
+      );
+    }
+  }).immediate();
   const result = summary();
   db.prepare(
     "UPDATE work_messages SET text=? WHERE id=(SELECT receipt_id FROM sprint_submissions WHERE ref=?)",
@@ -714,6 +733,13 @@ export async function keepObservedSprint(
           ref,
           itemId,
           token,
+        );
+        db.prepare(
+          "UPDATE work_attention SET state='done',resolved_at=?,snoozed_until=NULL WHERE id=? AND work_area_id=? AND state<>'done'",
+        ).run(
+          new Date().toISOString(),
+          "sprint-held:" + ref + ":" + itemId,
+          request.workAreaId,
         );
         const summary = submissionReceipt(db, ref);
         db.prepare("UPDATE work_messages SET text=? WHERE id=?").run(

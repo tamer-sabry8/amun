@@ -137,6 +137,7 @@ export function planningChangeCount(moves: readonly PlannedMove[]) {
 }
 
 export interface SavedPlanningLink {
+  focus?: { ref: string; storyId: number };
   areaId: string;
   productId: string;
   sourceId: string;

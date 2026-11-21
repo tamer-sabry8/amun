@@ -1676,6 +1676,7 @@ export function Sprints({
       >
         {cached ? (
           <SprintPlanner
+            focus={selectedDraft?.focus}
             key={selectedDraft.id}
             scope={{ ...selectedDraft, iteration: cached.iteration }}
             members={cached.members}
@@ -1824,6 +1825,7 @@ export function Sprints({
           azure.items?.sprint === openAzure &&
           azure.items?.state === "ready" ? (
             <SprintPlanner
+              focus={selectedDraft?.focus}
               key={JSON.stringify(planner)}
               scope={planner}
               name={current.name}

@@ -190,3 +190,114 @@ it("restores a four-change draft offline, undoes one locally, and keeps the orig
     vi.unstubAllGlobals();
   }
 });
+
+it("asks for goal advice explicitly, stages the reviewed story, and leaves the suggested owner optional", async () => {
+  const { SprintGoal } = await import("../src/rebuild/sprint-goal.tsx");
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const scope = {
+    areaId: "gitex",
+    productId: "p",
+    sourceId: "azure",
+    team: "T",
+    backlog: "Stories",
+    sprintId: "4",
+    iteration: "Gitex/Sprint 4",
+  };
+  const listeners = new Set<(e: unknown) => void>();
+  vi.spyOn(bridge, "onEvent").mockImplementation((callback) => {
+    listeners.add(callback);
+    return () => {
+      listeners.delete(callback);
+    };
+  });
+  const send = vi.spyOn(bridge, "send").mockImplementation((raw) => {
+    const r = raw as { requestId: string; ref: string };
+    for (const receive of listeners)
+      receive({
+        kind: "ado-operation-result",
+        productId: "p",
+        requestId: r.requestId,
+        requestRef: r.ref,
+        message: "Review suggestions",
+        suggestions: [
+          {
+            id: 24,
+            rev: 3,
+            reason: "Covers badge recovery",
+            ownerId: "sam",
+            evidenceId: 31,
+          },
+        ],
+      });
+  });
+  vi.spyOn(commands, "workAsync").mockResolvedValue({
+    action: "new-chat",
+    ok: true,
+    message: "",
+    ref: "chat",
+    step: null,
+  });
+  const stage = vi.fn();
+  const card = {
+    id: 24,
+    rev: 3,
+    title: "Replacement",
+    type: "Story",
+    column: null,
+    state: "Ready",
+    iteration: "Gitex/Sprint 5",
+    prerequisites: [31],
+  };
+  const el = document.createElement("div"),
+    root = createRoot(el);
+  try {
+    await act(async () =>
+      root.render(
+        createElement(SprintGoal, {
+          scope,
+          name: "Sprint 4",
+          tag: "",
+          cards: [card],
+          people: [{ id: "sam", name: "Sam", uniqueName: "sam@example.test" }],
+          enabled: true,
+          stage,
+          unavailable: () => false,
+        }),
+      ),
+    );
+    const input = el.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(input, "Badge recovery");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(send).not.toHaveBeenCalled();
+    await act(async () => el.querySelector("button")!.click());
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain("Gitex/Sprint 5");
+    expect(el.textContent).toContain("Unestimated");
+    expect(el.textContent).toContain("Covers badge recovery");
+    expect(stage).not.toHaveBeenCalled();
+    const stageButton = Array.from(el.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Stage #24"),
+    )!;
+    await act(async () => stageButton.click());
+    expect(stage).toHaveBeenLastCalledWith(card, undefined);
+    await act(async () =>
+      el.querySelector<HTMLInputElement>("input[type=checkbox]")!.click(),
+    );
+    await act(async () => stageButton.click());
+    expect(stage).toHaveBeenLastCalledWith(card, {
+      from: null,
+      to: { id: "sam", name: "Sam", uniqueName: "sam@example.test" },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => root.unmount());
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  }
+});
