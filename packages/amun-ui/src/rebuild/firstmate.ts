@@ -98,15 +98,38 @@ function runOnce(command: string, argument: string) {
   listen();
   return new Promise<{ kind: string; [key: string]: unknown }>((resolve) => {
     const id = crypto.randomUUID();
-    waiting.set(id, resolve as (result: unknown) => void);
-    bridge.send({
-      version: 1,
-      kind: "native-pi",
-      action: "run",
-      id,
-      command,
-      argument,
+    // Opening the conversation is a read. No user turn has been dispatched yet.
+    const opening = command === "conversation";
+    const timer = opening
+      ? setTimeout(() => {
+          waiting.delete(id);
+          resolve({
+            kind: "message",
+            text: "Firstmate did not finish opening the conversation. Your message is saved in this chat. Try sending again.",
+          });
+        }, 60_000)
+      : undefined;
+    waiting.set(id, (result) => {
+      clearTimeout(timer);
+      resolve(result as { kind: string; [key: string]: unknown });
     });
+    try {
+      bridge.send({
+        version: 1,
+        kind: "native-pi",
+        action: "run",
+        id,
+        command,
+        argument,
+      });
+    } catch {
+      waiting.delete(id);
+      clearTimeout(timer);
+      resolve({
+        kind: "message",
+        text: "Amun lost its connection to Firstmate. Check the conversation before sending again.",
+      });
+    }
   });
 }
 
@@ -143,12 +166,20 @@ try {
 } catch {
   // A damaged entry only loses the waiting state, never the message itself.
 }
+const queueListeners = new Set<() => void>();
+export function observeHeldMessages(listener: () => void) {
+  queueListeners.add(listener);
+  return () => {
+    queueListeners.delete(listener);
+  };
+}
 const saveHeld = () => {
   try {
     localStorage.setItem(heldKey, JSON.stringify(Object.fromEntries(held)));
   } catch {
     // Storage is best effort; the in-memory copy still holds for this run.
   }
+  for (const listener of queueListeners) listener();
 };
 /** Work areas with a turn in flight, so a waiting message is never sent twice. */
 export const inFlight = new Set<string>();

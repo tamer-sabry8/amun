@@ -4849,3 +4849,23 @@
   align-items: center;
   box-shadow: var(--float);
 }
+
+.rb-planning-panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+}
+.rb-planning-panes > section {
+  min-width: 0;
+}
+.rb-planning-panes h2 {
+  margin-bottom: 0.6rem;
+}
+.rb-planning-panes .rb-line {
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+.rb-planning-panes small {
+  display: block;
+  color: var(--muted);
+}

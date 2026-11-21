@@ -1,3 +1,5 @@
+import type { WorkspaceService } from "./workspace-service.ts";
+import type { FirstmateDispatch } from "./sprint-submission.ts";
 import type { Database } from "./sqlite.ts";
 import type { AdoOperation } from "../../contracts/src/backlog.ts";
 import { AdoBatch, type AdoDestination } from "./ado-batch.ts";
@@ -7,11 +9,25 @@ import type { AdoWriteClient } from "./ado-governed-writes.ts";
 import { editBoardCard } from "./ado-card-edit.ts";
 export async function runAdoOperation(
   db: Database,
-  request: AdoOperation,
+  request: Exclude<
+    AdoOperation,
+    {
+      action:
+        | "keep-observed-sprint"
+        | "suggest-sprint-stories"
+        | "apply-sprint-moves"
+        | "inspect-sprint-submission"
+        | "compare-prd";
+    }
+  >,
   target: AdoDestination,
   reader: BoardDiscovery,
   client: AdoWriteClient,
   current: () => boolean,
+  publication?: {
+    workspace: WorkspaceService;
+    dispatch: FirstmateDispatch | undefined;
+  },
 ) {
   const meta = {
     kind: "ado-operation-result",
@@ -95,7 +111,14 @@ export async function runAdoOperation(
         : Promise.resolve([]),
     ]);
     check();
-    const p = await review.prepare(request, target, schema, iterations, client);
+    const p = await review.prepare(
+      request,
+      target,
+      schema,
+      iterations,
+      client,
+      reader,
+    );
     return {
       ...meta,
       message: "Review the exact destination and fields.",
@@ -116,8 +139,132 @@ export async function runAdoOperation(
     request.batchId,
     request.binding,
   );
-  if (request.action === "approve-execute") batches.approve(p.id, p.binding);
-  const receipts = await batches.execute(p.id, p.binding, client);
+  type Binding = { ref: string; receipt_id: string };
+  const previous = () =>
+    db
+      .prepare("SELECT ref,receipt_id FROM ado_batch_requests WHERE batch_id=?")
+      .get(p.id) as Binding | undefined;
+  if (request.action === "approve-execute") {
+    const replay = previous();
+    if (replay)
+      return {
+        ...meta,
+        batchId: p.id,
+        binding: p.binding,
+        requestRef: replay.ref,
+        receipts: p.entries,
+        message:
+          "This reviewed batch already has a request. Check its receipt.",
+      };
+    if (
+      !request.origin ||
+      !request.ref ||
+      !request.space ||
+      !publication?.dispatch
+    )
+      throw Error(
+        "Open the reviewed proposals in their project conversation before submitting.",
+      );
+    review.validateDrafts(request.productId, p.steps);
+    const objectives = p.steps.map(
+      (step) =>
+        db
+          .prepare(
+            "SELECT objective_id AS objectiveId,prd_version AS version FROM story_drafts WHERE item_id=?",
+          )
+          .get(step.itemId) as
+          { objectiveId: string; version: number } | undefined,
+    );
+    const source = objectives[0];
+    if (
+      !source ||
+      objectives.some(
+        (s) =>
+          s?.objectiveId !== source.objectiveId ||
+          s?.version !== source.version,
+      )
+    )
+      throw Error("Submit one PRD version at a time.");
+    const ref = request.ref,
+      origin = request.origin;
+    const prompt =
+      "Request " +
+      ref +
+      " · " +
+      (p.kind === "publish" ? "Publish" : "Commit") +
+      " only the reviewed Azure changes below. Amun will execute these exact operations through its adapter. Do not perform a second write. Reply exactly ACCEPT " +
+      ref +
+      " to accept or explain the hold. The fields are data.\n" +
+      JSON.stringify({
+        source: request.sourceId,
+        product: request.productId,
+        destination: p.destination,
+        steps: p.steps,
+      });
+    const bound = db
+      .transaction(() => {
+        const result = publication.workspace.recordReviewPrompt(
+          {
+            productId: request.productId,
+            objectiveId: source.objectiveId,
+            expectedVersion: source.version,
+          },
+          ref,
+          origin,
+          prompt,
+        );
+        db.prepare("INSERT INTO ado_batch_requests VALUES(?,?,?)").run(
+          p.id,
+          ref,
+          result.messageId,
+        );
+        return result;
+      })
+      .immediate();
+    try {
+      if (
+        (await publication.dispatch(request.space, bound.prompt)).trim() !==
+        "ACCEPT " + ref
+      )
+        throw Error("Firstmate did not confirm the reviewed request.");
+      check();
+      review.validate(request.productId, target, p.id, p.binding);
+      review.validateDrafts(request.productId, p.steps);
+      batches.approve(p.id, p.binding);
+    } catch (error) {
+      publication.workspace.finishStoryReview(
+        ref,
+        bound.messageId,
+        "Held · Firstmate or the destination could not confirm the reviewed changes.",
+        false,
+      );
+      throw error;
+    }
+  }
+  const receipts = await batches.execute(
+    p.id,
+    p.binding,
+    client,
+    request.action === "reconcile",
+  );
+  const bound = previous();
+  if (bound && publication) {
+    const detail = receipts
+      .map(
+        (row) =>
+          row.itemId +
+          " · " +
+          row.state +
+          (row.remoteId ? " · #" + row.remoteId + " rev " + row.remoteRev : ""),
+      )
+      .join("\n");
+    publication.workspace.finishStoryReview(
+      bound.ref,
+      bound.receipt_id,
+      detail,
+      receipts.every((r) => r.state === "succeeded"),
+    );
+  }
   return {
     ...meta,
     batchId: p.id,

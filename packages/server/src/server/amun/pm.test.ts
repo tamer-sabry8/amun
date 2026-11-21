@@ -121,7 +121,7 @@ describe.skipIf(!hasTasksAxi)("amun-tasks-axi against a real Firstmate home", ()
 });
 
 describe("Linear adapter", () => {
-  const states = { data: { team: { states: { nodes: [
+  const states = { data: { team: { states: { pageInfo: {hasNextPage:false,endCursor:null}, nodes: [
     { id: "s-back", name: "Backlog", type: "backlog" },
     { id: "s-todo", name: "Todo", type: "unstarted" },
     { id: "s-prog", name: "In Progress", type: "started" },
@@ -139,7 +139,7 @@ describe("Linear adapter", () => {
   it("needs a key per account and sends it as the Authorization header", async () => {
     expect(() => LinearAdapter.fromEnv({ account: "acme", teamId: "T", env: {} })).toThrow(MissingCredentialError);
     const { fetch, calls } = recordedFetch([
-      ["cycles", { data: { team: { cycles: { nodes: [
+      ["cycles", { data: { team: { cycles: { pageInfo: {hasNextPage:false,endCursor:null}, nodes: [
         { id: "c1", name: null, number: 7, startsAt: "2026-11-17", endsAt: "2026-11-30", isActive: true, isFuture: false },
       ] } } } }],
       ["issues(first", { data: { team: { issues: {
@@ -161,7 +161,7 @@ describe("Linear adapter", () => {
 
   it("creates and moves issues only with the captain's approval for those stories", async () => {
     const { fetch, calls } = recordedFetch([
-      ["states {", states],
+      ["states(first", states],
       ["issueCreate", { data: { issueCreate: { success: true, issue: { id: "i9", identifier: "ENG-9", title: "Billing", state: { id: "s-todo", name: "Todo", type: "unstarted" } } } } }],
       ["issueUpdate", { data: { issueUpdate: { success: true } } }],
     ]);
@@ -193,8 +193,8 @@ describe("Jira adapter", () => {
       JiraAdapter.fromEnv({ baseUrl: "https://x.atlassian.net", projectKey: "PM", boardId: 1, env: { JIRA_EMAIL: "a@b" } }),
     ).toThrow("JIRA_API_TOKEN");
     const { fetch, calls } = recordedFetch([
-      ["GET https://acme.atlassian.net/rest/agile/1.0/board/42/sprint", { values: [{ id: 5, name: "Sprint 5", state: "active" }, { id: 6, name: "Sprint 6", state: "future" }] }],
-      ["/rest/agile/1.0/sprint/5/issue?", { issues: [{ id: "100", key: "PM-1", fields: { summary: "Roadmap", status: { name: "In Progress", statusCategory: { key: "indeterminate" } } } }] }],
+      ["GET https://acme.atlassian.net/rest/agile/1.0/board/42/sprint", { startAt:0, isLast:true, values: [{ id: 5, name: "Sprint 5", state: "active" }, { id: 6, name: "Sprint 6", state: "future" }] }],
+      ["/rest/software/1.0/board/42/issue?", { issues: [{ id: "100", key: "PM-1", fields: { project: {key:"PM"}, sprint: {id:5}, summary: "Roadmap", status: { name: "In Progress", statusCategory: { key: "indeterminate" } } } }] }],
       ["/rest/agile/1.0/sprint/6/issue?", { issues: [] }],
       ["POST https://acme.atlassian.net/rest/api/3/issue ", { id: "101", key: "PM-2" }],
       ["POST https://acme.atlassian.net/rest/agile/1.0/sprint/6/issue", {}],

@@ -126,6 +126,7 @@ export const sprintViews = [
 ] as const;
 export const sprintTabs = [
   "Summary",
+  "Planning",
   "Stories",
   "Pull requests",
   "Activity",
@@ -162,14 +163,17 @@ export function sprintRow(sprint: Sprint, now: number) {
   return {
     title: `${sprint.workAreaName} · ${sprint.name}`,
     progress: `${sprint.done} / ${sprint.total} stories done`,
-    timing: !started
-      ? `Starts in ${days(Math.ceil((start - now) / dayMs))}`
-      : now > end
-        ? "Ended"
-        : `${days(Math.ceil((end - now) / dayMs))} left`,
+    timing:
+      !Number.isFinite(start) || !Number.isFinite(end)
+        ? "Dates not set"
+        : !started
+          ? `Starts in ${days(Math.ceil((start - now) / dayMs))}`
+          : now > end
+            ? "Ended"
+            : `${days(Math.ceil((end - now) / dayMs))} left`,
     flags: [
       ...(sprint.blocked ? [`${sprint.blocked} blocked`] : []),
-      ...(!started ? ["Not started"] : []),
+      ...(now < start ? ["Not started"] : []),
       ...(sprint.changedInAdo ? ["Changed in ADO"] : []),
     ],
   };
@@ -204,7 +208,7 @@ export function adoSprints(
   return items.flatMap((item) => {
     const start = Date.parse(item.start);
     const finish = Date.parse(item.finish);
-    if (!Number.isFinite(start) || !Number.isFinite(finish)) return [];
+
     return [
       {
         id: `ado:${item.id}`,
@@ -212,8 +216,10 @@ export function adoSprints(
         workAreaName,
         name: item.name,
         team,
-        start: new Date(start).toISOString(),
-        end: new Date(finish + dayMs - 1).toISOString(),
+        start: Number.isFinite(start) ? new Date(start).toISOString() : "",
+        end: Number.isFinite(finish)
+          ? new Date(finish + dayMs - 1).toISOString()
+          : "",
         goal: "",
         draft: false,
         done: 0,
@@ -250,6 +256,33 @@ export function adoSprintsLine(items: AdoSprint[], team: string, now: number) {
   return latest
     ? `${team} has no current or upcoming sprints. Its latest was ${latest.name} (ended ${endedOn(Date.parse(latest.end))}).`
     : `Showing ${items.length} sprint${items.length === 1 ? "" : "s"} for ${team}.`;
+}
+export function sprintGroups<T extends Sprint>(
+  sprints: readonly T[],
+  now: number,
+) {
+  const groups: Record<
+    "Current" | "Upcoming" | "Unscheduled" | "Completed",
+    T[]
+  > = {
+    Current: [],
+    Upcoming: [],
+    Unscheduled: [],
+    Completed: [],
+  };
+  for (const sprint of sprints) {
+    if (sprint.draft) continue;
+    const start = Date.parse(sprint.start);
+    const end = Date.parse(sprint.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
+      groups.Unscheduled.push(sprint);
+    else if (now > end) groups.Completed.push(sprint);
+    else if (now < start) groups.Upcoming.push(sprint);
+    else groups.Current.push(sprint);
+  }
+  groups.Completed.sort((a, b) => b.end.localeCompare(a.end));
+  groups.Upcoming.sort((a, b) => a.start.localeCompare(b.start));
+  return groups;
 }
 export function sprintOverview(
   sprints: Sprint[],
@@ -526,4 +559,36 @@ export function orgChart(agents: AgentCard[]): AgentNode | null {
       .map(node),
   });
   return node(lead);
+}
+
+export function nextSprintDetails(
+  history: readonly Pick<Sprint, "name" | "start" | "end">[],
+) {
+  const dated = history
+    .map((s) => ({
+      ...s,
+      from: Date.parse(s.start.slice(0, 10)),
+      to: Date.parse(s.end.slice(0, 10)),
+    }))
+    .sort((a, b) => b.from - a.from);
+  const suffix = dated[0]?.name.match(/^(.*?)(\d+)$/);
+  const name = suffix ? suffix[1] + String(Number(suffix[2]) + 1) : "Sprint 1";
+  const blank = { name, start: "", end: "" };
+  if (dated.some((s) => !Number.isFinite(s.from) || !Number.isFinite(s.to)))
+    return blank;
+  const [last, previous] = dated;
+  if (!last || !previous) return blank;
+  const duration = last.to - last.from,
+    cadence = last.from - previous.from;
+  if (
+    duration < 0 ||
+    previous.to - previous.from !== duration ||
+    cadence <= duration
+  )
+    return blank;
+  return {
+    name,
+    start: new Date(last.from + cadence).toISOString().slice(0, 10),
+    end: new Date(last.to + cadence).toISOString().slice(0, 10),
+  };
 }

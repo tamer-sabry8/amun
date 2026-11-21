@@ -1,3 +1,5 @@
+import { useReviewOrigin } from "./review-origin.tsx";
+import { StoryProposals } from "./story-proposals.tsx";
 // The PRD pane. Same messages and checks as the earlier PRD workspace
 // (understanding, editor with autosave, Firstmate proposals, approval, stories,
 // selection tools); only the view is new. The earlier Research / Write /
@@ -396,14 +398,17 @@ function PrdEditor({
 }
 
 export function PrdView({
+  initialObjective,
   context,
   openPreview,
 }: {
   context: Context;
   openPreview?: ((url: string) => void) | undefined;
+  initialObjective?: string | undefined;
 }) {
+  const origin = useReviewOrigin();
   const difficulty = "standard";
-  const [chosen, choose] = useState(""),
+  const [chosen, choose] = useState(initialObjective ?? ""),
     [selection, select] = useState(""),
     [asked, setAsked] = useState(false),
     [sourcesOpen, setSourcesOpen] = useState(false);
@@ -618,6 +623,7 @@ export function PrdView({
                   kind: "product-authoring",
                   ...target,
                   action: "stories",
+                  origin,
                   model,
                   difficulty,
                 })
@@ -627,9 +633,11 @@ export function PrdView({
             </button>
           </div>
           {storiesReady && (
-            <p className="muted small" role="status">
-              Story drafts ready in Backlog.
-            </p>
+            <StoryProposals
+              context={context}
+              objectiveId={objective.id}
+              version={prd.version}
+            />
           )}
         </section>
       )}

@@ -58,6 +58,25 @@ export const storyDecision = decisionOptions.extend({
   requested: z.boolean(),
 });
 export type StoryDecision = z.infer<typeof storyDecision>;
+export const coverageRow = z.strictObject({
+  draftId: id,
+  classification: z.enum(["covered", "edit", "addition", "held"]),
+  providerId: z.int().positive().nullable(),
+  revision: z.int().positive().nullable(),
+  evidence: z.string().max(4000),
+  reason: z.string().min(1).max(2000),
+});
+export const prdComparison = z.object({
+  pending: z.boolean().optional(),
+  ref: id,
+  objectiveId: id,
+  version: z.int().positive(),
+  sourceId: id,
+  team: id,
+  level: id,
+  verifiedAt: z.string(),
+  rows: z.array(coverageRow),
+});
 export const storyBundle = z.object({
   stories: z
     .array(
@@ -83,7 +102,32 @@ export const storyDraft = z.object({
   status: z.string(),
   acceptance: z.array(z.string()),
 });
+const reviewedStory = z.object({
+  title: z.string().trim().min(1).max(256),
+  acceptance: z.array(z.string().trim().min(1).max(2048)).min(1).max(20),
+});
 export const productAuthoring = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...modelBase,
+    ...docTarget,
+    action: z.literal("flag-coverage-gap"),
+    itemId: id,
+    baseline: reviewedStory,
+    sourceId: id,
+    team: id,
+    level: id,
+    comparisonRef: id,
+    providerId: z.int().positive(),
+    note: z.string().trim().min(1).max(2048),
+  }),
+  z.strictObject({
+    ...modelBase,
+    ...docTarget,
+    action: z.literal("update-story-draft"),
+    itemId: id,
+    baseline: reviewedStory,
+    reviewed: reviewedStory,
+  }),
   z.strictObject({
     ...modelBase,
     action: z.literal("story-decision"),
@@ -408,6 +452,19 @@ export const workspaceSnapshot = z.strictObject({
       routingReviews: z.array(routingReview).default([]),
       storyDecisions: z.array(storyDecision).default([]),
       storyDrafts: z.array(storyDraft).default([]),
+      storyReviews: z
+        .array(
+          z.strictObject({
+            objectiveId: id,
+            version: z.int().positive(),
+            areaId: id,
+            chatId: id.nullable(),
+            ref: id,
+            messageId: id,
+          }),
+        )
+        .optional(),
+      comparisons: z.array(prdComparison).optional(),
       priorities: z.array(
         z.strictObject({ id, ...priorityFields, score: z.number().nullable() }),
       ),

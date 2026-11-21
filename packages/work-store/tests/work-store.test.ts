@@ -2093,3 +2093,22 @@ describe("ordinary chats, grouped by Amun (owner, 20 November 2026)", () => {
     });
   });
 });
+
+it("restores a sprint chat by project, connection and sprint identity", () => {
+  const a = area(null, "project", "Gitex");
+  const b = area(null, "project", "Second project");
+  const sprint = {
+    connection: "azure-source",
+    id: "iteration-4",
+    name: "Sprint 4",
+  };
+  const open = (workAreaId: string, connection = sprint.connection) =>
+    send("new-chat", { workAreaId, sprint: { ...sprint, connection } }).ref;
+  const original = open(a);
+  expect(original).toBeTruthy();
+  store = new WorkStore(db, undefined, tick);
+  expect(open(a)).toBe(original);
+  expect(open(b)).not.toBe(original);
+  expect(open(a, "another-collection")).not.toBe(original);
+  expect(snap().chats).toHaveLength(3);
+});

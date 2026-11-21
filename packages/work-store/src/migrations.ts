@@ -1201,4 +1201,27 @@ ALTER TABLE work_areas ADD COLUMN first_chat_title_by TEXT NOT NULL DEFAULT '';`
   seen_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX work_requests_message ON work_requests(message_id);`,
+  `ALTER TABLE work_chats ADD COLUMN sprint_connection TEXT;
+ALTER TABLE work_chats ADD COLUMN sprint_id TEXT;
+CREATE UNIQUE INDEX work_chat_sprint ON work_chats(work_area_id,sprint_connection,sprint_id)
+ WHERE sprint_id IS NOT NULL;`,
+  `CREATE TABLE sprint_submissions(ref TEXT PRIMARY KEY REFERENCES work_requests(ref), scope_json TEXT NOT NULL, receipt_id TEXT NOT NULL REFERENCES work_messages(id));
+CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submissions(ref), item_id INTEGER NOT NULL, state TEXT NOT NULL, remote_rev INTEGER, detail TEXT NOT NULL, PRIMARY KEY(ref,item_id));`,
+  `CREATE TABLE prd_review_origins(product_id TEXT NOT NULL REFERENCES products(id),objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,ref TEXT NOT NULL REFERENCES work_requests(ref),area_id TEXT NOT NULL REFERENCES work_areas(id),chat_id TEXT REFERENCES work_chats(id), PRIMARY KEY(product_id,objective_id,version));`,
+  `CREATE TABLE prd_comparisons(product_id TEXT NOT NULL REFERENCES products(id),objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,source_id TEXT NOT NULL,team TEXT NOT NULL,level TEXT NOT NULL,result_json TEXT NOT NULL, PRIMARY KEY(product_id,objective_id,version,source_id,team,level));`,
+  `CREATE TABLE ado_batch_requests(batch_id TEXT PRIMARY KEY REFERENCES ado_batches(id),ref TEXT NOT NULL UNIQUE REFERENCES work_requests(ref),receipt_id TEXT NOT NULL REFERENCES work_messages(id));`,
+  `ALTER TABLE work_blockers ADD COLUMN sprint_link_json TEXT;`,
+  `CREATE TABLE prd_comparison_runs(scope TEXT PRIMARY KEY,ref TEXT NOT NULL);`,
+  `CREATE TABLE blocker_nudges(blocker_id TEXT PRIMARY KEY REFERENCES work_blockers(id) ON DELETE CASCADE,ref TEXT NOT NULL UNIQUE,chat_id TEXT NOT NULL,receipt_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);`,
+  `CREATE TABLE navigation_dispatches(ref TEXT PRIMARY KEY,activity_id TEXT NOT NULL REFERENCES work_activity(id) ON DELETE CASCADE,space TEXT NOT NULL,state TEXT NOT NULL);`,
+  `CREATE TABLE sprint_new_stories(ref TEXT NOT NULL REFERENCES sprint_submissions(ref),local_id TEXT NOT NULL,state TEXT NOT NULL,remote_id INTEGER,remote_rev INTEGER,step_json TEXT,detail TEXT NOT NULL,PRIMARY KEY(ref,local_id));`,
+  `ALTER TABLE work_blockers ADD COLUMN azure_indicator_json TEXT; ALTER TABLE work_blockers ADD COLUMN azure_check_pending INTEGER NOT NULL DEFAULT 0;`,
+  `ALTER TABLE blocker_nudges ADD COLUMN space TEXT;
+CREATE TABLE blocker_comment_reviews(blocker_id TEXT NOT NULL REFERENCES work_blockers(id) ON DELETE CASCADE, comment_id INTEGER NOT NULL,version INTEGER NOT NULL,url TEXT NOT NULL,body TEXT NOT NULL,proposal TEXT,state TEXT NOT NULL,PRIMARY KEY(blocker_id,comment_id,version));`,
+  `CREATE TABLE sprint_suggestions(ref TEXT PRIMARY KEY REFERENCES work_requests(ref), scope_json TEXT NOT NULL, receipt_id TEXT NOT NULL, result_json TEXT);`,
+  `CREATE TRIGGER finish_linked_blocker_review AFTER UPDATE OF resolved_at ON work_blockers
+   WHEN OLD.resolved_at IS NULL AND NEW.resolved_at IS NOT NULL BEGIN
+     UPDATE work_attention SET state='done',resolved_at=NEW.resolved_at,snoozed_until=NULL
+     WHERE id='blocker-review:' || NEW.id AND work_area_id=NEW.work_area_id AND state<>'done';
+   END;`,
 ] as const;

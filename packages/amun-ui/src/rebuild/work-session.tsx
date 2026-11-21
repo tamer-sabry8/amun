@@ -1,3 +1,6 @@
+import { inspectView } from "../daemon/navigation.ts";
+import { StoryProposals } from "./story-proposals.tsx";
+import { ReviewOrigin } from "./review-origin.tsx";
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
 import { BlockerRow } from "./blocker-row.tsx";
@@ -11,7 +14,13 @@ import {
   mentionsAzureDevOps,
   parseQuestion,
 } from "../../../../packages/domain/src/work/question-choices.ts";
-import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
@@ -94,6 +103,7 @@ import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   heldMessage,
+  observeHeldMessages,
   inFlight,
   holdMessage,
   markBriefed,
@@ -179,7 +189,7 @@ export type PaneTarget =
       version?: number;
     }
   | { kind: "plan"; id: string }
-  | { kind: "prd" }
+  | { kind: "prd"; objectiveId?: string }
   | { kind: "backlog" }
   | { kind: "pulls" }
   | { kind: "browser"; url: string }
@@ -1773,7 +1783,9 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const [waiting, setWaiting] = useState(() => heldMessage(threadKey));
+  const waiting = useSyncExternalStore(observeHeldMessages, () =>
+    heldMessage(threadKey),
+  );
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
@@ -1797,21 +1809,13 @@ export function WorkSession({
           reason: "busy" as const,
         };
         holdMessage(threadKey, queued);
-        setWaiting(queued);
       }
       return;
     }
     inFlight.add(threadKey);
-    // A message that is out stays saved until Firstmate has answered, so a
-    // slow turn, a reload or a retry can never leave the newest one unsaved.
-    if (!retry)
-      holdMessage(threadKey, {
-        text,
-        scoped,
-        activityId,
-        image,
-        reason: "busy" as const,
-      });
+    // Once claimed for dispatch, this message is no longer queued. The
+    // original message remains in chat even if its receipt is interrupted.
+    if (retry) releaseMessage(threadKey);
     setProblem("");
     setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
@@ -1886,28 +1890,16 @@ export function WorkSession({
       // Only the message this turn carried leaves the wait; a newer one stays.
       if (heldMessage(threadKey)?.scoped === scoped) {
         releaseMessage(threadKey);
-        setWaiting(null);
       }
       if (heldMessage(threadKey)) retryWaiting();
-    } else if (turn.needsProvider || retry) {
+    } else if (turn.needsProvider) {
       const newer = heldMessage(threadKey);
       if (newer && newer.scoped !== scoped) {
         // A message queued behind this turn now waits for the provider too.
         if (turn.needsProvider && waitReason(newer) === "busy") {
           const message = { ...newer, reason: "provider" as const };
           holdMessage(threadKey, message);
-          setWaiting(message);
         }
-        return;
-      }
-      if (
-        !turn.needsProvider &&
-        waitReason(heldMessage(threadKey) ?? {}) === "busy"
-      ) {
-        // A message that only queued behind a turn is not a provider wait.
-        releaseMessage(threadKey);
-        setWaiting(null);
-        setProblem(turn.reason);
         return;
       }
       // Kept, not failed: it goes out once a provider is connected.
@@ -1919,7 +1911,6 @@ export function WorkSession({
         reason: "provider" as const,
       };
       holdMessage(threadKey, message);
-      setWaiting(message);
       return;
     } else {
       setProblem(turn.reason);
@@ -2073,7 +2064,6 @@ export function WorkSession({
       typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
     // One message waits at a time; a new one replaces the wait, not the text.
     releaseMessage(threadKey);
-    setWaiting(null);
     lastRequest.current = text;
     // A chat started from a card carries the card with its first message.
     const asked = askCard;
@@ -2244,9 +2234,8 @@ export function WorkSession({
   }, [areaId, !!context]);
   useEffect(() => {
     // Returning to this conversation: one attempt for a message left waiting.
-    setWaiting(heldMessage(threadKey));
     if (heldMessage(threadKey)) retryWaiting();
-  }, [areaId]);
+  }, [threadKey]);
   useEffect(() => {
     if (!waiting) return;
     // Coming back from sign-in, or a change in the connected providers.
@@ -2262,7 +2251,7 @@ export function WorkSession({
       stop();
       window.removeEventListener("focus", retryWaiting);
     };
-  }, [areaId, !!waiting]);
+  }, [threadKey, !!waiting]);
   useEffect(() => {
     if (first && context && sentFirst.current !== first) {
       sentFirst.current = first;
@@ -2346,6 +2335,19 @@ export function WorkSession({
       </div>
     );
   const { area } = context;
+  const reviewContext =
+    workspace?.productContext?.productId === area.productId
+      ? workspace.productContext
+      : null;
+  const chatReviews =
+    reviewContext?.storyReviews?.filter(
+      (r) =>
+        r.areaId === areaId &&
+        r.chatId === chatId &&
+        reviewContext.objectives.some(
+          (o) => o.id === r.objectiveId && o.prd?.version === r.version,
+        ),
+    ) ?? [];
   const lastReplyId = context.messages[latestTurnStart(context.messages)]?.id;
   const open = pane !== null;
   // Only this work's own questions. The First Mate's standing holds (often a
@@ -2602,19 +2604,43 @@ export function WorkSession({
             <>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "prd" })}
+                onClick={() => {
+                  inspectView({
+                    view: "PRD",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "prd" });
+                }}
               >
                 PRD
               </button>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "backlog" })}
+                onClick={() => {
+                  inspectView({
+                    view: "Backlog",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "backlog" });
+                }}
               >
                 Backlog
               </button>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "pulls" })}
+                onClick={() => {
+                  inspectView({
+                    view: "Pull requests",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "pulls" });
+                }}
               >
                 Pull requests
               </button>
@@ -2633,7 +2659,15 @@ export function WorkSession({
           {!open && (
             <button
               className="btn quiet"
-              onClick={() => onPane({ kind: "happened" })}
+              onClick={() => {
+                inspectView({
+                  view: "What happened",
+                  areaId,
+                  project: area.name,
+                  source: "Project",
+                });
+                onPane({ kind: "happened" });
+              }}
             >
               What happened
             </button>
@@ -2886,7 +2920,11 @@ export function WorkSession({
                   />
                 ) : message.role === "card" ? (
                   message.id === lastReplyId ? (
-                    <div key={message.id} ref={latestReply}>
+                    <div
+                      key={message.id}
+                      data-mid={message.id}
+                      ref={latestReply}
+                    >
                       <InlineCard
                         snapshot={snapshot}
                         areaId={areaId}
@@ -2899,17 +2937,18 @@ export function WorkSession({
                       />
                     </div>
                   ) : (
-                    <InlineCard
-                      key={message.id}
-                      snapshot={snapshot}
-                      areaId={areaId}
-                      card={
-                        (message.card ?? {
-                          kind: "note",
-                          text: message.text,
-                        }) as Card
-                      }
-                    />
+                    <div data-mid={message.id} key={message.id}>
+                      <InlineCard
+                        snapshot={snapshot}
+                        areaId={areaId}
+                        card={
+                          (message.card ?? {
+                            kind: "note",
+                            text: message.text,
+                          }) as Card
+                        }
+                      />
+                    </div>
                   )
                 ) : (
                   <Fragment key={message.id}>
@@ -2983,6 +3022,52 @@ export function WorkSession({
                       />
                       {message.role === "you" && requestLineFor(message.card)}
                     </div>
+                    {reviewContext &&
+                      chatReviews
+                        .filter((r) => r.messageId === message.id)
+                        .map((r) => (
+                          <details
+                            key={r.ref}
+                            className="rb-inline"
+                            onToggle={(e) => {
+                              if (e.currentTarget.open)
+                                inspectView({
+                                  view: "Story proposals",
+                                  areaId,
+                                  record: r.ref,
+                                  source: "Chat",
+                                });
+                            }}
+                          >
+                            <summary>
+                              Review story proposals · PRD v{r.version}
+                            </summary>
+                            <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                              <StoryProposals
+                                context={reviewContext}
+                                objectiveId={r.objectiveId}
+                                version={r.version}
+                              />
+                            </ReviewOrigin.Provider>
+                            <button
+                              className="btn quiet"
+                              onClick={() => {
+                                inspectView({
+                                  view: "Full PRD review",
+                                  areaId,
+                                  record: r.ref,
+                                  source: "Chat",
+                                });
+                                onPane({
+                                  kind: "prd",
+                                  objectiveId: r.objectiveId,
+                                });
+                              }}
+                            >
+                              Open full review
+                            </button>
+                          </details>
+                        ))}
                   </Fragment>
                 ),
               )}
@@ -3048,7 +3133,6 @@ export function WorkSession({
                           className="btn quiet"
                           onClick={() => {
                             releaseMessage(threadKey);
-                            setWaiting(null);
                           }}
                         >
                           Discard message
@@ -3652,7 +3736,15 @@ export function WorkSession({
                     ? "Close What happened"
                     : "Close the document"
                 }
-                onClick={() => onPane(null)}
+                onClick={() => {
+                  inspectView({
+                    view: "Back to conversation",
+                    areaId,
+                    project: area.name,
+                    source: "Project panel",
+                  });
+                  onPane(null);
+                }}
               >
                 <Icon name="close" width={17} height={17} />
               </button>
@@ -3764,16 +3856,24 @@ export function WorkSession({
               {(pane.kind === "prd" || pane.kind === "backlog") &&
                 (workspace?.productContext?.productId === area.productId ? (
                   pane.kind === "prd" ? (
-                    <PrdView
-                      key={workspace.productContext.productId}
-                      context={workspace.productContext}
-                      openPreview={(url) => onPane({ kind: "browser", url })}
-                    />
+                    <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                      <PrdView
+                        initialObjective={pane.objectiveId}
+                        key={JSON.stringify([
+                          workspace.productContext.productId,
+                          pane.objectiveId,
+                        ])}
+                        context={workspace.productContext}
+                        openPreview={(url) => onPane({ kind: "browser", url })}
+                      />
+                    </ReviewOrigin.Provider>
                   ) : (
-                    <Backlog
-                      key={workspace.productContext.productId}
-                      context={workspace.productContext}
-                    />
+                    <ReviewOrigin.Provider value={{ areaId, chatId }}>
+                      <Backlog
+                        key={workspace.productContext.productId}
+                        context={workspace.productContext}
+                      />
+                    </ReviewOrigin.Provider>
                   )
                 ) : (
                   <p className="muted" role="status">

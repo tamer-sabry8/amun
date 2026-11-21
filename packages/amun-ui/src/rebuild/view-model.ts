@@ -768,7 +768,12 @@ export function notionPageLines(
  * areas, so each turn names the one it is about, with its own record.
  */
 export function areaTurnContext(
-  area: { type: string; name: string; client?: string | null },
+  area: {
+    type: string;
+    name: string;
+    client?: string | null;
+    dueAt?: string | null;
+  },
   typeLabel: string,
   group: string | null | undefined,
   record?: Parameters<typeof workTypeGuard>[1],
@@ -817,7 +822,7 @@ export function areaTurnContext(
     : "";
   const client =
     area.type === "project"
-      ? ` The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
+      ? ` This project exists in Amun. Its saved due date is ${area.dueAt ?? "unset"}. The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
       : "";
   const types = tracker ? ` ${tracker}` : "";
   return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${failedList}${pageList}${types}]\n${workTypeGuard(area.type, record)}`;

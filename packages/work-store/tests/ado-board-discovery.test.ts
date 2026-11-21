@@ -199,7 +199,7 @@ it("pages the project team directory with Azure's top/skip API", async () => {
   expect((await d.teams()).at(-1)).toEqual({ id: "100", name: "Team 100" });
   expect(get).toHaveBeenCalledTimes(2);
 });
-it("reads a team's current and upcoming sprints, read-only and bounded", async () => {
+it("reads dated, completed and undated team iterations", async () => {
   const get = vi.fn(async (method: string, url: string) => {
     expect(method).toBe("GET");
     expect(new URL(url).pathname).toBe(
@@ -225,6 +225,8 @@ it("reads a team's current and upcoming sprints, read-only and bounded", async (
   });
   const d = new BoardDiscovery(base, "Library", get);
   expect((await d.sprints("West Team")).map((s) => s.name)).toEqual([
+    "Sprint 4",
+    "Sprint 1",
     "Sprint 2",
     "Sprint 3",
   ]);
@@ -310,4 +312,42 @@ it("reads a sprint's work items with title, type, state and assignee", async () 
     },
   ]);
   expect(get.mock.calls.every(([method]) => method === "GET")).toBe(true);
+});
+
+it("reads every sprint member in batches and rejects a missing item", async () => {
+  const ids = Array.from({ length: 203 }, (_, i) => i + 1);
+  let omitLast = false;
+  const get = vi.fn(async (_method: string, raw: string) => {
+    const query = new URL(raw).searchParams.get("ids");
+    if (query === null)
+      return {
+        status: 200,
+        data: { workItemRelations: ids.map((id) => ({ target: { id } })) },
+      };
+    const batch = query.split(",").map(Number);
+    expect(batch.length).toBeLessThanOrEqual(200);
+    return {
+      status: 200,
+      data: {
+        value: batch
+          .filter((id) => !omitLast || id !== 203)
+          .map((id) => ({
+            id,
+            fields: {
+              "System.Title": String(id),
+              "System.State": "Active",
+              "System.WorkItemType": "Story",
+            },
+          })),
+      },
+    };
+  });
+  const reader = new BoardDiscovery(base, "Library", get);
+  const result = await reader.iterationItems("West", "iteration");
+  expect(result.items.map((item) => item.id)).toEqual(ids);
+  expect(result.more).toBe(false);
+  omitLast = true;
+  await expect(reader.iterationItems("West", "iteration")).rejects.toThrow(
+    "Incomplete Azure sprint",
+  );
 });

@@ -1,3 +1,4 @@
+import { scheduleBlockerChecks } from "./blocker-checks.js";
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -268,6 +269,11 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       },
     },
   );
+  const ado = openAdo(work, {
+    connections: () => connections.list(),
+    secret: async (connection) =>
+      (await connections.token({ kind: "ado", baseUrl: connection.baseUrl })) ?? null,
+  });
   const handler = new AmunRpcHandler({
     spaces,
     primary,
@@ -281,11 +287,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       const event: AmunEvent = { event: "renderer.event", message };
       for (const ws of wss.clients) send(ws, event);
     },
-    ado: openAdo(work, {
-      connections: () => connections.list(),
-      secret: async (connection) =>
-        (await connections.token({ kind: "ado", baseUrl: connection.baseUrl })) ?? null,
-    }),
+    ado,
     amunHome: paths.amunHome,
     firstmateRoot: paths.firstmateRoot,
     readSnapshot: (fmHome) => snapshots.read(fmHome),
@@ -449,6 +451,11 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     { replayState: false },
   );
 
+  const stopBlockerChecks = scheduleBlockerChecks(async () => {
+    if (await ado.refreshLinkedBlockers(async (slug, prompt) => (await primary.send(await spaces.get(slug), prompt)).reply)) {
+      for (const ws of wss.clients) send(ws, { event: "work.updated" });
+    }
+  }, (error) => input.logger.warn({ err: error }, "Amun blocker refresh failed"));
   // Chair questions reach the captain as attention items, and answers go
   // back; connected UIs are told when that (or a finished council) shows.
   let councilPolling = false;
@@ -485,6 +492,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       laterReplies.current = null;
       stopWatchingTurns();
       clearInterval(timer);
+      stopBlockerChecks();
       clearInterval(councilTimer);
       clearInterval(councilUpdateTimer);
       clearTimeout(councilFirstCheck);

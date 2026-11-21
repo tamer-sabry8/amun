@@ -140,6 +140,9 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   message: { local: "The conversation itself; the owner's words are sent." },
   "settle-card": { local: "Updates a card already answered." },
   attention: { local: "Raised by Amun or by Firstmate, not by the owner." },
+  "navigation-activity": {
+    local: "The navigation queue sends the read prompt separately.",
+  },
   activity: { local: "Progress of a turn Firstmate is already running." },
   "agent-status": { local: "Reported from Firstmate's own crew." },
   "record-results": { local: "What publishing returned; no owner choice." },
@@ -339,6 +342,31 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [look.at.ref, c.areaId],
     }),
   },
+  "draft-blocker-message": {
+    local:
+      "Firstmate receives the request in the originating sprint conversation.",
+  },
+  "record-blocker-message": {
+    tell: (c) => ({
+      what:
+        c.disposition === "manual"
+          ? "confirmed a blocker message was sent manually"
+          : "copied a blocker message; delivery remains unconfirmed",
+      ids: [c.areaId, c.blockerId, c.ref],
+    }),
+  },
+  "link-blocker-story": {
+    tell: (c) => ({
+      what:
+        "linked blocker " +
+        c.blockerId +
+        " to story " +
+        c.storyId +
+        " in sprint " +
+        c.sprintId,
+      ids: [c.areaId, c.blockerId, c.sourceId, c.sprintId, c.storyId],
+    }),
+  },
   "set-blocker-owner": {
     tell: (c) => ({
       what: c.owner
@@ -430,6 +458,12 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
     tell: (c, look) => ({
       what: `${c.sprintId ? "changed" : "drafted"} the sprint “${c.name}” for ${look.area(c.workAreaId)}, ${day(c.start)} to ${day(c.end)}, ${c.stories.length} stories in and ${c.out.length} out`,
       ids: [c.sprintId ?? look.at.ref, c.workAreaId],
+    }),
+  },
+  "edit-sprint-draft": {
+    tell: (c) => ({
+      what: "updated local draft details for " + c.name,
+      ids: [c.sprintId, c.workAreaId],
     }),
   },
   "move-sprint-story": {

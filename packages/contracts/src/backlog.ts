@@ -16,11 +16,13 @@ export const backlogRead = z.discriminatedUnion("action", [
     action: z.literal("sprint-items"),
     team: id,
     sprint: id,
+    workAreaId: id.optional(),
   }),
   z.strictObject({ ...context, action: z.literal("options"), team: id }),
   z.strictObject({
     ...context,
     action: z.literal("cards"),
+    details: z.boolean().optional(),
     team: id,
     level: id,
   }),
@@ -33,6 +35,37 @@ const card = z.object({
   state: z.string(),
   type: z.string(),
   column: z.string().nullable(),
+  iteration: z.string().nullable().optional(),
+  rank: z
+    .object({
+      field: z.enum([
+        "Microsoft.VSTS.Common.StackRank",
+        "Microsoft.VSTS.Common.BacklogPriority",
+      ]),
+      value: z.number(),
+    })
+    .optional(),
+  prerequisites: z.array(z.int().positive()).optional(),
+  assignee: z.string().optional(),
+  assigneeId: z.string().optional(),
+  labels: z.array(z.string()).optional(),
+  estimates: z
+    .array(z.object({ name: z.string(), value: z.number() }))
+    .optional(),
+  blocked: z.string().optional(),
+  description: z.string().optional(),
+  criteria: z.string().optional(),
+  readableCriteria: z.boolean().optional(),
+});
+export const planningIdentity = z.object({ id, name: id, uniqueName: id });
+export const criteriaEdit = z.object({
+  from: z.string().max(65536),
+  text: z.string().max(16000),
+});
+export const statusEdit = z.object({ from: id, to: id });
+export const ownerEdit = z.object({
+  from: id.nullable(),
+  to: planningIdentity,
 });
 const column = named.extend({
   stateMappings: z.record(z.string(), z.string()),
@@ -77,6 +110,7 @@ export const backlogResult = z.discriminatedUnion("view", [
   z.object({
     ...common,
     view: z.literal("sprints"),
+    sourceId: id.optional(),
     team: named,
     sprints: z.array(
       z.object({
@@ -99,6 +133,12 @@ export const backlogResult = z.discriminatedUnion("view", [
         type: z.string(),
         state: z.string(),
         assignee: z.string().nullable(),
+        points: z.number().optional(),
+        storyUrl: z.url({ protocol: /^https$/ }).optional(),
+        labels: z.array(z.string()).optional(),
+        indicator: z
+          .object({ rev: z.int().positive(), blocked: z.boolean() })
+          .optional(),
       }),
     ),
     more: z.boolean(),
@@ -113,6 +153,15 @@ export const backlogResult = z.discriminatedUnion("view", [
     view: z.literal("cards"),
     columns: z.array(column),
     cards: z.array(card),
+    identities: z.array(planningIdentity).optional(),
+    transitions: z
+      .record(z.string(), z.record(z.string(), z.array(z.string())))
+      .optional(),
+    creationTarget: z
+      .object({ type: id, area: id, backlogIteration: id })
+      .nullable()
+      .optional(),
+    backlogIteration: z.string().nullable().optional(),
     canEditBoard: z.boolean(),
   }),
 ]);
@@ -131,16 +180,142 @@ const operationContext = {
   team: id,
 };
 export const operationItem = z.strictObject({
+  duplicateDecision: z.enum(["edit-existing", "create-separately"]).optional(),
+  targetId: z.int().positive().optional(),
   id,
   title: z.string().min(1).max(256),
   type: id,
   fields: z.record(z.string(), value),
 });
+export const reviewedOrder = z.object({
+  beforeId: z.int().positive(),
+  anchorRev: z.int().positive(),
+  oldNext: z.int().positive().nullable(),
+});
+export const plannedStory = z.object({
+  localId: z.uuid(),
+  title: z.string().trim().min(1).max(256),
+  criteria: z.array(z.string().trim().min(1).max(2048)).max(20),
+  labels: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[^;\r\n]+$/),
+    )
+    .max(30),
+  schedule: z.boolean(),
+  separate: z.boolean().optional(),
+});
+export type PlannedStory = z.infer<typeof plannedStory>;
+export const sprintMoveRequest = z.strictObject({
+  ...operationContext,
+  action: z.literal("apply-sprint-moves"),
+  ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  space: id,
+  workAreaId: id,
+  chatId: id,
+  level: id,
+  sprintId: id,
+  iteration: id,
+  creates: z.array(plannedStory).max(100).optional(),
+  creationTarget: z
+    .object({ type: id, area: id, backlogIteration: id })
+    .optional(),
+  moves: z
+    .array(
+      z.strictObject({
+        id: z.int().positive(),
+        rev: z.int().positive(),
+        from: id,
+        to: id,
+        addLabels: z
+          .array(
+            z
+              .string()
+              .trim()
+              .min(1)
+              .max(128)
+              .regex(/^[^;\r\n]+$/),
+          )
+          .min(1)
+          .max(30)
+          .optional(),
+        targetSprintId: id.optional(),
+        reorder: reviewedOrder.optional(),
+        criteria: criteriaEdit.optional(),
+        status: statusEdit.optional(),
+        owner: ownerEdit.optional(),
+        title: z.string().max(1024),
+      }),
+    )
+    .max(100),
+});
+export type SprintMoveRequest = z.infer<typeof sprintMoveRequest>;
+export const goalSuggestion = z.object({
+  id: z.int().positive(),
+  rev: z.int().positive(),
+  reason: z.string().min(1).max(1024),
+  ownerId: id.optional(),
+  evidenceId: z.int().positive().optional(),
+});
 export const adoOperation = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("suggest-sprint-stories"),
+    space: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    workAreaId: id,
+    chatId: id,
+    level: id,
+    sprintId: id,
+    goal: z.string().trim().min(1).max(2048),
+    planningLoad: z
+      .object({
+        teamPoints: z.number().nonnegative(),
+        unestimated: z.int().nonnegative(),
+        localBudget: z.number().nonnegative().nullable(),
+      })
+      .optional(),
+    tag: z.string().max(128).optional(),
+  }),
+  sprintMoveRequest,
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("compare-prd"),
+    level: id,
+    objectiveId: id,
+    versionNumber: z.int().positive(),
+    workAreaId: id,
+    chatId: id.nullable(),
+    space: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("inspect-sprint-submission"),
+    workAreaId: id,
+    sprintId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("keep-observed-sprint"),
+    space: id,
+    workAreaId: id,
+    sprintId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    itemId: z.int().positive(),
+    rev: z.int().positive(),
+    iteration: id,
+  }),
   z.strictObject({ ...operationContext, action: z.literal("targets") }),
   z.strictObject({
     ...operationContext,
     action: z.literal("preview"),
+    level: id.optional(),
     intent: z.enum(["publish", "commit"]),
     area: id,
     iteration: id,
@@ -150,6 +325,12 @@ export const adoOperation = z.discriminatedUnion("action", [
   z.strictObject({
     ...operationContext,
     action: z.literal("approve-execute"),
+    origin: z.object({ areaId: id, chatId: id.nullable() }).optional(),
+    ref: z
+      .string()
+      .regex(/^amun-r-[0-9a-f]{12}$/)
+      .optional(),
+    space: id.optional(),
     batchId: z.uuid(),
     binding: z.string().length(64),
   }),
@@ -179,6 +360,8 @@ export const operationResult = z.object({
   batchId: z.string().optional(),
   binding: z.string().optional(),
   preview: z.string().optional(),
+  requestRef: z.string().optional(),
+  suggestions: z.array(goalSuggestion).optional(),
   receipts: z
     .array(
       z.object({

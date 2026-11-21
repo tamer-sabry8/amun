@@ -1,3 +1,4 @@
+import type { SavedPlanningLink } from "./planning-draft.ts";
 // Amun shell v3 (handoff §4): sidebar · main workspace · rail. Replaces the
 // earlier shell at its mount point; see docs/UX-REBUILD.md for what was
 // switched off and how to restore it.
@@ -25,6 +26,7 @@ import {
 } from "../../../../packages/domain/src/work/shell.ts";
 import type { Attention } from "../../../../packages/domain/src/work/home.ts";
 import type { LibraryItem } from "../../../../packages/domain/src/work/planning.ts";
+import { inspectView } from "../daemon/navigation.ts";
 import { bridge, initializeBridge } from "../bridge.ts";
 import { AuthPrompt } from "../auth-prompt-view.tsx";
 import { Icon } from "../icons.tsx";
@@ -122,6 +124,8 @@ export function App() {
   );
   const snapshot = state.snapshot;
   const [layout, dispatch] = useReducer(shellReducer, initialShell);
+  const [resumePlanning, setResumePlanning] =
+    useState<SavedPlanningLink | null>(null);
   const [pane, setPane] = useState<PaneTarget>(null);
   /** The fork on screen inside the open work; null is its main chat. */
   const [chatId, setChatId] = useState<string | null>(null);
@@ -349,6 +353,7 @@ export function App() {
   const go = (route: Exclude<Route, "work" | "setup">) => {
     setPane(null);
     setFirst(null);
+    setResumePlanning(null);
     dispatch({ type: "go", route });
   };
   const openWork = (
@@ -804,8 +809,45 @@ export function App() {
         name: topOffer.request.name,
       }
     : null;
-  const openAttention = (item: Attention) => {
+  const openAttention = (
+    item: Pick<Attention, "id" | "workAreaId" | "kind">,
+  ) => {
     const raw = snapshot.attention.find((entry) => entry.id === item.id);
+    const held = snapshot.sprintDecisions?.find(
+      (d) =>
+        raw?.id === "sprint-held:" + d.ref + ":" + d.storyId &&
+        d.workAreaId === raw.workAreaId,
+    );
+    if (held) {
+      inspectView({
+        view: "Sprint decision",
+        areaId: held.workAreaId,
+        record: held.ref,
+        source: "Island",
+      });
+      go("sprints");
+      setResumePlanning({
+        ...held,
+        areaId: held.workAreaId,
+        id: raw!.id,
+        count: 0,
+        focus: { ref: held.ref, storyId: held.storyId },
+      });
+      return;
+    }
+    if (raw?.id.startsWith("blocker-review:") && raw.workAreaId && raw.ref) {
+      const chat = snapshot.chats.find(
+        (c) =>
+          c.workAreaId === raw.workAreaId &&
+          c.messages.some((m) => m.id === raw.ref),
+      );
+      if (chat)
+        openWork(raw.workAreaId, undefined, null, chat.id, {
+          messageId: raw.ref,
+        });
+      else setNote("The original blocker receipt is unavailable.");
+      return;
+    }
     const plan = raw?.ref?.startsWith("plan:") ? raw.ref.slice(5) : null;
     if (item.workAreaId)
       openWork(
@@ -921,7 +963,10 @@ export function App() {
       <Sidebar
         route={layout.route}
         collapsed={collapsed}
-        onRoute={go}
+        onRoute={(route) => {
+          inspectView({ view: route, source: "Navigation" });
+          go(route);
+        }}
         onSearch={() => dispatch({ type: "palette", open: true })}
         onToggle={() => dispatch({ type: "toggle_sidebar" })}
         snapshot={snapshot as Snapshot}
@@ -1048,6 +1093,10 @@ export function App() {
           </div>
         ) : layout.route === "home" ? (
           <Home
+            onOpenDecision={(id) => {
+              const item = snapshot.attention.find((a) => a.id === id);
+              if (item) openAttention(item);
+            }}
             snapshot={snapshot}
             now={now}
             model={model}
@@ -1147,6 +1196,10 @@ export function App() {
           />
         ) : layout.route === "roadmap" ? (
           <Roadmap
+            onResume={(link) => {
+              go("sprints");
+              setResumePlanning(link);
+            }}
             snapshot={snapshot}
             model={model}
             onReview={(planId, areaId) =>
@@ -1156,10 +1209,20 @@ export function App() {
           />
         ) : layout.route === "sprints" ? (
           <Sprints
+            key={resumePlanning?.id ?? "sprints"}
+            resume={resumePlanning}
             snapshot={snapshot}
             now={now}
             model={model}
-            onWork={(id, message) => openWork(id, message)}
+            onWork={(id, message, chat, messageId) =>
+              openWork(
+                id,
+                message,
+                null,
+                chat ?? null,
+                messageId ? { messageId } : null,
+              )
+            }
             onReview={(planId, areaId) =>
               areaId &&
               openWork(areaId, undefined, { kind: "plan", id: planId })
@@ -1167,6 +1230,10 @@ export function App() {
           />
         ) : layout.route === "portfolio" ? (
           <Portfolio
+            onResume={(link) => {
+              go("sprints");
+              setResumePlanning(link);
+            }}
             snapshot={snapshot}
             model={model}
             onWork={(id) => openWork(id)}
@@ -1264,7 +1331,10 @@ export function App() {
         open={layout.palette}
         snapshot={snapshot as Snapshot}
         onClose={() => dispatch({ type: "palette", open: false })}
-        onRoute={go}
+        onRoute={(route) => {
+          inspectView({ view: route, source: "Navigation" });
+          go(route);
+        }}
         onWork={(id) => openWork(id)}
         onHit={(item) => {
           dispatch({ type: "palette", open: false });

@@ -1,11 +1,14 @@
-import { randomUUID } from "node:crypto";
+import type { BoardDiscovery } from "./ado-board-discovery.ts";
+import { prdComparison } from "../../contracts/src/workspace.ts";
+import { appendAzureCriteria } from "./ado-publication-fields.ts";
+import { createHash, randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
 import { AdoBatch, type AdoDestination, type AdoStep } from "./ado-batch.ts";
 import type {
   AzureProcessSchema,
   AdoOperation,
 } from "../../contracts/src/backlog.ts";
-import { requiredInputs } from "./ado-publication-fields.ts";
+import { storyTextFields, requiredInputs } from "./ado-publication-fields.ts";
 import type { AdoWriteClient } from "./ado-governed-writes.ts";
 import { ProductDocuments } from "./product-documents.ts";
 type Preview = Extract<AdoOperation, { action: "preview" }>;
@@ -21,6 +24,25 @@ interface Draft {
   prd_version: number;
   requirement_id: string;
 }
+function draftDigest(row: Draft) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        row.id,
+        row.parent_id,
+        row.type,
+        row.title,
+        row.body,
+        row.acceptance_json,
+        row.remote_id,
+        row.objective_id,
+        row.prd_version,
+        row.requirement_id,
+      ]),
+    )
+    .digest("hex");
+}
+
 export class AdoReview {
   constructor(private db: Database) {}
   private draft(product: string, id: string) {
@@ -49,12 +71,25 @@ export class AdoReview {
     schema: AzureProcessSchema,
     iterations: string[],
     client: AdoWriteClient,
+    reader: BoardDiscovery,
   ) {
     const steps: AdoStep[] = [];
     if (!schema.areas.includes(cmd.area))
       throw Error("Select a discovered area path.");
     if (cmd.intent === "commit" && !iterations.includes(cmd.iteration))
       throw Error("Select a team iteration.");
+    let backlog: Awaited<ReturnType<BoardDiscovery["cards"]>> = [];
+    if (cmd.intent === "publish") {
+      const level = (await reader.levels(cmd.team, true)).find(
+        (l) => l.id === cmd.level,
+      );
+      if (!level)
+        throw Error(
+          "Select the team backlog and compare the PRD before publication.",
+        );
+      const settings = await reader.boardSettings(cmd.team, level.name);
+      backlog = await reader.cards(cmd.team, level.id, settings.columnField);
+    }
     for (const input of cmd.items) {
       const row = this.draft(cmd.productId, input.id);
       const marker = "Test-" + randomUUID();
@@ -66,6 +101,103 @@ export class AdoReview {
           );
         const type = schema.types.find((t) => t.name === input.type);
         if (!type) throw Error("Select a discovered work item type.");
+        const stored = this.db
+          .prepare(
+            "SELECT result_json FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=? AND COALESCE(json_extract(result_json,'$.pending'),0)=0",
+          )
+          .get(
+            cmd.productId,
+            row.objective_id,
+            row.prd_version,
+            cmd.sourceId,
+            cmd.team,
+            cmd.level ?? "",
+          ) as { result_json: string } | undefined;
+        const coverage =
+          stored && prdComparison.parse(JSON.parse(stored.result_json));
+        const proposal = coverage?.rows.find(
+          (r) => r.draftId === (row.parent_id ?? row.id),
+        );
+        const comparison = coverage && {
+          ref: coverage.ref,
+          sourceId: cmd.sourceId,
+          team: cmd.team,
+          level: cmd.level!,
+        };
+        if (!comparison || !proposal || proposal.classification === "held")
+          throw Error(
+            "Complete the backlog comparison and resolve this held proposal first.",
+          );
+        const duplicate = backlog.some(
+          (c) =>
+            c.title.trim().toLowerCase() === input.title.trim().toLowerCase(),
+        );
+        if (
+          (duplicate || (!row.parent_id && proposal.providerId)) &&
+          !input.duplicateDecision
+        )
+          throw Error(
+            "An existing story may cover this requirement. Choose the existing ID or explicitly create separately.",
+          );
+        if (input.duplicateDecision === "edit-existing") {
+          const record = backlog.find((c) => c.id === input.targetId);
+          if (!record || row.parent_id)
+            throw Error("Select a verified existing story from this backlog.");
+          if (
+            proposal.providerId === record.id &&
+            proposal.revision !== record.rev
+          )
+            throw Error("The comparison is stale. Refresh the existing story.");
+          const existing = await client.item(record.id);
+          if (
+            existing.rev !== record.rev ||
+            existing.fields["System.WorkItemType"] !== type.name
+          )
+            throw Error("Existing story revision or type changed.");
+          const key = type.fields.some(
+            (f) =>
+              f.referenceName === "Microsoft.VSTS.Common.AcceptanceCriteria",
+          )
+            ? "Microsoft.VSTS.Common.AcceptanceCriteria"
+            : "System.Description";
+          if (!type.fields.some((f) => f.referenceName === key))
+            throw Error(
+              "This type has no writable acceptance criteria destination.",
+            );
+          const before = existing.fields[key] ?? "";
+          if (typeof before !== "string")
+            throw Error("Review the current criteria field.");
+          const after = appendAzureCriteria(
+            before,
+            JSON.parse(row.acceptance_json),
+            key === "System.Description",
+          );
+          const edits: AdoStep["fields"] = {};
+          if (after !== before) edits[key] = after;
+          if (
+            input.title !== row.title &&
+            input.title !== existing.fields["System.Title"]
+          )
+            edits["System.Title"] = input.title;
+          if (Object.keys(input.fields).length)
+            throw Error("Review existing-story field edits separately.");
+          if (!Object.keys(edits).length)
+            throw Error(
+              "The existing story already contains the reviewed values.",
+            );
+          steps.push({
+            itemId: row.id,
+            draftDigest: draftDigest(row),
+            comparison,
+            type: type.name,
+            parentId: null,
+            remoteId: record.id,
+            revision: record.rev,
+            marker,
+            fields: edits,
+          });
+          continue;
+        }
         const fields: AdoStep["fields"] = { ...input.fields };
         for (const [key, v] of Object.entries(fields)) {
           const definition = type.fields.find((f) => f.referenceName === key);
@@ -82,30 +214,21 @@ export class AdoReview {
           "System.AreaPath": cmd.area,
           "System.IterationPath": destination.project,
         });
-        const escape = (v: string) =>
-          v
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;");
-        if (type.fields.some((f) => f.referenceName === "System.Description"))
-          fields["System.Description"] = "<p>" + escape(row.body) + "</p>";
-        const criteria = JSON.parse(row.acceptance_json) as string[];
-        if (
-          criteria.length &&
-          type.fields.some(
-            (f) =>
-              f.referenceName === "Microsoft.VSTS.Common.AcceptanceCriteria",
-          )
-        )
-          fields["Microsoft.VSTS.Common.AcceptanceCriteria"] =
-            "<ul>" +
-            criteria.map((c) => "<li>" + escape(c) + "</li>").join("") +
-            "</ul>";
+        Object.assign(
+          fields,
+          storyTextFields(
+            type.fields,
+            row.body,
+            JSON.parse(row.acceptance_json),
+          ),
+        );
         const missing = requiredInputs(type, fields);
         if (missing.length)
           throw Error("Required fields: " + missing.join(", "));
         steps.push({
           itemId: row.id,
+          draftDigest: draftDigest(row),
+          comparison,
           parentId: row.parent_id,
           remoteId: null,
           revision: 0,
@@ -138,6 +261,7 @@ export class AdoReview {
           fields["System.AssignedTo"] = cmd.assignee.trim();
         steps.push({
           itemId: row.id,
+          draftDigest: draftDigest(row),
           parentId: null,
           remoteId: current.id,
           revision: current.rev,
@@ -154,6 +278,35 @@ export class AdoReview {
       steps,
     );
   }
+  validateDrafts(product: string, steps: AdoStep[]) {
+    for (const step of steps) {
+      const row = this.draft(product, step.itemId);
+      if (step.comparison) {
+        const c = step.comparison;
+        const verified = this.db
+          .prepare(
+            "SELECT 1 FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=? AND json_extract(result_json,'$.ref')=? AND COALESCE(json_extract(result_json,'$.pending'),0)=0",
+          )
+          .get(
+            product,
+            row.objective_id,
+            row.prd_version,
+            c.sourceId,
+            c.team,
+            c.level,
+            c.ref,
+          );
+        if (!verified)
+          throw Error(
+            "The backlog comparison changed. Refresh the publication preview.",
+          );
+      }
+      if (step.draftDigest !== draftDigest(row))
+        throw Error(
+          "The draft changed after preview. Review its current wording before submitting.",
+        );
+    }
+  }
   validate(
     product: string,
     destination: AdoDestination,
@@ -169,7 +322,6 @@ export class AdoReview {
       p.destination.team !== destination.team
     )
       throw Error("Preview destination or contents changed.");
-    for (const s of p.steps) this.draft(product, s.itemId);
     return p;
   }
 }

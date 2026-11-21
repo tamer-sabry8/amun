@@ -119,6 +119,17 @@ export class WorkspaceService {
       },
       tasks: this.reminders.list(productId),
       memoryLinks: this.memorySync.list(productId),
+      storyReviews: this.db
+        .prepare(
+          `SELECT o.objective_id AS objectiveId,o.version,o.area_id AS areaId,o.chat_id AS chatId,o.ref,r.message_id AS messageId FROM prd_review_origins o JOIN work_requests r ON r.ref=o.ref WHERE o.product_id=?`,
+        )
+        .all(productId),
+      comparisons: this.db
+        .prepare(
+          "SELECT result_json FROM prd_comparisons WHERE product_id=? ORDER BY rowid",
+        )
+        .all(productId)
+        .map((row) => JSON.parse((row as { result_json: string }).result_json)),
       storyDecisions: new StoryDecisions(this.db).list(productId),
       storyDrafts: this.db
         .prepare(
@@ -274,6 +285,118 @@ export class WorkspaceService {
         .all(),
     });
   }
+  bindStoryReview(
+    input: unknown,
+    ref: string,
+    origin: { areaId: string; chatId: string | null },
+    instruction: string,
+  ) {
+    const typed = productAuthoring.safeParse(input);
+    if (!typed.success) throw new AuthoringError("Invalid review source.");
+    const cmd = typed.data;
+    if (
+      cmd.action !== "stories" &&
+      cmd.action !== "update-story-draft" &&
+      cmd.action !== "flag-coverage-gap"
+    )
+      throw new AuthoringError("Unknown story review operation.");
+    return this.recordReviewPrompt(cmd, ref, origin, instruction);
+  }
+
+  recordReviewPrompt(
+    cmd: { productId: string; objectiveId: string; expectedVersion: number },
+    ref: string,
+    origin: { areaId: string; chatId: string | null },
+    instruction: string,
+  ) {
+    return this.db
+      .transaction(() => {
+        const area = this.db
+          .prepare(
+            "SELECT 1 FROM work_areas WHERE id=? AND product_id=? AND status<>'deleted'",
+          )
+          .get(origin.areaId, cmd.productId);
+        if (
+          !area ||
+          (origin.chatId &&
+            !this.db
+              .prepare("SELECT 1 FROM work_chats WHERE id=? AND work_area_id=?")
+              .get(origin.chatId, origin.areaId))
+        )
+          throw new AuthoringError(
+            "The originating PRD conversation is unavailable.",
+          );
+        const existing = this.db
+          .prepare(
+            "SELECT ref,area_id,chat_id FROM prd_review_origins WHERE product_id=? AND objective_id=? AND version=?",
+          )
+          .get(cmd.productId, cmd.objectiveId, cmd.expectedVersion) as
+          { ref: string; area_id: string; chat_id: string | null } | undefined;
+        const areaId = existing?.area_id ?? origin.areaId;
+        const chatId = existing ? existing.chat_id : origin.chatId;
+        const parent = existing?.ref ?? ref;
+        const prompt =
+          instruction +
+          "\nOriginating review " +
+          parent +
+          " · conversation " +
+          (chatId ?? areaId) +
+          " · work area " +
+          areaId;
+        const id = randomUUID(),
+          receipt = randomUUID(),
+          now = new Date().toISOString();
+        const message = this.db.prepare(
+          "INSERT INTO work_messages(id,role,work_area_id,chat_id,text,created_at) VALUES(?,?,?,?,?,?)",
+        );
+        message.run(id, "you", areaId, chatId, this.redactor.text(prompt), now);
+        message.run(receipt, "card", areaId, chatId, "Pending · " + ref, now);
+        this.db
+          .prepare(
+            "INSERT INTO work_requests(ref,message_id,project_area_id,status,updated_at) VALUES(?,?,?,'working',?)",
+          )
+          .run(ref, id, areaId, now);
+        if (!existing)
+          this.db
+            .prepare("INSERT INTO prd_review_origins VALUES(?,?,?,?,?,?)")
+            .run(
+              cmd.productId,
+              cmd.objectiveId,
+              cmd.expectedVersion,
+              ref,
+              areaId,
+              chatId,
+            );
+        return {
+          parent,
+          messageId: receipt,
+          prompt: this.redactor.text(prompt),
+        };
+      })
+      .immediate();
+  }
+
+  finishStoryReview(ref: string, messageId: string, text: string, ok: boolean) {
+    const detail = this.redactor.text(text);
+    this.db
+      .transaction(() => {
+        this.db
+          .prepare("UPDATE work_messages SET text=? WHERE id=? AND role='card'")
+          .run(detail + " · " + ref, messageId);
+        this.db
+          .prepare(
+            "UPDATE work_requests SET status=?,detail=?,updated_at=? WHERE ref=?",
+          )
+          .run(
+            ok ? "delivered" : "needs-decision",
+            detail,
+            new Date().toISOString(),
+            ref,
+          );
+      })
+      .immediate();
+  }
+
   async author(
     input: unknown,
     firstmate: ProductModel,

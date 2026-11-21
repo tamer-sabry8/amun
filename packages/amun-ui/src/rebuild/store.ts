@@ -9,6 +9,7 @@ import {
 import { bridge } from "../bridge.ts";
 
 export interface WorkResult {
+  commandId?: string | undefined;
   action: string;
   ok: boolean;
   message: string;
@@ -46,8 +47,8 @@ export function receive(raw: unknown) {
     state = { ...state, council: parsed.data };
   else if (parsed.data.kind !== "work-result") return false;
   else {
-    const { action, ok, message, ref, step } = parsed.data;
-    const result = { action, ok, message, ref, step };
+    const { commandId, action, ok, message, ref, step } = parsed.data;
+    const result = { commandId, action, ok, message, ref, step };
     state = { ...state, result };
     for (const listener of resultListeners) listener(result);
   }
@@ -110,10 +111,12 @@ export function workAsync<A extends Action>(
   action: A,
   payload?: Partial<Payload<A>>,
 ) {
+  const commandId = crypto.randomUUID();
   return new Promise<WorkResult>((resolve) => {
     const stop = workStore.onResult((result) => {
-      if (result.action !== action) return;
+      if (result.action !== action || result.commandId !== commandId) return;
       stop();
+      clearTimeout(responseTimer);
       const before = state.snapshot;
       const settle = workStore.subscribe(() => {
         if (state.snapshot === before) return;
@@ -127,7 +130,19 @@ export function workAsync<A extends Action>(
         resolve(result);
       }, 1500);
     });
-    work(action, payload);
+    const responseTimer = setTimeout(() => {
+      stop();
+      resolve({
+        commandId,
+        action,
+        ok: false,
+        ref: null,
+        step: null,
+        message:
+          "Amun has not confirmed the request. Check Activity before retrying.",
+      });
+    }, 30_000);
+    bridge.send({ version: 1, kind: "work", action, ...payload, commandId });
   });
 }
 /** Council commands run in the service: status, a run, seats and updates. */

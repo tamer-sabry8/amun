@@ -9,6 +9,10 @@ export interface AdoDestination {
   team: string;
 }
 export interface AdoStep {
+  expectedAssigneeId?: string;
+  creationLabels?: string[];
+  draftDigest?: string;
+  comparison?: { ref: string; sourceId: string; team: string; level: string };
   itemId: string;
   type: string;
   parentId: string | null;
@@ -57,8 +61,9 @@ export class AdoBatch {
     for (const step of steps) {
       if (
         kind === "publish" &&
-        (step.remoteId !== null ||
-          step.revision !== 0 ||
+        ((step.remoteId === null
+          ? step.revision !== 0
+          : step.revision <= 0 || !!step.parentId) ||
           (step.parentId && !seen.has(step.parentId)))
       )
         throw Error("Select the parent before its children.");
@@ -158,7 +163,12 @@ export class AdoBatch {
       })
       .immediate();
   }
-  async execute(id: string, binding: string, api: AdoWrites) {
+  async execute(
+    id: string,
+    binding: string,
+    api: AdoWrites,
+    reconcileOnly = false,
+  ) {
     const p = this.preview(id);
     if (
       p.binding !== binding ||
@@ -169,7 +179,7 @@ export class AdoBatch {
     for (const [index, e] of p.entries.entries()) {
       const step = p.steps[index]!;
       const parent = step.parentId ? receipts.get(step.parentId) : null;
-      if (parent === undefined) break;
+      if (parent === undefined) continue;
       const save = (r: AdoReceipt) => {
         if (
           !Number.isSafeInteger(r.id) ||
@@ -199,6 +209,8 @@ export class AdoBatch {
           })
           .immediate();
       };
+      if (reconcileOnly && e.state !== "unknown" && e.state !== "succeeded")
+        continue;
       await dispatchOne(
         this.store,
         {
@@ -216,7 +228,8 @@ export class AdoBatch {
       const row = this.db
         .prepare("SELECT remote_id AS id FROM ado_steps WHERE action_id=?")
         .get(e.actionId) as { id: number | null };
-      if (this.store.read(e.actionId).state !== "succeeded" || !row.id) break;
+      if (this.store.read(e.actionId).state !== "succeeded" || !row.id)
+        continue;
       receipts.set(step.itemId, row.id);
     }
     return this.preview(id).entries;

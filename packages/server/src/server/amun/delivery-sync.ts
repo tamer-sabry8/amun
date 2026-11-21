@@ -141,79 +141,50 @@ export class LinearAdapter implements DeliveryAdapter {
     return json.data;
   }
 
+  private async teamNodes<T>(field: "cycles" | "issues" | "states", selection: string): Promise<T[]> {
+    const query = `query($teamId: String!, $after: String) { team(id: $teamId) { ${field}(first: 50, after: $after) { nodes { ${selection} } pageInfo { hasNextPage endCursor } } } }`;
+    const nodes: T[] = [];
+    const seen = new Set<string>();
+    let after: string | null = null;
+    for (;;) {
+      const data: { team: Record<string, { nodes: T[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } }> } =
+        await this.gql(query, { teamId: this.config.teamId, after });
+      const page = data.team?.[field];
+      if (!page || !Array.isArray(page.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean")
+        throw new DeliveryApiError("linear", 200, "Incomplete team response");
+      nodes.push(...page.nodes);
+      if (!page.pageInfo.hasNextPage) return nodes;
+      after = page.pageInfo.endCursor;
+      if (!after || seen.has(after)) throw new DeliveryApiError("linear", 200, "Invalid continuation cursor");
+      seen.add(after);
+    }
+  }
+
   private async workflowStates(): Promise<LinearState[]> {
-    if (this.states) return this.states;
-    const data = await this.gql<{ team: { states: { nodes: LinearState[] } } }>(
-      "query($teamId: String!) { team(id: $teamId) { states { nodes { id name type } } } }",
-      { teamId: this.config.teamId },
-    );
-    this.states = data.team.states.nodes;
+    this.states ??= await this.teamNodes<LinearState>("states", "id name type");
     return this.states;
   }
 
   async listSprints(): Promise<RemoteSprint[]> {
-    const data = await this.gql<{
-      team: {
-        cycles: {
-          nodes: {
-            id: string;
-            name: string | null;
-            number: number;
-            startsAt: string | null;
-            endsAt: string | null;
-            isActive: boolean;
-            isFuture: boolean;
-          }[];
-        };
-      };
-    }>(
-      "query($teamId: String!) { team(id: $teamId) { cycles(first: 50) { nodes { id name number startsAt endsAt isActive isFuture } } } }",
-      { teamId: this.config.teamId },
-    );
-    return data.team.cycles.nodes.map((c) => ({
-      id: c.id,
-      name: c.name ?? `Cycle ${c.number}`,
+    const cycles = await this.teamNodes<{
+      id: string; name: string | null; number: number; startsAt: string | null;
+      endsAt: string | null; isActive: boolean; isFuture: boolean;
+    }>("cycles", "id name number startsAt endsAt isActive isFuture");
+    return cycles.map(c => ({
+      id: c.id, name: c.name ?? `Cycle ${c.number}`,
       state: c.isActive ? "active" : c.isFuture ? "future" : "closed",
-      startsAt: c.startsAt,
-      endsAt: c.endsAt,
+      startsAt: c.startsAt, endsAt: c.endsAt,
     }));
   }
 
   async listIssues(): Promise<RemoteIssue[]> {
-    const issues: RemoteIssue[] = [];
-    let after: string | null = null;
-    for (let page = 0; page < 20; page += 1) {
-      const data: {
-        team: {
-          issues: {
-            nodes: {
-              id: string;
-              identifier: string;
-              title: string;
-              state: LinearState;
-              cycle: { id: string } | null;
-            }[];
-            pageInfo: { hasNextPage: boolean; endCursor: string | null };
-          };
-        };
-      } = await this.gql(
-        "query($teamId: String!, $after: String) { team(id: $teamId) { issues(first: 50, after: $after) { nodes { id identifier title state { id name type } cycle { id } } pageInfo { hasNextPage endCursor } } } }",
-        { teamId: this.config.teamId, after },
-      );
-      for (const node of data.team.issues.nodes) {
-        issues.push({
-          id: node.id,
-          key: node.identifier,
-          title: node.title,
-          column: linearColumn(node.state),
-          remoteStatus: node.state.name,
-          sprintId: node.cycle?.id ?? null,
-        });
-      }
-      if (!data.team.issues.pageInfo.hasNextPage) break;
-      after = data.team.issues.pageInfo.endCursor;
-    }
-    return issues;
+    const issues = await this.teamNodes<{
+      id: string; identifier: string; title: string; state: LinearState; cycle: {id: string} | null;
+    }>("issues", "id identifier title state { id name type } cycle { id }");
+    return issues.map(node => ({
+      id: node.id, key: node.identifier, title: node.title,
+      column: linearColumn(node.state), remoteStatus: node.state.name, sprintId: node.cycle?.id ?? null,
+    }));
   }
 
   async createIssue(story: Story): Promise<RemoteIssue> {
@@ -355,40 +326,51 @@ export class JiraAdapter implements DeliveryAdapter {
   }
 
   async listSprints(): Promise<RemoteSprint[]> {
-    const data = await this.request<{
-      values: { id: number; name: string; state: string; startDate?: string; endDate?: string }[];
-    }>("GET", `/rest/agile/1.0/board/${this.config.boardId}/sprint?state=active,future`);
-    return data.values.map((s) => ({
-      id: String(s.id),
-      name: s.name,
-      state: s.state === "active" ? "active" : s.state === "future" ? "future" : "closed",
-      startsAt: s.startDate ?? null,
-      endsAt: s.endDate ?? null,
-    }));
+    const sprints: RemoteSprint[] = [];
+    for (;;) {
+      const page = await this.request<{
+        startAt: number; isLast: boolean;
+        values: {id: number; name: string; state: string; startDate?: string; endDate?: string}[];
+      }>("GET", `/rest/agile/1.0/board/${this.config.boardId}/sprint?startAt=${sprints.length}&maxResults=50`);
+      if (page.startAt !== sprints.length || typeof page.isLast !== "boolean" || (!page.isLast && !page.values.length))
+        throw new DeliveryApiError("jira", 200, "Incomplete sprint page");
+      for (const sprint of page.values) sprints.push({
+        id: String(sprint.id), name: sprint.name,
+        state: sprint.state === "active" ? "active" : sprint.state === "future" ? "future" : "closed",
+        startsAt: sprint.startDate ?? null, endsAt: sprint.endDate ?? null,
+      });
+      if (page.isLast) return sprints;
+    }
   }
 
   async listIssues(): Promise<RemoteIssue[]> {
     const issues: RemoteIssue[] = [];
-    for (const sprint of await this.listSprints()) {
-      const data = await this.request<{
-        issues: {
-          id: string;
-          key: string;
-          fields: { summary: string; status: { name: string; statusCategory: { key: string } } };
-        }[];
-      }>("GET", `/rest/agile/1.0/sprint/${sprint.id}/issue?fields=summary,status&maxResults=100`);
-      for (const issue of data.issues) {
-        issues.push({
-          id: issue.id,
-          key: issue.key,
-          title: issue.fields.summary,
-          column: jiraColumn(issue.fields.status),
-          remoteStatus: issue.fields.status.name,
-          sprintId: sprint.id,
+    const seen = new Set<string>();
+    const params = new URLSearchParams({
+      fields: "summary,status,sprint,project", maxResults: "100",
+      jql: `project = ${JSON.stringify(this.config.projectKey)}`,
+    });
+    for (;;) {
+      const page = await this.request<{
+        nextPageToken?: string; isLast?: boolean;
+        issues: { id: string; key: string; fields: { project: {key: string}; summary: string;
+          status: {name: string; statusCategory: {key: string}}; sprint?: {id: number} | null;
+        }}[];
+      }>("GET", `/rest/software/1.0/board/${this.config.boardId}/issue?${params}`);
+      for (const issue of page.issues) {
+        if (!Object.hasOwn(issue.fields, "sprint")) throw new DeliveryApiError("jira", 200, "Sprint membership was not returned");
+        if (issue.fields.project.key !== this.config.projectKey)
+          throw new DeliveryApiError("jira", 200, "Board issue outside the selected project");
+        issues.push({id: issue.id, key: issue.key, title: issue.fields.summary,
+          column: jiraColumn(issue.fields.status), remoteStatus: issue.fields.status.name,
+          sprintId: issue.fields.sprint ? String(issue.fields.sprint.id) : null,
         });
       }
+      if (!page.nextPageToken && page.isLast !== false) return issues;
+      if (!page.nextPageToken || seen.has(page.nextPageToken)) throw new DeliveryApiError("jira", 200, "Invalid continuation token");
+      seen.add(page.nextPageToken);
+      params.set("nextPageToken", page.nextPageToken);
     }
-    return issues;
   }
 
   async createIssue(story: Story): Promise<RemoteIssue> {
@@ -450,6 +432,7 @@ export class DeliverySync {
   /** Read-only: load sprints and remote status for stories already linked. */
   async pull(): Promise<PullResult> {
     const sprints = await this.adapter.listSprints();
+    const issues = await this.adapter.listIssues();
     for (const sprint of sprints) {
       this.store.upsertSprint({
         id: `${this.adapter.system}:${sprint.id}`,
@@ -462,7 +445,7 @@ export class DeliverySync {
       });
     }
     const result: PullResult = { sprints: sprints.length, linked: 0, moved: [], unlinked: [] };
-    for (const issue of await this.adapter.listIssues()) {
+    for (const issue of issues) {
       const story = this.store.storyForExternal(this.adapter.system, this.adapter.account, issue.id);
       if (!story) {
         result.unlinked.push(issue.key);
@@ -479,7 +462,7 @@ export class DeliverySync {
         syncedAt: this.now().toISOString(),
       });
       // Firstmate owns columns for backlog-backed stories; remote status only moves local-only ones.
-      const sprintId = issue.sprintId ? `${this.adapter.system}:${issue.sprintId}` : story.sprintId;
+      const sprintId = issue.sprintId ? `${this.adapter.system}:${issue.sprintId}` : null;
       if (!story.backlogTaskId && story.column !== issue.column) {
         this.store.upsertStory({ ...story, column: issue.column, sprintId });
         result.moved.push({ storyId: story.id, to: issue.column });
@@ -500,7 +483,7 @@ export class DeliverySync {
     for (const id of storyIds) {
       const story = this.store.getStory(id);
       if (!story) continue;
-      const link = this.store.externalLinks(id).find((l) => l.system === this.adapter.system);
+      const link = this.store.externalLinks(id).find((l) => l.system === this.adapter.system && l.account === this.adapter.account);
       if (!link) {
         const issue = await this.adapter.createIssue(story);
         this.store.linkExternal({

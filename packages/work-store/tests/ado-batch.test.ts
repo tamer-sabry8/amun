@@ -15,10 +15,10 @@ it("recovers a lost response after item three, verifies markers and never publis
     project: "Library",
     team: "West",
   };
-  const steps = Array.from({ length: 4 }, (_, i) => ({
+  const steps = Array.from({ length: 5 }, (_, i) => ({
     itemId: String(i),
     type: "Task",
-    parentId: null,
+    parentId: i === 3 ? "2" : null,
     fields: { "System.Title": "Task " + i, "System.IterationPath": "Library" },
     marker: "Test-" + i,
     revision: 0,
@@ -47,15 +47,15 @@ it("recovers a lost response after item three, verifies markers and never publis
     (await batch.execute(preview.id, preview.binding, adapter)).map(
       (x) => x.state,
     ),
-  ).toEqual(["succeeded", "succeeded", "unknown", "approved"]);
+  ).toEqual(["succeeded", "succeeded", "unknown", "approved", "succeeded"]);
   new ActionStore(db).recover();
   expect(
     (await new AdoBatch(db).execute(preview.id, preview.binding, adapter)).map(
       (x) => x.remoteId,
     ),
-  ).toEqual([1, 2, 3, 4]);
+  ).toEqual([1, 2, 3, 5, 4]);
   await batch.execute(preview.id, preview.binding, adapter);
-  expect(writes).toEqual(steps.map((s) => s.marker));
+  expect(writes).toEqual(["Test-0", "Test-1", "Test-2", "Test-4", "Test-3"]);
   expect(
     db.prepare("SELECT count(*) AS n FROM actions WHERE kind='commit'").get(),
   ).toEqual({ n: 0 });

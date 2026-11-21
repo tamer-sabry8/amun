@@ -1,5 +1,16 @@
 // Hand-written surface the daemon uses; the bundle in dist/ is built from src/.
 export interface WorkStoreLike {
+  inspectNavigation?(
+    ref: string,
+    space: string,
+    prompt: string,
+    send: (prompt: string) => Promise<void>,
+  ): Promise<{ delivered: boolean }>;
+  draftNudge?(
+    input: unknown,
+    send: (prompt: string) => Promise<string>,
+    space?: string,
+  ): Promise<unknown>;
   snapshot(): unknown;
   handle(input: unknown): unknown[];
   /** Words inside documents, records and conversations, in the current group. */
@@ -23,6 +34,26 @@ export declare class Redactor {
 }
 /** Products, their mapped sources, PRDs and priorities. */
 export interface WorkspaceLike {
+  bindStoryReview?(
+    input: unknown,
+    ref: string,
+    origin: { areaId: string; chatId: string | null },
+    prompt: string,
+  ): { parent: string; messageId: string; prompt: string };
+  finishStoryReview?(
+    ref: string,
+    messageId: string,
+    text: string,
+    ok: boolean,
+  ): void;
+  author?(
+    input: unknown,
+    firstmate: (
+      model: string,
+      instruction: string,
+      context: string,
+    ) => Promise<string>,
+  ): Promise<unknown>;
   snapshot(): unknown;
   handle(input: unknown): unknown;
 }
@@ -37,7 +68,10 @@ export interface AdoAccess {
 }
 /** Azure DevOps backlog reads and governed writes for a product. */
 export interface AdoServiceLike {
-  handle(message: unknown): Promise<Record<string, unknown> | null>;
+  handle(
+    message: unknown,
+    dispatch?: (space: string, prompt: string) => Promise<string>,
+  ): Promise<Record<string, unknown> | null>;
 }
 /** Agent command-line tools found on this Mac, and the owner's choices. */
 export interface ToolsServiceLike {
@@ -57,7 +91,11 @@ export declare function openWorkStore(
 export declare function openAdo(
   opened: OpenedWorkStore,
   access: AdoAccess,
-): AdoServiceLike;
+): AdoServiceLike & {
+  refreshLinkedBlockers(
+    dispatch?: (space: string, prompt: string) => Promise<string>,
+  ): Promise<boolean>;
+};
 /** The Council (Roast Room): status, runs, seats, updates and the room. */
 export interface CouncilLike {
   handle(message: unknown): Promise<unknown[]>;

@@ -297,12 +297,84 @@ export const workSnapshot = z.strictObject({
       createdAt: stamp,
     }),
   ),
+  sprintDecisions: z
+    .array(
+      z.strictObject({
+        ref: id,
+        workAreaId: id,
+        chatId: id,
+        productId: id,
+        sourceId: id,
+        team: id,
+        backlog: id,
+        sprintId: id,
+        storyId: z.int().positive(),
+      }),
+    )
+    .optional(),
+  sprintCarryovers: z
+    .array(
+      z.strictObject({
+        workAreaId: id,
+        productId: id,
+        sourceId: id,
+        team: id,
+        chatId: id,
+        ref: id,
+        fromId: id,
+        toId: id,
+        title: z.string(),
+        storyId: z.int().positive(),
+        destination: z.string(),
+        revision: z.int().positive(),
+        storyUrl: z.string(),
+      }),
+    )
+    .optional(),
   blockers: z.array(
     z.strictObject({
       id,
       workAreaId: id,
       title: z.string(),
       owner: z.string().nullable(),
+      nudge: z
+        .object({
+          ref: id,
+          text: z.string(),
+          state: z.enum(["drafting", "draft", "copied", "manual", "failed"]),
+        })
+        .nullable()
+        .optional(),
+      ownerReplies: z
+        .array(
+          z.object({
+            id: z.int(),
+            version: z.int(),
+            url: z.url(),
+            body: z.string(),
+            proposal: z.string().nullable(),
+            state: z.enum(["pending", "unconfirmed", "reviewed"]),
+          }),
+        )
+        .optional(),
+      azureIndicator: z
+        .object({
+          rev: z.int().positive(),
+          blocked: z.boolean(),
+          checkedAt: stamp,
+        })
+        .optional(),
+      azureCheckPending: z.boolean().optional(),
+      sprintLink: z
+        .object({
+          sourceId: id,
+          sprintId: id,
+          storyId: id,
+          teamId: id.optional(),
+          trackAzureIndicator: z.literal(true).optional(),
+        })
+        .nullable()
+        .optional(),
       raisedAt: stamp,
       resolvedAt: stamp.nullable(),
     }),
@@ -781,6 +853,28 @@ export const workCommand = z.discriminatedUnion("action", [
     title: name,
     owner: text.nullable().default(null),
   }),
+  act("draft-blocker-message", {
+    areaId: id,
+    blockerId: id,
+    chatId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
+  act("record-blocker-message", {
+    areaId: id,
+    blockerId: id,
+    ref: id,
+    body: z.string().trim().min(1).max(16000),
+    disposition: z.enum(["copied", "manual"]),
+  }),
+  act("link-blocker-story", {
+    areaId: id,
+    blockerId: id,
+    sourceId: id,
+    sprintId: id,
+    storyId: id,
+    teamId: id.optional(),
+    trackAzureIndicator: z.literal(true).optional(),
+  }),
   act("set-blocker-owner", { blockerId: id, owner: text.nullable() }),
   act("resolve-blocker", { blockerId: id }),
   act("reminder", { text: z.string().max(16384), workAreaId: id.nullable() }),
@@ -858,6 +952,14 @@ export const workCommand = z.discriminatedUnion("action", [
     stories: z.array(planStory).max(500).default([]),
     out: z.array(planStory).max(500).default([]),
   }),
+  act("edit-sprint-draft", {
+    sprintId: id,
+    workAreaId: id,
+    name,
+    goal: text,
+    start: z.union([z.iso.date(), z.literal("")]),
+    end: z.union([z.iso.date(), z.literal("")]),
+  }),
   act("move-sprint-story", {
     sprintId: id,
     storyId: id,
@@ -921,6 +1023,12 @@ export const workCommand = z.discriminatedUnion("action", [
     state: z.enum(["working", "waiting", "idle", "done"]),
     nowDoing: text.nullable().default(null),
     output: longText.optional(),
+  }),
+  act("navigation-activity", {
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    workAreaId: id.nullable(),
+    prompt: text.min(1),
+    delivered: z.boolean(),
   }),
   act("activity", {
     groupId: id.nullable(),
@@ -987,7 +1095,10 @@ export const workCommand = z.discriminatedUnion("action", [
   act("fork-chat", { workAreaId: id, messageId: id }),
   act("delete-chat", { chatId: id }),
   /** "New chat" in a folder: an empty chat, named by its first message. */
-  act("new-chat", { workAreaId: id }),
+  act("new-chat", {
+    workAreaId: id,
+    sprint: z.strictObject({ connection: id, id, name }).optional(),
+  }),
   /** `chatId` null is the work's first chat. */
   act("rename-chat", { workAreaId: id, chatId: id.nullable(), title: name }),
   /** Archived chats leave the sidebar, stay searchable and can come back. */
@@ -1447,6 +1558,7 @@ export const workEvent = z.discriminatedUnion("kind", [
   z.strictObject({
     version: z.literal(1),
     kind: z.literal("work-result"),
+    commandId: z.uuid().optional(),
     action: z.string().max(64),
     ok: z.boolean(),
     message: z.string().max(1024),

@@ -1,3 +1,4 @@
+import { draftBlockerNudge, recordNudgeAction } from "./blocker-nudge.ts";
 // Storage and command handling for the UX rebuild model (migration 29).
 // Decisions come from packages/domain/src/work; this file persists them.
 import { randomUUID } from "node:crypto";
@@ -415,13 +416,54 @@ export class WorkStore {
           createdAt: String(row.created_at),
         })),
         plans: this.plans(),
+        sprintDecisions: this
+          .all(`SELECT s.ref,m.work_area_id AS workAreaId,m.chat_id AS chatId,
+          json_extract(s.scope_json,'$.product') AS productId,json_extract(s.scope_json,'$.source') AS sourceId,
+          json_extract(s.scope_json,'$.destination.team') AS team,json_extract(s.scope_json,'$.level') AS backlog,
+          json_extract(s.scope_json,'$.sprintId') AS sprintId,i.item_id AS storyId
+          FROM sprint_submissions s JOIN sprint_submission_items i ON i.ref=s.ref AND i.state='held'
+          JOIN work_messages m ON m.id=s.receipt_id JOIN work_attention d ON d.id='sprint-held:'||s.ref||':'||i.item_id AND d.state<>'done'`),
+        sprintCarryovers: this.all(`
+          SELECT m.work_area_id AS workAreaId, m.chat_id AS chatId, s.ref,
+            json_extract(s.scope_json,'$.product') AS productId, json_extract(s.scope_json,'$.source') AS sourceId,
+            json_extract(s.scope_json,'$.destination.team') AS team,
+            json_extract(s.scope_json,'$.sprintId') AS fromId, json_extract(j.value,'$.targetSprintId') AS toId,
+            json_extract(j.value,'$.title') AS title, i.item_id AS storyId, json_extract(j.value,'$.to') AS destination,
+            i.remote_rev AS revision, rtrim(json_extract(s.scope_json,'$.destination.collection'),'/') || '/_workitems/edit/' || i.item_id AS storyUrl
+          FROM sprint_submissions s JOIN work_messages m ON m.id=s.receipt_id
+          JOIN sprint_submission_items i ON i.ref=s.ref AND i.state='confirmed' AND i.remote_rev>0
+          JOIN json_each(s.scope_json,'$.moves') j ON json_extract(j.value,'$.id')=i.item_id
+          WHERE json_extract(j.value,'$.targetSprintId') IS NOT NULL ORDER BY m.created_at,s.ref,i.item_id
+        `),
         blockers: this.all(
-          "SELECT b.* FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
+          "SELECT n.ref AS nudge_ref,n.text AS nudge_text,n.state AS nudge_state,b.* FROM work_blockers b LEFT JOIN blocker_nudges n ON n.blocker_id=b.id JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
         ).map((row) => ({
           id: String(row.id),
           workAreaId: String(row.work_area_id),
           title: String(row.title),
           owner: (row.owner as string | null) ?? null,
+          nudge: row.nudge_ref
+            ? {
+                ref: row.nudge_ref,
+                text: row.nudge_text,
+                state: row.nudge_state,
+              }
+            : null,
+          ...(row.nudge_ref
+            ? {
+                ownerReplies: this.all(
+                  "SELECT comment_id AS id,version,url,body,proposal,state FROM blocker_comment_reviews WHERE blocker_id=? ORDER BY comment_id,version",
+                  row.id,
+                ),
+              }
+            : {}),
+          ...(row.azure_indicator_json
+            ? { azureIndicator: JSON.parse(String(row.azure_indicator_json)) }
+            : {}),
+          ...(row.azure_check_pending ? { azureCheckPending: true } : {}),
+          sprintLink: row.sprint_link_json
+            ? JSON.parse(String(row.sprint_link_json))
+            : null,
           raisedAt: String(row.raised_at),
           resolvedAt: (row.resolved_at as string | null) ?? null,
         })),
@@ -799,6 +841,73 @@ export class WorkStore {
   /** Content search, always limited to the group the owner is working in. */
   search(query: string) {
     return searchContent(this.db, query, this.setup().activeGroupId);
+  }
+  async inspectNavigation(
+    ref: string,
+    space: string,
+    prompt: string,
+    send: (prompt: string) => Promise<void>,
+  ) {
+    const activity = this.get(
+      "SELECT id,text,state FROM work_activity WHERE ref=?",
+      ref,
+    );
+    if (!activity || activity.text !== this.clean(prompt))
+      throw new WorkError("The navigation request changed.");
+    const claimed = this.run(
+      "INSERT OR IGNORE INTO navigation_dispatches VALUES(?,?,?,'pending')",
+      ref,
+      activity.id,
+      space,
+    ).changes;
+    if (!claimed) {
+      const prior = this.get(
+        "SELECT state FROM navigation_dispatches WHERE ref=? AND space=?",
+        ref,
+        space,
+      );
+      if (!prior)
+        throw new WorkError(
+          "The navigation request belongs to another Firstmate space.",
+        );
+      return { delivered: prior.state === "delivered" };
+    }
+    let delivered = false;
+    try {
+      await send(prompt);
+      delivered = true;
+    } catch {}
+    this.db
+      .transaction(() => {
+        this.run(
+          "UPDATE navigation_dispatches SET state=? WHERE ref=?",
+          delivered ? "delivered" : "unknown",
+          ref,
+        );
+        this.run(
+          "UPDATE work_activity SET state=? WHERE id=?",
+          delivered ? "finished" : "failed",
+          activity.id,
+        );
+      })
+      .immediate();
+    return { delivered };
+  }
+  async draftNudge(
+    input: unknown,
+    send: (prompt: string) => Promise<string>,
+    space?: string,
+  ) {
+    const command = workCommand.parse(input);
+    if (command.action !== "draft-blocker-message")
+      throw Error("Unknown blocker draft action.");
+    await draftBlockerNudge(
+      this.db,
+      command,
+      async (prompt) => this.clean(await send(prompt)),
+      space,
+    );
+    return this.snapshot();
   }
   handle(input: unknown): WorkEvent[] {
     const parsed = workCommand.safeParse(input);
@@ -1416,6 +1525,67 @@ export class WorkStore {
         );
         return { ref: id };
       }
+      case "draft-blocker-message":
+        throw new WorkError(
+          "Open the sprint conversation to draft with Firstmate.",
+        );
+      case "record-blocker-message": {
+        try {
+          if (
+            recordNudgeAction(
+              this.db,
+              command.areaId,
+              command.blockerId,
+              command.ref,
+              this.clean(command.body),
+              command.disposition,
+            )
+          )
+            this.activity({
+              groupId: this.groupOf(command.areaId),
+              workAreaId: command.areaId,
+              text:
+                command.disposition === "copied"
+                  ? "Copied blocker message · delivery unconfirmed"
+                  : "Sent manually · confirmed by you",
+              ref: command.ref,
+              state: "finished",
+            });
+        } catch {
+          throw new WorkError(
+            "The message draft changed. Check the blocker before recording delivery.",
+          );
+        }
+        return { ref: command.ref };
+      }
+      case "link-blocker-story": {
+        const record = this.get(
+          "SELECT sprint_link_json FROM work_blockers WHERE id=? AND work_area_id=? AND resolved_at IS NULL",
+          command.blockerId,
+          command.areaId,
+        );
+        if (!record)
+          throw new WorkError(
+            "The open blocker is unavailable in this work area.",
+          );
+        const link = JSON.stringify({
+          sourceId: command.sourceId,
+          sprintId: command.sprintId,
+          storyId: command.storyId,
+          ...(command.teamId ? { teamId: command.teamId } : {}),
+          ...(command.trackAzureIndicator ? { trackAzureIndicator: true } : {}),
+        });
+        if (record.sprint_link_json && record.sprint_link_json !== link)
+          throw new WorkError(
+            "This blocker already has a different story link.",
+          );
+        this.run(
+          "UPDATE work_blockers SET sprint_link_json=? WHERE id=?",
+          link,
+          command.blockerId,
+        );
+        return { ref: command.blockerId };
+      }
       case "set-blocker-owner": {
         const owner = command.owner?.trim();
         const changed = this.run(
@@ -1725,6 +1895,27 @@ export class WorkStore {
         );
         return { ref: id };
       }
+      case "edit-sprint-draft": {
+        if (command.end && command.start && command.end < command.start)
+          throw new WorkError("A sprint cannot end before it starts.");
+        const saved = this.db
+          .prepare(
+            "UPDATE work_sprints SET name=?,goal=?,start=?,end=? WHERE id=? AND work_area_id=? AND draft=1",
+          )
+          .run(
+            this.clean(command.name),
+            this.clean(command.goal),
+            command.start,
+            command.end,
+            command.sprintId,
+            command.workAreaId,
+          );
+        if (!saved.changes)
+          throw new WorkError(
+            "This sprint draft is no longer available in the selected work area.",
+          );
+        return { ref: command.sprintId };
+      }
       case "move-sprint-story": {
         const sprint = this.get(
           "SELECT * FROM work_sprints WHERE id=?",
@@ -1972,6 +2163,37 @@ export class WorkStore {
       case "edit-agent":
         // The First Mate edits its agents; Amun stores nothing for this.
         return {};
+      case "navigation-activity": {
+        const existing = this.get(
+          "SELECT id,text,work_area_id FROM work_activity WHERE ref=?",
+          command.ref,
+        );
+        const prompt = this.clean(command.prompt);
+        if (existing) {
+          if (
+            existing.text !== prompt ||
+            existing.work_area_id !== command.workAreaId
+          )
+            throw new WorkError(
+              "This navigation reference belongs to another click.",
+            );
+          if (command.delivered)
+            this.run(
+              "UPDATE work_activity SET state='finished' WHERE id=?",
+              existing.id,
+            );
+          return { ref: String(existing.id) };
+        }
+        return {
+          ref: this.activity({
+            groupId: this.groupOf(command.workAreaId),
+            workAreaId: command.workAreaId,
+            text: prompt,
+            ref: command.ref,
+            state: command.delivered ? "finished" : "running",
+          }),
+        };
+      }
       case "activity": {
         const groupId = command.workAreaId
           ? this.groupOf(command.workAreaId)
@@ -2454,12 +2676,25 @@ export class WorkStore {
       case "new-chat": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
+        const sprint = command.sprint;
+        if (sprint) {
+          const existing = this.get(
+            "SELECT id FROM work_chats WHERE work_area_id=? AND sprint_connection=? AND sprint_id=?",
+            command.workAreaId,
+            sprint.connection,
+            sprint.id,
+          );
+          if (existing) return { ref: String(existing.id) };
+        }
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at) VALUES (?,?,'','chat','',NULL,?)",
+          "INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,from_chat_id,created_at,sprint_connection,sprint_id) VALUES (?,?,?,'chat','',NULL,?,?,?)",
           id,
           command.workAreaId,
+          sprint?.name ?? "",
           now,
+          sprint?.connection ?? null,
+          sprint?.id ?? null,
         );
         this.run(
           "UPDATE work_areas SET last_context_at=? WHERE id=?",

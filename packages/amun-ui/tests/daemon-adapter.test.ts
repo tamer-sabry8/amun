@@ -400,6 +400,7 @@ describe("daemon contract adapter", () => {
     const reply = nativePiEvent.parse(sent).result;
     // The UI refuses to send without a model, so one is always reported.
     expect(open.model).toBe("pi");
+    expect(daemon.calls.some((c) => c.method === "models.list")).toBe(false);
     expect(reply).toMatchObject({
       kind: "conversation",
       replyCount: 1,

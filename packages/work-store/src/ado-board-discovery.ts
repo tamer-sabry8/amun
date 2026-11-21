@@ -4,6 +4,10 @@ import type { Transport } from "./ado-client.ts";
 
 type BoardSummary = { id: string; name: string };
 type SprintItem = {
+  assignedIdentity?: { id: string; uniqueName: string };
+  labels?: string[];
+  points?: number;
+  indicator?: { rev: number; blocked: boolean };
   id: number;
   title: string;
   type: string;
@@ -203,8 +207,8 @@ export class BoardDiscovery {
       return x.path;
     });
   }
-  /** Read-only: the team's current and upcoming sprints, soonest first. */
-  async sprints(team: string, limit = 12) {
+  /** Read-only: the team's iterations, including completed and undated ones. */
+  async sprints(team: string, limit?: number) {
     const found: {
       id: string;
       name: string;
@@ -228,18 +232,12 @@ export class BoardDiscovery {
       )
         throw Error("Invalid team iteration");
       const a = record(x.attributes) ? x.attributes : {};
-      if (
-        a.timeFrame === "past" ||
-        typeof a.startDate !== "string" ||
-        typeof a.finishDate !== "string"
-      )
-        continue;
       found.push({
         id: x.id,
         name: x.name,
         path: x.path,
-        start: a.startDate,
-        finish: a.finishDate,
+        start: typeof a.startDate === "string" ? a.startDate : "",
+        finish: typeof a.finishDate === "string" ? a.finishDate : "",
       });
     }
     return found.sort((a, b) => a.start.localeCompare(b.start)).slice(0, limit);
@@ -310,6 +308,169 @@ export class BoardDiscovery {
     ).map(summary);
   }
 
+  async transitions(type: string) {
+    const data = await this.get(
+      new URL(
+        this.project + "/_apis/wit/workitemtypes/" + azurePathSegment(type),
+        this.base,
+      ),
+    );
+    if (!record(data) || !record(data.transitions) || data.isDisabled === true)
+      return {};
+    const result: Record<string, string[]> = Object.create(null);
+    for (const [from, options] of Object.entries(data.transitions)) {
+      if (Array.isArray(options))
+        result[from] = options.flatMap((s) =>
+          record(s) && typeof s.to === "string" && s.to !== from ? [s.to] : [],
+        );
+    }
+    return result;
+  }
+  async teamIdentities(team: string) {
+    // This endpoint pages by skip and top and nests each user under identity.
+    const members: { id: string; name: string; uniqueName: string }[] = [];
+    const seen = new Set<string>();
+    for (let skip = 0; ; skip += 100) {
+      const url = new URL(
+        "_apis/projects/" +
+          this.project +
+          "/teams/" +
+          azurePathSegment(team) +
+          "/members",
+        this.base,
+      );
+      url.searchParams.set("$top", "100");
+      url.searchParams.set("$skip", String(skip));
+      const data = await this.get(url);
+      if (!record(data) || !Array.isArray(data.value))
+        throw Error("Team member discovery is incomplete.");
+      for (const member of data.value) {
+        const identity = record(member) && member.identity;
+        if (
+          !record(identity) ||
+          typeof identity.id !== "string" ||
+          seen.has(identity.id)
+        )
+          throw Error("Team member discovery is incomplete.");
+        seen.add(identity.id);
+        if (
+          typeof identity.uniqueName === "string" &&
+          typeof identity.displayName === "string" &&
+          identity.isContainer !== true
+        )
+          members.push({
+            id: identity.id,
+            name: identity.displayName,
+            uniqueName: identity.uniqueName,
+          });
+      }
+      if (data.value.length < 100) return members;
+    }
+  }
+  async storyComments(id: number) {
+    if (!Number.isSafeInteger(id) || id < 1) throw Error("Invalid story ID");
+    const url = new URL(
+      this.project + "/_apis/wit/workItems/" + id + "/comments",
+      this.base,
+    );
+    url.searchParams.set("api-version", "7.0-preview.3");
+    url.searchParams.set("$top", "200");
+    const comments: {
+      id: number;
+      version: number;
+      authorId: string;
+      at: string;
+      text: string;
+      url: string;
+    }[] = [];
+    const seen = new Set<string>();
+    for (;;) {
+      const page = await this.transport("GET", url.href);
+      if (
+        page.status !== 200 ||
+        !record(page.data) ||
+        !Array.isArray(page.data.comments)
+      )
+        throw Error("Azure comments unavailable.");
+      for (const c of page.data.comments) {
+        if (c.isDeleted) continue;
+        if (
+          c.workItemId !== id ||
+          !Number.isSafeInteger(c.id) ||
+          !Number.isSafeInteger(c.version) ||
+          !c.createdBy?.id ||
+          typeof c.text !== "string" ||
+          !Number.isFinite(Date.parse(c.createdDate))
+        )
+          throw Error("Azure comment evidence incomplete.");
+        const link = new URL(
+          this.project + "/_workitems/edit/" + id,
+          this.base,
+        );
+        link.searchParams.set("discussionId", String(c.id));
+        comments.push({
+          id: c.id,
+          version: c.version,
+          authorId: c.createdBy.id,
+          at: c.createdDate,
+          text: c.text,
+          url: link.href,
+        });
+      }
+      const next = page.continuationToken ?? page.data.continuationToken;
+      if (!next) return comments;
+      if (typeof next !== "string" || seen.has(next))
+        throw Error("Azure comment pagination incomplete.");
+      seen.add(next);
+      url.searchParams.set("continuationToken", next);
+    }
+  }
+
+  async planningCreationTarget(
+    team: string,
+    levelId: string,
+    backlogIteration: string | null,
+  ) {
+    if (!backlogIteration) return null;
+    const prefix = this.project + "/" + azurePathSegment(team) + "/_apis/work/";
+    const [config, areas] = await Promise.all([
+      this.get(new URL(prefix + "backlogconfiguration", this.base)),
+      this.get(new URL(prefix + "teamsettings/teamfieldvalues", this.base)),
+    ]);
+    if (
+      !record(config) ||
+      !record(config.requirementBacklog) ||
+      config.requirementBacklog.id !== levelId ||
+      !record(config.requirementBacklog.defaultWorkItemType) ||
+      typeof config.requirementBacklog.defaultWorkItemType.name !== "string" ||
+      !record(areas) ||
+      !record(areas.field) ||
+      areas.field.referenceName !== "System.AreaPath" ||
+      typeof areas.defaultValue !== "string" ||
+      !Array.isArray(areas.values) ||
+      !areas.values.some((v) => record(v) && v.value === areas.defaultValue)
+    )
+      return null;
+    return {
+      type: config.requirementBacklog.defaultWorkItemType.name,
+      area: areas.defaultValue,
+      backlogIteration,
+    };
+  }
+  async backlogIteration(team: string): Promise<string | null> {
+    const settings = await this.get(
+      new URL(
+        this.project +
+          "/" +
+          azurePathSegment(team) +
+          "/_apis/work/teamsettings",
+        this.base,
+      ),
+    );
+    if (!record(settings) || !record(settings.backlogIteration)) return null;
+    const path = settings.backlogIteration.path;
+    return typeof path === "string" && path.trim() ? path : null;
+  }
   async boardSettings(team: string, board: string) {
     const url = new URL(
       this.project +
@@ -337,7 +498,7 @@ export class BoardDiscovery {
    * Read-only: the work items in one of the team's sprints, as Azure lists
    * them, with title, type, state and who they are assigned to.
    */
-  async iterationItems(team: string, iteration: string, limit = 200) {
+  async iterationItems(team: string, iteration: string, limit?: number) {
     const data = await this.get(
       new URL(
         this.project +
@@ -351,27 +512,20 @@ export class BoardDiscovery {
     );
     if (!record(data) || !Array.isArray(data.workItemRelations))
       throw new Error("Invalid Azure sprint");
-    const ids: number[] = [];
+    const ids = new Set<number>();
     for (const relation of data.workItemRelations) {
       const id = relation?.target?.id;
       if (!Number.isSafeInteger(id) || id < 1)
         throw new Error("Invalid Azure item reference");
-      if (!ids.includes(id)) ids.push(id);
+      ids.add(id);
     }
-    const wanted = ids.slice(0, limit);
+    const wanted = [...ids].slice(0, limit);
     const byId = new Map<number, SprintItem>();
+    const ranks = new Map<number, number>();
     for (let offset = 0; offset < wanted.length; offset += 200) {
       const url = new URL(this.project + "/_apis/wit/workitems", this.base);
-      url.searchParams.set("ids", wanted.slice(offset, offset + 200).join(","));
-      url.searchParams.set(
-        "fields",
-        [
-          "System.Title",
-          "System.State",
-          "System.WorkItemType",
-          "System.AssignedTo",
-        ].join(","),
-      );
+      const chunk = new Set(wanted.slice(offset, offset + 200));
+      url.searchParams.set("ids", [...chunk].join(","));
       const batch = await this.get(url);
       if (!record(batch) || !Array.isArray(batch.value))
         throw new Error("Invalid Azure items");
@@ -379,14 +533,43 @@ export class BoardDiscovery {
         const f = item?.fields;
         if (
           !f ||
-          !wanted.includes(item.id) ||
+          !chunk.has(item.id) ||
+          byId.has(item.id) ||
           typeof f["System.Title"] !== "string" ||
           typeof f["System.State"] !== "string" ||
           typeof f["System.WorkItemType"] !== "string"
         )
           throw new Error("Invalid Azure item");
+        const rank =
+          f["Microsoft.VSTS.Common.StackRank"] ??
+          f["Microsoft.VSTS.Common.BacklogPriority"];
+        if (typeof rank === "number" && Number.isFinite(rank))
+          ranks.set(item.id, rank);
         const who = f["System.AssignedTo"];
+        const points = f["Microsoft.VSTS.Scheduling.StoryPoints"];
+        const indicator = f["Microsoft.VSTS.CMMI.Blocked"];
         byId.set(item.id, {
+          ...(typeof f["System.Tags"] === "string"
+            ? {
+                labels: f["System.Tags"]
+                  .split(";")
+                  .map((label: string) => label.trim())
+                  .filter(Boolean),
+              }
+            : {}),
+          ...(typeof points === "number" && Number.isFinite(points)
+            ? { points }
+            : {}),
+          ...(Number.isSafeInteger(item.rev) &&
+          item.rev > 0 &&
+          (indicator === "Yes" || indicator === "No")
+            ? { indicator: { rev: item.rev, blocked: indicator === "Yes" } }
+            : {}),
+          ...(record(who) &&
+          typeof who.id === "string" &&
+          typeof who.uniqueName === "string"
+            ? { assignedIdentity: { id: who.id, uniqueName: who.uniqueName } }
+            : {}),
           id: item.id,
           title: f["System.Title"],
           type: f["System.WorkItemType"],
@@ -400,9 +583,12 @@ export class BoardDiscovery {
         });
       }
     }
+    if (byId.size !== wanted.length) throw new Error("Incomplete Azure sprint");
+    if (ranks.size === wanted.length)
+      wanted.sort((a, b) => ranks.get(a)! - ranks.get(b)!);
     return {
-      items: wanted.flatMap((id) => byId.get(id) ?? []),
-      more: ids.length > wanted.length,
+      items: wanted.map((id) => byId.get(id)!),
+      more: ids.size > wanted.length,
     };
   }
 
@@ -414,7 +600,12 @@ export class BoardDiscovery {
     return response.data;
   }
 
-  async cards(team: string, level: string, columnField: string) {
+  async cards(
+    team: string,
+    level: string,
+    columnField: string,
+    details = false,
+  ) {
     if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,255}$/.test(columnField))
       throw new Error("Invalid Azure column field");
     const data = await this.get(
@@ -447,6 +638,22 @@ export class BoardDiscovery {
         type: string;
         state: string;
         column: string | null;
+        iteration: string | null;
+        assignee?: string;
+        assigneeId?: string;
+        labels?: string[];
+        estimates?: { name: string; value: number }[];
+        blocked?: string | undefined;
+        description?: string;
+        readableCriteria?: boolean;
+        criteria?: string;
+        rank?: {
+          field:
+            | "Microsoft.VSTS.Common.StackRank"
+            | "Microsoft.VSTS.Common.BacklogPriority";
+          value: number;
+        };
+        prerequisites?: number[];
       }
     >();
     for (let offset = 0; offset < ordered.length; offset += 200) {
@@ -455,15 +662,18 @@ export class BoardDiscovery {
         "ids",
         ordered.slice(offset, offset + 200).join(","),
       );
-      url.searchParams.set(
-        "fields",
-        [
-          "System.Title",
-          "System.State",
-          "System.WorkItemType",
-          columnField,
-        ].join(","),
-      );
+      if (details) url.searchParams.set("$expand", "Relations");
+      if (!details)
+        url.searchParams.set(
+          "fields",
+          [
+            "System.Title",
+            "System.State",
+            "System.WorkItemType",
+            "System.IterationPath",
+            columnField,
+          ].join(","),
+        );
       const batch = await this.get(url);
       if (!record(batch) || !Array.isArray(batch.value))
         throw new Error("Invalid Azure items");
@@ -480,12 +690,102 @@ export class BoardDiscovery {
           typeof f["System.WorkItemType"] !== "string"
         )
           throw new Error("Invalid Azure item");
+        const rankField = (
+          [
+            "Microsoft.VSTS.Common.StackRank",
+            "Microsoft.VSTS.Common.BacklogPriority",
+          ] as const
+        ).find(
+          (field) => typeof f[field] === "number" && Number.isFinite(f[field]),
+        );
         byId.set(item.id, {
+          ...(details && rankField
+            ? { rank: { field: rankField, value: f[rankField] } }
+            : {}),
           id: item.id,
           rev: item.rev,
           title: f["System.Title"],
           state: f["System.State"],
           type: f["System.WorkItemType"],
+          iteration:
+            typeof f["System.IterationPath"] === "string"
+              ? f["System.IterationPath"]
+              : null,
+          ...(details
+            ? {
+                prerequisites: Array.isArray(item.relations)
+                  ? item.relations.flatMap((rel: unknown) => {
+                      if (
+                        !record(rel) ||
+                        rel.rel !== "System.LinkTypes.Dependency-Reverse" ||
+                        typeof rel.url !== "string"
+                      )
+                        return [];
+                      try {
+                        const target = new URL(rel.url);
+                        const match = target.pathname.match(
+                          /\/_apis\/wit\/workitems\/(\d+)$/i,
+                        );
+                        const id = match && Number(match[1]);
+                        if (
+                          target.origin === this.base.origin &&
+                          target.pathname
+                            .toLowerCase()
+                            .startsWith(this.base.pathname.toLowerCase()) &&
+                          id &&
+                          ids.has(id)
+                        )
+                          return [id];
+                      } catch {}
+                      return [];
+                    })
+                  : [],
+                ...(typeof f["System.AssignedTo"]?.id === "string"
+                  ? { assigneeId: f["System.AssignedTo"].id }
+                  : {}),
+                assignee:
+                  typeof f["System.AssignedTo"] === "string"
+                    ? f["System.AssignedTo"]
+                    : f["System.AssignedTo"]?.displayName,
+                labels:
+                  typeof f["System.Tags"] === "string"
+                    ? f["System.Tags"]
+                        .split(";")
+                        .map((t: string) => t.trim())
+                        .filter(Boolean)
+                    : [],
+                estimates: ["StoryPoints", "Effort", "Size"].flatMap(
+                  (field) => {
+                    const value = f["Microsoft.VSTS.Scheduling." + field];
+                    return typeof value === "number"
+                      ? [
+                          {
+                            name:
+                              field === "StoryPoints" ? "Story points" : field,
+                            value,
+                          },
+                        ]
+                      : [];
+                  },
+                ),
+                blocked:
+                  typeof f["Microsoft.VSTS.CMMI.Blocked"] === "string"
+                    ? f["Microsoft.VSTS.CMMI.Blocked"]
+                    : undefined,
+                description:
+                  typeof f["System.Description"] === "string"
+                    ? f["System.Description"]
+                    : "",
+                readableCriteria:
+                  typeof f["Microsoft.VSTS.Common.AcceptanceCriteria"] ===
+                  "string",
+                criteria:
+                  typeof f["Microsoft.VSTS.Common.AcceptanceCriteria"] ===
+                  "string"
+                    ? f["Microsoft.VSTS.Common.AcceptanceCriteria"]
+                    : "",
+              }
+            : {}),
           column: typeof f[columnField] === "string" ? f[columnField] : null,
         });
       }

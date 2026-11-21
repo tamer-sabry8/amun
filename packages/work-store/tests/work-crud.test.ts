@@ -364,6 +364,254 @@ describe("blockers", () => {
     );
     expect(send("resolve-blocker", { blockerId: id }).ok).toBe(true);
   });
+  it("retains a blocker link across reopen and rejects a conflicting sprint or area", () => {
+    const areaId = add("project", "Portal");
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Access needed",
+    }).ref!;
+    const link = {
+      sourceId: "azure-1",
+      sprintId: "iteration-5",
+      storyId: "42",
+    };
+    const args = { areaId, blockerId, ...link };
+    expect(
+      send("link-blocker-story", { ...args, areaId: add("project", "Other") })
+        .ok,
+    ).toBe(false);
+    expect(send("link-blocker-story", args).ok).toBe(true);
+    expect(send("link-blocker-story", args).ok).toBe(true);
+    expect(send("link-blocker-story", { ...args, sprintId: "other" }).ok).toBe(
+      false,
+    );
+    expect(new WorkStore(db).snapshot().blockers[0]?.sprintLink).toEqual(link);
+    send("resolve-blocker", { blockerId });
+    expect(send("link-blocker-story", args).ok).toBe(false);
+  });
+  it("requires a verified change of the explicitly linked Azure indicator before resolving a blocker", async () => {
+    const { observeSprintBlockers } =
+      await import("../src/sprint-blocker-evidence.ts");
+    const areaId = add("project", "Portal");
+    db.prepare(
+      "INSERT INTO products(id,name,created_at) VALUES('p','Portal','2026-01-01')",
+    ).run();
+    db.prepare("UPDATE work_areas SET product_id='p' WHERE id=?").run(areaId);
+    for (const track of [true, false]) {
+      const blockerId = send("raise-blocker", {
+        areaId,
+        title: track ? "Approval" : "Access",
+      }).ref;
+      expect(
+        send("link-blocker-story", {
+          areaId,
+          blockerId,
+          sourceId: "azure",
+          sprintId: "ado:s",
+          storyId: "24",
+          teamId: "west",
+          ...(track ? { trackAzureIndicator: true } : {}),
+        }).ok,
+      ).toBe(true);
+    }
+    const scope = {
+      workAreaId: areaId,
+      productId: "p",
+      sourceId: "azure",
+      team: "west",
+      sprint: "s",
+    };
+    const first = "2026-10-13T09:00:00.000Z",
+      last = "2026-10-13T10:00:00.000Z";
+    observeSprintBlockers(
+      db,
+      scope,
+      [{ id: 24, indicator: { rev: 2, blocked: true } }],
+      first,
+    );
+    observeSprintBlockers(db, scope, null, last);
+    expect(blockers()[0]).toMatchObject({
+      azureCheckPending: true,
+      azureIndicator: { checkedAt: first },
+      resolvedAt: null,
+    });
+    observeSprintBlockers(
+      db,
+      { ...scope, team: "east" },
+      [{ id: 24, indicator: { rev: 3, blocked: false } }],
+      last,
+    );
+    expect(blockers().every((b) => !b.resolvedAt)).toBe(true);
+    observeSprintBlockers(
+      db,
+      scope,
+      [{ id: 24, indicator: { rev: 3, blocked: false } }],
+      last,
+    );
+    expect(blockers().find((b) => b.title === "Approval")?.resolvedAt).toBe(
+      last,
+    );
+    expect(blockers().find((b) => b.title === "Access")?.resolvedAt).toBeNull();
+  });
+  it("keeps one nudge in the sprint conversation and distinguishes manual delivery from resolution", async () => {
+    const areaId = add("project", "Gitex");
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Badge permission",
+      owner: "Sam",
+    }).ref!;
+    const sprint = { id: "ado:4", connection: "azure", name: "Sprint 4" };
+    const chatId = send("new-chat", { workAreaId: areaId, sprint }).ref!;
+    send("link-blocker-story", {
+      areaId,
+      blockerId,
+      sourceId: "azure",
+      sprintId: sprint.id,
+      storyId: "24",
+    });
+    const ref = "amun-r-123456789abc";
+    const args = {
+      version: 1,
+      kind: "work",
+      action: "draft-blocker-message",
+      ref,
+      areaId,
+      blockerId,
+      chatId,
+    };
+    let calls = 0;
+    const draft = () =>
+      store.draftNudge(args, async () => {
+        calls++;
+        return "Sam, can you confirm access for badge printing?";
+      });
+    await Promise.all([draft(), draft()]);
+    expect(calls).toBe(1);
+    const record = (disposition: string) =>
+      send("record-blocker-message", {
+        areaId,
+        blockerId,
+        ref,
+        body: "Sam, can you confirm badge access today?",
+        disposition,
+      });
+    expect(record("copied").ok).toBe(true);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      nudge: { state: "copied" },
+    });
+    expect(record("manual").ok).toBe(true);
+    expect(record("manual").ok).toBe(true);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      nudge: { state: "manual" },
+    });
+    const messages = snap().chats.find((c) => c.id === chatId)!.messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[1]?.text).toContain("Sent manually · confirmed by you");
+  });
+  it("sends a verified owner reply to the originating Firstmate once across overlapping and repeated reads", async () => {
+    const { reviewBlockerComments } =
+      await import("../src/blocker-comment-review.ts");
+    const areaId = add("project", "QA");
+    db.prepare(
+      "INSERT INTO products(id,name,created_at) VALUES('p','QA','2026-01-01')",
+    ).run();
+    db.prepare("UPDATE work_areas SET product_id='p' WHERE id=?").run(areaId);
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Badge",
+      owner: "Sam",
+    }).ref!;
+    send("link-blocker-story", {
+      areaId,
+      blockerId,
+      sourceId: "azure",
+      sprintId: "ado:4",
+      storyId: "24",
+      teamId: "west",
+    });
+    const chatId = send("new-chat", {
+      workAreaId: areaId,
+      sprint: { id: "ado:4", connection: "azure", name: "Sprint 4" },
+    }).ref;
+    await store.draftNudge(
+      {
+        version: 1,
+        kind: "work",
+        action: "draft-blocker-message",
+        areaId,
+        blockerId,
+        chatId,
+        ref: "amun-r-123456789abc",
+      },
+      async () => "Draft",
+      "home",
+    );
+    const identity = { id: "7", name: "Sam", uniqueName: "sam@example.test" };
+    const member = { id: 24, assignee: "Sam", assignedIdentity: identity };
+    const comment = {
+      id: 5,
+      version: 1,
+      authorId: "7",
+      at: new Date(Date.now() + 10).toISOString(),
+      text: "Scan both passes.",
+      url: "https://example.test/comment/5",
+    };
+    const reader = {
+      teamIdentities: async () => [identity],
+      storyComments: async () => [
+        { ...comment, id: 4, authorId: "8" },
+        comment,
+      ],
+    };
+    const scope = {
+      productId: "p",
+      workAreaId: areaId,
+      team: "west",
+      sourceId: "azure",
+      sprint: "4",
+    };
+    let calls = 0;
+    const run = () =>
+      reviewBlockerComments(
+        db,
+        scope,
+        [member],
+        reader,
+        async (space, prompt) => {
+          expect(space).toBe("home");
+          expect(prompt).toContain("amun-r-123456789abc");
+          calls++;
+          return "Both passes scan.";
+        },
+        (s) => s,
+      );
+    await Promise.all([run(), run()]);
+    await run();
+    expect(calls).toBe(1);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      ownerReplies: [
+        { id: 5, state: "reviewed", proposal: "Both passes scan." },
+      ],
+    });
+    const blocker = snap().blockers[0]!;
+    const decision = snap().attention.find(
+      (a) => a.id === "blocker-review:" + blocker.id,
+    );
+    expect(decision?.state).toBe("open");
+    db.prepare(
+      "INSERT INTO work_attention(id,kind,work_area_id,title,state,created_at) VALUES('separate','risk',?,'Independent approval','open','now')",
+    ).run(areaId);
+    send("resolve-blocker", { blockerId: blocker.id });
+    expect(snap().attention.find((a) => a.id === decision!.id)?.state).toBe(
+      "done",
+    );
+    expect(snap().attention.find((a) => a.id === "separate")?.state).toBe(
+      "open",
+    );
+  });
   it("need a work area, and go with it when it is deleted", () => {
     expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
       false,
@@ -462,4 +710,38 @@ describe("document versions and approval", () => {
       }).ok,
     ).toBe(false);
   });
+});
+
+it("retains one navigation dispatch after loss of acknowledgement and keeps it out of chat", async () => {
+  const areaId = add("project", "Gitex");
+  const ref = "amun-r-abcdef123456",
+    prompt = "Open sprint detail. Read-only.";
+  send("navigation-activity", {
+    ref,
+    workAreaId: areaId,
+    prompt,
+    delivered: false,
+  });
+  let sent = 0;
+  const uncertain = await store.inspectNavigation(
+    ref,
+    "work",
+    prompt,
+    async () => {
+      sent++;
+      throw Error("lost acknowledgement");
+    },
+  );
+  expect(uncertain.delivered).toBe(false);
+  const reopened = new WorkStore(db);
+  expect(
+    await reopened.inspectNavigation(ref, "work", prompt, async () => {
+      sent++;
+    }),
+  ).toEqual({ delivered: false });
+  expect(sent).toBe(1);
+  expect(reopened.snapshot().activity.find((a) => a.ref === ref)).toMatchObject(
+    { text: prompt, state: "failed" },
+  );
+  expect(reopened.snapshot().messages).toHaveLength(0);
 });

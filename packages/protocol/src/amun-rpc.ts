@@ -262,6 +262,9 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // contract), and Azure DevOps backlog reads and governed writes, which use
   // the saved connection's Keychain token inside the daemon only.
   z.object({ id: z.string(), method: z.literal("workspace.snapshot") }),
+  z.object({ id: z.string(), method: z.literal("work.inspect"), ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/), space: slug, prompt: z.string().min(1).max(16384) }),
+  z.object({ id: z.string(), method: z.literal("work.nudge"), space: slug, command: z.record(z.string(), z.unknown()) }),
+  z.object({ id: z.string(), method: z.literal("workspace.author"), origin:z.object({areaId:z.string(),chatId:z.string().nullable()}).nullish(), space: slug, ref:z.string().regex(/^amun-r-[0-9a-f]{12}$/), message:z.record(z.string(),z.unknown()) }),
   z.object({ id: z.string(), method: z.literal("workspace.command"), command: z.record(z.string(), z.unknown()) }),
   z.object({ id: z.string(), method: z.literal("ado.request"), message: z.record(z.string(), z.unknown()) }),
   // Agent command-line tools on this Mac (the renderer's "tools" contract):

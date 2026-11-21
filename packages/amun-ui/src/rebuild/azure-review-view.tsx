@@ -1,3 +1,5 @@
+import { useReviewOrigin } from "./review-origin.tsx";
+import { newRequestRef } from "../../../domain/src/work/requests.ts";
 import { useEffect, useRef, useState } from "react";
 import {
   operationResult,
@@ -65,11 +67,14 @@ export function AzureWorkReview({
   scope,
   context,
   schema,
+  level,
 }: {
   scope: Scope;
+  level: string;
   context: Context;
   schema: AzureProcessSchema;
 }) {
+  const origin = useReviewOrigin();
   const op = useOperation(scope);
   const [intent, intend] = useState("publish"),
     [iterations, setIterations] = useState<string[]>([]),
@@ -92,174 +97,274 @@ export function AzureWorkReview({
       ? d.status === "draft"
       : d.status === "published" || d.status === "committed",
   );
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState<string[]>([]);
+  const coverage = (draft: Context["storyDrafts"][number]) =>
+    context.comparisons
+      ?.find(
+        (c) =>
+          !c.pending &&
+          c.objectiveId === draft.objectiveId &&
+          c.version === draft.version &&
+          c.sourceId === scope.sourceId &&
+          c.team === scope.team &&
+          c.level === level,
+      )
+      ?.rows.find((row) => row.draftId === (draft.parentId ?? draft.id));
+  const eligible = (draft: Context["storyDrafts"][number]) =>
+    intent === "commit" ||
+    (!!coverage(draft) &&
+      coverage(draft)?.classification !== "held" &&
+      !context.storyDecisions.some(
+        (d) => d.itemId === draft.id && d.state !== "resolved",
+      ));
+  const visible = (draft: Context["storyDrafts"][number]) =>
+    filter === "all" ||
+    filter === (coverage(draft)?.classification ?? "pending");
+  const visibleEligible = drafts.filter((d) => visible(d) && eligible(d));
+  const count = drafts.filter(
+    (d) => selected.includes(d.id) && eligible(d),
+  ).length;
   return (
     <section className="rb-inline" aria-label="Azure work review">
       <h3>Publish stories and plan a sprint</h3>
-      {!held && (
-        <>
-          <div className="row">
-            <button
-              className="btn"
-              disabled={op.busy}
-              onClick={() => op.send("targets", {})}
+      <div hidden={!!held}>
+        <div className="row">
+          <button
+            className="btn"
+            disabled={op.busy}
+            onClick={() => op.send("targets", {})}
+          >
+            Find sprints
+          </button>
+        </div>
+        <form
+          style={stack}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            try {
+              const items = drafts
+                .filter((d) => selected.includes(d.id) && eligible(d))
+                .map((d) => ({
+                  id: d.id,
+                  ...(data.get("decision-" + d.id)
+                    ? { duplicateDecision: data.get("decision-" + d.id) }
+                    : {}),
+                  ...(data.get("target-" + d.id)
+                    ? { targetId: Number(data.get("target-" + d.id)) }
+                    : {}),
+                  type: data.get("type-" + d.id) ?? d.type,
+                  title: data.get("title-" + d.id) ?? d.title,
+                  fields: JSON.parse(
+                    String(data.get("fields-" + d.id) || "{}"),
+                  ),
+                }));
+              if (!items.length) throw Error("Select at least one item.");
+              setError("");
+              op.send("preview", {
+                level,
+                intent,
+                area: String(data.get("area")),
+                iteration:
+                  intent === "publish"
+                    ? project
+                    : String(data.get("iteration")),
+                assignee:
+                  intent === "commit" ? String(data.get("assignee") ?? "") : "",
+                items,
+              });
+            } catch (err) {
+              setError(
+                err instanceof SyntaxError
+                  ? "Enter valid JSON for additional fields."
+                  : String(err),
+              );
+            }
+          }}
+        >
+          <label className="field">
+            What would you like to do?
+            <select
+              value={intent}
+              onChange={(e) => {
+                intend(e.target.value);
+                op.clear();
+              }}
             >
-              Find sprints
+              <option value="publish">Publish to the backlog</option>
+              <option value="commit">Commit to a sprint</option>
+            </select>
+          </label>
+          <label className="field">
+            Area
+            <select name="area">
+              {schema.areas.map((a) => (
+                <option key={a}>{a}</option>
+              ))}
+            </select>
+          </label>
+          {intent === "commit" && (
+            <>
+              <label className="field">
+                Sprint
+                <select required name="iteration">
+                  <option value="">Choose a sprint…</option>
+                  {iterations.map((i) => (
+                    <option key={i}>{i}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Assign to (optional)
+                <input type="text" name="assignee" />
+              </label>
+            </>
+          )}
+          {intent === "publish" && (
+            <div className="row wrap">
+              <label className="field">
+                Show
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                >
+                  <option value="all">All proposals</option>
+                  <option value="addition">New stories</option>
+                  <option value="edit">Proposed edits</option>
+                  <option value="covered">Covered</option>
+                  <option value="held">Needs review</option>
+                  <option value="pending">Comparison pending</option>
+                </select>
+              </label>
+              <button
+                className="btn quiet"
+                type="button"
+                disabled={!visibleEligible.length}
+                onClick={() =>
+                  setSelected((ids) => [
+                    ...new Set([
+                      ...ids,
+                      ...visibleEligible
+                        .filter(
+                          (d) => coverage(d)?.classification !== "covered",
+                        )
+                        .map((d) => d.id),
+                    ]),
+                  ])
+                }
+              >
+                Select visible changes
+              </button>
+              <span role="status">{count} selected</span>
+            </div>
+          )}
+          {drafts.map((d) => (
+            <div
+              key={d.id}
+              hidden={intent === "publish" && !visible(d)}
+              role="group"
+              aria-labelledby={"pick-" + d.id}
+              style={
+                intent === "publish" && !visible(d)
+                  ? { display: "none" }
+                  : divided
+              }
+            >
+              <label className="row" id={"pick-" + d.id}>
+                <input
+                  type="checkbox"
+                  name={"select-" + d.id}
+                  disabled={!eligible(d)}
+                  checked={selected.includes(d.id) && eligible(d)}
+                  onChange={(e) =>
+                    setSelected((ids) =>
+                      e.target.checked
+                        ? [...new Set([...ids, d.id])]
+                        : ids.filter((id) => id !== d.id),
+                    )
+                  }
+                />
+                {d.title}
+              </label>
+              <p className="muted small">
+                PRD v{d.version} · {d.requirementId}
+              </p>
+              {intent === "publish" && (
+                <>
+                  <label className="field">
+                    Duplicate decision
+                    <select name={"decision-" + d.id} defaultValue="">
+                      <option value="">Check for an existing story</option>
+                      <option value="edit-existing">Edit existing story</option>
+                      <option value="create-separately">
+                        Create separately
+                      </option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    Existing story ID for an edit
+                    <input type="number" name={"target-" + d.id} min="1" />
+                  </label>
+                  <label className="field">
+                    Title in Azure DevOps
+                    <input
+                      type="text"
+                      required
+                      name={"title-" + d.id}
+                      defaultValue={d.title}
+                    />
+                  </label>
+                  <label className="field">
+                    Work item type
+                    <select
+                      name={"type-" + d.id}
+                      defaultValue={
+                        schema.types.find(
+                          (t) => t.name.toLowerCase() === d.type,
+                        )?.name ??
+                        schema.types.find((t) =>
+                          [
+                            "Product Backlog Item",
+                            "User Story",
+                            "Issue",
+                          ].includes(t.name),
+                        )?.name
+                      }
+                    >
+                      {schema.types.map((t) => (
+                        <option key={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    Extra fields, written as JSON
+                    <textarea
+                      name={"fields-" + d.id}
+                      defaultValue="{}"
+                      style={{ minHeight: 60, resize: "vertical" }}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          ))}
+          {!drafts.length && (
+            <p className="muted small">
+              {intent === "publish"
+                ? "No story drafts are waiting to be published."
+                : "No published stories are waiting for a sprint."}
+            </p>
+          )}
+          <div className="row">
+            <button className="btn" disabled={op.busy || !count}>
+              {intent === "publish"
+                ? "Preview what will be published"
+                : "Preview what will be committed"}
             </button>
           </div>
-          <form
-            style={stack}
-            onSubmit={(e) => {
-              e.preventDefault();
-              const data = new FormData(e.currentTarget);
-              try {
-                const items = drafts
-                  .filter((d) => data.has("select-" + d.id))
-                  .map((d) => ({
-                    id: d.id,
-                    type: data.get("type-" + d.id) ?? d.type,
-                    title: data.get("title-" + d.id) ?? d.title,
-                    fields: JSON.parse(
-                      String(data.get("fields-" + d.id) || "{}"),
-                    ),
-                  }));
-                if (!items.length) throw Error("Select at least one item.");
-                setError("");
-                op.send("preview", {
-                  intent,
-                  area: String(data.get("area")),
-                  iteration:
-                    intent === "publish"
-                      ? project
-                      : String(data.get("iteration")),
-                  assignee:
-                    intent === "commit"
-                      ? String(data.get("assignee") ?? "")
-                      : "",
-                  items,
-                });
-              } catch (err) {
-                setError(
-                  err instanceof SyntaxError
-                    ? "Enter valid JSON for additional fields."
-                    : String(err),
-                );
-              }
-            }}
-          >
-            <label className="field">
-              What would you like to do?
-              <select
-                value={intent}
-                onChange={(e) => {
-                  intend(e.target.value);
-                  op.clear();
-                }}
-              >
-                <option value="publish">Publish to the backlog</option>
-                <option value="commit">Commit to a sprint</option>
-              </select>
-            </label>
-            <label className="field">
-              Area
-              <select name="area">
-                {schema.areas.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </select>
-            </label>
-            {intent === "commit" && (
-              <>
-                <label className="field">
-                  Sprint
-                  <select required name="iteration">
-                    <option value="">Choose a sprint…</option>
-                    {iterations.map((i) => (
-                      <option key={i}>{i}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  Assign to (optional)
-                  <input type="text" name="assignee" />
-                </label>
-              </>
-            )}
-            {drafts.map((d) => (
-              <div
-                key={d.id}
-                role="group"
-                aria-labelledby={"pick-" + d.id}
-                style={divided}
-              >
-                <label className="row" id={"pick-" + d.id}>
-                  <input type="checkbox" name={"select-" + d.id} />
-                  {d.title}
-                </label>
-                <p className="muted small">
-                  PRD v{d.version} · {d.requirementId}
-                </p>
-                {intent === "publish" && (
-                  <>
-                    <label className="field">
-                      Title in Azure DevOps
-                      <input
-                        type="text"
-                        required
-                        name={"title-" + d.id}
-                        defaultValue={d.title}
-                      />
-                    </label>
-                    <label className="field">
-                      Work item type
-                      <select
-                        name={"type-" + d.id}
-                        defaultValue={
-                          schema.types.find(
-                            (t) => t.name.toLowerCase() === d.type,
-                          )?.name ??
-                          schema.types.find((t) =>
-                            [
-                              "Product Backlog Item",
-                              "User Story",
-                              "Issue",
-                            ].includes(t.name),
-                          )?.name
-                        }
-                      >
-                        {schema.types.map((t) => (
-                          <option key={t.name}>{t.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      Extra fields, written as JSON
-                      <textarea
-                        name={"fields-" + d.id}
-                        defaultValue="{}"
-                        style={{ minHeight: 60, resize: "vertical" }}
-                      />
-                    </label>
-                  </>
-                )}
-              </div>
-            ))}
-            {!drafts.length && (
-              <p className="muted small">
-                {intent === "publish"
-                  ? "No story drafts are waiting to be published."
-                  : "No published stories are waiting for a sprint."}
-              </p>
-            )}
-            <div className="row">
-              <button className="btn" disabled={op.busy || !drafts.length}>
-                {intent === "publish"
-                  ? "Preview what will be published"
-                  : "Preview what will be committed"}
-              </button>
-            </div>
-          </form>
-        </>
-      )}
+        </form>
+      </div>
       {held && (
         <>
           <p className="muted small">
@@ -277,7 +382,7 @@ export function AzureWorkReview({
                 op.clear();
               }}
             >
-              Close review
+              Back to review
             </button>
             {op.result?.receipts?.every(
               (r) => r.state === "pending_approval",
@@ -287,6 +392,8 @@ export function AzureWorkReview({
                 disabled={op.busy}
                 onClick={() =>
                   op.send("approve-execute", {
+                    origin,
+                    ref: newRequestRef(),
                     batchId: held.id,
                     binding: held.binding,
                   })

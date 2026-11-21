@@ -1,3 +1,9 @@
+import {
+  ProjectFilter,
+  useProjectFilter,
+  matchesProjectTag,
+} from "./project-backlog-filter.tsx";
+import { StoryDraftEditor } from "./story-draft-editor.tsx";
 // The Backlog pane. Same messages, remembered choices and checks as the earlier
 // Backlog (story drafts, project, team, level, work items, edits, publishing);
 // only the view is new.
@@ -94,6 +100,7 @@ export function Backlog({ context }: { context: Context }) {
                     </button>
                   </div>
                 )}
+                <StoryDraftEditor story={story} context={context} />
                 <StoryImplementation context={context} story={story.id} />
               </article>
             ))}
@@ -170,7 +177,7 @@ function TeamBoard({
   function remember(selection: { team: string; level: string } | undefined) {
     writeBoard(browserStore(), productId, sourceId, selection);
   }
-  function send(action: string, fields: Record<string, string> = {}) {
+  function send(action: string, fields: Record<string, string | boolean> = {}) {
     const requestId = crypto.randomUUID();
     pending.current = requestId;
     setStatus("Loading…");
@@ -262,6 +269,10 @@ function TeamBoard({
     setResult(undefined);
   }
   const scope = { productId, sourceId, team };
+  const filter = useProjectFilter({ ...scope, backlog: level });
+  const projectCards =
+    result?.cards.filter((c) => matchesProjectTag(c.labels, filter.tag)) ?? [];
+  const visibleCards = filter.full ? (result?.cards ?? []) : projectCards;
   return (
     <>
       <div className="row wrap">
@@ -335,6 +346,7 @@ function TeamBoard({
       )}
       {schema && team && (
         <AzureWorkReview
+          level={level}
           key={team}
           scope={scope}
           context={context}
@@ -362,7 +374,7 @@ function TeamBoard({
               disabled={!level}
               onClick={() => {
                 setResult(undefined);
-                send("cards", { team, level });
+                send("cards", { team, level, details: true });
               }}
             >
               Show work items
@@ -389,9 +401,19 @@ function TeamBoard({
               Board view
             </button>
           </div>
+          <ProjectFilter
+            filter={filter}
+            labels={result.cards.flatMap((c) => c.labels ?? [])}
+            matching={projectCards.length}
+            total={result.cards.length}
+            noun="backlog"
+          />
+          {filter.tag && !visibleCards.length && (
+            <p>No stories match the saved project filter.</p>
+          )}
           {view === "list" ? (
             <div className="rb-rows">
-              {result.cards.map((c) => (
+              {visibleCards.map((c) => (
                 <div key={c.id}>
                   <div className="rb-rowitem">
                     <span>
@@ -439,7 +461,7 @@ function TeamBoard({
                 <section key={col ?? "unmapped"} style={divided}>
                   <h3>{col ?? "Unmapped"}</h3>
                   <ul style={{ ...list, paddingLeft: 0, listStyle: "none" }}>
-                    {result.cards
+                    {visibleCards
                       .filter((c) =>
                         col
                           ? c.column === col

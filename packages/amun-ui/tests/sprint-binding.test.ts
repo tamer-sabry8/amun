@@ -43,28 +43,24 @@ it("uses the binding Backlog saved for the chosen work area", () => {
     sourceId: "s1",
     team: "POCs Team",
   });
-  // No saved board: the project the work already publishes to is read.
-  expect(resolveSprintBinding(store, areas, "a2")).toEqual({
-    productId: expect.any(String),
-    sourceId: "publishing",
-    team: "",
-  });
+  expect(resolveSprintBinding(store, areas, "a2")).toBeNull();
   expect(resolveSprintBinding(store, areas, "no-product")).toBeNull();
 });
 
 it("for all work areas, prefers the default team, then the most recent binding", () => {
   const store = memory();
   writeBoard(store, "p1", "s1", { team: "T1", level: "" });
+  writeSource(store, "p1", "s1");
+  writeSource(store, "p2", "s2");
   writeBoard(store, "p2", "s2", { team: "T2", level: "" });
   expect(resolveSprintBinding(store, areas, "")?.productId).toBe("p2");
   writeSprintDefault(store, { productId: "p1", sourceId: "s1", team: "T1" });
   expect(resolveSprintBinding(store, areas, "")?.productId).toBe("p1");
 });
 
-it("falls back to the publishing project, without a team, when nothing is saved", () => {
-  expect(resolveSprintBinding(memory(), areas, "")).toMatchObject({
-    sourceId: "publishing",
-    team: "",
-  });
-  expect(resolveSprintBinding(memory(), [], "")).toBeNull();
+it("waits for an explicit project choice even with one candidate", () => {
+  const store = memory();
+  writeBoard(store, "p1", "s1", { team: "T1", level: "Stories" });
+  expect(resolveSprintBinding(store, areas, "")).toBeNull();
+  expect(resolveSprintBinding(store, areas, "a1")).toBeNull();
 });

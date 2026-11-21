@@ -1,3 +1,4 @@
+import { newRequestRef } from "../../../domain/src/work/requests.ts";
 // Answers the renderer's existing port contracts (@amun/contracts) from the
 // daemon's /amun RPC, so every screen keeps its current shape. Products become
 // products and groups. Every product shares the captain's one Firstmate home,
@@ -20,6 +21,7 @@ import {
   workSnapshot,
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
+import { NavigationQueue } from "./navigation.ts";
 import { NoticeQueue, type NoticeOptions } from "./firstmate-notices.ts";
 import { AmunRequestError, type AmunTransport } from "./amun-client.ts";
 import { agentCatalog } from "../../../domain/src/work/agents.ts";
@@ -550,6 +552,48 @@ export class ContractAdapter {
     private readonly now: () => string = () => new Date().toISOString(),
     notices: NoticeOptions = {},
   ) {
+    let storage = notices.keep;
+    if (storage === undefined) {
+      try {
+        storage = globalThis.localStorage;
+      } catch {
+        storage = null;
+      }
+    }
+    const navigation = new NavigationQueue(
+      {
+        activity: async (item, state) => {
+          const events = await this.handleWork({
+            version: 1,
+            kind: "work",
+            action: "navigation-activity",
+            ref: item.ref,
+            workAreaId: item.inspection.areaId ?? null,
+            prompt: item.prompt,
+            delivered: state === "finished",
+          });
+          if (
+            !events.some(
+              (e) => e && typeof e === "object" && "ok" in e && e.ok === true,
+            )
+          )
+            throw Error("Could not record navigation.");
+          this.onChange?.();
+        },
+        send: async (prompt, ref) => {
+          const result = await this.daemon.request<{ delivered: boolean }>(
+            "work.inspect",
+            { space: await this.ensureSpace(), ref, prompt },
+          );
+          return result.delivered;
+        },
+      },
+      storage ?? undefined,
+    );
+    navigation.install();
+    this.daemon.onStatus((connected) => {
+      if (connected) void navigation.flush();
+    });
     this.notices = new NoticeQueue(
       async (text) => {
         const space = await this.ensureSpace();
@@ -765,11 +809,54 @@ export class ContractAdapter {
       await this.refresh();
       return [this.workspace()];
     }
+    if (message.kind === "product-authoring") {
+      const { origin, ...input } = message;
+      const ref = newRequestRef();
+      const result = await this.daemon
+        .request<unknown>("workspace.author", {
+          space: await this.ensureSpace(),
+          ref,
+          message: input,
+          origin,
+        })
+        .catch(() => ({
+          version: 1,
+          kind: "workspace-error",
+          message:
+            "Firstmate could not complete this draft. Reopen the PRD to check its saved state.",
+        }));
+      this.view = { ...this.view, workspace: await this.readWorkspace() };
+      await this.refresh().catch(() => undefined);
+      return [result, this.workspace(), this.work()];
+    }
     if (message.kind === "workspace") return this.handleWorkspace(message);
     if (message.kind === "backlog-read" || message.kind === "ado-operation") {
       const reply = await this.daemon
-        .request<unknown>("ado.request", { message })
+        .request<unknown>("ado.request", {
+          message:
+            message.action === "keep-observed-sprint" ||
+            message.action === "suggest-sprint-stories" ||
+            message.action === "apply-sprint-moves" ||
+            message.action === "compare-prd" ||
+            message.action === "approve-execute"
+              ? { ...message, space: await this.ensureSpace() }
+              : message,
+        })
         .catch(() => null);
+      if (message.action === "compare-prd") {
+        this.view = { ...this.view, workspace: await this.readWorkspace() };
+        return reply ? [reply, this.workspace()] : [];
+      }
+      if (
+        reply &&
+        (message.action === "apply-sprint-moves" ||
+          message.action === "suggest-sprint-stories" ||
+          message.action === "keep-observed-sprint" ||
+          message.action === "inspect-sprint-submission")
+      ) {
+        await this.refresh().catch(() => undefined);
+        return [reply, this.work()];
+      }
       return reply ? [reply] : [];
     }
     if (message.kind === "council") {
@@ -844,7 +931,19 @@ export class ContractAdapter {
       ];
     }
     if (message.kind === "auth") return this.handleAuth(message);
-    if (message.kind === "work") return this.handleWork(message);
+    if (message.kind === "work") {
+      const { commandId, ...command } = message;
+      const events = await this.handleWork(command);
+      if (typeof commandId !== "string") return events;
+      return events.map((event) =>
+        event &&
+        typeof event === "object" &&
+        "kind" in event &&
+        event.kind === "work-result"
+          ? { ...event, commandId }
+          : event,
+      );
+    }
     if (message.kind === "work-delegate") return this.delegate(message);
     if (message.kind === "native-pi" && message.action === "run")
       return [await this.handleNativePi(message)];
@@ -1074,6 +1173,17 @@ export class ContractAdapter {
   private async handleWork(message: Message): Promise<unknown[]> {
     const action = String(message.action);
     try {
+      if (action === "draft-blocker-message") {
+        const snapshot = await this.daemon.request<WorkSnapshot>("work.nudge", {
+          command: message,
+          space: await this.ensureSpace(),
+        });
+        this.view = { ...this.view, work: snapshot };
+        return [
+          this.result(action, true, "Draft request checked."),
+          this.work(),
+        ];
+      }
       if (action === "snapshot") {
         await this.refresh();
         return [this.work()];
@@ -1524,7 +1634,7 @@ export class ContractAdapter {
       let conversation = this.conversation;
       if (!conversation) {
         await this.daemon.request("primary.start", { space });
-        await this.models().catch(() => undefined);
+        // Model discovery belongs to the picker. A slow catalog must not hold a chat turn.
         conversation = {
           sessionId: crypto.randomUUID(),
           text: "",

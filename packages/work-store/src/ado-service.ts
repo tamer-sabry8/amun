@@ -1,8 +1,13 @@
+import { keepObservedSprint } from "./sprint-submission.ts";
+import { suggestSprintStories } from "./sprint-suggestions.ts";
+import { reviewBlockerComments } from "./blocker-comment-review.ts";
+import { observeSprintBlockers } from "./sprint-blocker-evidence.ts";
+import { comparePrd } from "./prd-comparison.ts";
 // Azure DevOps backlog reads and governed writes for a product, ported from
 // Amun Beta 0.9's service (backlog-read and ado-operation messages). The
 // token comes from the daemon's Keychain store and is registered with the
 // redactor before any request, so it never reaches a message or log.
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   adoOperation,
   backlogRead,
@@ -44,6 +49,12 @@ function readFailure(raw: string): string {
   return "Unable to read the mapped Azure project. Check its URL, VPN and connection.";
 }
 
+import {
+  applySprintMoves,
+  inspectSprintSubmission,
+  type FirstmateDispatch,
+} from "./sprint-submission.ts";
+
 export class AdoService {
   private last: { scope: string; reader: BoardDiscovery } | undefined;
 
@@ -54,8 +65,45 @@ export class AdoService {
     private readonly redactor: Redactor,
   ) {}
 
+  async refreshLinkedBlockers(dispatch?: FirstmateDispatch) {
+    const scopes = this.db
+      .prepare(
+        `SELECT DISTINCT a.id AS workAreaId,a.product_id AS productId,
+      json_extract(b.sprint_link_json,'$.sourceId') AS sourceId,
+      json_extract(b.sprint_link_json,'$.teamId') AS team,
+      substr(json_extract(b.sprint_link_json,'$.sprintId'),5) AS sprint
+      FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id
+      WHERE b.resolved_at IS NULL AND a.status<>'deleted' AND a.product_id IS NOT NULL
+      AND json_extract(b.sprint_link_json,'$.teamId') IS NOT NULL
+      AND json_extract(b.sprint_link_json,'$.sprintId') LIKE 'ado:%'`,
+      )
+      .all() as {
+      workAreaId: string;
+      productId: string;
+      sourceId: string;
+      team: string;
+      sprint: string;
+    }[];
+    for (const scope of scopes) {
+      await this.handle(
+        {
+          version: 1,
+          kind: "backlog-read",
+          action: "sprint-items",
+          requestId: randomUUID(),
+          ...scope,
+        },
+        dispatch,
+      );
+    }
+    return scopes.length > 0;
+  }
+
   /** Answers a backlog-read or ado-operation message; null if it is neither. */
-  async handle(message: unknown): Promise<Record<string, unknown> | null> {
+  async handle(
+    message: unknown,
+    dispatch?: FirstmateDispatch,
+  ): Promise<Record<string, unknown> | null> {
     const kind =
       message && typeof message === "object" && "kind" in message
         ? (message as { kind: unknown }).kind
@@ -73,8 +121,14 @@ export class AdoService {
       requestId: request.requestId,
     };
     try {
-      return await this.run(request, meta);
+      return await this.run(request, meta, dispatch);
     } catch (error) {
+      if (request.action === "sprint-items" && request.workAreaId)
+        observeSprintBlockers(
+          this.db,
+          { ...request, workAreaId: request.workAreaId },
+          null,
+        );
       const raw = error instanceof Error ? error.message : "";
       if (request.kind === "ado-operation")
         return {
@@ -92,16 +146,12 @@ export class AdoService {
   private async run(
     request: AdoOperation | ReturnType<typeof backlogRead.parse>,
     meta: { kind: string; productId: string; requestId: string },
+    dispatch?: FirstmateDispatch,
   ): Promise<Record<string, unknown>> {
     const sources = this.workspace.productSources(request.productId);
-    const readOnlySprints =
-      request.kind === "backlog-read" &&
-      (request.action === "sprints" || request.action === "sprint-items");
-    const source =
-      sources.find((s) => s.id === request.sourceId && s.kind === "ado") ??
-      (readOnlySprints
-        ? sources.find((s) => s.kind === "ado" && s.reference)
-        : undefined);
+    const source = sources.find(
+      (s) => s.id === request.sourceId && s.kind === "ado",
+    );
     if (!source?.reference) throw new Error(NO_AZURE_PROJECT);
     const { connection, collection, project } = projectSource(
       source.reference,
@@ -125,15 +175,141 @@ export class AdoService {
         reader: new BoardDiscovery(collection, project, transport()),
       };
     const d = this.last.reader;
-    if (request.kind === "ado-operation")
-      return runAdoOperation(
-        this.db,
-        request,
-        { collection, project, team: request.team },
-        d,
-        new AdoWriteClient(collection, project, transport()),
-        () => this.workspace.productSources(request.productId).length > 0,
-      );
+    if (request.kind === "ado-operation") {
+      const target = { collection, project, team: request.team };
+      const client = new AdoWriteClient(collection, project, transport());
+      const mapped = () =>
+        this.workspace
+          .productSources(request.productId)
+          .some(
+            (current) =>
+              current.id === source.id &&
+              current.kind === "ado" &&
+              current.reference === source.reference,
+          );
+      if (request.action === "keep-observed-sprint") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await keepObservedSprint(
+            this.db,
+            request,
+            target,
+            client,
+            mapped,
+            dispatch,
+          )),
+        };
+      }
+      if (request.action === "suggest-sprint-stories") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await suggestSprintStories(
+            this.db,
+            request,
+            d,
+            dispatch,
+            mapped,
+            (text) => this.redactor.text(text),
+          )),
+        };
+      }
+      if (request.action === "compare-prd") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        let receipt: string | undefined;
+        try {
+          const result = await comparePrd(
+            this.db,
+            request,
+            d,
+            async (space, prompt) => {
+              if (receipt)
+                return dispatch(
+                  space,
+                  prompt +
+                    "\nContinuation of comparison " +
+                    request.ref +
+                    " for work area " +
+                    request.workAreaId +
+                    ".",
+                );
+              const origin = this.workspace.recordReviewPrompt(
+                {
+                  productId: request.productId,
+                  objectiveId: request.objectiveId,
+                  expectedVersion: request.versionNumber,
+                },
+                request.ref,
+                { areaId: request.workAreaId, chatId: request.chatId },
+                prompt,
+              );
+              receipt = origin.messageId;
+              return dispatch(space, origin.prompt);
+            },
+            mapped,
+          );
+          if (receipt)
+            this.workspace.finishStoryReview(
+              request.ref,
+              receipt,
+              result.message,
+              true,
+            );
+          return { ...meta, kind: "ado-operation-result", ...result };
+        } catch (error) {
+          if (receipt)
+            this.workspace.finishStoryReview(
+              request.ref,
+              receipt,
+              "Backlog comparison pending. Refresh to check the current scope.",
+              false,
+            );
+          throw error;
+        }
+      }
+      if (request.action === "inspect-sprint-submission")
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await inspectSprintSubmission(
+            this.db,
+            request,
+            target,
+            client,
+            async (levelId) => {
+              const level = (await d.levels(request.team)).find(
+                (l) => l.id === levelId,
+              );
+              if (!level) throw Error("Selected backlog unavailable.");
+              const settings = await d.boardSettings(request.team, level.name);
+              return d.cards(request.team, levelId, settings.columnField);
+            },
+          )),
+        };
+      if (request.action === "apply-sprint-moves") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await applySprintMoves(
+            this.db,
+            request,
+            target,
+            d,
+            client,
+            mapped,
+            dispatch,
+          )),
+        };
+      }
+      return runAdoOperation(this.db, request, target, d, client, mapped, {
+        workspace: this.workspace,
+        dispatch,
+      });
+    }
     if (request.action === "schema")
       return { ...meta, view: "schema", schema: await d.processSchema() };
     if (request.action === "teams")
@@ -148,14 +324,48 @@ export class AdoService {
         return {
           ...meta,
           view: "sprints",
+          sourceId: source.id,
           team,
           sprints: await d.sprints(team.id),
         };
+      const membership = await d.iterationItems(team.id, request.sprint);
+      if (
+        request.workAreaId &&
+        this.workspace
+          .productSources(request.productId)
+          .some(
+            (current) =>
+              current.id === source.id &&
+              current.reference === source.reference,
+          )
+      ) {
+        observeSprintBlockers(
+          this.db,
+          { ...request, workAreaId: request.workAreaId },
+          membership.items,
+        );
+        if (dispatch)
+          await reviewBlockerComments(
+            this.db,
+            { ...request, workAreaId: request.workAreaId, team: team.id },
+            membership.items,
+            d,
+            dispatch,
+            (text) => this.redactor.text(text),
+          ).catch(() => undefined);
+      }
       return {
         ...meta,
         view: "sprint-items",
         sprint: request.sprint,
-        ...(await d.iterationItems(team.id, request.sprint)),
+        ...membership,
+        items: membership.items.map((item) => ({
+          ...item,
+          storyUrl: new URL(
+            encodeURIComponent(project) + "/_workitems/edit/" + item.id,
+            collection.replace(/\/?$/, "/"),
+          ).href,
+        })),
       };
     }
     if (request.action === "options")
@@ -168,11 +378,44 @@ export class AdoService {
       d.boardSettings(request.team, level.name),
       d.columns(request.team, level.name),
     ]);
+    const backlogIteration = request.details
+      ? await d.backlogIteration(request.team).catch(() => null)
+      : null;
+    const cards = await d.cards(
+      request.team,
+      request.level,
+      settings.columnField,
+      request.details,
+    );
+    const [identities, transitions] = request.details
+      ? await Promise.all([
+          d.teamIdentities(request.team).catch(() => []),
+          Promise.all(
+            [...new Set(cards.map((c) => c.type))].map(
+              async (type) =>
+                [type, await d.transitions(type).catch(() => ({}))] as const,
+            ),
+          ).then((entries) => Object.fromEntries(entries)),
+        ])
+      : [[], {}];
     return {
       ...meta,
       view: "cards",
       columns,
-      cards: await d.cards(request.team, request.level, settings.columnField),
+      cards,
+      ...(request.details ? { identities, transitions } : {}),
+      ...(request.details
+        ? {
+            backlogIteration,
+            creationTarget: await d
+              .planningCreationTarget(
+                request.team,
+                request.level,
+                backlogIteration,
+              )
+              .catch(() => null),
+          }
+        : {}),
       canEditBoard: settings.canEdit,
     };
   }
