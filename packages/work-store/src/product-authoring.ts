@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
 
 import {
+  prdComparison,
   productAuthoring,
   interviewQuestion,
   documentProposal,
@@ -82,18 +83,27 @@ export class ProductAuthoring {
         throw new AuthoringError(
           "Add a product source before starting the interview.",
         );
-      if (cmd.action === "update-story-draft") {
+      if (
+        cmd.action === "update-story-draft" ||
+        cmd.action === "flag-coverage-gap"
+      ) {
         const record = () =>
           this.db
             .prepare(
-              `SELECT w.title,w.acceptance_json FROM work_items w JOIN story_drafts d ON w.id=d.item_id WHERE w.id=? AND w.product_id=? AND d.objective_id=? AND d.prd_version=? AND w.remote_id IS NULL AND w.status='draft'`,
+              `SELECT w.title,w.acceptance_json,d.requirement_text FROM work_items w JOIN story_drafts d ON w.id=d.item_id WHERE w.id=? AND w.product_id=? AND d.objective_id=? AND d.prd_version=? AND w.remote_id IS NULL AND w.status='draft'`,
             )
             .get(
               cmd.itemId,
               productId,
               cmd.objectiveId,
               cmd.expectedVersion,
-            ) as { title: string; acceptance_json: string } | undefined;
+            ) as
+            | {
+                title: string;
+                acceptance_json: string;
+                requirement_text: string;
+              }
+            | undefined;
         const matches = () => {
           const row = record();
           const prd = new ProductDocuments(this.db).prd(
@@ -113,6 +123,94 @@ export class ProductAuthoring {
             );
         };
         matches();
+        if (cmd.action === "flag-coverage-gap") {
+          const args = [
+            productId,
+            cmd.objectiveId,
+            cmd.expectedVersion,
+            cmd.sourceId,
+            cmd.team,
+            cmd.level,
+          ];
+          const read = () => {
+            const stored = this.db
+              .prepare(
+                "SELECT result_json FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=?",
+              )
+              .get(...args) as { result_json: string } | undefined;
+            const result =
+              stored && prdComparison.parse(JSON.parse(stored.result_json));
+            const match = result?.rows.find(
+              (r) =>
+                r.draftId === cmd.itemId &&
+                r.providerId === cmd.providerId &&
+                r.classification === "covered",
+            );
+            if (
+              !result ||
+              result.ref !== cmd.comparisonRef ||
+              result.pending ||
+              !match
+            )
+              throw new AuthoringError(
+                "Refresh the PRD comparison before correcting this match.",
+              );
+            return { result, match };
+          };
+          const { match } = read();
+          const answer = parseModelJson(
+            await firstmate(
+              model,
+              "Draft one local acceptance criterion addressing the captain’s missing case. Return JSON containing criterion. No tracker write is authorized.",
+              JSON.stringify({
+                requirement: record()?.requirement_text,
+                match,
+                note: cmd.note,
+                current: cmd.baseline,
+              }),
+            ),
+          );
+          const criterion =
+            answer &&
+            typeof answer === "object" &&
+            "criterion" in answer &&
+            typeof answer.criterion === "string"
+              ? this.redactor.text(answer.criterion.trim())
+              : "";
+          if (
+            !criterion ||
+            criterion.length > 2048 ||
+            cmd.baseline.acceptance.length >= 20 ||
+            cmd.baseline.acceptance.includes(criterion)
+          )
+            throw new AuthoringError(
+              "Firstmate did not return a new editable criterion.",
+            );
+          this.db
+            .transaction(() => {
+              validate();
+              matches();
+              const { result, match: row } = read();
+              this.db
+                .prepare(
+                  "UPDATE work_items SET acceptance_json=? WHERE id=? AND product_id=?",
+                )
+                .run(
+                  JSON.stringify([...cmd.baseline.acceptance, criterion]),
+                  cmd.itemId,
+                  productId,
+                );
+              row.classification = "edit";
+              row.reason = this.redactor.text(cmd.note).slice(0, 2000);
+              this.db
+                .prepare(
+                  "UPDATE prd_comparisons SET result_json=? WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=?",
+                )
+                .run(JSON.stringify(result), ...args);
+            })
+            .immediate();
+          return;
+        }
         const reply = await firstmate(
           model,
           "Update only this local story proposal with the captain’s exact reviewed wording. Amun will save it. Return only JSON with acceptedItemId set to the supplied itemId.",

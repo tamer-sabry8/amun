@@ -1,3 +1,4 @@
+import { StoryDraftEditor } from "./story-draft-editor.tsx";
 import {
   ReviewBacklogPicker,
   type ReviewBoard,
@@ -191,6 +192,94 @@ export function PrdCoverage({
                           #{row.providerId} · revision {row.revision}
                         </p>
                       )}
+                      {row.classification === "covered" &&
+                        row.providerId &&
+                        !comparison.pending && (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const form = e.currentTarget;
+                              const note = String(
+                                new FormData(form).get("gap") ?? "",
+                              ).trim();
+                              const story = context.storyDrafts.find(
+                                  (s) => s.id === row.draftId,
+                                ),
+                                model = context.allowedModels[0];
+                              if (
+                                !note ||
+                                !origin ||
+                                !story ||
+                                !model ||
+                                !board ||
+                                form.dataset.sent === "true"
+                              )
+                                return;
+                              form.dataset.sent = "true";
+                              setStatus(
+                                "Firstmate is drafting the missing criterion.",
+                              );
+                              bridge.send({
+                                version: 1,
+                                kind: "product-authoring",
+                                action: "flag-coverage-gap",
+                                productId: context.productId,
+                                objectiveId,
+                                expectedVersion: version,
+                                origin,
+                                model,
+                                sourceId,
+                                team: board.team,
+                                level: board.level,
+                                comparisonRef: comparison.ref,
+                                providerId: row.providerId,
+                                itemId: story.id,
+                                baseline: {
+                                  title: story.title,
+                                  acceptance: story.acceptance,
+                                },
+                                note,
+                              });
+                            }}
+                          >
+                            <label className="field">
+                              Missing case
+                              <textarea
+                                name="gap"
+                                required
+                                maxLength={2048}
+                                onChange={(e) => {
+                                  if (e.target.form)
+                                    delete e.target.form.dataset.sent;
+                                }}
+                              />
+                            </label>
+                            <button
+                              className="btn quiet"
+                              disabled={
+                                !origin || !context.allowedModels.length
+                              }
+                            >
+                              Draft correction
+                            </button>
+                          </form>
+                        )}
+                      {row.classification === "edit" &&
+                        context.storyDrafts
+                          .filter((s) => s.id === row.draftId)
+                          .map((story) => (
+                            <div key={story.id}>
+                              <ul>
+                                {story.acceptance.map((criterion, i) => (
+                                  <li key={i}>{criterion}</li>
+                                ))}
+                              </ul>
+                              <StoryDraftEditor
+                                context={context}
+                                story={story}
+                              />
+                            </div>
+                          ))}
                       {row.evidence && <blockquote>{row.evidence}</blockquote>}
                     </article>
                   ))}

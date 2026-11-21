@@ -289,7 +289,11 @@ export class WorkspaceService {
     const typed = productAuthoring.safeParse(input);
     if (!typed.success) throw new AuthoringError("Invalid review source.");
     const cmd = typed.data;
-    if (cmd.action !== "stories" && cmd.action !== "update-story-draft")
+    if (
+      cmd.action !== "stories" &&
+      cmd.action !== "update-story-draft" &&
+      cmd.action !== "flag-coverage-gap"
+    )
       throw new AuthoringError("Unknown story review operation.");
     return this.recordReviewPrompt(cmd, ref, origin, instruction);
   }

@@ -1,3 +1,5 @@
+import { ProductAuthoring } from "../src/product-authoring.ts";
+import { Redactor } from "../src/redaction.ts";
 import { expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { openDatabase } from "../src/sqlite.ts";
@@ -18,17 +20,7 @@ it("adds a reviewed criterion inside existing Azure HTML without changing the No
 });
 
 it("compares Gitex, creates one reviewed backlog item, reads it back and records one originating chat receipt on duplicate confirmation", async () => {
-  const db = openDatabase(":memory:");
-  migrate(db);
-  db.exec(`INSERT INTO products(id,name,created_at) VALUES('p','Gitex','now');
-    INSERT INTO work_areas(id,type,name,product_id,created_at) VALUES('area','product','Gitex','p','now');
-    INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,created_at) VALUES('chat','area','PRD review','chat','','now');
-    INSERT INTO objectives(id,product_id,statement,status) VALUES('o','p','Badge printing','active');
-    INSERT INTO prds(id,product_id,objective_id,version,markdown,created_at) VALUES('doc','p','o',2,'Enable badge printing','now');
-    INSERT INTO prd_versions(id,product_id,objective_id,prd_id,version,markdown,created_at) VALUES('v','p','o','doc',2,'Enable badge printing','now');
-    INSERT INTO approvals(id,prd_version_id,decision,kind,payload_hash,approved_by,approved_at) VALUES('ok','v','approved','prd','hash','pm','now');
-    INSERT INTO work_items(id,product_id,title,type,status,body,acceptance_json) VALUES('local','p','Badge printing','Story','draft','Enable badge printing','["Print one badge"]');
-    INSERT INTO story_drafts VALUES('local','o',2,'R1','Enable badge printing');`);
+  const db = createPrdFixture();
   const target = {
     collection: "https://controlled.invalid/C/",
     project: "Gitex",
@@ -255,4 +247,98 @@ it("finds a duplicate on a later comparison page and holds an interrupted read",
       200,
     ),
   ).rejects.toThrow("read interrupted");
+});
+
+function createPrdFixture() {
+  const db = openDatabase(":memory:");
+  migrate(db);
+  db.exec(`INSERT INTO products(id,name,created_at) VALUES('p','Gitex','now');
+    INSERT INTO work_areas(id,type,name,product_id,created_at) VALUES('area','product','Gitex','p','now');
+    INSERT INTO work_chats(id,work_area_id,title,kind,forked_from,created_at) VALUES('chat','area','PRD review','chat','','now');
+    INSERT INTO objectives(id,product_id,statement,status) VALUES('o','p','Badge printing','active');
+    INSERT INTO prds(id,product_id,objective_id,version,markdown,created_at) VALUES('doc','p','o',2,'Enable badge printing','now');
+    INSERT INTO prd_versions(id,product_id,objective_id,prd_id,version,markdown,created_at) VALUES('v','p','o','doc',2,'Enable badge printing','now');
+    INSERT INTO approvals(id,prd_version_id,decision,kind,payload_hash,approved_by,approved_at) VALUES('ok','v','approved','prd','hash','pm','now');
+    INSERT INTO work_items(id,product_id,title,type,status,body,acceptance_json) VALUES('local','p','Badge printing','Story','draft','Enable badge printing','["Print one badge"]');
+    INSERT INTO story_drafts VALUES('local','o',2,'R1','Enable badge printing');`);
+  return db;
+}
+
+it("turns a verified coverage gap into a local editable criterion and refuses a stale correction", async () => {
+  const db = createPrdFixture();
+  db.prepare("UPDATE products SET allowed_models_json=? WHERE id='p'").run(
+    JSON.stringify(["test"]),
+  );
+  db.prepare(
+    "INSERT INTO sources(id,product_id,kind,title,retrieved_at,hash) VALUES('azure','p','ado','Azure','now','hash')",
+  ).run();
+  const row = {
+    draftId: "local",
+    classification: "covered",
+    providerId: 24,
+    revision: 3,
+    evidence: "Print one badge",
+    reason: "Print covered",
+  };
+  const result = {
+    ref: "amun-r-112233445566",
+    sourceId: "azure",
+    team: "T",
+    level: "stories",
+    objectiveId: "o",
+    version: 2,
+    verifiedAt: "2026-11-21",
+    rows: [row],
+  };
+  db.prepare("INSERT INTO prd_comparisons VALUES(?,?,?,?,?,?,?)").run(
+    "p",
+    "o",
+    2,
+    "azure",
+    "T",
+    "stories",
+    JSON.stringify(result),
+  );
+  const cmd = {
+    version: 1,
+    kind: "product-authoring",
+    action: "flag-coverage-gap",
+    productId: "p",
+    objectiveId: "o",
+    expectedVersion: 2,
+    model: "test",
+    itemId: "local",
+    baseline: { title: "Badge printing", acceptance: ["Print one badge"] },
+    sourceId: "azure",
+    team: "T",
+    level: "stories",
+    comparisonRef: result.ref,
+    providerId: 24,
+    note: "Cover a lost badge.",
+  };
+  const fm = vi.fn(async () =>
+      JSON.stringify({ criterion: "Reprint a lost badge." }),
+    ),
+    author = new ProductAuthoring(db, () => "p", new Redactor());
+  await author.run(cmd, fm);
+  expect(
+    JSON.parse(
+      String(
+        db
+          .prepare("SELECT acceptance_json FROM work_items WHERE id='local'")
+          .pluck()
+          .get(),
+      ),
+    ),
+  ).toEqual(["Print one badge", "Reprint a lost badge."]);
+  expect(
+    JSON.parse(
+      String(
+        db.prepare("SELECT result_json FROM prd_comparisons").pluck().get(),
+      ),
+    ).rows[0],
+  ).toMatchObject({ classification: "edit", providerId: 24, revision: 3 });
+  await expect(author.run(cmd, fm)).rejects.toThrow("changed");
+  expect(fm).toHaveBeenCalledTimes(1);
+  db.close();
 });
