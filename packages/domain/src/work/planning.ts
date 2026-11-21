@@ -560,3 +560,35 @@ export function orgChart(agents: AgentCard[]): AgentNode | null {
   });
   return node(lead);
 }
+
+export function nextSprintDetails(
+  history: readonly Pick<Sprint, "name" | "start" | "end">[],
+) {
+  const dated = history
+    .map((s) => ({
+      ...s,
+      from: Date.parse(s.start.slice(0, 10)),
+      to: Date.parse(s.end.slice(0, 10)),
+    }))
+    .sort((a, b) => b.from - a.from);
+  const suffix = dated[0]?.name.match(/^(.*?)(\d+)$/);
+  const name = suffix ? suffix[1] + String(Number(suffix[2]) + 1) : "Sprint 1";
+  const blank = { name, start: "", end: "" };
+  if (dated.some((s) => !Number.isFinite(s.from) || !Number.isFinite(s.to)))
+    return blank;
+  const [last, previous] = dated;
+  if (!last || !previous) return blank;
+  const duration = last.to - last.from,
+    cadence = last.from - previous.from;
+  if (
+    duration < 0 ||
+    previous.to - previous.from !== duration ||
+    cadence <= duration
+  )
+    return blank;
+  return {
+    name,
+    start: new Date(last.from + cadence).toISOString().slice(0, 10),
+    end: new Date(last.to + cadence).toISOString().slice(0, 10),
+  };
+}

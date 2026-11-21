@@ -918,6 +918,14 @@ export const workCommand = z.discriminatedUnion("action", [
     stories: z.array(planStory).max(500).default([]),
     out: z.array(planStory).max(500).default([]),
   }),
+  act("edit-sprint-draft", {
+    sprintId: id,
+    workAreaId: id,
+    name,
+    goal: text,
+    start: z.union([z.iso.date(), z.literal("")]),
+    end: z.union([z.iso.date(), z.literal("")]),
+  }),
   act("move-sprint-story", {
     sprintId: id,
     storyId: id,

@@ -460,6 +460,12 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [c.sprintId ?? look.at.ref, c.workAreaId],
     }),
   },
+  "edit-sprint-draft": {
+    tell: (c) => ({
+      what: "updated local draft details for " + c.name,
+      ids: [c.sprintId, c.workAreaId],
+    }),
+  },
   "move-sprint-story": {
     tell: (c) => ({
       what: `moved story ${c.storyId} ${c.list === "out" ? "out of" : "into"} a sprint${c.owner ? `, for ${c.owner}` : ""}`,

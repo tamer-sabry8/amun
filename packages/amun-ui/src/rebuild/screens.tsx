@@ -39,6 +39,7 @@ import {
   riceBadge,
   roadmapViews,
   adoSprints,
+  nextSprintDetails,
   sprintGroups,
   sprintCommand,
   sprintRow,
@@ -1544,17 +1545,26 @@ export function Sprints({
       setNote("Choose a work area first, then I’ll draft its next sprint.");
       return;
     }
-    const last = sprints
-      .filter((sprint) => sprint.workAreaId === areaId)
-      .sort((a, b) => b.end.localeCompare(a.end))[0];
-    const start = last ? Date.parse(last.end) + dayMs : now;
-    const number = Number(/\d+/.exec(last?.name ?? "")?.[0] ?? 0) + 1;
+    if (draft && draft.workAreaId === areaId) {
+      setView("plan");
+      return;
+    }
+    const team = azure.reply?.team.name ?? null;
+    const sourceHistory =
+      azure.reply && azureArea?.id === areaId
+        ? adoSprints(
+            azure.reply.sprints,
+            azure.reply.team.name,
+            areaId,
+            azureArea.name,
+          )
+        : sprints.filter(
+            (s) => s.workAreaId === areaId && !s.draft && s.team === team,
+          );
     const result = await workAsync("save-sprint", {
       workAreaId: areaId,
-      name: `Sprint ${number}`,
-      team: last?.team ?? null,
-      start: new Date(start).toISOString(),
-      end: new Date(start + 13 * dayMs).toISOString(),
+      team,
+      ...nextSprintDetails(sourceHistory),
       draft: true,
     });
     if (result.ref) {
@@ -2171,6 +2181,62 @@ export function Sprints({
                 Review and approve
               </button>
             </div>
+            <details>
+              <summary>Edit draft details</summary>
+              <form
+                className="rb-inline"
+                key={JSON.stringify([
+                  draft.id,
+                  draft.name,
+                  draft.start,
+                  draft.end,
+                  draft.goal,
+                ])}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const data = new FormData(e.currentTarget);
+                  const result = await workAsync("edit-sprint-draft", {
+                    sprintId: draft.id,
+                    workAreaId: draft.workAreaId,
+                    name: String(data.get("name") ?? ""),
+                    goal: String(data.get("goal") ?? ""),
+                    start: String(data.get("start") ?? ""),
+                    end: String(data.get("end") ?? ""),
+                  });
+                  setNote(
+                    result.ok ? "Sprint draft saved in Amun." : result.message,
+                  );
+                }}
+              >
+                <label className="field">
+                  Sprint name
+                  <input required name="name" defaultValue={draft.name} />
+                </label>
+                <label className="field">
+                  Goal
+                  <textarea name="goal" defaultValue={draft.goal} />
+                </label>
+                <div className="row wrap">
+                  <label className="field">
+                    Start date
+                    <input
+                      type="date"
+                      name="start"
+                      defaultValue={draft.start.slice(0, 10)}
+                    />
+                  </label>
+                  <label className="field">
+                    End date
+                    <input
+                      type="date"
+                      name="end"
+                      defaultValue={draft.end.slice(0, 10)}
+                    />
+                  </label>
+                </div>
+                <button className="btn">Save draft details</button>
+              </form>
+            </details>
             <p>
               {draft.goal || <span className="muted">No sprint goal yet.</span>}
             </p>

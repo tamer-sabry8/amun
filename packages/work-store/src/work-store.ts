@@ -1876,6 +1876,27 @@ export class WorkStore {
         );
         return { ref: id };
       }
+      case "edit-sprint-draft": {
+        if (command.end && command.start && command.end < command.start)
+          throw new WorkError("A sprint cannot end before it starts.");
+        const saved = this.db
+          .prepare(
+            "UPDATE work_sprints SET name=?,goal=?,start=?,end=? WHERE id=? AND work_area_id=? AND draft=1",
+          )
+          .run(
+            this.clean(command.name),
+            this.clean(command.goal),
+            command.start,
+            command.end,
+            command.sprintId,
+            command.workAreaId,
+          );
+        if (!saved.changes)
+          throw new WorkError(
+            "This sprint draft is no longer available in the selected work area.",
+          );
+        return { ref: command.sprintId };
+      }
       case "move-sprint-story": {
         const sprint = this.get(
           "SELECT * FROM work_sprints WHERE id=?",
