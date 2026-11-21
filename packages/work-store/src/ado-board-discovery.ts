@@ -469,6 +469,7 @@ export class BoardDiscovery {
         blocked?: string | undefined;
         description?: string;
         criteria?: string;
+        prerequisites?: number[];
       }
     >();
     for (let offset = 0; offset < ordered.length; offset += 200) {
@@ -477,6 +478,7 @@ export class BoardDiscovery {
         "ids",
         ordered.slice(offset, offset + 200).join(","),
       );
+      if (details) url.searchParams.set("$expand", "Relations");
       if (!details)
         url.searchParams.set(
           "fields",
@@ -516,6 +518,33 @@ export class BoardDiscovery {
               : null,
           ...(details
             ? {
+                prerequisites: Array.isArray(item.relations)
+                  ? item.relations.flatMap((rel: unknown) => {
+                      if (
+                        !record(rel) ||
+                        rel.rel !== "System.LinkTypes.Dependency-Reverse" ||
+                        typeof rel.url !== "string"
+                      )
+                        return [];
+                      try {
+                        const target = new URL(rel.url);
+                        const match = target.pathname.match(
+                          /\/_apis\/wit\/workitems\/(\d+)$/i,
+                        );
+                        const id = match && Number(match[1]);
+                        if (
+                          target.origin === this.base.origin &&
+                          target.pathname
+                            .toLowerCase()
+                            .startsWith(this.base.pathname.toLowerCase()) &&
+                          id &&
+                          ids.has(id)
+                        )
+                          return [id];
+                      } catch {}
+                      return [];
+                    })
+                  : [],
                 assignee:
                   typeof f["System.AssignedTo"] === "string"
                     ? f["System.AssignedTo"]

@@ -389,6 +389,63 @@ describe("blockers", () => {
     send("resolve-blocker", { blockerId });
     expect(send("link-blocker-story", args).ok).toBe(false);
   });
+  it("keeps one nudge in the sprint conversation and distinguishes manual delivery from resolution", async () => {
+    const areaId = add("project", "Gitex");
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Badge permission",
+      owner: "Sam",
+    }).ref!;
+    const sprint = { id: "ado:4", connection: "azure", name: "Sprint 4" };
+    const chatId = send("new-chat", { workAreaId: areaId, sprint }).ref!;
+    send("link-blocker-story", {
+      areaId,
+      blockerId,
+      sourceId: "azure",
+      sprintId: sprint.id,
+      storyId: "24",
+    });
+    const ref = "amun-r-123456789abc";
+    const args = {
+      version: 1,
+      kind: "work",
+      action: "draft-blocker-message",
+      ref,
+      areaId,
+      blockerId,
+      chatId,
+    };
+    let calls = 0;
+    const draft = () =>
+      store.draftNudge(args, async () => {
+        calls++;
+        return "Sam, can you confirm access for badge printing?";
+      });
+    await Promise.all([draft(), draft()]);
+    expect(calls).toBe(1);
+    const record = (disposition: string) =>
+      send("record-blocker-message", {
+        areaId,
+        blockerId,
+        ref,
+        body: "Sam, can you confirm badge access today?",
+        disposition,
+      });
+    expect(record("copied").ok).toBe(true);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      nudge: { state: "copied" },
+    });
+    expect(record("manual").ok).toBe(true);
+    expect(record("manual").ok).toBe(true);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      nudge: { state: "manual" },
+    });
+    const messages = snap().chats.find((c) => c.id === chatId)!.messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[1]?.text).toContain("Sent manually · confirmed by you");
+  });
   it("need a work area, and go with it when it is deleted", () => {
     expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
       false,

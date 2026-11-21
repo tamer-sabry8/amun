@@ -400,6 +400,13 @@ export class AmunRpcHandler {
         return this.deps.connections.list();
       case "work.snapshot":
         return this.deps.work.snapshot();
+      case "work.nudge": {
+        if (!this.deps.work.draftNudge) throw Error("Blocker message drafting is unavailable.");
+        const space = await this.deps.spaces.get(request.space);
+        return this.deps.work.draftNudge(request.command, async (prompt) =>
+          (await this.deps.primary.send(space, prompt)).reply
+        );
+      }
       case "work.command":
         return this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
       case "work.search": {

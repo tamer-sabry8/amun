@@ -7,6 +7,7 @@ const fake = vi.hoisted(() => ({
   },
   sent: [] as { command: string; argument: string }[],
   failure: "",
+  silentStart: false,
 }));
 vi.mock("../src/bridge.ts", () => ({
   bridge: {
@@ -23,6 +24,7 @@ vi.mock("../src/bridge.ts", () => ({
     },
     send: (c: { id: string; command: string; argument: string }) => {
       fake.sent.push(c);
+      if (fake.silentStart && c.command === "conversation") return;
       const result =
         c.command === "conversation-send" && fake.failure
           ? { kind: "message", text: fake.failure }
@@ -79,4 +81,25 @@ it("a remounted queue observer sees a prior turn clear its waiting message", asy
   fm.releaseMessage("gitex");
   stop();
   expect(seen).toEqual([null]);
+});
+
+it("reports a silent chat start and keeps the user's turn out of the delivery queue", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.resetModules();
+    fake.sent.length = 0;
+    fake.silentStart = true;
+    const fm = await import("../src/rebuild/firstmate.ts");
+    const reply = fm.askFirstmate("Create a project");
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(await reply).toMatchObject({
+      ok: false,
+      needsProvider: false,
+      reason: expect.stringContaining("opening the conversation"),
+    });
+    expect(fake.sent.map((c) => c.command)).toEqual(["conversation"]);
+  } finally {
+    fake.silentStart = false;
+    vi.useRealTimers();
+  }
 });

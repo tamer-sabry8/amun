@@ -108,6 +108,8 @@ export function PrdCoverage({
       {comparison && (
         <>
           <p className="muted small">
+            {comparison.pending &&
+              "Comparison incomplete · last verified results. "}
             Last compared {new Date(comparison.verifiedAt).toLocaleString()}
           </p>
           {(["covered", "edit", "addition", "held"] as const).map(

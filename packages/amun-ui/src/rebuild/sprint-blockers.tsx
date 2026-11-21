@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { browserStore } from "../backlog-selection.ts";
+import { newRequestRef } from "../../../domain/src/work/requests.ts";
+import { useRef, useState } from "react";
 import type { WorkSnapshot } from "../../../contracts/src/work.ts";
 import { workAsync } from "./store.ts";
 import { inspectView } from "../daemon/navigation.ts";
@@ -139,7 +141,87 @@ function BlockerDiscussion({
 }) {
   const [text, edit] = useState("");
   const [sending, setSending] = useState(false);
+  const busy = useRef(false);
+  const [note, setNote] = useState("");
+  const [edited, setEdited] = useState<{ ref: string; value: string } | null>(
+    null,
+  );
+  const nudge = blocker.nudge;
+  const draftKey = nudge
+    ? "amun.blocker-message:" +
+      JSON.stringify([blocker.workAreaId, blocker.id, nudge.ref])
+    : "";
+  let cached: string | null = null;
+  try {
+    cached = draftKey ? (browserStore()?.getItem(draftKey) ?? null) : null;
+  } catch {}
+  const body =
+    nudge?.state === "manual"
+      ? nudge.text
+      : ((edited?.ref === nudge?.ref ? edited?.value : null) ??
+        cached ??
+        nudge?.text ??
+        "");
   const link = blocker.sprintLink!;
+  const editBody = (value: string) => {
+    if (!nudge) return;
+    setEdited({ ref: nudge.ref, value });
+    try {
+      browserStore()?.setItem(draftKey, value);
+    } catch {
+      setNote("This edit is available until you leave this screen.");
+    }
+  };
+  const prepare = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setSending(true);
+    setNote("");
+    try {
+      const chat = await workAsync("new-chat", {
+        told: true,
+        workAreaId: blocker.workAreaId,
+        sprint: { connection: link.sourceId, id: link.sprintId, name: sprint },
+      });
+      if (!chat.ok || !chat.ref) {
+        setNote(chat.message);
+        return;
+      }
+      const result = await workAsync("draft-blocker-message", {
+        areaId: blocker.workAreaId,
+        chatId: chat.ref,
+        blockerId: blocker.id,
+        ref: newRequestRef(),
+      });
+      if (!result.ok) setNote(result.message);
+    } finally {
+      setSending(false);
+      busy.current = false;
+    }
+  };
+  const record = async (disposition: "copied" | "manual") => {
+    if (!nudge || busy.current || !body.trim()) return;
+    busy.current = true;
+    setSending(true);
+    try {
+      if (disposition === "copied") await navigator.clipboard.writeText(body);
+      const result = await workAsync("record-blocker-message", {
+        areaId: blocker.workAreaId,
+        blockerId: blocker.id,
+        ref: nudge.ref,
+        body,
+        disposition,
+      });
+      if (!result.ok) setNote(result.message);
+    } catch {
+      setNote(
+        "Could not copy the message. Select the draft text to copy it manually.",
+      );
+    } finally {
+      setSending(false);
+      busy.current = false;
+    }
+  };
   const data = {
     areaId: blocker.workAreaId,
     project,
@@ -210,17 +292,63 @@ function BlockerDiscussion({
           <button
             type="button"
             className="btn quiet"
-            disabled={sending}
-            onClick={() =>
-              void send(
-                "Draft a message to the blocker owner about this story. Return the draft to this sprint conversation for review.",
-              )
-            }
+            disabled={sending || !!(nudge && nudge.state !== "failed")}
+            onClick={() => void prepare()}
           >
             Draft a message
           </button>
         </div>
       </form>
+      {nudge && (
+        <section className="rb-inline" aria-label="Message to blocker owner">
+          <h4>Message to {blocker.owner || "blocker owner"}</h4>
+          {nudge.state === "drafting" || nudge.state === "failed" ? (
+            <p role="status">
+              {nudge.state === "drafting"
+                ? "Waiting for Firstmate’s draft."
+                : "Draft unavailable. Use Draft a message to try again."}
+            </p>
+          ) : (
+            <>
+              <label className="field">
+                Message
+                <textarea
+                  value={body}
+                  readOnly={nudge.state === "manual"}
+                  maxLength={16000}
+                  onChange={(e) => editBody(e.target.value)}
+                />
+              </label>
+              <p className="muted small">
+                {nudge.state === "manual"
+                  ? "Sent manually · confirmed by you"
+                  : nudge.state === "copied"
+                    ? "Copied · delivery unconfirmed"
+                    : "Draft · delivery unconfirmed"}
+              </p>
+              {nudge.state !== "manual" && (
+                <div className="row wrap">
+                  <button
+                    className="btn"
+                    disabled={sending || !body.trim()}
+                    onClick={() => void record("copied")}
+                  >
+                    Copy message
+                  </button>
+                  <button
+                    className="btn quiet"
+                    disabled={sending || !body.trim()}
+                    onClick={() => void record("manual")}
+                  >
+                    I sent it
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+      {note && <p role="status">{note}</p>}
     </article>
   );
 }

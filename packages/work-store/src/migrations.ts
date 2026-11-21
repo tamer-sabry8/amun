@@ -1211,4 +1211,6 @@ CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submiss
   `CREATE TABLE prd_comparisons(product_id TEXT NOT NULL REFERENCES products(id),objective_id TEXT NOT NULL REFERENCES objectives(id),version INTEGER NOT NULL,source_id TEXT NOT NULL,team TEXT NOT NULL,level TEXT NOT NULL,result_json TEXT NOT NULL, PRIMARY KEY(product_id,objective_id,version,source_id,team,level));`,
   `CREATE TABLE ado_batch_requests(batch_id TEXT PRIMARY KEY REFERENCES ado_batches(id),ref TEXT NOT NULL UNIQUE REFERENCES work_requests(ref),receipt_id TEXT NOT NULL REFERENCES work_messages(id));`,
   `ALTER TABLE work_blockers ADD COLUMN sprint_link_json TEXT;`,
+  `CREATE TABLE prd_comparison_runs(scope TEXT PRIMARY KEY,ref TEXT NOT NULL);`,
+  `CREATE TABLE blocker_nudges(blocker_id TEXT PRIMARY KEY REFERENCES work_blockers(id) ON DELETE CASCADE,ref TEXT NOT NULL UNIQUE,chat_id TEXT NOT NULL,receipt_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);`,
 ] as const;

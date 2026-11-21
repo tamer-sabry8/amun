@@ -6,7 +6,7 @@ import { WorkspaceService } from "../src/workspace-service.ts";
 import { BoardDiscovery } from "../src/ado-board-discovery.ts";
 import { AdoWriteClient } from "../src/ado-governed-writes.ts";
 import { runAdoOperation } from "../src/ado-operations.ts";
-import { comparePrd } from "../src/prd-comparison.ts";
+import { compareEvidencePages, comparePrd } from "../src/prd-comparison.ts";
 import { appendAzureCriteria } from "../src/ado-publication-fields.ts";
 
 it("adds a reviewed criterion inside existing Azure HTML without changing the Notes section", () => {
@@ -198,4 +198,61 @@ it("compares Gitex, creates one reviewed backlog item, reads it back and records
       .get(),
   ).toEqual({ n: 1 });
   db.close();
+});
+
+it("finds a duplicate on a later comparison page and holds an interrupted read", async () => {
+  const draft = {
+    id: "local",
+    title: "Badge",
+    requirement: "Badge",
+    acceptance: "Print",
+  };
+  const records = [1, 2, 3].map((id) => ({
+    id,
+    rev: 2,
+    title: id === 3 ? "Badge" : "Other",
+    description: "x".repeat(110),
+  }));
+  const answer = vi.fn(async (prompt: string) => {
+    const { backlogRecords } = JSON.parse(prompt.split("\n").at(-1)!) as {
+      backlogRecords: { id: number; title: string }[];
+    };
+    const hit = backlogRecords.find((r) => r.id === 3);
+    return JSON.stringify({
+      rows: [
+        {
+          draftId: "local",
+          classification: hit ? "covered" : "addition",
+          providerId: hit?.id ?? null,
+          revision: hit ? 2 : null,
+          evidence: hit?.title ?? "",
+          reason: hit ? "Title in this record" : "No match on this page",
+        },
+      ],
+    });
+  });
+  const rows = await compareEvidencePages(
+    {},
+    "ref",
+    [draft],
+    records,
+    answer,
+    200,
+  );
+  expect(answer).toHaveBeenCalledTimes(3);
+  expect(rows).toMatchObject([{ classification: "covered", providerId: 3 }]);
+  let n = 0;
+  await expect(
+    compareEvidencePages(
+      {},
+      "ref",
+      [draft],
+      records,
+      async (prompt) => {
+        if (++n === 2) throw Error("read interrupted");
+        return answer(prompt);
+      },
+      200,
+    ),
+  ).rejects.toThrow("read interrupted");
 });

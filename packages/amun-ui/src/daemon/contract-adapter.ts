@@ -1165,6 +1165,17 @@ export class ContractAdapter {
   private async handleWork(message: Message): Promise<unknown[]> {
     const action = String(message.action);
     try {
+      if (action === "draft-blocker-message") {
+        const snapshot = await this.daemon.request<WorkSnapshot>("work.nudge", {
+          command: message,
+          space: await this.ensureSpace(),
+        });
+        this.view = { ...this.view, work: snapshot };
+        return [
+          this.result(action, true, "Draft request checked."),
+          this.work(),
+        ];
+      }
       if (action === "snapshot") {
         await this.refresh();
         return [this.work()];

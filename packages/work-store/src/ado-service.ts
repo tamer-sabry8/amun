@@ -152,6 +152,16 @@ export class AdoService {
             request,
             d,
             async (space, prompt) => {
+              if (receipt)
+                return dispatch(
+                  space,
+                  prompt +
+                    "\nContinuation of comparison " +
+                    request.ref +
+                    " for work area " +
+                    request.workAreaId +
+                    ".",
+                );
               const origin = this.workspace.recordReviewPrompt(
                 {
                   productId: request.productId,

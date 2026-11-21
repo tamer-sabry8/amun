@@ -303,6 +303,14 @@ export const workSnapshot = z.strictObject({
       workAreaId: id,
       title: z.string(),
       owner: z.string().nullable(),
+      nudge: z
+        .object({
+          ref: id,
+          text: z.string(),
+          state: z.enum(["drafting", "draft", "copied", "manual", "failed"]),
+        })
+        .nullable()
+        .optional(),
       sprintLink: z
         .object({ sourceId: id, sprintId: id, storyId: id })
         .nullable()
@@ -784,6 +792,19 @@ export const workCommand = z.discriminatedUnion("action", [
     areaId: id,
     title: name,
     owner: text.nullable().default(null),
+  }),
+  act("draft-blocker-message", {
+    areaId: id,
+    blockerId: id,
+    chatId: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
+  act("record-blocker-message", {
+    areaId: id,
+    blockerId: id,
+    ref: id,
+    body: z.string().trim().min(1).max(16000),
+    disposition: z.enum(["copied", "manual"]),
   }),
   act("link-blocker-story", {
     areaId: id,

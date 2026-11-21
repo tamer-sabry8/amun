@@ -342,6 +342,19 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [look.at.ref, c.areaId],
     }),
   },
+  "draft-blocker-message": {
+    local:
+      "Firstmate receives the request in the originating sprint conversation.",
+  },
+  "record-blocker-message": {
+    tell: (c) => ({
+      what:
+        c.disposition === "manual"
+          ? "confirmed a blocker message was sent manually"
+          : "copied a blocker message; delivery remains unconfirmed",
+      ids: [c.areaId, c.blockerId, c.ref],
+    }),
+  },
   "link-blocker-story": {
     tell: (c) => ({
       what:

@@ -103,7 +103,7 @@ export class AdoReview {
         if (!type) throw Error("Select a discovered work item type.");
         const stored = this.db
           .prepare(
-            "SELECT result_json FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=?",
+            "SELECT result_json FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=? AND COALESCE(json_extract(result_json,'$.pending'),0)=0",
           )
           .get(
             cmd.productId,
@@ -113,12 +113,18 @@ export class AdoReview {
             cmd.team,
             cmd.level ?? "",
           ) as { result_json: string } | undefined;
-        const proposal =
-          stored &&
-          prdComparison
-            .parse(JSON.parse(stored.result_json))
-            .rows.find((r) => r.draftId === (row.parent_id ?? row.id));
-        if (!proposal || proposal.classification === "held")
+        const coverage =
+          stored && prdComparison.parse(JSON.parse(stored.result_json));
+        const proposal = coverage?.rows.find(
+          (r) => r.draftId === (row.parent_id ?? row.id),
+        );
+        const comparison = coverage && {
+          ref: coverage.ref,
+          sourceId: cmd.sourceId,
+          team: cmd.team,
+          level: cmd.level!,
+        };
+        if (!comparison || !proposal || proposal.classification === "held")
           throw Error(
             "Complete the backlog comparison and resolve this held proposal first.",
           );
@@ -182,6 +188,7 @@ export class AdoReview {
           steps.push({
             itemId: row.id,
             draftDigest: draftDigest(row),
+            comparison,
             type: type.name,
             parentId: null,
             remoteId: record.id,
@@ -221,6 +228,7 @@ export class AdoReview {
         steps.push({
           itemId: row.id,
           draftDigest: draftDigest(row),
+          comparison,
           parentId: row.parent_id,
           remoteId: null,
           revision: 0,
@@ -272,7 +280,28 @@ export class AdoReview {
   }
   validateDrafts(product: string, steps: AdoStep[]) {
     for (const step of steps) {
-      if (step.draftDigest !== draftDigest(this.draft(product, step.itemId)))
+      const row = this.draft(product, step.itemId);
+      if (step.comparison) {
+        const c = step.comparison;
+        const verified = this.db
+          .prepare(
+            "SELECT 1 FROM prd_comparisons WHERE product_id=? AND objective_id=? AND version=? AND source_id=? AND team=? AND level=? AND json_extract(result_json,'$.ref')=? AND COALESCE(json_extract(result_json,'$.pending'),0)=0",
+          )
+          .get(
+            product,
+            row.objective_id,
+            row.prd_version,
+            c.sourceId,
+            c.team,
+            c.level,
+            c.ref,
+          );
+        if (!verified)
+          throw Error(
+            "The backlog comparison changed. Refresh the publication preview.",
+          );
+      }
+      if (step.draftDigest !== draftDigest(row))
         throw Error(
           "The draft changed after preview. Review its current wording before submitting.",
         );

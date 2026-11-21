@@ -10,6 +10,7 @@ export interface AdoDestination {
 }
 export interface AdoStep {
   draftDigest?: string;
+  comparison?: { ref: string; sourceId: string; team: string; level: string };
   itemId: string;
   type: string;
   parentId: string | null;

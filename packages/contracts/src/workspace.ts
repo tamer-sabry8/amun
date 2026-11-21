@@ -67,6 +67,7 @@ export const coverageRow = z.strictObject({
   reason: z.string().min(1).max(2000),
 });
 export const prdComparison = z.object({
+  pending: z.boolean().optional(),
   ref: id,
   objectiveId: id,
   version: z.int().positive(),

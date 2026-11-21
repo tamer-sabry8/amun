@@ -35,6 +35,7 @@ const card = z.object({
   type: z.string(),
   column: z.string().nullable(),
   iteration: z.string().nullable().optional(),
+  prerequisites: z.array(z.int().positive()).optional(),
   assignee: z.string().optional(),
   labels: z.array(z.string()).optional(),
   estimates: z

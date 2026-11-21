@@ -1,3 +1,4 @@
+import { draftBlockerNudge, recordNudgeAction } from "./blocker-nudge.ts";
 // Storage and command handling for the UX rebuild model (migration 29).
 // Decisions come from packages/domain/src/work; this file persists them.
 import { randomUUID } from "node:crypto";
@@ -416,12 +417,19 @@ export class WorkStore {
         })),
         plans: this.plans(),
         blockers: this.all(
-          "SELECT b.* FROM work_blockers b JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
+          "SELECT n.ref AS nudge_ref,n.text AS nudge_text,n.state AS nudge_state,b.* FROM work_blockers b LEFT JOIN blocker_nudges n ON n.blocker_id=b.id JOIN work_areas a ON a.id=b.work_area_id WHERE a.status<>'deleted' ORDER BY b.raised_at,b.id",
         ).map((row) => ({
           id: String(row.id),
           workAreaId: String(row.work_area_id),
           title: String(row.title),
           owner: (row.owner as string | null) ?? null,
+          nudge: row.nudge_ref
+            ? {
+                ref: row.nudge_ref,
+                text: row.nudge_text,
+                state: row.nudge_state,
+              }
+            : null,
           sprintLink: row.sprint_link_json
             ? JSON.parse(String(row.sprint_link_json))
             : null,
@@ -802,6 +810,15 @@ export class WorkStore {
   /** Content search, always limited to the group the owner is working in. */
   search(query: string) {
     return searchContent(this.db, query, this.setup().activeGroupId);
+  }
+  async draftNudge(input: unknown, send: (prompt: string) => Promise<string>) {
+    const command = workCommand.parse(input);
+    if (command.action !== "draft-blocker-message")
+      throw Error("Unknown blocker draft action.");
+    await draftBlockerNudge(this.db, command, async (prompt) =>
+      this.clean(await send(prompt)),
+    );
+    return this.snapshot();
   }
   handle(input: unknown): WorkEvent[] {
     const parsed = workCommand.safeParse(input);
@@ -1418,6 +1435,39 @@ export class WorkStore {
           now,
         );
         return { ref: id };
+      }
+      case "draft-blocker-message":
+        throw new WorkError(
+          "Open the sprint conversation to draft with Firstmate.",
+        );
+      case "record-blocker-message": {
+        try {
+          if (
+            recordNudgeAction(
+              this.db,
+              command.areaId,
+              command.blockerId,
+              command.ref,
+              this.clean(command.body),
+              command.disposition,
+            )
+          )
+            this.activity({
+              groupId: this.groupOf(command.areaId),
+              workAreaId: command.areaId,
+              text:
+                command.disposition === "copied"
+                  ? "Copied blocker message · delivery unconfirmed"
+                  : "Sent manually · confirmed by you",
+              ref: command.ref,
+              state: "finished",
+            });
+        } catch {
+          throw new WorkError(
+            "The message draft changed. Check the blocker before recording delivery.",
+          );
+        }
+        return { ref: command.ref };
       }
       case "link-blocker-story": {
         const record = this.get(

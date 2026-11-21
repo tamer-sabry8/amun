@@ -185,7 +185,9 @@ export function SprintPlanner({
         .filter(
           (move) =>
             !receipts[batch.ref]?.some(
-              (r) => r.itemId === String(move.id) && r.state === "confirmed",
+              (r) =>
+                r.itemId === String(move.id) &&
+                (r.state === "confirmed" || r.state === "held"),
             ),
         )
         .map((move) => move.id),
@@ -625,6 +627,33 @@ export function SprintPlanner({
                     : ""}
                 </small>
               </span>
+              {cards
+                ?.find((c) => c.id === move.id)
+                ?.prerequisites?.map((id) => {
+                  const before = cards.find((c) => c.id === id);
+                  if (
+                    !before ||
+                    before.id === move.id ||
+                    before.iteration === scope.iteration ||
+                    draft.moves.some(
+                      (m) => m.id === id && m.to === scope.iteration,
+                    )
+                  )
+                    return null;
+                  return (
+                    <button
+                      key={id}
+                      className="btn quiet"
+                      disabled={
+                        !before.iteration || preparing || submittedIds.has(id)
+                      }
+                      onClick={() => add(before)}
+                      aria-label={"Add prerequisite " + before.title}
+                    >
+                      Add {before.title}
+                    </button>
+                  );
+                })}
               <button
                 className="btn quiet"
                 onClick={() =>
@@ -665,6 +694,68 @@ export function SprintPlanner({
                   Check receipt
                 </button>
               </div>
+              {batch.moves
+                .filter((move) =>
+                  receipts[batch.ref]?.some(
+                    (r) => r.itemId === String(move.id) && r.state === "held",
+                  ),
+                )
+                .map((move) => {
+                  const current = cards?.find((c) => c.id === move.id);
+                  const canStage =
+                    current?.iteration &&
+                    !draft.moves.some((m) => m.id === move.id) &&
+                    !submittedIds.has(move.id);
+                  return (
+                    <div className="rb-line" key={move.id}>
+                      <span className="grow">
+                        #{move.id} {move.title}
+                        <small>
+                          Reviewed from {move.from} · currently{" "}
+                          {current?.iteration ?? "unavailable"}
+                        </small>
+                      </span>
+                      <button
+                        className="btn quiet"
+                        disabled={preparing || !canStage}
+                        onClick={() => {
+                          if (!current?.iteration || applying.current) return;
+                          const target =
+                            move.from === move.to ? current.iteration : move.to;
+                          if (
+                            target === current.iteration &&
+                            !move.addLabels?.length
+                          ) {
+                            setError(
+                              "This story is already in the requested sprint.",
+                            );
+                            return;
+                          }
+                          if (
+                            move.targetSprintId &&
+                            current.iteration !== scope.iteration
+                          ) {
+                            setError(
+                              "Review the new source sprint before carrying this story forward.",
+                            );
+                            return;
+                          }
+                          save(
+                            stageMove(draft, {
+                              ...move,
+                              title: current.title,
+                              rev: current.rev,
+                              from: current.iteration,
+                              to: target,
+                            }),
+                          );
+                        }}
+                      >
+                        Review again
+                      </button>
+                    </div>
+                  );
+                })}
               {receiptText[batch.ref] && (
                 <p role="status" style={{ whiteSpace: "pre-line" }}>
                   {receiptText[batch.ref]}

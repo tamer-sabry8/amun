@@ -1,5 +1,6 @@
 // Hand-written surface the daemon uses; the bundle in dist/ is built from src/.
 export interface WorkStoreLike {
+  draftNudge?(input: unknown, send: (prompt: string) => Promise<string>): Promise<unknown>;
   snapshot(): unknown;
   handle(input: unknown): unknown[];
   /** Words inside documents, records and conversations, in the current group. */
