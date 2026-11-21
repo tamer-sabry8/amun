@@ -9,7 +9,7 @@ export function PlannedStoryRow({
 }: {
   story: PlannedStory;
   name: string;
-  matches: readonly { id: number; title: string }[];
+  matches: readonly { id: number; title: string; outside?: string }[];
   update(next: PlannedStory): void;
   remove(): void;
   focus: boolean;
@@ -75,7 +75,10 @@ export function PlannedStoryRow({
           <h4>Possible duplicates</h4>
           {matches.map((m) => (
             <p key={m.id}>
-              #{m.id} {m.title}
+              #{m.id} {m.title}{" "}
+              {m.outside && (
+                <span className="muted small">Outside {m.outside} filter</span>
+              )}
             </p>
           ))}
           <label>

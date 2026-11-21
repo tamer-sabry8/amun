@@ -1,3 +1,8 @@
+import {
+  ProjectFilter,
+  useProjectFilter,
+  matchesProjectTag,
+} from "./project-backlog-filter.tsx";
 import { readPlanningCache } from "./planning-cache.ts";
 import { SprintBlockers } from "./sprint-blockers.tsx";
 import { ResumePlanning, OfflinePlanning } from "./resume-planning.tsx";
@@ -1490,6 +1495,15 @@ export function Sprints({
   const openAzure = current?.id.startsWith("ado:")
     ? current.id.slice("ado:".length)
     : null;
+  const filterBoard =
+    azure.sourceId &&
+    readBoard(browserStore(), azure.productId, azure.sourceId);
+  const sprintFilter = useProjectFilter({
+    productId: azure.productId,
+    sourceId: azure.sourceId,
+    team: azure.reply?.team.id ?? "",
+    backlog: filterBoard ? filterBoard.level : "",
+  });
   const openSprint = azure.openSprint;
   // Opening an Azure sprint reads its work items (read-only).
   useEffect(() => {
@@ -1691,6 +1705,16 @@ export function Sprints({
             iteration: iteration.path,
           }
         : null;
+    const projectStories = current.stories.filter((story) =>
+      matchesProjectTag(azureDetail.get(story.id)?.labels, sprintFilter.tag),
+    );
+    const filteredSprint = !!(
+      planner &&
+      sprintFilter.tag &&
+      !sprintFilter.full
+    );
+    const visibleStories = filteredSprint ? projectStories : current.stories;
+    const visibleIds = new Set(visibleStories.map((s) => s.id));
     const steps = snapshot.activity.filter(
       (item) => item.workAreaId === current.workAreaId,
     );
@@ -1757,6 +1781,18 @@ export function Sprints({
         }
         footer={footer}
       >
+        {planner && tab !== "Planning" && azure.items?.state === "ready" && (
+          <ProjectFilter
+            filter={sprintFilter}
+            labels={azure.items.items.flatMap((s) => s.labels ?? [])}
+            matching={projectStories.length}
+            total={current.stories.length}
+            noun="sprint"
+          />
+        )}
+        {filteredSprint && !visibleStories.length && (
+          <p>No stories match the saved project filter in this sprint.</p>
+        )}
         {tab === "Planning" &&
           (planner &&
           azure.items?.sprint === openAzure &&
@@ -1811,7 +1847,12 @@ export function Sprints({
                 ? { teamId: azure.reply.team.id }
                 : {})}
               refresh={() => openAzure && openSprint(openAzure)}
-              blockers={snapshot.blockers}
+              blockers={snapshot.blockers.filter(
+                (b) =>
+                  !filteredSprint ||
+                  !b.sprintLink ||
+                  visibleIds.has(b.sprintLink.storyId),
+              )}
               areaId={current.workAreaId}
               project={current.workAreaName}
               sprintId={current.id}
@@ -1819,7 +1860,7 @@ export function Sprints({
               sourceId={
                 openAzure ? (azure.reply?.sourceId ?? azure.sourceId) : "amun"
               }
-              stories={current.stories}
+              stories={visibleStories}
               now={now}
               discuss={discussSprint}
             />
@@ -1842,18 +1883,18 @@ export function Sprints({
                   ? sprintReplies.itemsLost
                   : sprintReplies.itemsNone}
             </p>
-          ) : current.stories.length ? (
+          ) : visibleStories.length ? (
             <div className="rb-board">
               {[
                 ...new Set(
-                  current.stories.map(
+                  visibleStories.map(
                     (story) => azureDetail.get(story.id)?.state ?? "Planned",
                   ),
                 ),
               ].map((state) => (
                 <section className="rb-col" key={state} aria-label={state}>
                   <header>{state}</header>
-                  {current.stories
+                  {visibleStories
                     .filter(
                       (story) =>
                         (azureDetail.get(story.id)?.state ?? "Planned") ===

@@ -5,6 +5,7 @@ import type { Transport } from "./ado-client.ts";
 type BoardSummary = { id: string; name: string };
 type SprintItem = {
   assignedIdentity?: { id: string; uniqueName: string };
+  labels?: string[];
   points?: number;
   indicator?: { rev: number; blocked: boolean };
   id: number;
@@ -548,6 +549,14 @@ export class BoardDiscovery {
         const points = f["Microsoft.VSTS.Scheduling.StoryPoints"];
         const indicator = f["Microsoft.VSTS.CMMI.Blocked"];
         byId.set(item.id, {
+          ...(typeof f["System.Tags"] === "string"
+            ? {
+                labels: f["System.Tags"]
+                  .split(";")
+                  .map((label: string) => label.trim())
+                  .filter(Boolean),
+              }
+            : {}),
           ...(typeof points === "number" && Number.isFinite(points)
             ? { points }
             : {}),

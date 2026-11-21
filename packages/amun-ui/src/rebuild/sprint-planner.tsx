@@ -1,3 +1,8 @@
+import {
+  ProjectFilter,
+  useProjectFilter,
+  matchesProjectTag,
+} from "./project-backlog-filter.tsx";
 import { PlanningFields } from "./planning-fields.tsx";
 import {
   placeBefore,
@@ -55,6 +60,8 @@ export function SprintPlanner({
     bridge.subscribe,
     () => bridge.getSnapshot().status === "Connected",
   );
+  const projectFilter = useProjectFilter(scope);
+  const activeTag = projectFilter.full ? "" : projectFilter.tag;
   const [carryTo, setCarryTo] = useState("");
   const [carryIds, setCarryIds] = useState<number[]>([]);
   const [budget, setBudget] = useState(() => {
@@ -504,6 +511,7 @@ export function SprintPlanner({
     cards &&
     ordered.filter(
       (card) =>
+        matchesProjectTag(card.labels, activeTag) &&
         !members.some((s) => s.id === String(card.id)) &&
         !draft.moves.some((s) => s.id === card.id && s.to !== s.from) &&
         (card.title.toLocaleLowerCase().includes(search) ||
@@ -531,6 +539,20 @@ export function SprintPlanner({
   const load = cards
     ? plannedLoad(members, cards, draft.moves, scope.iteration)
     : null;
+  const projectIds = new Set(
+    cards
+      ?.filter((c) => matchesProjectTag(c.labels, projectFilter.tag))
+      .map((c) => String(c.id)),
+  );
+  const projectLoad =
+    projectFilter.tag && cards
+      ? plannedLoad(
+          members.filter((m) => projectIds.has(m.id)),
+          cards,
+          draft.moves.filter((m) => projectIds.has(String(m.id))),
+          scope.iteration,
+        )
+      : null;
   const budgetValue =
     budget.trim() !== "" &&
     Number.isFinite(Number(budget)) &&
@@ -555,6 +577,19 @@ export function SprintPlanner({
       <div className="rb-planning-panes">
         <section aria-label="Team backlog">
           <h2>Team backlog</h2>
+          {cards && (
+            <ProjectFilter
+              filter={projectFilter}
+              labels={cards.flatMap((c) => c.labels ?? [])}
+              matching={
+                cards.filter((c) =>
+                  matchesProjectTag(c.labels, projectFilter.tag),
+                ).length
+              }
+              total={cards.length}
+              noun="backlog"
+            />
+          )}
           <button
             className="btn"
             disabled={preparing}
@@ -569,7 +604,7 @@ export function SprintPlanner({
                       localId,
                       title: "",
                       criteria: [],
-                      labels: [],
+                      labels: activeTag ? [activeTag] : [],
                       schedule: false,
                     },
                   ],
@@ -584,7 +619,13 @@ export function SprintPlanner({
             <PlannedStoryRow
               key={story.localId}
               story={story}
-              matches={candidates(story.title)}
+              matches={candidates(story.title).map((c) => ({
+                ...c,
+                outside:
+                  activeTag && !matchesProjectTag(c.labels, activeTag)
+                    ? activeTag
+                    : "",
+              }))}
               name={name}
               focus={newFocus === story.localId}
               update={updateCreated}
@@ -656,6 +697,7 @@ export function SprintPlanner({
             >
               <div className="grow">
                 <details
+                  aria-label={"Backlog story " + card.id}
                   onToggle={(event) => {
                     if (event.currentTarget.open)
                       inspectView({
@@ -1182,6 +1224,14 @@ export function SprintPlanner({
           ))}
           {load && (
             <section aria-label="Team planning capacity">
+              {projectLoad && (
+                <p>
+                  {projectFilter.tag} · {projectLoad.points} planned points
+                  {projectLoad.unknown.length
+                    ? " · " + projectLoad.unknown.length + " unestimated"
+                    : ""}
+                </p>
+              )}
               <p>
                 Team · {load.points} planned points
                 {budgetValue !== null ? " of " + budgetValue : ""}

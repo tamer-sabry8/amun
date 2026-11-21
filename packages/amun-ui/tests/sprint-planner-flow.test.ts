@@ -91,7 +91,9 @@ it("stages locally across a remount, holds an offline apply and sends a connecte
     )!;
   try {
     await mount();
-    const row = container.querySelector("details")!;
+    const row = container.querySelector(
+      'details[aria-label^="Backlog story "]',
+    )!;
     expect(row.querySelector("summary")?.textContent).toContain(
       "Ready for rehearsal · Effort 3 · Gitex · Blocked: Yes",
     );
