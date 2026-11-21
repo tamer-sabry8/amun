@@ -274,16 +274,29 @@ export class AdoService {
     const backlogIteration = request.details
       ? await d.backlogIteration(request.team).catch(() => null)
       : null;
+    const cards = await d.cards(
+      request.team,
+      request.level,
+      settings.columnField,
+      request.details,
+    );
+    const [identities, transitions] = request.details
+      ? await Promise.all([
+          d.teamIdentities(request.team).catch(() => []),
+          Promise.all(
+            [...new Set(cards.map((c) => c.type))].map(
+              async (type) =>
+                [type, await d.transitions(type).catch(() => ({}))] as const,
+            ),
+          ).then((entries) => Object.fromEntries(entries)),
+        ])
+      : [[], {}];
     return {
       ...meta,
       view: "cards",
       columns,
-      cards: await d.cards(
-        request.team,
-        request.level,
-        settings.columnField,
-        request.details,
-      ),
+      cards,
+      ...(request.details ? { identities, transitions } : {}),
       ...(request.details
         ? {
             backlogIteration,

@@ -448,3 +448,54 @@ it("moves one record above its anchor in the complete shared order and reads tha
   expect(read.mock.calls.length).toBeGreaterThanOrEqual(3);
   db.close();
 });
+
+it("stages a permitted status and verified identity without changing sprint membership or resolving the blocker", async () => {
+  const { db, request, target, reader } = fixture();
+  const owner = { id: "sam-42", name: "Sam", uniqueName: "sam@example.test" };
+  request.moves = [
+    {
+      ...request.moves[0]!,
+      to: "Gitex",
+      status: { from: "New", to: "Ready for rehearsal" },
+      owner: { from: null, to: owner },
+    },
+  ];
+  db.prepare(
+    "INSERT INTO work_blockers(id,work_area_id,title,raised_at) VALUES('b','gitex','Access','now')",
+  ).run();
+  const people = vi.fn(async () => [owner]);
+  const write = vi.fn(async () => ({ id: 24, rev: 4 }));
+  const result = await applySprintMoves(
+    db,
+    request,
+    target,
+    {
+      ...reader,
+      transitions: async () => ({ New: ["Ready for rehearsal"] }),
+      teamIdentities: people,
+      cards: async () =>
+        (await reader.cards()).map((c) => ({ ...c, state: "New" })),
+    },
+    { write },
+    () => true,
+    async () => "ACCEPT " + request.ref,
+  );
+  expect(result.receipts[0]?.state).toBe("confirmed");
+  expect(write).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      expectedAssigneeId: owner.id,
+      fields: {
+        "System.State": "Ready for rehearsal",
+        "System.AssignedTo": owner.uniqueName,
+      },
+    }),
+    null,
+  );
+  expect(
+    db
+      .prepare("SELECT resolved_at FROM work_blockers WHERE id='b'")
+      .pluck()
+      .get(),
+  ).toBeNull();
+  db.close();
+});

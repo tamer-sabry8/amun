@@ -1749,6 +1749,20 @@ export function Sprints({
               key={JSON.stringify(planner)}
               scope={planner}
               name={current.name}
+              openBlockers={snapshot.blockers.reduce<Record<string, number>>(
+                (counts, b) => {
+                  if (
+                    b.workAreaId === current.workAreaId &&
+                    !b.resolvedAt &&
+                    b.sprintLink?.sourceId === planner.sourceId &&
+                    b.sprintLink.sprintId === current.id
+                  )
+                    counts[b.sprintLink.storyId] =
+                      (counts[b.sprintLink.storyId] ?? 0) + 1;
+                  return counts;
+                },
+                {},
+              )}
               refreshMembers={() => openAzure && openSprint(openAzure)}
               members={current.stories}
               destinations={azure.reply?.sprints ?? []}

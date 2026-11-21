@@ -46,6 +46,7 @@ const card = z.object({
     .optional(),
   prerequisites: z.array(z.int().positive()).optional(),
   assignee: z.string().optional(),
+  assigneeId: z.string().optional(),
   labels: z.array(z.string()).optional(),
   estimates: z
     .array(z.object({ name: z.string(), value: z.number() }))
@@ -53,6 +54,12 @@ const card = z.object({
   blocked: z.string().optional(),
   description: z.string().optional(),
   criteria: z.string().optional(),
+});
+export const planningIdentity = z.object({ id, name: id, uniqueName: id });
+export const statusEdit = z.object({ from: id, to: id });
+export const ownerEdit = z.object({
+  from: id.nullable(),
+  to: planningIdentity,
 });
 const column = named.extend({
   stateMappings: z.record(z.string(), z.string()),
@@ -134,6 +141,10 @@ export const backlogResult = z.discriminatedUnion("view", [
     view: z.literal("cards"),
     columns: z.array(column),
     cards: z.array(card),
+    identities: z.array(planningIdentity).optional(),
+    transitions: z
+      .record(z.string(), z.record(z.string(), z.array(z.string())))
+      .optional(),
     creationTarget: z
       .object({ type: id, area: id, backlogIteration: id })
       .nullable()
@@ -222,6 +233,8 @@ export const sprintMoveRequest = z.strictObject({
           .optional(),
         targetSprintId: id.optional(),
         reorder: reviewedOrder.optional(),
+        status: statusEdit.optional(),
+        owner: ownerEdit.optional(),
         title: z.string().max(1024),
       }),
     )

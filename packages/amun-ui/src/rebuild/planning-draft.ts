@@ -1,4 +1,9 @@
-import { plannedStory, reviewedOrder } from "@amun/contracts";
+import {
+  plannedStory,
+  reviewedOrder,
+  statusEdit,
+  ownerEdit,
+} from "@amun/contracts";
 import { z } from "zod";
 import type { SelectionStore } from "../backlog-selection.ts";
 
@@ -31,6 +36,8 @@ const move = z.object({
     .max(30)
     .optional(),
   reorder: reviewedOrder.optional(),
+  status: statusEdit.optional(),
+  owner: ownerEdit.optional(),
   targetSprintId: z.string().min(1).optional(),
 });
 export type PlannedMove = z.infer<typeof move>;
@@ -88,7 +95,13 @@ export function stageMove(
     ? { ...previous, ...move, rev: previous.rev, from: previous.from }
     : move;
   const moves = draft.moves.filter((entry) => entry.id !== move.id);
-  if (next.from !== next.to || next.addLabels?.length || next.reorder) {
+  if (
+    next.from !== next.to ||
+    next.addLabels?.length ||
+    next.reorder ||
+    next.status ||
+    next.owner
+  ) {
     if (previous)
       return {
         ...draft,
@@ -107,7 +120,9 @@ export function planningChangeCount(moves: readonly PlannedMove[]) {
       n +
       Number(m.from !== m.to) +
       Number(!!m.addLabels?.length) +
-      Number(!!m.reorder),
+      Number(!!m.reorder) +
+      Number(!!m.status) +
+      Number(!!m.owner),
     0,
   );
 }

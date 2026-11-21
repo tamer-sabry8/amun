@@ -156,6 +156,12 @@ export class AdoWriteClient {
   }
   async verify(id: number, step: AdoStep, parent: number | null) {
     const item = await this.item(id);
+    if (
+      step.expectedAssigneeId &&
+      (item.fields["System.AssignedTo"] as { id?: string } | undefined)?.id !==
+        step.expectedAssigneeId
+    )
+      throw Error("Azure assignee identity changed");
     if (item.fields["System.WorkItemType"] !== step.type)
       throw Error("Azure type changed");
     for (const [k, v] of Object.entries(step.fields)) {

@@ -304,6 +304,65 @@ export class BoardDiscovery {
     ).map(summary);
   }
 
+  async transitions(type: string) {
+    const data = await this.get(
+      new URL(
+        this.project + "/_apis/wit/workitemtypes/" + azurePathSegment(type),
+        this.base,
+      ),
+    );
+    if (!record(data) || !record(data.transitions) || data.isDisabled === true)
+      return {};
+    const result: Record<string, string[]> = Object.create(null);
+    for (const [from, options] of Object.entries(data.transitions)) {
+      if (Array.isArray(options))
+        result[from] = options.flatMap((s) =>
+          record(s) && typeof s.to === "string" && s.to !== from ? [s.to] : [],
+        );
+    }
+    return result;
+  }
+  async teamIdentities(team: string) {
+    // This endpoint pages by skip and top and nests each user under identity.
+    const members: { id: string; name: string; uniqueName: string }[] = [];
+    const seen = new Set<string>();
+    for (let skip = 0; ; skip += 100) {
+      const url = new URL(
+        "_apis/projects/" +
+          this.project +
+          "/teams/" +
+          azurePathSegment(team) +
+          "/members",
+        this.base,
+      );
+      url.searchParams.set("$top", "100");
+      url.searchParams.set("$skip", String(skip));
+      const data = await this.get(url);
+      if (!record(data) || !Array.isArray(data.value))
+        throw Error("Team member discovery is incomplete.");
+      for (const member of data.value) {
+        const identity = record(member) && member.identity;
+        if (
+          !record(identity) ||
+          typeof identity.id !== "string" ||
+          seen.has(identity.id)
+        )
+          throw Error("Team member discovery is incomplete.");
+        seen.add(identity.id);
+        if (
+          typeof identity.uniqueName === "string" &&
+          typeof identity.displayName === "string" &&
+          identity.isContainer !== true
+        )
+          members.push({
+            id: identity.id,
+            name: identity.displayName,
+            uniqueName: identity.uniqueName,
+          });
+      }
+      if (data.value.length < 100) return members;
+    }
+  }
   async planningCreationTarget(
     team: string,
     levelId: string,
@@ -495,6 +554,7 @@ export class BoardDiscovery {
         column: string | null;
         iteration: string | null;
         assignee?: string;
+        assigneeId?: string;
         labels?: string[];
         estimates?: { name: string; value: number }[];
         blocked?: string | undefined;
@@ -593,6 +653,9 @@ export class BoardDiscovery {
                       return [];
                     })
                   : [],
+                ...(typeof f["System.AssignedTo"]?.id === "string"
+                  ? { assigneeId: f["System.AssignedTo"].id }
+                  : {}),
                 assignee:
                   typeof f["System.AssignedTo"] === "string"
                     ? f["System.AssignedTo"]

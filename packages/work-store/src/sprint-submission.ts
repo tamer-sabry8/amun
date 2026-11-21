@@ -36,7 +36,15 @@ export async function applySprintMoves(
     BoardDiscovery,
     "sprints" | "levels" | "boardSettings" | "cards" | "backlogIteration"
   > &
-    Partial<Pick<BoardDiscovery, "processSchema" | "planningCreationTarget">>,
+    Partial<
+      Pick<
+        BoardDiscovery,
+        | "processSchema"
+        | "planningCreationTarget"
+        | "transitions"
+        | "teamIdentities"
+      >
+    >,
   client: Pick<AdoWriteClient, "write">,
   stillMapped: () => boolean,
   dispatch: FirstmateDispatch,
@@ -76,7 +84,8 @@ export async function applySprintMoves(
     new Set(moves.map((m) => m.id)).size !== moves.length ||
     moves.some((m) =>
       m.from === m.to
-        ? (!m.addLabels?.length && !m.reorder) || !!m.targetSprintId
+        ? (!m.addLabels?.length && !m.reorder && !m.status && !m.owner) ||
+          !!m.targetSprintId
         : m.to !== request.iteration && m.from !== request.iteration,
     )
   )
@@ -198,7 +207,7 @@ export async function applySprintMoves(
       destination.team,
       level.id,
       settings.columnField,
-      moves.some((m) => m.addLabels?.length || m.reorder),
+      moves.some((m) => m.addLabels?.length || m.reorder || m.owner),
     );
     const ready = new Set(
       summary()
@@ -245,6 +254,43 @@ export async function applySprintMoves(
       set(move.id, "unknown", "Awaiting independent verification");
       try {
         const fields: Record<string, string | number> = {};
+        if (move.status) {
+          const transitions = await reader.transitions?.(card.type);
+          if (
+            card.state !== move.status.from ||
+            !transitions?.[card.state]?.includes(move.status.to)
+          ) {
+            set(move.id, "held", "The reviewed transition is unavailable.");
+            continue;
+          }
+          fields["System.State"] = move.status.to;
+        }
+        if (move.owner) {
+          const identity = (
+            await reader.teamIdentities?.(destination.team)
+          )?.find(
+            (i) =>
+              i.id === move.owner?.to.id &&
+              i.uniqueName === move.owner.to.uniqueName,
+          );
+          if (
+            !identity ||
+            (card.assigneeId ?? null) !== move.owner.from ||
+            (card.assignee && !card.assigneeId)
+          ) {
+            set(
+              move.id,
+              "held",
+              "The assignee identity or current ownership changed.",
+            );
+            continue;
+          }
+          fields["System.AssignedTo"] = identity.uniqueName;
+        }
+        if (!stillMapped()) {
+          set(move.id, "held", "The project connection changed.");
+          continue;
+        }
         if (rank) fields[rank.field] = rank.value;
         if (move.from !== move.to) fields["System.IterationPath"] = move.to;
         if (move.addLabels?.length) {
@@ -273,6 +319,7 @@ export async function applySprintMoves(
             type: card.type,
             revision: move.rev,
             fields,
+            ...(move.owner ? { expectedAssigneeId: move.owner.to.id } : {}),
             parentId: null,
             marker: ref,
           },
@@ -452,6 +499,10 @@ export async function inspectSprintSubmission(
           (!order ||
             successor(await order(scope.level), move.id) !==
               move.reorder.beforeId)) ||
+        (move.status && item.fields["System.State"] !== move.status.to) ||
+        (move.owner &&
+          (item.fields["System.AssignedTo"] as { id?: string } | undefined)
+            ?.id !== move.owner.to.id) ||
         item.rev <= move.rev ||
         item.fields["System.IterationPath"] !== move.to ||
         move.addLabels?.some(

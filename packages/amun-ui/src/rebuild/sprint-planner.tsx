@@ -1,3 +1,4 @@
+import { PlanningFields } from "./planning-fields.tsx";
 import {
   placeBefore,
   reviewedRank,
@@ -36,6 +37,7 @@ export function SprintPlanner({
   destinations = [],
   refreshMembers,
   offlineOnly = false,
+  openBlockers,
   openChat,
 }: {
   scope: PlanningScope;
@@ -44,6 +46,7 @@ export function SprintPlanner({
   destinations?: { id: string; name: string; path: string }[];
   refreshMembers?(): void;
   offlineOnly?: boolean;
+  openBlockers?: Record<string, number>;
   openChat(chatId: string, requestRef?: string): void;
 }) {
   const connected = useSyncExternalStore(
@@ -63,6 +66,12 @@ export function SprintPlanner({
   const [creationTarget, setCreationTarget] = useState<NonNullable<
     Extract<BacklogResult, { view: "cards" }>["creationTarget"]
   > | null>(null);
+  const [fieldOptions, setFieldOptions] = useState<
+    Pick<
+      Extract<BacklogResult, { view: "cards" }>,
+      "identities" | "transitions"
+    >
+  >({});
   const [editingLabel, setEditingLabel] = useState<number | null>(null);
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
@@ -182,6 +191,10 @@ export function SprintPlanner({
         });
         setCards(parsed.data.cards);
         setCreationTarget(parsed.data.creationTarget ?? null);
+        setFieldOptions({
+          identities: parsed.data.identities,
+          transitions: parsed.data.transitions,
+        });
         setBacklogPath(parsed.data.backlogIteration ?? null);
         setError("");
       }
@@ -385,6 +398,16 @@ export function SprintPlanner({
       }),
     );
   };
+  const fields = (card: Card | undefined) =>
+    card && (
+      <PlanningFields
+        card={card}
+        pending={draft.moves.find((m) => m.id === card.id)}
+        options={fieldOptions}
+        disabled={preparing || submittedIds.has(card.id)}
+        stage={(m) => !applying.current && save(stageMove(draft, m))}
+      />
+    );
   const search = query.trim().toLocaleLowerCase();
   const ordered = draft.moves.reduce(
     (list, m) =>
@@ -444,7 +467,9 @@ export function SprintPlanner({
         m.to === scope.iteration &&
         m.from !== m.to &&
         !m.addLabels?.length &&
-        !m.reorder,
+        !m.reorder &&
+        !m.status &&
+        !m.owner,
     );
   const load = cards
     ? plannedLoad(members, cards, draft.moves, scope.iteration)
@@ -613,6 +638,7 @@ export function SprintPlanner({
                     Azure · {scope.team} · #{card.id} · revision {card.rev}
                   </p>
                 </details>
+                {fields(card)}
               </div>
               <button
                 className="btn"
@@ -816,7 +842,10 @@ export function SprintPlanner({
             )
             .map((story) => (
               <div className="rb-line" key={story.id}>
-                <span className="grow">{story.title}</span>
+                <div className="grow">
+                  {story.title}
+                  {fields(cards?.find((c) => String(c.id) === story.id))}
+                </div>
                 {backlogPath &&
                   backlogPath !== scope.iteration &&
                   cards?.some(
@@ -865,12 +894,24 @@ export function SprintPlanner({
                   {move.from !== move.to
                     ? move.from + " → " + move.to
                     : move.from}
+                  {move.status
+                    ? " · Status: " + move.status.from + " → " + move.status.to
+                    : ""}
+                  {move.owner ? " · Owner: " + move.owner.to.name : ""}
                   {move.reorder ? " · Before #" + move.reorder.beforeId : ""}
                   {move.addLabels?.length
                     ? " · Add labels: " + move.addLabels.join(", ")
                     : ""}
                 </small>
               </span>
+              {fields(cards?.find((c) => c.id === move.id))}
+              {move.status &&
+                /^(done|closed|completed)$/i.test(move.status.to) &&
+                openBlockers?.[String(move.id)] && (
+                  <span className="tag warn">
+                    {openBlockers[String(move.id)]} open blocker
+                  </span>
+                )}
               {cards
                 ?.find((c) => c.id === move.id)
                 ?.prerequisites?.map((id) => {
