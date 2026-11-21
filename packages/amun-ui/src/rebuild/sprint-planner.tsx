@@ -1,3 +1,4 @@
+import { SprintGoal } from "./sprint-goal.tsx";
 import {
   ProjectFilter,
   useProjectFilter,
@@ -33,6 +34,7 @@ import {
   stageMove,
   type PlanningDraft,
   type PlanningScope,
+  type PlannedMove,
 } from "./planning-draft.ts";
 
 type Card = Extract<BacklogResult, { view: "cards" }>["cards"][number];
@@ -454,7 +456,10 @@ export function SprintPlanner({
       setPreparing(false);
     }
   };
-  const add = (card: Card) => {
+  const add = (
+    card: Card,
+    suggestedOwner?: NonNullable<PlannedMove["owner"]>,
+  ) => {
     if (applying.current || submittedIds.has(card.id)) return;
     if (
       !card.iteration ||
@@ -469,6 +474,7 @@ export function SprintPlanner({
         title: card.title,
         from: card.iteration,
         to: scope.iteration,
+        ...(suggestedOwner ? { owner: suggestedOwner } : {}),
       }),
     );
   };
@@ -856,6 +862,21 @@ export function SprintPlanner({
           }}
         >
           <h2>{name}</h2>
+          <SprintGoal
+            key={JSON.stringify([scopedDraftKey(scope), activeTag])}
+            scope={scope}
+            name={name}
+            tag={activeTag}
+            cards={cards ?? []}
+            people={fieldOptions.identities ?? []}
+            enabled={fresh && connected && !offlineOnly && !preparing}
+            stage={(card, owner) => add(card, owner)}
+            unavailable={(id) =>
+              submittedIds.has(id) ||
+              draft.moves.some((m) => m.id === id) ||
+              members.some((m) => m.id === String(id))
+            }
+          />
           <p className="muted small">{scope.iteration}</p>
           {destinations.some((s) => s.id !== scope.sprintId) &&
             members.length > 0 && (

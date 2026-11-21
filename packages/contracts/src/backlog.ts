@@ -253,7 +253,26 @@ export const sprintMoveRequest = z.strictObject({
     .max(100),
 });
 export type SprintMoveRequest = z.infer<typeof sprintMoveRequest>;
+export const goalSuggestion = z.object({
+  id: z.int().positive(),
+  rev: z.int().positive(),
+  reason: z.string().min(1).max(1024),
+  ownerId: id.optional(),
+  evidenceId: z.int().positive().optional(),
+});
 export const adoOperation = z.discriminatedUnion("action", [
+  z.strictObject({
+    ...operationContext,
+    action: z.literal("suggest-sprint-stories"),
+    space: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    workAreaId: id,
+    chatId: id,
+    level: id,
+    sprintId: id,
+    goal: z.string().trim().min(1).max(2048),
+    tag: z.string().max(128).optional(),
+  }),
   sprintMoveRequest,
   z.strictObject({
     ...operationContext,
@@ -323,6 +342,7 @@ export const operationResult = z.object({
   binding: z.string().optional(),
   preview: z.string().optional(),
   requestRef: z.string().optional(),
+  suggestions: z.array(goalSuggestion).optional(),
   receipts: z
     .array(
       z.object({

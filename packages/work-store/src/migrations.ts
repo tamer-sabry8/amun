@@ -1218,4 +1218,5 @@ CREATE TABLE sprint_submission_items(ref TEXT NOT NULL REFERENCES sprint_submiss
   `ALTER TABLE work_blockers ADD COLUMN azure_indicator_json TEXT; ALTER TABLE work_blockers ADD COLUMN azure_check_pending INTEGER NOT NULL DEFAULT 0;`,
   `ALTER TABLE blocker_nudges ADD COLUMN space TEXT;
 CREATE TABLE blocker_comment_reviews(blocker_id TEXT NOT NULL REFERENCES work_blockers(id) ON DELETE CASCADE, comment_id INTEGER NOT NULL,version INTEGER NOT NULL,url TEXT NOT NULL,body TEXT NOT NULL,proposal TEXT,state TEXT NOT NULL,PRIMARY KEY(blocker_id,comment_id,version));`,
+  `CREATE TABLE sprint_suggestions(ref TEXT PRIMARY KEY REFERENCES work_requests(ref), scope_json TEXT NOT NULL, receipt_id TEXT NOT NULL, result_json TEXT);`,
 ] as const;

@@ -13,7 +13,10 @@ export async function runAdoOperation(
     AdoOperation,
     {
       action:
-        "apply-sprint-moves" | "inspect-sprint-submission" | "compare-prd";
+        | "suggest-sprint-stories"
+        | "apply-sprint-moves"
+        | "inspect-sprint-submission"
+        | "compare-prd";
     }
   >,
   target: AdoDestination,

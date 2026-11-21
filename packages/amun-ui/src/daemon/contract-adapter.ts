@@ -834,6 +834,7 @@ export class ContractAdapter {
       const reply = await this.daemon
         .request<unknown>("ado.request", {
           message:
+            message.action === "suggest-sprint-stories" ||
             message.action === "apply-sprint-moves" ||
             message.action === "compare-prd" ||
             message.action === "approve-execute"

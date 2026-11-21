@@ -1,3 +1,4 @@
+import { suggestSprintStories } from "./sprint-suggestions.ts";
 import { reviewBlockerComments } from "./blocker-comment-review.ts";
 import { observeSprintBlockers } from "./sprint-blocker-evidence.ts";
 import { comparePrd } from "./prd-comparison.ts";
@@ -185,6 +186,21 @@ export class AdoService {
               current.kind === "ado" &&
               current.reference === source.reference,
           );
+      if (request.action === "suggest-sprint-stories") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          ...(await suggestSprintStories(
+            this.db,
+            request,
+            d,
+            dispatch,
+            mapped,
+            (text) => this.redactor.text(text),
+          )),
+        };
+      }
       if (request.action === "compare-prd") {
         if (!dispatch) throw Error("Firstmate is unavailable.");
         let receipt: string | undefined;

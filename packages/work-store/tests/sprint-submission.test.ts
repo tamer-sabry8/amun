@@ -1,3 +1,4 @@
+import { suggestSprintStories } from "../src/sprint-suggestions.ts";
 import { expect, it, vi } from "vitest";
 import { openDatabase } from "../src/sqlite.ts";
 import { migrate } from "../src/database.ts";
@@ -551,3 +552,66 @@ it.each([true, false])(
     db.close();
   },
 );
+
+it("keeps goal suggestions in one sprint chat, with owners supported by a verified prerequisite", async () => {
+  const { db, reader, request } = fixture();
+  const scoped = {
+    ...request,
+    action: "suggest-sprint-stories" as const,
+    goal: "Ship sign-in",
+    tag: "",
+  };
+  const cards = await reader.cards();
+  const discovery = {
+    ...reader,
+    cards: async () => [
+      { ...cards[0]!, prerequisites: [31] },
+      { ...cards[1]!, assigneeId: "owner" },
+    ],
+    teamIdentities: async () => [
+      { id: "owner", name: "Alex", uniqueName: "alex@example.test" },
+    ],
+  };
+  const suggestion = {
+    id: 24,
+    rev: 3,
+    reason: "Enables sign-in",
+    ownerId: "owner",
+    evidenceId: 31,
+  };
+  const send = vi.fn(async () => JSON.stringify({ suggestions: [suggestion] }));
+  const run = (r = scoped) =>
+    suggestSprintStories(
+      db,
+      r,
+      discovery,
+      send,
+      () => true,
+      (x) => x,
+    );
+  try {
+    expect((await run()).suggestions).toEqual([suggestion]);
+    expect((await run()).suggestions).toEqual([suggestion]);
+    expect(send).toHaveBeenCalledTimes(1);
+    await expect(run({ ...scoped, goal: "Different goal" })).rejects.toThrow(
+      "another suggestion request",
+    );
+    await expect(run({ ...scoped, chatId: "wrong" })).rejects.toThrow(
+      "conversation changed",
+    );
+    send.mockResolvedValue(
+      JSON.stringify({ suggestions: [{ ...suggestion, ownerId: "other" }] }),
+    );
+    expect(
+      (await run({ ...scoped, ref: "amun-r-000000000003" })).suggestions,
+    ).toEqual([]);
+    send.mockResolvedValue(
+      JSON.stringify({ suggestions: [{ ...suggestion, rev: 2 }] }),
+    );
+    expect(
+      (await run({ ...scoped, ref: "amun-r-000000000004" })).suggestions,
+    ).toEqual([]);
+  } finally {
+    db.close();
+  }
+});
