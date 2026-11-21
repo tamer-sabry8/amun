@@ -1841,8 +1841,6 @@ export function WorkSession({
         error instanceof Error ? error.message : "Firstmate could not answer.",
     }));
     setWriting(entryKey, false);
-    setBusy(false);
-    inFlight.delete(threadKey);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
@@ -1879,7 +1877,7 @@ export function WorkSession({
                     : // Handing work over is always said, even from a silent reply.
                       handed.join(" "));
       if (said)
-        work("message", {
+        await workAsync("message", {
           workAreaId: areaId,
           role: "firstmate",
           text: said,
@@ -1899,14 +1897,18 @@ export function WorkSession({
       if (briefing) markBriefed();
       // Reports and documents: linked to a request only by its reference.
       if (/```amun/.test(turn.reply))
-        work("apply-reply", {
+        await workAsync("apply-reply", {
           text: turn.reply,
           workAreaId: areaId,
           chatId: savedIn,
           saveText: false,
         });
+      for (const followup of turn.followups)
+        await workAsync("record-firstmate-reply", {
+          text: followup,
+          model: turn.model,
+        });
       for (const proposed of parsed.actions) raise(proposed);
-      if (heldMessage(threadKey)) retryWaiting();
     } else if (turn.needsProvider) {
       // Kept, not failed: it goes out once a provider is connected.
       const message = {
@@ -1917,14 +1919,18 @@ export function WorkSession({
         reason: "provider" as const,
         ref,
       };
+      setBusy(false);
+      inFlight.delete(threadKey);
       holdMessage(threadKey, message, true);
       return;
     } else {
       setProblem(turn.reason);
       // This turn failed for a reason other than a provider: it is not kept.
       // A message queued behind this failed turn is still sent.
-      if (heldMessage(threadKey)) retryWaiting();
     }
+    setBusy(false);
+    inFlight.delete(threadKey);
+    if (heldMessage(threadKey)) retryWaiting();
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
       work("activity", {
@@ -2125,10 +2131,12 @@ export function WorkSession({
       // owner last wrote goes to Firstmate with it.
       const news = agentNews(context.messages);
       const record = snapshot.rfps.find((item) => item.id === areaId);
-      const tracker = await askTrackerTypes(areaId);
-      const reasons = await askFailureReasons(
-        snapshot.plans.filter((plan) => plan.workAreaId === areaId),
-      );
+      const [tracker, reasons] = await Promise.all([
+        askTrackerTypes(areaId),
+        askFailureReasons(
+          snapshot.plans.filter((plan) => plan.workAreaId === areaId),
+        ),
+      ]);
       const header = areaTurnContext(
         context.area,
         typeLabels[context.area.type],
@@ -2181,7 +2189,7 @@ export function WorkSession({
       const about = asked
         ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
         : "";
-      const asks = `${requestLine(ref)}\n${text}`;
+      const asks = `${requestLine(ref)}\n${text}\n\nFor crew work, dispatch through Firstmate’s native workflow as soon as the needed inputs are known. Reuse the current session’s startup digest and lock; do not rerun session startup once it has succeeded for this session. After dispatch, acknowledge and end this turn so the captain can continue. When the crew returns, relay the result with the same request reference in a fenced amun report, including status delivered for a completed answer (even when there is no document).`;
       const scoped = briefing
         ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
         : `${header}${which}${asks}${about}`;

@@ -1738,12 +1738,14 @@ export class ContractAdapter {
         const answer = await this.daemon.request<{
           reply?: string;
           finalText?: string;
-        }>("primary.send", { space, text: argument.text });
+          followups?: string[];
+        }>("primary.send", { space, text: argument.text, collectFollowups: true });
         const latest = (answer.reply ?? answer.finalText ?? "").trim();
         conversation.text += `${conversation.text ? "\n\n" : ""}You: ${argument.text}\n\nFirst Mate: ${latest}`;
         conversation.replyCount += 1;
         conversation.latestReply = latest;
         this.registerPool(space);
+        return reply({ ...this.conversationResult(conversation), followups: answer.followups });
       }
       return reply(this.conversationResult(conversation));
     } catch (error) {

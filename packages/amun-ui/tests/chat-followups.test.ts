@@ -86,7 +86,12 @@ it("accepts two more prompts during a slow reply and drains them in order across
     () =>
       new Promise((resolve) => {
         releases.push(() =>
-          resolve({ ok: true, reply: "Received", model: "test" }),
+          resolve({
+            ok: true,
+            reply: "Received",
+            model: "test",
+            followups: [],
+          }),
         );
       }),
   );

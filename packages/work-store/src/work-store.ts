@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
 import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
 import { planItemKey, sameItem } from "./plan-publication.ts";
+import { recordFirstMateReply } from "./first-mate-thread.ts";
 import { WorkReminders } from "./work-reminders.ts";
 import { searchContent } from "./content-search.ts";
 import { agentCatalog } from "../../domain/src/work/agents.ts";
@@ -2927,7 +2928,7 @@ export class WorkStore {
       }
       case "request-report": {
         const row = this.get(
-          "SELECT seen_json FROM work_requests WHERE ref=?",
+          "SELECT status,seen_json FROM work_requests WHERE ref=?",
           command.ref,
         );
         // Never guess: a report for a reference Amun never gave is refused,
@@ -2935,6 +2936,9 @@ export class WorkStore {
         if (!row) throw new WorkError("No request has that reference.");
         const seen: string[] = list(row.seen_json).map(String);
         if (seen.includes(command.fingerprint)) return { ref: command.ref };
+        // A delayed progress report cannot reopen a delivered request.
+        if (row.status === "delivered" && command.status !== "delivered")
+          return { ref: command.ref };
         this.run(
           "UPDATE work_requests SET status=?,role=?,detail=?,parts=max(parts,?),updated_at=?,seen_json=? WHERE ref=?",
           command.status,
@@ -2946,6 +2950,11 @@ export class WorkStore {
           command.ref,
         );
         return { ref: command.ref };
+      }
+      case "record-firstmate-reply": {
+        const ref = recordFirstMateReply(this, command.text, command.model);
+        if (!ref) throw new WorkError("There is no chat for this Firstmate reply.");
+        return { ref };
       }
       case "apply-reply": {
         if (!this.live(command.workAreaId))

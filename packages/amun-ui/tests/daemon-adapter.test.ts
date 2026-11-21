@@ -149,7 +149,7 @@ class FakeDaemon implements AmunTransport {
       "primary.once": { asked: true },
       "holds.answer": { reply: "Aye." },
       "primary.start": { agentId: "fm" },
-      "primary.send": { reply: "Aye, Captain." },
+      "primary.send": { reply: "Aye, Captain.", followups: ["PRD finished."] },
       "connections.list": this.connections,
       "connections.save": this.connections[0],
       "trace.history": { asked: true, ledger: false, archive: false },
@@ -407,13 +407,14 @@ describe("daemon contract adapter", () => {
       kind: "conversation",
       replyCount: 1,
       latestReply: "Aye, Captain.",
+      followups: ["PRD finished."],
     });
     expect(
       daemon.calls.filter((c) => c.method === "primary.start"),
     ).toHaveLength(1);
     expect(
       daemon.calls.find((c) => c.method === "primary.send")?.params,
-    ).toEqual({ space: "alpha", text: "Status?" });
+    ).toEqual({ space: "alpha", text: "Status?", collectFollowups: true });
 
     const [other] = await adapter.handle({
       version: 1,

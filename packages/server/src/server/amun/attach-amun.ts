@@ -167,12 +167,15 @@ export function agentManagerHost(
         await agentManager.setAgentModel(agent.id, launch.model).catch(() => undefined);
       return { agentId: agent.id };
     },
-    async runAgent(agentId, text) {
+    async runAgent(agentId, text, collectFollowups) {
       const result = await agentManager.runAgent(agentId, text);
       // The owner's reply is the first one in the run, not the last: a wake
       // handled in the same run must not take its place (owner's trace, 19
       // November 2026: "yes" was answered with a wake's "shipshape").
       const [reply, ...later] = repliesInRun(result.timeline);
+      if (collectFollowups) {
+        return { finalText: reply ?? result.finalText, followups: later.filter((text) => !isAllClear(text)) };
+      }
       for (const text of later) laterReplies.current?.({ agentId, text });
       return { finalText: reply ?? result.finalText };
     },

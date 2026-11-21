@@ -134,7 +134,7 @@ function runOnce(command: string, argument: string) {
 }
 
 export type Turn =
-  | { ok: true; reply: string; model: string | null }
+  | { ok: true; reply: string; model: string | null; followups: string[] }
   | {
       ok: false;
       reason: string;
@@ -331,7 +331,16 @@ export async function askFirstmate(
         : null
       : replyFromTranscript(before, session.text, text);
   return reply
-    ? { ok: true, reply, model: session.model }
+    ? {
+        ok: true,
+        reply,
+        model: session.model,
+        followups: Array.isArray(result.followups)
+          ? result.followups.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : [],
+      }
     : {
         ok: false,
         needsProvider: false,

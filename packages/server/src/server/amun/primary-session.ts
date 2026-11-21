@@ -97,7 +97,7 @@ export interface PrimaryHost {
    * archived, and runs the same harness in the same Firstmate checkout.
    */
   resumeAgent?(agentId: string, launch: PrimaryLaunch): Promise<boolean>;
-  runAgent(agentId: string, text: string): Promise<{ finalText: string }>;
+  runAgent(agentId: string, text: string, collectFollowups?: boolean): Promise<{ finalText: string; followups?: string[] }>;
   /** Ends a turn that is still open, so the next message can be sent. */
   cancelRun?(agentId: string): Promise<void>;
 }
@@ -218,13 +218,13 @@ export class PrimarySessions {
    * working waits here instead of failing. A turn that fails is closed, so
    * one stuck message can never block every message after it.
    */
-  send(space: ProductSpace, text: string): Promise<{ agentId: string; reply: string }> {
+  send(space: ProductSpace, text: string, collectFollowups = false) {
     const home = space.fmHome;
     this.waiting.set(home, this.pending(home) + 1);
     const before = this.turns.get(home) ?? Promise.resolve();
     const turn = before
       .catch(() => undefined)
-      .then(() => this.takeTurn(space, text))
+      .then(() => this.takeTurn(space, text, collectFollowups))
       .finally(() => {
         this.waiting.set(home, Math.max(0, this.pending(home) - 1));
       });
@@ -235,7 +235,8 @@ export class PrimarySessions {
   private async takeTurn(
     space: ProductSpace,
     text: string,
-  ): Promise<{ agentId: string; reply: string }> {
+    collectFollowups: boolean,
+  ): Promise<{ agentId: string; reply: string; followups?: string[] }> {
     const { agentId } = await this.start(space);
     // The First Mate also takes turns nobody here asked for (a Firstmate wake,
     // a heartbeat). The captain's message waits for such a turn to finish; it
@@ -245,8 +246,8 @@ export class PrimarySessions {
     for (;;) {
       this.amunTurns.add(agentId);
       try {
-        const { finalText } = await this.host.runAgent(agentId, text);
-        return { agentId, reply: finalText };
+        const { finalText, followups } = await this.host.runAgent(agentId, text, collectFollowups);
+        return { agentId, reply: finalText, ...(followups?.length ? { followups } : {}) };
       } catch (error) {
         const ownTurn = /already has an active run/i.test(
           error instanceof Error ? error.message : String(error),
