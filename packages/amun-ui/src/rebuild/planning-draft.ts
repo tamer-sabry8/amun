@@ -1,4 +1,5 @@
 import {
+  operationResult,
   plannedStory,
   reviewedOrder,
   statusEdit,
@@ -42,6 +43,7 @@ const move = z.object({
 });
 export type PlannedMove = z.infer<typeof move>;
 const submission = z.object({
+  result: operationResult.optional(),
   ref: z.string(),
   chatId: z.string(),
   moves: z.array(move),
@@ -62,6 +64,9 @@ const savedDraft = z.object({
     .optional(),
 });
 export type PlanningDraft = z.infer<typeof savedDraft>;
+export function normalizePlanningDraft(draft: PlanningDraft) {
+  return savedDraft.parse(draft);
+}
 
 export function scopedDraftKey(scope: Omit<PlanningScope, "iteration">) {
   return (
@@ -177,4 +182,36 @@ export function savedPlanningLinks(
     }
   }
   return links;
+}
+
+export function recordPlanningReceipt(
+  store: SelectionStore | undefined,
+  scope: PlanningScope,
+  ref: string,
+  result: z.infer<typeof operationResult>,
+) {
+  if (
+    !store ||
+    result.productId !== scope.productId ||
+    result.requestRef !== ref
+  )
+    return null;
+  const draft = loadDraft(store, scope);
+  if (!draft.submissions?.some((b) => b.ref === ref)) return null;
+  const next = {
+    ...draft,
+    submissions: draft.submissions.map((b) =>
+      b.ref === ref
+        ? {
+            ...b,
+            result: {
+              ...result,
+              receipts: result.receipts ?? b.result?.receipts,
+            },
+          }
+        : b,
+    ),
+  };
+  store.setItem(scopedDraftKey(scope), JSON.stringify(next));
+  return next;
 }

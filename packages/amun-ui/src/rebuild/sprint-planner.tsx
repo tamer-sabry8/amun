@@ -22,6 +22,8 @@ import { inspectView } from "../daemon/navigation.ts";
 import {
   loadDraft,
   planningChangeCount,
+  recordPlanningReceipt,
+  normalizePlanningDraft,
   scopedDraftKey,
   stageMove,
   type PlanningDraft,
@@ -110,8 +112,16 @@ export function SprintPlanner({
       string,
       NonNullable<ReturnType<typeof operationResult.parse>["receipts"]>
     >
-  >({});
-  const [receiptText, setReceiptText] = useState<Record<string, string>>({});
+  >(() =>
+    Object.fromEntries(
+      (draft?.submissions ?? []).map((b) => [b.ref, b.result?.receipts ?? []]),
+    ),
+  );
+  const [receiptText, setReceiptText] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (draft?.submissions ?? []).map((b) => [b.ref, b.result?.message ?? ""]),
+    ),
+  );
   const inspections = useRef(new Map<string, string>());
   useEffect(
     () =>
@@ -124,6 +134,19 @@ export function SprintPlanner({
         if (!ref) return;
         inspections.current.delete(result.requestId);
         if (result.requestRef && result.requestRef !== ref) return;
+        try {
+          const next = recordPlanningReceipt(
+            browserStore(),
+            scope,
+            ref,
+            result,
+          );
+          if (next) setDraft(next);
+        } catch {
+          setError(
+            "Couldn’t save the receipt on this device. Check the original request after reopening.",
+          );
+        }
         setReceiptText((prev) => ({ ...prev, [ref]: result.message }));
         if (result.receipts) {
           setReceipts((prev) => ({ ...prev, [ref]: result.receipts! }));
@@ -160,6 +183,13 @@ export function SprintPlanner({
   const applying = useRef(false);
   const [preparing, setPreparing] = useState(false);
   const key = scopedDraftKey(scope);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, [key]);
   useEffect(() => {
     const requestId = crypto.randomUUID();
     setFresh(false);
@@ -227,8 +257,9 @@ export function SprintPlanner({
     try {
       const store = browserStore();
       if (!store) throw Error();
-      store.setItem(key, JSON.stringify(next));
-      setDraft(next);
+      const normalized = normalizePlanningDraft(next);
+      store.setItem(key, JSON.stringify(normalized));
+      setDraft(normalized);
       return true;
     } catch {
       setError("Amun could not save this change on your device.");
@@ -325,12 +356,34 @@ export function SprintPlanner({
           name,
         },
       });
+      if (!mounted.current) return;
       if (!chat.ok || !chat.ref) {
         setError(chat.message);
         return;
       }
       if (bridge.getSnapshot().status !== "Connected") {
         setError("Waiting for Firstmate. Apply when connected.");
+        return;
+      }
+      const latest = loadDraft(browserStore(), scope);
+      const unchanged =
+        ready.every((m) =>
+          latest.moves.some(
+            (entry) =>
+              entry.id === m.id && JSON.stringify(entry) === JSON.stringify(m),
+          ),
+        ) &&
+        readyCreates.every(
+          (s) =>
+            JSON.stringify(
+              latest.creates?.find((c) => c.localId === s.localId),
+            ) === JSON.stringify(creates.find((c) => c.localId === s.localId)),
+        );
+      if (!unchanged || latest.id !== draft.id) {
+        setDraft(latest);
+        setError(
+          "The draft changed while preparing this request. Review it before applying.",
+        );
         return;
       }
       const batch = {
@@ -341,12 +394,12 @@ export function SprintPlanner({
       };
       if (
         !save({
-          ...draft,
-          moves: draft.moves.filter((m) => !ready.includes(m)),
-          creates: creates.filter(
+          ...latest,
+          moves: latest.moves.filter((m) => !ready.some((r) => r.id === m.id)),
+          creates: (latest.creates ?? []).filter(
             (s) => !readyCreates.some((r) => r.localId === s.localId),
           ),
-          submissions: [...submitted, batch],
+          submissions: [...(latest.submissions ?? []), batch],
         })
       )
         return;
@@ -375,6 +428,10 @@ export function SprintPlanner({
           ? { creates: readyCreates, creationTarget }
           : {}),
       });
+    } catch {
+      setError(
+        "Couldn’t verify the saved draft. Reopen the planner to check its receipt.",
+      );
     } finally {
       applying.current = false;
       setPreparing(false);
