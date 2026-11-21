@@ -444,6 +444,7 @@ export class BoardDiscovery {
         type: string;
         state: string;
         column: string | null;
+        iteration: string | null;
       }
     >();
     for (let offset = 0; offset < ordered.length; offset += 200) {
@@ -458,6 +459,7 @@ export class BoardDiscovery {
           "System.Title",
           "System.State",
           "System.WorkItemType",
+          "System.IterationPath",
           columnField,
         ].join(","),
       );
@@ -483,6 +485,10 @@ export class BoardDiscovery {
           title: f["System.Title"],
           state: f["System.State"],
           type: f["System.WorkItemType"],
+          iteration:
+            typeof f["System.IterationPath"] === "string"
+              ? f["System.IterationPath"]
+              : null,
           column: typeof f[columnField] === "string" ? f[columnField] : null,
         });
       }

@@ -33,6 +33,7 @@ const card = z.object({
   state: z.string(),
   type: z.string(),
   column: z.string().nullable(),
+  iteration: z.string().nullable().optional(),
 });
 const column = named.extend({
   stateMappings: z.record(z.string(), z.string()),
@@ -77,6 +78,7 @@ export const backlogResult = z.discriminatedUnion("view", [
   z.object({
     ...common,
     view: z.literal("sprints"),
+    sourceId: id.optional(),
     team: named,
     sprints: z.array(
       z.object({

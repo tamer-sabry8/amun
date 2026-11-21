@@ -94,14 +94,9 @@ export class AdoService {
     meta: { kind: string; productId: string; requestId: string },
   ): Promise<Record<string, unknown>> {
     const sources = this.workspace.productSources(request.productId);
-    const readOnlySprints =
-      request.kind === "backlog-read" &&
-      (request.action === "sprints" || request.action === "sprint-items");
-    const source =
-      sources.find((s) => s.id === request.sourceId && s.kind === "ado") ??
-      (readOnlySprints
-        ? sources.find((s) => s.kind === "ado" && s.reference)
-        : undefined);
+    const source = sources.find(
+      (s) => s.id === request.sourceId && s.kind === "ado",
+    );
     if (!source?.reference) throw new Error(NO_AZURE_PROJECT);
     const { connection, collection, project } = projectSource(
       source.reference,
@@ -132,7 +127,15 @@ export class AdoService {
         { collection, project, team: request.team },
         d,
         new AdoWriteClient(collection, project, transport()),
-        () => this.workspace.productSources(request.productId).length > 0,
+        () =>
+          this.workspace
+            .productSources(request.productId)
+            .some(
+              (current) =>
+                current.id === source.id &&
+                current.kind === "ado" &&
+                current.reference === source.reference,
+            ),
       );
     if (request.action === "schema")
       return { ...meta, view: "schema", schema: await d.processSchema() };
@@ -148,6 +151,7 @@ export class AdoService {
         return {
           ...meta,
           view: "sprints",
+          sourceId: source.id,
           team,
           sprints: await d.sprints(team.id),
         };

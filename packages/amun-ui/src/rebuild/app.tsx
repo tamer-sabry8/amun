@@ -25,6 +25,7 @@ import {
 } from "../../../../packages/domain/src/work/shell.ts";
 import type { Attention } from "../../../../packages/domain/src/work/home.ts";
 import type { LibraryItem } from "../../../../packages/domain/src/work/planning.ts";
+import { inspectView } from "../daemon/navigation.ts";
 import { bridge, initializeBridge } from "../bridge.ts";
 import { AuthPrompt } from "../auth-prompt-view.tsx";
 import { Icon } from "../icons.tsx";
@@ -921,7 +922,10 @@ export function App() {
       <Sidebar
         route={layout.route}
         collapsed={collapsed}
-        onRoute={go}
+        onRoute={(route) => {
+          inspectView({ view: route, source: "Navigation" });
+          go(route);
+        }}
         onSearch={() => dispatch({ type: "palette", open: true })}
         onToggle={() => dispatch({ type: "toggle_sidebar" })}
         snapshot={snapshot as Snapshot}
@@ -1266,7 +1270,10 @@ export function App() {
         open={layout.palette}
         snapshot={snapshot as Snapshot}
         onClose={() => dispatch({ type: "palette", open: false })}
-        onRoute={go}
+        onRoute={(route) => {
+          inspectView({ view: route, source: "Navigation" });
+          go(route);
+        }}
         onWork={(id) => openWork(id)}
         onHit={(item) => {
           dispatch({ type: "palette", open: false });

@@ -140,6 +140,9 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   message: { local: "The conversation itself; the owner's words are sent." },
   "settle-card": { local: "Updates a card already answered." },
   attention: { local: "Raised by Amun or by Firstmate, not by the owner." },
+  "navigation-activity": {
+    local: "The navigation queue sends the read prompt separately.",
+  },
   activity: { local: "Progress of a turn Firstmate is already running." },
   "agent-status": { local: "Reported from Firstmate's own crew." },
   "record-results": { local: "What publishing returned; no owner choice." },

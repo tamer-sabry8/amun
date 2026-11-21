@@ -5,7 +5,7 @@ import type {
   AzureProcessSchema,
   AdoOperation,
 } from "../../contracts/src/backlog.ts";
-import { requiredInputs } from "./ado-publication-fields.ts";
+import { storyTextFields, requiredInputs } from "./ado-publication-fields.ts";
 import type { AdoWriteClient } from "./ado-governed-writes.ts";
 import { ProductDocuments } from "./product-documents.ts";
 type Preview = Extract<AdoOperation, { action: "preview" }>;
@@ -82,25 +82,14 @@ export class AdoReview {
           "System.AreaPath": cmd.area,
           "System.IterationPath": destination.project,
         });
-        const escape = (v: string) =>
-          v
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;");
-        if (type.fields.some((f) => f.referenceName === "System.Description"))
-          fields["System.Description"] = "<p>" + escape(row.body) + "</p>";
-        const criteria = JSON.parse(row.acceptance_json) as string[];
-        if (
-          criteria.length &&
-          type.fields.some(
-            (f) =>
-              f.referenceName === "Microsoft.VSTS.Common.AcceptanceCriteria",
-          )
-        )
-          fields["Microsoft.VSTS.Common.AcceptanceCriteria"] =
-            "<ul>" +
-            criteria.map((c) => "<li>" + escape(c) + "</li>").join("") +
-            "</ul>";
+        Object.assign(
+          fields,
+          storyTextFields(
+            type.fields,
+            row.body,
+            JSON.parse(row.acceptance_json),
+          ),
+        );
         const missing = requiredInputs(type, fields);
         if (missing.length)
           throw Error("Required fields: " + missing.join(", "));

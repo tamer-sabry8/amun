@@ -1,6 +1,9 @@
 // The six sidebar destinations (handoff §9): Agents · Council · Roadmap ·
 // Sprints · Portfolio · RFPs. Each is driven by the composer plus a few
 // direct manipulations; committing anything goes through an approval.
+import { SprintPlanner } from "./sprint-planner.tsx";
+import { browserStore, readBoard } from "../backlog-selection.ts";
+import { inspectView } from "../daemon/navigation.ts";
 import { AVATARS, chooseAvatar, useChosenAvatar } from "./avatar-choice.ts";
 import {
   agentCatalog,
@@ -1372,7 +1375,10 @@ export function Sprints({
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
   const [areaId, setAreaId] = useState("");
-  const [sprintId, setSprintId] = useState<string | null>(null);
+  const [selection, selectSprint] = useState<Pick<
+    Sprint,
+    "id" | "workAreaId"
+  > | null>(null);
   const [tab, setTab] = useState<(typeof sprintTabs)[number]>("Summary");
   const [note, setNote] = useState("");
   const areas = areasInScope(snapshot).filter(
@@ -1390,9 +1396,11 @@ export function Sprints({
       workAreaName: areaOf(snapshot, sprint.workAreaId)?.name ?? "",
     }));
   const azure = useAzureSprints(areas, areaId, setNote);
-  const azureArea = areas.find(
-    (area) => area.productId === azure.productId && azure.productId,
+  const boundAreas = areas.filter(
+    (area) =>
+      area.productId === azure.productId && (!areaId || area.id === areaId),
   );
+  const azureArea = boundAreas.length === 1 ? boundAreas[0] : undefined;
   const fromAzure =
     azure.reply && azureArea && (!areaId || areaId === azureArea.id)
       ? adoSprints(
@@ -1425,7 +1433,12 @@ export function Sprints({
       : [];
   const overview = [...sprints, ...fromAzure];
   const groups = sprintGroups(overview, now);
-  const current = overview.find((sprint) => sprint.id === sprintId) ?? null;
+  const current =
+    overview.find(
+      (sprint) =>
+        sprint.id === selection?.id &&
+        sprint.workAreaId === selection.workAreaId,
+    ) ?? null;
   const azureDetail = new Map(
     (azure.items?.state === "ready" ? azure.items.items : []).map((item) => [
       String(item.id),
@@ -1500,7 +1513,9 @@ export function Sprints({
     const result = await workAsync("new-chat", {
       workAreaId: current.workAreaId,
       sprint: {
-        connection: openAzure ? azure.sourceId : "amun",
+        connection: openAzure
+          ? (azure.reply?.sourceId ?? azure.sourceId)
+          : "amun",
         id: current.id,
         name: current.name,
       },
@@ -1561,6 +1576,28 @@ export function Sprints({
   );
   if (current) {
     const row = sprintRow(current, now);
+    const sourceId = azure.reply?.sourceId;
+    const board =
+      sourceId && readBoard(browserStore(), azure.productId, sourceId);
+    const iteration = azure.reply?.sprints.find(
+      (entry) => entry.id === openAzure,
+    );
+    const planner =
+      board &&
+      sourceId &&
+      board.level &&
+      iteration &&
+      board.team === azure.reply?.team.id
+        ? {
+            areaId: current.workAreaId,
+            productId: azure.productId,
+            sourceId,
+            team: board.team,
+            backlog: board.level,
+            sprintId: iteration.id,
+            iteration: iteration.path,
+          }
+        : null;
     const steps = snapshot.activity.filter(
       (item) => item.workAreaId === current.workAreaId,
     );
@@ -1583,28 +1620,56 @@ export function Sprints({
           .join(" · ")}
         actions={
           <>
-            <button className="btn quiet" onClick={() => setSprintId(null)}>
+            <button className="btn quiet" onClick={() => selectSprint(null)}>
               All sprints
             </button>
             <button className="btn" onClick={() => void discussSprint()}>
               Discuss sprint
             </button>
             <div className="rb-seg" role="tablist" aria-label="Sprint detail">
-              {sprintTabs.map((name) => (
-                <button
-                  key={name}
-                  role="tab"
-                  aria-selected={tab === name}
-                  onClick={() => setTab(name)}
-                >
-                  {name}
-                </button>
-              ))}
+              {sprintTabs
+                .filter((name) => name !== "Planning" || openAzure)
+                .map((name) => (
+                  <button
+                    key={name}
+                    role="tab"
+                    aria-selected={tab === name}
+                    onClick={() => {
+                      inspectView({
+                        view: name,
+                        project: current.workAreaName,
+                        areaId: current.workAreaId,
+                        record: current.id,
+                        source: "Sprint detail",
+                      });
+                      setTab(name);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
             </div>
           </>
         }
         footer={footer}
       >
+        {tab === "Planning" &&
+          (planner &&
+          azure.items?.sprint === openAzure &&
+          azure.items?.state === "ready" ? (
+            <SprintPlanner
+              key={JSON.stringify(planner)}
+              scope={planner}
+              name={current.name}
+              members={current.stories}
+            />
+          ) : (
+            <p className="muted" role="status">
+              {planner
+                ? "Current sprint membership must be loaded before planning."
+                : "Choose the connected project, team and backlog in Backlog to plan this sprint."}
+            </p>
+          ))}
         {tab === "Summary" && (
           <div style={{ display: "grid", gap: 12, maxWidth: "68ch" }}>
             <p>{current.goal || "No sprint goal yet."}</p>
@@ -1739,6 +1804,11 @@ export function Sprints({
       {view === "overview" && (
         <section aria-labelledby="rb-sprints-h">
           <h2 id="rb-sprints-h">Sprints by status</h2>
+          {boundAreas.length > 1 && (
+            <p className="muted">
+              Choose a work area to view its connected Azure sprints.
+            </p>
+          )}
           <p className="muted small" style={{ margin: "4px 0 12px" }}>
             As of {shortDate(new Date(now).toISOString())} · Select a sprint to
             open it.
@@ -1755,7 +1825,14 @@ export function Sprints({
                         key={sprint.id}
                         className="rb-rowitem"
                         onClick={() => {
-                          setSprintId(sprint.id);
+                          inspectView({
+                            view: sprint.name,
+                            project: sprint.workAreaName,
+                            areaId: sprint.workAreaId,
+                            record: sprint.id,
+                            source: "Sprints",
+                          });
+                          selectSprint(sprint);
                           setTab("Summary");
                         }}
                       >
@@ -1838,7 +1915,7 @@ export function Sprints({
             range={range}
             weeks={weeks}
             onOpen={(sprint) =>
-              sprint.draft ? setView("plan") : setSprintId(sprint.id)
+              sprint.draft ? setView("plan") : selectSprint(sprint)
             }
           />
           {!overview.length && (

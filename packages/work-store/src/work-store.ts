@@ -1972,6 +1972,37 @@ export class WorkStore {
       case "edit-agent":
         // The First Mate edits its agents; Amun stores nothing for this.
         return {};
+      case "navigation-activity": {
+        const existing = this.get(
+          "SELECT id,text,work_area_id FROM work_activity WHERE ref=?",
+          command.ref,
+        );
+        const prompt = this.clean(command.prompt);
+        if (existing) {
+          if (
+            existing.text !== prompt ||
+            existing.work_area_id !== command.workAreaId
+          )
+            throw new WorkError(
+              "This navigation reference belongs to another click.",
+            );
+          if (command.delivered)
+            this.run(
+              "UPDATE work_activity SET state='finished' WHERE id=?",
+              existing.id,
+            );
+          return { ref: String(existing.id) };
+        }
+        return {
+          ref: this.activity({
+            groupId: this.groupOf(command.workAreaId),
+            workAreaId: command.workAreaId,
+            text: prompt,
+            ref: command.ref,
+            state: command.delivered ? "finished" : "running",
+          }),
+        };
+      }
       case "activity": {
         const groupId = command.workAreaId
           ? this.groupOf(command.workAreaId)

@@ -20,6 +20,7 @@ import {
   workSnapshot,
   type WorkSnapshot,
 } from "../../../contracts/src/work.ts";
+import { NavigationQueue } from "./navigation.ts";
 import { NoticeQueue, type NoticeOptions } from "./firstmate-notices.ts";
 import { AmunRequestError, type AmunTransport } from "./amun-client.ts";
 import { agentCatalog } from "../../../domain/src/work/agents.ts";
@@ -550,6 +551,44 @@ export class ContractAdapter {
     private readonly now: () => string = () => new Date().toISOString(),
     notices: NoticeOptions = {},
   ) {
+    let storage = notices.keep;
+    if (storage === undefined) {
+      try {
+        storage = globalThis.localStorage;
+      } catch {
+        storage = null;
+      }
+    }
+    const navigation = new NavigationQueue(
+      {
+        activity: async (item, state) => {
+          const events = await this.handleWork({
+            version: 1,
+            kind: "work",
+            action: "navigation-activity",
+            ref: item.ref,
+            workAreaId: item.inspection.areaId ?? null,
+            prompt: item.prompt,
+            delivered: state === "finished",
+          });
+          if (
+            !events.some(
+              (e) => e && typeof e === "object" && "ok" in e && e.ok === true,
+            )
+          )
+            throw Error("Could not record navigation.");
+          this.onChange?.();
+        },
+        send: async (text) => {
+          await this.askFirstMate(text);
+        },
+      },
+      storage ?? undefined,
+    );
+    navigation.install();
+    this.daemon.onStatus((connected) => {
+      if (connected) void navigation.flush();
+    });
     this.notices = new NoticeQueue(
       async (text) => {
         const space = await this.ensureSpace();
@@ -844,7 +883,19 @@ export class ContractAdapter {
       ];
     }
     if (message.kind === "auth") return this.handleAuth(message);
-    if (message.kind === "work") return this.handleWork(message);
+    if (message.kind === "work") {
+      const { commandId, ...command } = message;
+      const events = await this.handleWork(command);
+      if (typeof commandId !== "string") return events;
+      return events.map((event) =>
+        event &&
+        typeof event === "object" &&
+        "kind" in event &&
+        event.kind === "work-result"
+          ? { ...event, commandId }
+          : event,
+      );
+    }
     if (message.kind === "work-delegate") return this.delegate(message);
     if (message.kind === "native-pi" && message.action === "run")
       return [await this.handleNativePi(message)];

@@ -126,6 +126,7 @@ export const sprintViews = [
 ] as const;
 export const sprintTabs = [
   "Summary",
+  "Planning",
   "Stories",
   "Pull requests",
   "Activity",

@@ -922,6 +922,12 @@ export const workCommand = z.discriminatedUnion("action", [
     nowDoing: text.nullable().default(null),
     output: longText.optional(),
   }),
+  act("navigation-activity", {
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    workAreaId: id.nullable(),
+    prompt: text.min(1),
+    delivered: z.boolean(),
+  }),
   act("activity", {
     groupId: id.nullable(),
     workAreaId: id.nullable(),
@@ -1450,6 +1456,7 @@ export const workEvent = z.discriminatedUnion("kind", [
   z.strictObject({
     version: z.literal(1),
     kind: z.literal("work-result"),
+    commandId: z.uuid().optional(),
     action: z.string().max(64),
     ok: z.boolean(),
     message: z.string().max(1024),

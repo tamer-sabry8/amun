@@ -169,7 +169,7 @@ export class AdoBatch {
     for (const [index, e] of p.entries.entries()) {
       const step = p.steps[index]!;
       const parent = step.parentId ? receipts.get(step.parentId) : null;
-      if (parent === undefined) break;
+      if (parent === undefined) continue;
       const save = (r: AdoReceipt) => {
         if (
           !Number.isSafeInteger(r.id) ||
@@ -216,7 +216,8 @@ export class AdoBatch {
       const row = this.db
         .prepare("SELECT remote_id AS id FROM ado_steps WHERE action_id=?")
         .get(e.actionId) as { id: number | null };
-      if (this.store.read(e.actionId).state !== "succeeded" || !row.id) break;
+      if (this.store.read(e.actionId).state !== "succeeded" || !row.id)
+        continue;
       receipts.set(step.itemId, row.id);
     }
     return this.preview(id).entries;
