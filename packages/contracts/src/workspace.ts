@@ -58,6 +58,24 @@ export const storyDecision = decisionOptions.extend({
   requested: z.boolean(),
 });
 export type StoryDecision = z.infer<typeof storyDecision>;
+export const coverageRow = z.strictObject({
+  draftId: id,
+  classification: z.enum(["covered", "edit", "addition", "held"]),
+  providerId: z.int().positive().nullable(),
+  revision: z.int().positive().nullable(),
+  evidence: z.string().max(4000),
+  reason: z.string().min(1).max(2000),
+});
+export const prdComparison = z.object({
+  ref: id,
+  objectiveId: id,
+  version: z.int().positive(),
+  sourceId: id,
+  team: id,
+  level: id,
+  verifiedAt: z.string(),
+  rows: z.array(coverageRow),
+});
 export const storyBundle = z.object({
   stories: z
     .array(
@@ -420,6 +438,7 @@ export const workspaceSnapshot = z.strictObject({
       routingReviews: z.array(routingReview).default([]),
       storyDecisions: z.array(storyDecision).default([]),
       storyDrafts: z.array(storyDraft).default([]),
+      comparisons: z.array(prdComparison).optional(),
       priorities: z.array(
         z.strictObject({ id, ...priorityFields, score: z.number().nullable() }),
       ),

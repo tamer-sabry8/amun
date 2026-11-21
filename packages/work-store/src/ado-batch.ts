@@ -57,8 +57,9 @@ export class AdoBatch {
     for (const step of steps) {
       if (
         kind === "publish" &&
-        (step.remoteId !== null ||
-          step.revision !== 0 ||
+        ((step.remoteId === null
+          ? step.revision !== 0
+          : step.revision <= 0 || !!step.parentId) ||
           (step.parentId && !seen.has(step.parentId)))
       )
         throw Error("Select the parent before its children.");
@@ -158,7 +159,12 @@ export class AdoBatch {
       })
       .immediate();
   }
-  async execute(id: string, binding: string, api: AdoWrites) {
+  async execute(
+    id: string,
+    binding: string,
+    api: AdoWrites,
+    reconcileOnly = false,
+  ) {
     const p = this.preview(id);
     if (
       p.binding !== binding ||
@@ -199,6 +205,8 @@ export class AdoBatch {
           })
           .immediate();
       };
+      if (reconcileOnly && e.state !== "unknown" && e.state !== "succeeded")
+        continue;
       await dispatchOne(
         this.store,
         {

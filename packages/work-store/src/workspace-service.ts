@@ -119,6 +119,12 @@ export class WorkspaceService {
       },
       tasks: this.reminders.list(productId),
       memoryLinks: this.memorySync.list(productId),
+      comparisons: this.db
+        .prepare(
+          "SELECT result_json FROM prd_comparisons WHERE product_id=? ORDER BY rowid",
+        )
+        .all(productId)
+        .map((row) => JSON.parse((row as { result_json: string }).result_json)),
       storyDecisions: new StoryDecisions(this.db).list(productId),
       storyDrafts: this.db
         .prepare(
@@ -280,9 +286,20 @@ export class WorkspaceService {
     origin: { areaId: string; chatId: string | null },
     instruction: string,
   ) {
-    const cmd = productAuthoring.parse(input);
+    const typed = productAuthoring.safeParse(input);
+    if (!typed.success) throw new AuthoringError("Invalid review source.");
+    const cmd = typed.data;
     if (cmd.action !== "stories" && cmd.action !== "update-story-draft")
       throw new AuthoringError("Unknown story review operation.");
+    return this.recordReviewPrompt(cmd, ref, origin, instruction);
+  }
+
+  recordReviewPrompt(
+    cmd: { productId: string; objectiveId: string; expectedVersion: number },
+    ref: string,
+    origin: { areaId: string; chatId: string | null },
+    instruction: string,
+  ) {
     return this.db
       .transaction(() => {
         const area = this.db

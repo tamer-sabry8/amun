@@ -136,6 +136,8 @@ const operationContext = {
   team: id,
 };
 export const operationItem = z.strictObject({
+  duplicateDecision: z.enum(["edit-existing", "create-separately"]).optional(),
+  targetId: z.int().positive().optional(),
   id,
   title: z.string().min(1).max(256),
   type: id,
@@ -169,6 +171,17 @@ export const adoOperation = z.discriminatedUnion("action", [
   sprintMoveRequest,
   z.strictObject({
     ...operationContext,
+    action: z.literal("compare-prd"),
+    level: id,
+    objectiveId: id,
+    versionNumber: z.int().positive(),
+    workAreaId: id,
+    chatId: id.nullable(),
+    space: id,
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+  }),
+  z.strictObject({
+    ...operationContext,
     action: z.literal("inspect-sprint-submission"),
     workAreaId: id,
     sprintId: id,
@@ -178,6 +191,7 @@ export const adoOperation = z.discriminatedUnion("action", [
   z.strictObject({
     ...operationContext,
     action: z.literal("preview"),
+    level: id.optional(),
     intent: z.enum(["publish", "commit"]),
     area: id,
     iteration: id,
@@ -187,6 +201,12 @@ export const adoOperation = z.discriminatedUnion("action", [
   z.strictObject({
     ...operationContext,
     action: z.literal("approve-execute"),
+    origin: z.object({ areaId: id, chatId: id.nullable() }).optional(),
+    ref: z
+      .string()
+      .regex(/^amun-r-[0-9a-f]{12}$/)
+      .optional(),
+    space: id.optional(),
     batchId: z.uuid(),
     binding: z.string().length(64),
   }),

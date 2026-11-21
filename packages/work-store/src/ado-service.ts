@@ -1,3 +1,4 @@
+import { comparePrd } from "./prd-comparison.ts";
 // Azure DevOps backlog reads and governed writes for a product, ported from
 // Amun Beta 0.9's service (backlog-read and ado-operation messages). The
 // token comes from the daemon's Keychain store and is registered with the
@@ -142,6 +143,49 @@ export class AdoService {
               current.kind === "ado" &&
               current.reference === source.reference,
           );
+      if (request.action === "compare-prd") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        let receipt: string | undefined;
+        try {
+          const result = await comparePrd(
+            this.db,
+            request,
+            d,
+            async (space, prompt) => {
+              const origin = this.workspace.recordReviewPrompt(
+                {
+                  productId: request.productId,
+                  objectiveId: request.objectiveId,
+                  expectedVersion: request.versionNumber,
+                },
+                request.ref,
+                { areaId: request.workAreaId, chatId: request.chatId },
+                prompt,
+              );
+              receipt = origin.messageId;
+              return dispatch(space, origin.prompt);
+            },
+            mapped,
+          );
+          if (receipt)
+            this.workspace.finishStoryReview(
+              request.ref,
+              receipt,
+              result.message,
+              true,
+            );
+          return { ...meta, kind: "ado-operation-result", ...result };
+        } catch (error) {
+          if (receipt)
+            this.workspace.finishStoryReview(
+              request.ref,
+              receipt,
+              "Backlog comparison pending. Refresh to check the current scope.",
+              false,
+            );
+          throw error;
+        }
+      }
       if (request.action === "inspect-sprint-submission")
         return {
           ...meta,
@@ -164,7 +208,10 @@ export class AdoService {
           )),
         };
       }
-      return runAdoOperation(this.db, request, target, d, client, mapped);
+      return runAdoOperation(this.db, request, target, d, client, mapped, {
+        workspace: this.workspace,
+        dispatch,
+      });
     }
     if (request.action === "schema")
       return { ...meta, view: "schema", schema: await d.processSchema() };

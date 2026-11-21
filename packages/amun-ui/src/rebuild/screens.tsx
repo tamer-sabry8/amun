@@ -1161,7 +1161,10 @@ export function Roadmap({
             label="View"
             options={roadmapViews}
             value={view}
-            onChange={setView}
+            onChange={(choice) => {
+              inspectView({ view: choice, source: "Sprints" });
+              setView(choice);
+            }}
           />
           <WorkFilter areas={areas} value={areaId} onChange={setAreaId} />
         </>
@@ -1638,7 +1641,18 @@ export function Sprints({
           .join(" · ")}
         actions={
           <>
-            <button className="btn quiet" onClick={() => selectSprint(null)}>
+            <button
+              className="btn quiet"
+              onClick={() => {
+                inspectView({
+                  view: "All sprints",
+                  areaId: current.workAreaId,
+                  record: current.id,
+                  source: "Sprint detail",
+                });
+                selectSprint(null);
+              }}
+            >
               All sprints
             </button>
             <button className="btn" onClick={() => void discussSprint()}>

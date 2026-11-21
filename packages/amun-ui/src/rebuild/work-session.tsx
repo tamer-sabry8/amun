@@ -1,3 +1,4 @@
+import { inspectView } from "../daemon/navigation.ts";
 import { ReviewOrigin } from "./review-origin.tsx";
 // Work session (handoff §7): conversation on the left, live artifact on the
 // right with a draggable divider. Opening a work area lands here directly.
@@ -2589,19 +2590,43 @@ export function WorkSession({
             <>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "prd" })}
+                onClick={() => {
+                  inspectView({
+                    view: "PRD",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "prd" });
+                }}
               >
                 PRD
               </button>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "backlog" })}
+                onClick={() => {
+                  inspectView({
+                    view: "Backlog",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "backlog" });
+                }}
               >
                 Backlog
               </button>
               <button
                 className="btn quiet"
-                onClick={() => onPane({ kind: "pulls" })}
+                onClick={() => {
+                  inspectView({
+                    view: "Pull requests",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "pulls" });
+                }}
               >
                 Pull requests
               </button>
@@ -2620,7 +2645,15 @@ export function WorkSession({
           {!open && (
             <button
               className="btn quiet"
-              onClick={() => onPane({ kind: "happened" })}
+              onClick={() => {
+                inspectView({
+                  view: "What happened",
+                  areaId,
+                  project: area.name,
+                  source: "Project",
+                });
+                onPane({ kind: "happened" });
+              }}
             >
               What happened
             </button>
@@ -3638,7 +3671,15 @@ export function WorkSession({
                     ? "Close What happened"
                     : "Close the document"
                 }
-                onClick={() => onPane(null)}
+                onClick={() => {
+                  inspectView({
+                    view: "Back to conversation",
+                    areaId,
+                    project: area.name,
+                    source: "Project panel",
+                  });
+                  onPane(null);
+                }}
               >
                 <Icon name="close" width={17} height={17} />
               </button>

@@ -830,11 +830,17 @@ export class ContractAdapter {
       const reply = await this.daemon
         .request<unknown>("ado.request", {
           message:
-            message.action === "apply-sprint-moves"
+            message.action === "apply-sprint-moves" ||
+            message.action === "compare-prd" ||
+            message.action === "approve-execute"
               ? { ...message, space: await this.ensureSpace() }
               : message,
         })
         .catch(() => null);
+      if (message.action === "compare-prd") {
+        this.view = { ...this.view, workspace: await this.readWorkspace() };
+        return reply ? [reply, this.workspace()] : [];
+      }
       if (
         reply &&
         (message.action === "apply-sprint-moves" ||

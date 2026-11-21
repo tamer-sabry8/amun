@@ -337,6 +337,7 @@ function TeamBoard({
       )}
       {schema && team && (
         <AzureWorkReview
+          level={level}
           key={team}
           scope={scope}
           context={context}

@@ -78,3 +78,44 @@ export function storyTextFields(
   }
   return result;
 }
+
+/** Preserve the original provider HTML byte-for-byte around the insertion. */
+export function appendAzureCriteria(
+  html: string,
+  criteria: string[],
+  description: boolean,
+) {
+  const escape = (text: string) =>
+    text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  const heading =
+    /<h([1-6])\b[^>]*>\s*Acceptance criteria\s*:?\s*<\/h\1>/i.exec(html);
+  const start = description && heading ? heading.index + heading[0].length : 0;
+  const rest = html.slice(start);
+  const next = description && heading ? rest.search(/<h[1-6]\b/i) : -1;
+  const end = next < 0 ? html.length : start + next;
+  const section = description && !heading ? "" : html.slice(start, end);
+  const existing = new Set(
+    [...section.matchAll(/<(?:li|p)\b[^>]*>([\s\S]*?)<\/(?:li|p)>/gi)].map(
+      (m) => m[1]!.replace(/<[^>]+>/g, "").trim(),
+    ),
+  );
+  const added = [
+    ...new Set(criteria.map((c) => escape(c.trim())).filter(Boolean)),
+  ].filter((c) => !existing.has(c));
+  if (!added.length) return html;
+  const list = added.map((c) => "<li>" + c + "</li>").join("");
+  const closing = section.toLowerCase().lastIndexOf("</ul>");
+  if (closing >= 0)
+    return html.slice(0, start + closing) + list + html.slice(start + closing);
+  return (
+    html.slice(0, end) +
+    (description && !heading ? "<h3>Acceptance criteria</h3>" : "") +
+    "<ul>" +
+    list +
+    "</ul>" +
+    html.slice(end)
+  );
+}

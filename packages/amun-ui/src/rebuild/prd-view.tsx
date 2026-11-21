@@ -1,3 +1,4 @@
+import { PrdCoverage } from "./prd-coverage.tsx";
 import { useReviewOrigin } from "./review-origin.tsx";
 import { StoryDraftEditor } from "./story-draft-editor.tsx";
 // The PRD pane. Same messages and checks as the earlier PRD workspace
@@ -633,9 +634,11 @@ export function PrdView({
           {storiesReady && (
             <section aria-label="Story proposals">
               <h3>Story proposals</h3>
-              {!context.sources.some((source) => source.kind === "ado") && (
-                <p className="muted">Backlog comparison pending</p>
-              )}
+              <PrdCoverage
+                context={context}
+                objectiveId={objective.id}
+                version={prd.version}
+              />
               {context.storyDrafts
                 .filter(
                   (s) =>
