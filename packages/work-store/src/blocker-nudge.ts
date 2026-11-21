@@ -13,6 +13,7 @@ export async function draftBlockerNudge(
   db: Database,
   input: Input,
   send: (prompt: string) => Promise<string>,
+  space?: string,
 ) {
   const { areaId, blockerId, chatId, ref } = input;
   const now = () => new Date().toISOString();
@@ -71,6 +72,11 @@ export async function draftBlockerNudge(
       db.prepare(
         "INSERT INTO blocker_nudges(blocker_id,ref,chat_id,receipt_id,text,state) VALUES(?,?,?,?,'','drafting') ON CONFLICT(blocker_id) DO UPDATE SET ref=excluded.ref,chat_id=excluded.chat_id,receipt_id=excluded.receipt_id,text='',state='drafting'",
       ).run(blockerId, ref, chatId, receiptId);
+      if (space)
+        db.prepare("UPDATE blocker_nudges SET space=? WHERE ref=?").run(
+          space,
+          ref,
+        );
       return { prompt, receiptId };
     })
     .immediate();

@@ -4,6 +4,7 @@ import type { Transport } from "./ado-client.ts";
 
 type BoardSummary = { id: string; name: string };
 type SprintItem = {
+  assignedIdentity?: { id: string; uniqueName: string };
   points?: number;
   indicator?: { rev: number; blocked: boolean };
   id: number;
@@ -365,6 +366,65 @@ export class BoardDiscovery {
       if (data.value.length < 100) return members;
     }
   }
+  async storyComments(id: number) {
+    if (!Number.isSafeInteger(id) || id < 1) throw Error("Invalid story ID");
+    const url = new URL(
+      this.project + "/_apis/wit/workItems/" + id + "/comments",
+      this.base,
+    );
+    url.searchParams.set("api-version", "7.0-preview.3");
+    url.searchParams.set("$top", "200");
+    const comments: {
+      id: number;
+      version: number;
+      authorId: string;
+      at: string;
+      text: string;
+      url: string;
+    }[] = [];
+    const seen = new Set<string>();
+    for (;;) {
+      const page = await this.transport("GET", url.href);
+      if (
+        page.status !== 200 ||
+        !record(page.data) ||
+        !Array.isArray(page.data.comments)
+      )
+        throw Error("Azure comments unavailable.");
+      for (const c of page.data.comments) {
+        if (c.isDeleted) continue;
+        if (
+          c.workItemId !== id ||
+          !Number.isSafeInteger(c.id) ||
+          !Number.isSafeInteger(c.version) ||
+          !c.createdBy?.id ||
+          typeof c.text !== "string" ||
+          !Number.isFinite(Date.parse(c.createdDate))
+        )
+          throw Error("Azure comment evidence incomplete.");
+        const link = new URL(
+          this.project + "/_workitems/edit/" + id,
+          this.base,
+        );
+        link.searchParams.set("discussionId", String(c.id));
+        comments.push({
+          id: c.id,
+          version: c.version,
+          authorId: c.createdBy.id,
+          at: c.createdDate,
+          text: c.text,
+          url: link.href,
+        });
+      }
+      const next = page.continuationToken ?? page.data.continuationToken;
+      if (!next) return comments;
+      if (typeof next !== "string" || seen.has(next))
+        throw Error("Azure comment pagination incomplete.");
+      seen.add(next);
+      url.searchParams.set("continuationToken", next);
+    }
+  }
+
   async planningCreationTarget(
     team: string,
     levelId: string,
@@ -495,6 +555,11 @@ export class BoardDiscovery {
           item.rev > 0 &&
           (indicator === "Yes" || indicator === "No")
             ? { indicator: { rev: item.rev, blocked: indicator === "Yes" } }
+            : {}),
+          ...(record(who) &&
+          typeof who.id === "string" &&
+          typeof who.uniqueName === "string"
+            ? { assignedIdentity: { id: who.id, uniqueName: who.uniqueName } }
             : {}),
           id: item.id,
           title: f["System.Title"],

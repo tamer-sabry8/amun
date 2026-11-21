@@ -510,6 +510,93 @@ describe("blockers", () => {
     expect(messages).toHaveLength(2);
     expect(messages[1]?.text).toContain("Sent manually · confirmed by you");
   });
+  it("sends a verified owner reply to the originating Firstmate once across overlapping and repeated reads", async () => {
+    const { reviewBlockerComments } =
+      await import("../src/blocker-comment-review.ts");
+    const areaId = add("project", "QA");
+    db.prepare(
+      "INSERT INTO products(id,name,created_at) VALUES('p','QA','2026-01-01')",
+    ).run();
+    db.prepare("UPDATE work_areas SET product_id='p' WHERE id=?").run(areaId);
+    const blockerId = send("raise-blocker", {
+      areaId,
+      title: "Badge",
+      owner: "Sam",
+    }).ref!;
+    send("link-blocker-story", {
+      areaId,
+      blockerId,
+      sourceId: "azure",
+      sprintId: "ado:4",
+      storyId: "24",
+      teamId: "west",
+    });
+    const chatId = send("new-chat", {
+      workAreaId: areaId,
+      sprint: { id: "ado:4", connection: "azure", name: "Sprint 4" },
+    }).ref;
+    await store.draftNudge(
+      {
+        version: 1,
+        kind: "work",
+        action: "draft-blocker-message",
+        areaId,
+        blockerId,
+        chatId,
+        ref: "amun-r-123456789abc",
+      },
+      async () => "Draft",
+      "home",
+    );
+    const identity = { id: "7", name: "Sam", uniqueName: "sam@example.test" };
+    const member = { id: 24, assignee: "Sam", assignedIdentity: identity };
+    const comment = {
+      id: 5,
+      version: 1,
+      authorId: "7",
+      at: new Date(Date.now() + 10).toISOString(),
+      text: "Scan both passes.",
+      url: "https://example.test/comment/5",
+    };
+    const reader = {
+      teamIdentities: async () => [identity],
+      storyComments: async () => [
+        { ...comment, id: 4, authorId: "8" },
+        comment,
+      ],
+    };
+    const scope = {
+      productId: "p",
+      workAreaId: areaId,
+      team: "west",
+      sourceId: "azure",
+      sprint: "4",
+    };
+    let calls = 0;
+    const run = () =>
+      reviewBlockerComments(
+        db,
+        scope,
+        [member],
+        reader,
+        async (space, prompt) => {
+          expect(space).toBe("home");
+          expect(prompt).toContain("amun-r-123456789abc");
+          calls++;
+          return "Both passes scan.";
+        },
+        (s) => s,
+      );
+    await Promise.all([run(), run()]);
+    await run();
+    expect(calls).toBe(1);
+    expect(snap().blockers[0]).toMatchObject({
+      resolvedAt: null,
+      ownerReplies: [
+        { id: 5, state: "reviewed", proposal: "Both passes scan." },
+      ],
+    });
+  });
   it("need a work area, and go with it when it is deleted", () => {
     expect(send("raise-blocker", { areaId: "nope", title: "X" }).ok).toBe(
       false,

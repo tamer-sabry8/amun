@@ -411,7 +411,7 @@ export class AmunRpcHandler {
         if (!this.deps.work.draftNudge) throw Error("Blocker message drafting is unavailable.");
         const space = await this.deps.spaces.get(request.space);
         return this.deps.work.draftNudge(request.command, async (prompt) =>
-          (await this.deps.primary.send(space, prompt)).reply
+          (await this.deps.primary.send(space, prompt)).reply, request.space
         );
       }
       case "work.command":

@@ -430,6 +430,14 @@ export class WorkStore {
                 state: row.nudge_state,
               }
             : null,
+          ...(row.nudge_ref
+            ? {
+                ownerReplies: this.all(
+                  "SELECT comment_id AS id,version,url,body,proposal,state FROM blocker_comment_reviews WHERE blocker_id=? ORDER BY comment_id,version",
+                  row.id,
+                ),
+              }
+            : {}),
           ...(row.azure_indicator_json
             ? { azureIndicator: JSON.parse(String(row.azure_indicator_json)) }
             : {}),
@@ -866,12 +874,19 @@ export class WorkStore {
       .immediate();
     return { delivered };
   }
-  async draftNudge(input: unknown, send: (prompt: string) => Promise<string>) {
+  async draftNudge(
+    input: unknown,
+    send: (prompt: string) => Promise<string>,
+    space?: string,
+  ) {
     const command = workCommand.parse(input);
     if (command.action !== "draft-blocker-message")
       throw Error("Unknown blocker draft action.");
-    await draftBlockerNudge(this.db, command, async (prompt) =>
-      this.clean(await send(prompt)),
+    await draftBlockerNudge(
+      this.db,
+      command,
+      async (prompt) => this.clean(await send(prompt)),
+      space,
     );
     return this.snapshot();
   }

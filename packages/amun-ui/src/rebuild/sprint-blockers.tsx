@@ -272,6 +272,27 @@ function BlockerDiscussion({
     <article>
       <h4>{blocker.title}</h4>
       <p className="muted small">{blockerLine(blocker, now)}</p>
+      {blocker.ownerReplies?.map((reply) => (
+        <details key={reply.id + "-" + reply.version}>
+          <summary>Owner reply · #{reply.id}</summary>
+          <p>{reply.body}</p>
+          <a href={reply.url} target="_blank" rel="noreferrer">
+            View comment in Azure
+          </a>
+          {reply.proposal ? (
+            <button className="btn quiet" onClick={() => edit(reply.proposal!)}>
+              Edit proposed criterion in discussion
+            </button>
+          ) : (
+            <p role="status">
+              {reply.state === "pending"
+                ? "Firstmate is reviewing the reply."
+                : "Firstmate review unconfirmed."}
+            </p>
+          )}
+          {reply.proposal && <p>{reply.proposal}</p>}
+        </details>
+      ))}
       {blocker.azureIndicator && (
         <p className="muted small">
           Azure Blocked field · {blocker.azureIndicator.blocked ? "Yes" : "No"}{" "}

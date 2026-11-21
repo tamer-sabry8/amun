@@ -1,3 +1,4 @@
+import { reviewBlockerComments } from "./blocker-comment-review.ts";
 import { observeSprintBlockers } from "./sprint-blocker-evidence.ts";
 import { comparePrd } from "./prd-comparison.ts";
 // Azure DevOps backlog reads and governed writes for a product, ported from
@@ -62,7 +63,7 @@ export class AdoService {
     private readonly redactor: Redactor,
   ) {}
 
-  async refreshLinkedBlockers() {
+  async refreshLinkedBlockers(dispatch?: FirstmateDispatch) {
     const scopes = this.db
       .prepare(
         `SELECT DISTINCT a.id AS workAreaId,a.product_id AS productId,
@@ -82,13 +83,16 @@ export class AdoService {
       sprint: string;
     }[];
     for (const scope of scopes) {
-      await this.handle({
-        version: 1,
-        kind: "backlog-read",
-        action: "sprint-items",
-        requestId: randomUUID(),
-        ...scope,
-      });
+      await this.handle(
+        {
+          version: 1,
+          kind: "backlog-read",
+          action: "sprint-items",
+          requestId: randomUUID(),
+          ...scope,
+        },
+        dispatch,
+      );
     }
     return scopes.length > 0;
   }
@@ -302,12 +306,22 @@ export class AdoService {
               current.id === source.id &&
               current.reference === source.reference,
           )
-      )
+      ) {
         observeSprintBlockers(
           this.db,
           { ...request, workAreaId: request.workAreaId },
           membership.items,
         );
+        if (dispatch)
+          await reviewBlockerComments(
+            this.db,
+            { ...request, workAreaId: request.workAreaId, team: team.id },
+            membership.items,
+            d,
+            dispatch,
+            (text) => this.redactor.text(text),
+          ).catch(() => undefined);
+      }
       return {
         ...meta,
         view: "sprint-items",

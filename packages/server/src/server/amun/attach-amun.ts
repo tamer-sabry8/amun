@@ -452,7 +452,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   );
 
   const stopBlockerChecks = scheduleBlockerChecks(async () => {
-    if (await ado.refreshLinkedBlockers()) {
+    if (await ado.refreshLinkedBlockers(async (slug, prompt) => (await primary.send(await spaces.get(slug), prompt)).reply)) {
       for (const ws of wss.clients) send(ws, { event: "work.updated" });
     }
   }, (error) => input.logger.warn({ err: error }, "Amun blocker refresh failed"));

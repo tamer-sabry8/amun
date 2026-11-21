@@ -311,6 +311,18 @@ export const workSnapshot = z.strictObject({
         })
         .nullable()
         .optional(),
+      ownerReplies: z
+        .array(
+          z.object({
+            id: z.int(),
+            version: z.int(),
+            url: z.url(),
+            body: z.string(),
+            proposal: z.string().nullable(),
+            state: z.enum(["pending", "unconfirmed", "reviewed"]),
+          }),
+        )
+        .optional(),
       azureIndicator: z
         .object({
           rev: z.int().positive(),
