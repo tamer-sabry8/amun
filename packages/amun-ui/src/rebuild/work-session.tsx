@@ -2189,7 +2189,7 @@ export function WorkSession({
       const about = asked
         ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
         : "";
-      const asks = `${requestLine(ref)}\n${text}\n\nFor crew work, dispatch through Firstmate’s native workflow as soon as the needed inputs are known. Reuse the current session’s startup digest and lock; do not rerun session startup once it has succeeded for this session. After dispatch, acknowledge and end this turn so the captain can continue. When the crew returns, relay the result with the same request reference in a fenced amun report, including status delivered for a completed answer (even when there is no document).`;
+      const asks = `${requestLine(ref)}\n${text}\n\nFor crew work, dispatch through Firstmate’s native workflow as soon as the needed inputs are known. Reuse the current session’s startup digest and lock; do not rerun session startup once it has succeeded for this session. Put the request reference at the beginning of the crew brief and ask the crew to include it in the completion report. After dispatch, acknowledge and end this turn so the captain can continue. When the crew returns, relay the result with the same request reference in a fenced amun report, including status delivered for a completed answer (even when there is no document).`;
       const scoped = briefing
         ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
         : `${header}${which}${asks}${about}`;

@@ -1162,6 +1162,7 @@ export const workCommand = z.discriminatedUnion("action", [
     workAreaId: id,
     chatId: id.nullable(),
     saveText: z.boolean().default(false),
+    prdRelay: z.boolean().optional(),
     model: z.string().max(200).nullable().default(null),
   }),
   act("record-firstmate-reply", {

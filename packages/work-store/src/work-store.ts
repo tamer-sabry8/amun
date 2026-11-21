@@ -2953,7 +2953,8 @@ export class WorkStore {
       }
       case "record-firstmate-reply": {
         const ref = recordFirstMateReply(this, command.text, command.model);
-        if (!ref) throw new WorkError("There is no chat for this Firstmate reply.");
+        if (!ref)
+          throw new WorkError("There is no chat for this Firstmate reply.");
         return { ref };
       }
       case "apply-reply": {
@@ -2961,6 +2962,27 @@ export class WorkStore {
           throw new WorkError("That work area no longer exists.");
         const { visible, reports, documents, moves, unmatched } =
           readRequestBlocks(command.text);
+        // A PRD answer relayed early can arrive again through the normal
+        // watcher. Only suppress the repeated plaintext completion.
+        const completion = reports.length === 1 ? reports[0] : null;
+        const completedRequest =
+          command.saveText &&
+          !documents.length &&
+          !moves.length &&
+          !unmatched.length &&
+          completion?.status === "delivered"
+            ? this.get(
+                "SELECT status,seen_json FROM work_requests WHERE ref=?",
+                completion.request,
+              )
+            : undefined;
+        const prdRelayMarker = "prd-completion-relayed";
+        if (
+          completedRequest?.status === "delivered" &&
+          (command.prdRelay ||
+            list(completedRequest.seen_json).includes(prdRelayMarker))
+        )
+          return {};
         // Where a request's own message is now, after any move or split.
         const request = (ref: string | null) => {
           if (!ref) return null;
@@ -3036,6 +3058,19 @@ export class WorkStore {
             ref: move.request,
             accepted: move.accepted,
           } as never);
+        }
+        if (command.prdRelay && completedRequest && completion) {
+          const row = this.get(
+            "SELECT seen_json FROM work_requests WHERE ref=?",
+            completion.request,
+          );
+          this.run(
+            "UPDATE work_requests SET seen_json=? WHERE ref=?",
+            JSON.stringify(
+              [...list(row?.seen_json), prdRelayMarker].slice(-50),
+            ),
+            completion.request,
+          );
         }
         const looseWords = loose.map(reportWords).join("\n");
         // Firstmate's words first, then what it delivered.

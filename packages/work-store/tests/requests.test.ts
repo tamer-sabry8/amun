@@ -126,6 +126,32 @@ describe("request references", () => {
     ]);
   });
 
+  it("shows an early PRD completion only once when its ordinary wake arrives", () => {
+    const { gitex } = setup();
+    ask(gitex, "Read the PRD.", prd);
+    const status = {
+      do: "report",
+      request: prd,
+      status: "delivered",
+      role: "PRD",
+    };
+    recordFirstMateReply(
+      store,
+      "PRD has finished.\n" + block(status),
+      null,
+      true,
+    );
+    recordFirstMateReply(
+      store,
+      "PRD sent its finished report.\n" + block(status),
+    );
+    expect(
+      allMessages()
+        .filter((message) => message.role === "firstmate")
+        .map((message) => message.text),
+    ).toEqual(["PRD has finished."]);
+  });
+
   it("links two results that finish out of order to the exact message that asked", () => {
     const { gitex } = setup();
     const chat = send("new-chat", { workAreaId: gitex }).ref!;

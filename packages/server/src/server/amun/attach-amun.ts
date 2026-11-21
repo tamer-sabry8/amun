@@ -1,3 +1,4 @@
+import { findPrdReport, isPrdRelayReply, prdRelayPrompt } from "./prd-report-relay.js";
 import { scheduleBlockerChecks } from "./blocker-checks.js";
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
@@ -393,7 +394,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   // A First Mate turn Amun did not ask for (a heartbeat, a Firstmate wake or
   // guard notice) has a reply nobody is waiting on. It is kept in the
   // standing "Chat with Firstmate" conversation and every UI is told.
-  function showUnprompted(reply: UnpromptedReply): void {
+  function showUnprompted(reply: UnpromptedReply, prdRelay = false): void {
     if (isAllClear(reply.text)) return;
     let saved: string | null = null;
     try {
@@ -402,6 +403,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         work.store,
         reply.text,
         agent?.runtimeInfo?.model ?? agent?.config.model ?? null,
+        prdRelay,
       );
     } catch (error) {
       input.logger.warn({ err: error }, "amun could not keep a First Mate reply");
@@ -454,6 +456,49 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     { replayState: false },
   );
 
+  // A known PRD completion can reach Firstmate directly from its native report.
+  // The ordinary watcher still handles supervision and uncorrelated reports.
+  const attemptedPrdRelays = new Map<string, number>();
+  let checkingPrd = false;
+  let closing = false;
+  const prdTimer = setInterval(async () => {
+    const home = paths.fmHome;
+    if (closing || checkingPrd || !primary.agentFor(home) || primary.pending(home)) return;
+    checkingPrd = true;
+    const getRequests = () => (work.store.snapshot() as {
+      requests: { ref: string; status: string; updatedAt: string }[];
+    }).requests;
+    try {
+      const now = Date.now();
+      for (const [ref, at] of attemptedPrdRelays) {
+        if (now - at > 10 * 60_000) attemptedPrdRelays.delete(ref);
+      }
+      const report = await findPrdReport(home, getRequests(), new Set(attemptedPrdRelays.keys()), now);
+      if (!report || closing || primary.pending(home)) return;
+      const space = (await spaces.list())[0];
+      if (!space || closing || primary.pending(home)) return;
+      const isPending = () => getRequests().some((request) =>
+        request.ref === report.ref && (request.status === "sent" || request.status === "working"),
+      );
+      if (!isPending()) return;
+      attemptedPrdRelays.set(report.ref, now);
+      const { agentId, reply, followups } = await primary.send(space, prdRelayPrompt({
+        ...report,
+        text: work.redactor.text(report.text),
+      }), true);
+      if (closing) return;
+      if (isPrdRelayReply(reply, report.ref) && isPending()) {
+        showUnprompted({ fmHome: home, agentId, text: reply }, true);
+      }
+      for (const text of followups ?? []) showUnprompted({ fmHome: home, agentId, text });
+    } catch (error) {
+      input.logger.warn({ err: error }, "Amun PRD report relay failed");
+    } finally {
+      checkingPrd = false;
+    }
+  }, 1_000);
+  prdTimer.unref();
+
   const stopBlockerChecks = scheduleBlockerChecks(async () => {
     if (await ado.refreshLinkedBlockers(async (slug, prompt) => (await primary.send(await spaces.get(slug), prompt)).reply)) {
       for (const ws of wss.clients) send(ws, { event: "work.updated" });
@@ -492,6 +537,8 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   return {
     handler,
     close() {
+      closing = true;
+      clearInterval(prdTimer);
       laterReplies.current = null;
       stopWatchingTurns();
       clearInterval(timer);
