@@ -543,6 +543,62 @@ describe("Jira: epics, stories and sprints from an approved plan", () => {
     expect(plan(id).state).toBe("failed");
   });
 
+  it("links a story approved later to the epic approved first, across the split", async () => {
+    const id = propose("jira", [
+      { summary: "Checkout", fields: { type: "Epic", ...site } },
+      {
+        summary: "Pay by card",
+        fields: { type: "Task", ...site, parent: "Checkout" },
+      },
+    ]);
+    expect(
+      send("approve-plan", {
+        planId: id,
+        fingerprint: plan(id).fingerprint,
+        itemIds: [uuid(1)],
+      }).ok,
+    ).toBe(true);
+    await publisher.publish(id);
+    const rest = store
+      .snapshot()
+      .plans.find((p) => p.id !== id && p.state === "proposed")!;
+    // An unrelated plan with an item of the same name is never consulted.
+    const other = propose("jira", [
+      { summary: "Checkout", fields: { type: "Epic", ...site } },
+    ]);
+    approve(other);
+    await publisher.publish(other);
+    approve(rest.id);
+    await publisher.publish(rest.id);
+    expect(publisher.writes(rest.id)[0]).toMatchObject({
+      state: "created",
+      externalId: "SCRUM-3",
+    });
+    expect(jira.issues.get("SCRUM-3")!.parent).toBe("SCRUM-1");
+  });
+
+  it("waits for the other part of a split plan instead of guessing", async () => {
+    const id = propose("jira", [
+      { summary: "Checkout", fields: { type: "Epic", ...site } },
+      {
+        summary: "Pay by card",
+        fields: { type: "Task", ...site, parent: "Checkout" },
+      },
+    ]);
+    expect(
+      send("approve-plan", {
+        planId: id,
+        fingerprint: plan(id).fingerprint,
+        itemIds: [uuid(2)],
+      }).ok,
+    ).toBe(true);
+    await publisher.publish(id);
+    expect(publisher.writes(id)[0]!.note).toMatch(
+      /other part of this plan and has not been created yet/,
+    );
+    expect(jira.calls).not.toContain("createJiraIssue");
+  });
+
   it("refuses a sprint without dates to start, or without its board", () => {
     const item = (fields: Record<string, string>) => ({
       id: uuid(1),

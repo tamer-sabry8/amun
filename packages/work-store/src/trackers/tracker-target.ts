@@ -41,9 +41,35 @@ export const TRACKER_DESTINATIONS = new Set<string>(["linear", "jira"]);
 const label = { linear: "Linear", jira: "Jira" } as const;
 
 /**
- * A reference to another item of the same plan (by its id, or by its exact
- * title, which is how Firstmate names it) becomes that item's receipt.
- * Anything else is taken as an existing key in the tracker.
+ * The plans one proposal became when the captain approved only some of its
+ * items (work_plans.split_from): the original and every split of it, with
+ * the plan being published first. Unrelated plans are never included.
+ */
+function splitFamily(db: Database, planId: string): string[] {
+  const parent = db.prepare("SELECT split_from FROM work_plans WHERE id=?");
+  let root = planId;
+  for (const seen = new Set([planId]); ;) {
+    const up = (parent.get(root) as { split_from: string | null } | undefined)
+      ?.split_from;
+    if (!up || seen.has(up)) break;
+    seen.add(up);
+    root = up;
+  }
+  const children = db.prepare("SELECT id FROM work_plans WHERE split_from=?");
+  const family = new Set([root]);
+  for (const queue = [root]; queue.length;)
+    for (const row of children.all(queue.shift()!) as { id: string }[])
+      if (!family.has(row.id)) {
+        family.add(row.id);
+        queue.push(row.id);
+      }
+  return [planId, ...[...family].filter((id) => id !== planId)];
+}
+
+/**
+ * A reference to another item of the same plan, or of a split of it (by its
+ * id, or by its exact title, which is how Firstmate names it), becomes that
+ * item's receipt. Anything else is taken as an existing key in the tracker.
  */
 function reference(
   db: Database,
@@ -52,37 +78,46 @@ function reference(
   value: string | null,
 ) {
   if (!value) return null;
-  const plan = db
-    .prepare("SELECT approved_json FROM work_plans WHERE id=?")
-    .get(planId) as { approved_json: string | null } | undefined;
-  const items = JSON.parse(plan?.approved_json ?? "[]") as {
-    id: string;
-    summary: string;
-    fields: Record<string, string | number | null>;
-  }[];
   const same = (a: string) => a.normalize("NFKC").trim().toLowerCase();
-  const named = items.filter(
-    (item) =>
-      item.id === value ||
-      same(item.summary) === same(value) ||
-      (typeof item.fields.title === "string" &&
-        same(item.fields.title) === same(value)),
+  const read = db.prepare(
+    "SELECT approved_json,items_json FROM work_plans WHERE id=?",
   );
-  if (named.length > 1)
-    throw new PlanRefused(
-      `${label[provider]} refused it: more than one item in this plan is called ${value}, so its parent or sprint is unclear`,
+  for (const id of splitFamily(db, planId)) {
+    const plan = read.get(id) as
+      { approved_json: string | null; items_json: string | null } | undefined;
+    const items = JSON.parse(
+      plan?.approved_json ?? plan?.items_json ?? "[]",
+    ) as {
+      id: string;
+      summary: string;
+      fields: Record<string, string | number | null>;
+    }[];
+    const named = items.filter(
+      (item) =>
+        item.id === value ||
+        same(item.summary) === same(value) ||
+        (typeof item.fields.title === "string" &&
+          same(item.fields.title) === same(value)),
     );
-  if (!named.length) return value;
-  const row = db
-    .prepare(
-      "SELECT state,external_id FROM plan_writes WHERE plan_id=? AND item_id=?",
-    )
-    .get(planId, named[0]!.id) as
-    { state: string; external_id: string | null } | undefined;
-  if (row?.state === "created" && row.external_id) return row.external_id;
-  throw new PlanRefused(
-    `${label[provider]} refused it: the item it belongs to (${named[0]!.summary}) was not created, so nothing was sent`,
-  );
+    if (named.length > 1)
+      throw new PlanRefused(
+        `${label[provider]} refused it: more than one item in this plan is called ${value}, so its parent or sprint is unclear`,
+      );
+    if (!named.length) continue;
+    const row = db
+      .prepare(
+        "SELECT state,external_id FROM plan_writes WHERE plan_id=? AND item_id=?",
+      )
+      .get(id, named[0]!.id) as
+      { state: string; external_id: string | null } | undefined;
+    if (row?.state === "created" && row.external_id) return row.external_id;
+    throw new PlanRefused(
+      id === planId
+        ? `${label[provider]} refused it: the item it belongs to (${named[0]!.summary}) was not created, so nothing was sent`
+        : `${label[provider]} refused it: the item it belongs to (${named[0]!.summary}) is in the other part of this plan and has not been created yet. Approve and publish it first, then retry`,
+    );
+  }
+  return value;
 }
 
 async function jiraSites(session: TrackerSession) {
