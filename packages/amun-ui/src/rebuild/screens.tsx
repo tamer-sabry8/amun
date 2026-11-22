@@ -186,6 +186,13 @@ const catalogId = "catalog:";
 const absent = (agent: AgentRow) => agent.id.startsWith(catalogId);
 const live = (agent: AgentRow) =>
   agent.state === "working" || agent.state === "waiting";
+function CrewStateBadge({ state }: { state: AgentRow["state"] }) {
+  if (state === "working")
+    return <span className="rb-badge working">Working</span>;
+  if (state === "waiting")
+    return <span className="rb-badge blocked">Blocked</span>;
+  return null;
+}
 function SpecialistCard({
   agent,
   selected,
@@ -217,12 +224,7 @@ function SpecialistCard({
       <span className="text">
         <strong title={agent.role}>
           <span>{agent.role}</span>
-          {agent.state === "working" && (
-            <span className="rb-badge working">Working</span>
-          )}
-          {agent.state === "waiting" && (
-            <span className="rb-badge blocked">Blocked</span>
-          )}
+          <CrewStateBadge state={agent.state} />
         </strong>
         {line && <span title={line}>{line}</span>}
       </span>
@@ -258,7 +260,9 @@ function SpecialistPanel({
           >
             Specialist {pad(position)} of {pad(total)} · Dispatched by Firstmate
           </p>
-          <h2>{agent.role}</h2>
+          <h2>
+            {agent.role} <CrewStateBadge state={agent.state} />
+          </h2>
           <p className="summary">
             {profile
               ? profile.summary

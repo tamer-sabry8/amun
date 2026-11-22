@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
 import { adoWorkItemOf } from "../../domain/src/ado-update.ts";
 import { planItemKey, sameItem } from "./plan-publication.ts";
+import { recordFirstMateReply } from "./first-mate-thread.ts";
 import { WorkReminders } from "./work-reminders.ts";
 import { searchContent } from "./content-search.ts";
 import { agentCatalog } from "../../domain/src/work/agents.ts";
@@ -2937,7 +2938,7 @@ export class WorkStore {
       }
       case "request-report": {
         const row = this.get(
-          "SELECT seen_json FROM work_requests WHERE ref=?",
+          "SELECT status,seen_json FROM work_requests WHERE ref=?",
           command.ref,
         );
         // Never guess: a report for a reference Amun never gave is refused,
@@ -2945,6 +2946,9 @@ export class WorkStore {
         if (!row) throw new WorkError("No request has that reference.");
         const seen: string[] = list(row.seen_json).map(String);
         if (seen.includes(command.fingerprint)) return { ref: command.ref };
+        // A delayed progress report cannot reopen a delivered request.
+        if (row.status === "delivered" && command.status !== "delivered")
+          return { ref: command.ref };
         this.run(
           "UPDATE work_requests SET status=?,role=?,detail=?,parts=max(parts,?),updated_at=?,seen_json=? WHERE ref=?",
           command.status,
@@ -2957,11 +2961,38 @@ export class WorkStore {
         );
         return { ref: command.ref };
       }
+      case "record-firstmate-reply": {
+        const ref = recordFirstMateReply(this, command.text, command.model);
+        if (!ref)
+          throw new WorkError("There is no chat for this Firstmate reply.");
+        return { ref };
+      }
       case "apply-reply": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
         const { visible, reports, documents, moves, unmatched } =
           readRequestBlocks(command.text);
+        // A PRD answer relayed early can arrive again through the normal
+        // watcher. Only suppress the repeated plaintext completion.
+        const completion = reports.length === 1 ? reports[0] : null;
+        const completedRequest =
+          command.saveText &&
+          !documents.length &&
+          !moves.length &&
+          !unmatched.length &&
+          completion?.status === "delivered"
+            ? this.get(
+                "SELECT status,seen_json FROM work_requests WHERE ref=?",
+                completion.request,
+              )
+            : undefined;
+        const prdRelayMarker = "prd-completion-relayed";
+        if (
+          completedRequest?.status === "delivered" &&
+          (command.prdRelay ||
+            list(completedRequest.seen_json).includes(prdRelayMarker))
+        )
+          return {};
         // Where a request's own message is now, after any move or split.
         const request = (ref: string | null) => {
           if (!ref) return null;
@@ -3038,6 +3069,19 @@ export class WorkStore {
             accepted: move.accepted,
           } as never);
         }
+        if (command.prdRelay && completedRequest && completion) {
+          const row = this.get(
+            "SELECT seen_json FROM work_requests WHERE ref=?",
+            completion.request,
+          );
+          this.run(
+            "UPDATE work_requests SET seen_json=? WHERE ref=?",
+            JSON.stringify(
+              [...list(row?.seen_json), prdRelayMarker].slice(-50),
+            ),
+            completion.request,
+          );
+        }
         const looseWords = loose.map(reportWords).join("\n");
         // Firstmate's words first, then what it delivered.
         if (looseWords && !command.saveText) say(here, "firstmate", looseWords);
@@ -3065,6 +3109,15 @@ export class WorkStore {
             only ? { areaId: areaId!, chatId: chatId || null } : here,
             "firstmate",
             visible,
+            {
+              kind: "request-reply",
+              refs: reports
+                .filter(
+                  (report) =>
+                    report.status === "delivered" && request(report.request),
+                )
+                .map((report) => report.request),
+            },
           );
         }
         for (const document of documents) {

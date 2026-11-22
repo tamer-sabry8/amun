@@ -342,7 +342,7 @@ export class AmunRpcHandler {
       }
       case "primary.send": {
         const space = await this.deps.spaces.get(request.space);
-        return this.deps.primary.send(space, request.text);
+        return this.deps.primary.send(space, request.text, request.collectFollowups);
       }
       case "primary.once": {
         const space = await this.deps.spaces.get(request.space);

@@ -1166,6 +1166,11 @@ export const workCommand = z.discriminatedUnion("action", [
     workAreaId: id,
     chatId: id.nullable(),
     saveText: z.boolean().default(false),
+    prdRelay: z.boolean().optional(),
+    model: z.string().max(200).nullable().default(null),
+  }),
+  act("record-firstmate-reply", {
+    text: z.string().max(200000),
     model: z.string().max(200).nullable().default(null),
   }),
   /** The owner asked Firstmate to move a request to another project. */

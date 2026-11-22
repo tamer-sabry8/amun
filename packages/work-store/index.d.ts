@@ -29,6 +29,7 @@ export declare function recordFirstMateReply(
   store: WorkStoreLike,
   text: string,
   model?: string | null,
+  prdRelay?: boolean,
 ): string | null;
 /** Masks registered secrets and common credential shapes in text and objects. */
 export declare class Redactor {

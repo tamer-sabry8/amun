@@ -1,3 +1,4 @@
+import { findPrdReport, forwardPrdReport, isPrdRelayReply, prdRelayPrompt } from "./prd-report-relay.js";
 import { scheduleBlockerChecks } from "./blocker-checks.js";
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
@@ -84,6 +85,7 @@ export interface AttachAmunInput {
 export interface StoredAgentMatch {
   provider: string;
   cwd: string;
+  firstmateHome?: string;
 }
 
 export interface AmunAttachment {
@@ -134,7 +136,11 @@ export function agentManagerHost(
           async resumeAgent(agentId: string, launch: PrimaryLaunch) {
             // Only this home's First Mate: same harness, same Firstmate checkout.
             // The stored record is checked before any session is opened.
-            const agent = await loadAgent(agentId, { provider: launch.provider, cwd: launch.cwd });
+            const agent = await loadAgent(agentId, {
+              provider: launch.provider,
+              cwd: launch.cwd,
+              ...(launch.env.FM_HOME ? { firstmateHome: launch.env.FM_HOME } : {}),
+            });
             if (!agent) return false;
             if (agent.provider !== launch.provider || agent.cwd !== launch.cwd) {
               // Never leave a rejected First Mate running beside the new one.
@@ -167,12 +173,29 @@ export function agentManagerHost(
         await agentManager.setAgentModel(agent.id, launch.model).catch(() => undefined);
       return { agentId: agent.id };
     },
-    async runAgent(agentId, text) {
-      const result = await agentManager.runAgent(agentId, text);
-      // The owner's reply is the first one in the run, not the last: a wake
-      // handled in the same run must not take its place (owner's trace, 19
-      // November 2026: "yes" was answered with a wake's "shipshape").
+    async runAgent(agentId, text, collectFollowups, onCaptainReply) {
+      const foreground: { type: string; text?: unknown }[] = [];
+      let earlyReply = false;
+      const result = await agentManager.runAgent(agentId, text, undefined,
+        onCaptainReply ? (item) => {
+          if (earlyReply) return;
+          // A subsequent user message seals the captain's portion even
+          // while Pi continues running tools for a watcher wake.
+          if (item.type === "user_message") {
+            const [answer] = repliesInRun(foreground);
+            if (answer) {
+              earlyReply = true;
+              onCaptainReply(answer);
+              return;
+            }
+          }
+          foreground.push(item);
+        } : undefined,
+      );
       const [reply, ...later] = repliesInRun(result.timeline);
+      if (collectFollowups && !earlyReply) {
+        return { finalText: reply ?? result.finalText, followups: later.filter((text) => !isAllClear(text)) };
+      }
       for (const text of later) laterReplies.current?.({ agentId, text });
       return { finalText: reply ?? result.finalText };
     },
@@ -252,6 +275,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const snapshots = shareFleetSnapshots(
     (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
     {
+      deferRefresh: (fmHome) => primary.pending(fmHome) > 0,
       load(fmHome) {
         try {
           const kept = fleetSnapshotSchema.safeParse(
@@ -315,7 +339,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   } catch (error) {
     input.logger.warn({ err: error }, "Notion for the First Mate not available");
   }
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 12 * 1024 * 1024 });
   const watched = new Map<WebSocket, Set<string>>();
   const lastSent = new Map<string, string>();
 
@@ -390,7 +414,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   // A First Mate turn Amun did not ask for (a heartbeat, a Firstmate wake or
   // guard notice) has a reply nobody is waiting on. It is kept in the
   // standing "Chat with Firstmate" conversation and every UI is told.
-  function showUnprompted(reply: UnpromptedReply): void {
+  function showUnprompted(reply: UnpromptedReply, prdRelay = false): void {
     if (isAllClear(reply.text)) return;
     let saved: string | null = null;
     try {
@@ -399,6 +423,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         work.store,
         reply.text,
         agent?.runtimeInfo?.model ?? agent?.config.model ?? null,
+        prdRelay,
       );
     } catch (error) {
       input.logger.warn({ err: error }, "amun could not keep a First Mate reply");
@@ -451,6 +476,59 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     { replayState: false },
   );
 
+  // A known PRD completion can reach Firstmate directly from its native report.
+  // The ordinary watcher still handles supervision and uncorrelated reports.
+  const attemptedPrdRelays = new Map<string, number>();
+  let checkingPrd = false;
+  let closing = false;
+  const prdTimer = setInterval(async () => {
+    const home = paths.fmHome;
+    if (closing || checkingPrd || !primary.agentFor(home)) return;
+    checkingPrd = true;
+    const getRequests = () => (work.store.snapshot() as {
+      requests: { ref: string; status: string; updatedAt: string }[];
+    }).requests;
+    try {
+      const now = Date.now();
+      for (const [ref, at] of attemptedPrdRelays) {
+        if (now - at > 10 * 60_000) attemptedPrdRelays.delete(ref);
+      }
+      const report = await findPrdReport(home, getRequests(), new Set(attemptedPrdRelays.keys()), now);
+      if (!report || closing) return;
+      const isPending = () => getRequests().some((request) =>
+        request.ref === report.ref && (request.status === "sent" || request.status === "working"),
+      );
+      if (!isPending()) return;
+      const safeReport = { ...report, text: work.redactor.text(report.text) };
+      const agentId = primary.agentFor(home);
+      if (!agentId) return;
+      if (report.forwardVerbatim) {
+        // The renderer has saved the dispatch acknowledgement when this
+        // request is working. Its result can now arrive during a wake.
+        if (primary.pending(home) && !getRequests().some((request) =>
+          request.ref === report.ref && request.status === "working",
+        )) return;
+        attemptedPrdRelays.set(report.ref, now);
+        showUnprompted({ fmHome: home, agentId, text: forwardPrdReport(safeReport) }, true);
+        return;
+      }
+      const space = (await spaces.list())[0];
+      if (!space || closing || primary.pending(home) || !isPending()) return;
+      attemptedPrdRelays.set(report.ref, now);
+      const { reply, followups } = await primary.send(space, prdRelayPrompt(safeReport), true);
+      if (closing) return;
+      if (isPrdRelayReply(reply, report.ref) && isPending()) {
+        showUnprompted({ fmHome: home, agentId, text: reply }, true);
+      }
+      for (const text of followups ?? []) showUnprompted({ fmHome: home, agentId, text });
+    } catch (error) {
+      input.logger.warn({ err: error }, "Amun PRD report relay failed");
+    } finally {
+      checkingPrd = false;
+    }
+  }, 1_000);
+  prdTimer.unref();
+
   const stopBlockerChecks = scheduleBlockerChecks(async () => {
     if (await ado.refreshLinkedBlockers(async (slug, prompt) => (await primary.send(await spaces.get(slug), prompt)).reply)) {
       for (const ws of wss.clients) send(ws, { event: "work.updated" });
@@ -489,6 +567,8 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   return {
     handler,
     close() {
+      closing = true;
+      clearInterval(prdTimer);
       laterReplies.current = null;
       stopWatchingTurns();
       clearInterval(timer);

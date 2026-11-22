@@ -191,6 +191,7 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
     id: z.string(),
     method: z.literal("primary.send"),
     space: slug,
+    collectFollowups: z.boolean().optional(),
     text: z.string().min(1).max(32000),
   }),
   // The First Mate's model: what Pi offers from its signed-in accounts, and a

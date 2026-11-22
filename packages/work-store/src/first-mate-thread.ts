@@ -40,6 +40,7 @@ export function recordFirstMateReply(
   store: FirstMateThreadStore,
   text: string,
   model: string | null = null,
+  prdRelay = false,
 ): string | null {
   const snapshot = store.snapshot();
   const standing = [...snapshot.areas]
@@ -99,6 +100,7 @@ export function recordFirstMateReply(
         workAreaId: areaId,
         chatId,
         saveText: true,
+        ...(prdRelay ? { prdRelay } : {}),
         model,
       }),
     );

@@ -54,6 +54,7 @@ export function buildPrimaryLaunch(input: BuildLaunchInput): PrimaryLaunch {
     { root: input.firstmateRoot, fmHome: input.space.fmHome },
     input.baseEnv ?? process.env,
   );
+  if (provider === "pi") env.AMUN_FIRSTMATE_PRIMARY = "1";
   return {
     provider,
     cwd: input.firstmateRoot,
@@ -97,7 +98,7 @@ export interface PrimaryHost {
    * archived, and runs the same harness in the same Firstmate checkout.
    */
   resumeAgent?(agentId: string, launch: PrimaryLaunch): Promise<boolean>;
-  runAgent(agentId: string, text: string): Promise<{ finalText: string }>;
+  runAgent(agentId: string, text: string, collectFollowups?: boolean, onCaptainReply?: (text: string) => void): Promise<{ finalText: string; followups?: string[] }>;
   /** Ends a turn that is still open, so the next message can be sent. */
   cancelRun?(agentId: string): Promise<void>;
 }
@@ -218,24 +219,34 @@ export class PrimarySessions {
    * working waits here instead of failing. A turn that fails is closed, so
    * one stuck message can never block every message after it.
    */
-  send(space: ProductSpace, text: string): Promise<{ agentId: string; reply: string }> {
+  send(space: ProductSpace, text: string, collectFollowups = false) {
     const home = space.fmHome;
     this.waiting.set(home, this.pending(home) + 1);
     const before = this.turns.get(home) ?? Promise.resolve();
+    type Reply = { agentId: string; reply: string; followups?: string[] };
+    let resolveReply!: (reply: Reply) => void;
+    let rejectReply!: (error: unknown) => void;
+    const response = new Promise<Reply>((resolve, reject) => {
+      resolveReply = resolve;
+      rejectReply = reject;
+    });
     const turn = before
       .catch(() => undefined)
-      .then(() => this.takeTurn(space, text))
+      .then(() => this.takeTurn(space, text, collectFollowups, resolveReply))
       .finally(() => {
         this.waiting.set(home, Math.max(0, this.pending(home) - 1));
-      });
+      })
+      .then(resolveReply, rejectReply);
     this.turns.set(home, turn);
-    return turn;
+    return response;
   }
 
   private async takeTurn(
     space: ProductSpace,
     text: string,
-  ): Promise<{ agentId: string; reply: string }> {
+    collectFollowups: boolean,
+    onCaptainReply: (reply: { agentId: string; reply: string }) => void,
+  ): Promise<{ agentId: string; reply: string; followups?: string[] }> {
     const { agentId } = await this.start(space);
     // The First Mate also takes turns nobody here asked for (a Firstmate wake,
     // a heartbeat). The captain's message waits for such a turn to finish; it
@@ -245,8 +256,11 @@ export class PrimarySessions {
     for (;;) {
       this.amunTurns.add(agentId);
       try {
-        const { finalText } = await this.host.runAgent(agentId, text);
-        return { agentId, reply: finalText };
+        const { finalText, followups } = await this.host.runAgent(
+          agentId, text, collectFollowups,
+          collectFollowups ? (reply) => onCaptainReply({ agentId, reply }) : undefined,
+        );
+        return { agentId, reply: finalText, ...(followups?.length ? { followups } : {}) };
       } catch (error) {
         const ownTurn = /already has an active run/i.test(
           error instanceof Error ? error.message : String(error),

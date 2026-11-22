@@ -53,6 +53,22 @@ describe("shared fleet snapshots", () => {
     expect(pending).toHaveLength(2);
   });
 
+  it("serves the cached fleet while a captain turn has priority", async () => {
+    const { pending, readOnce } = slowReader();
+    let busy = true;
+    const snapshots = shareFleetSnapshots(readOnce, {
+      load: () => fixture,
+      deferRefresh: () => busy,
+    });
+    expect(await snapshots.readFresh("/home")).toBe(fixture);
+    expect(pending).toHaveLength(0);
+    busy = false;
+    const refresh = snapshots.readFresh("/home");
+    expect(pending).toHaveLength(1);
+    pending[0].resolve(fixture);
+    expect(await refresh).toBe(fixture);
+  });
+
   it("starts a new read after a failed one", async () => {
     const { pending, readOnce } = slowReader();
     const snapshots = shareFleetSnapshots(readOnce);

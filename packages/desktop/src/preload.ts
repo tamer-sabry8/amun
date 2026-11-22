@@ -44,6 +44,7 @@ ipcRenderer.on("amun-browser-handoff", (_event, handoff: unknown) => {
 });
 
 contextBridge.exposeInMainWorld("paseoDesktop", {
+  ...(process.argv.includes("--amun-mac-file-access") ? { openFullDiskAccess: () => ipcRenderer.invoke("amun:open-full-disk-access") } : {}),
   platform: process.platform,
   windowChromeMode: readWindowChromeMode(),
   invoke: (command: string, args?: Record<string, unknown>) =>

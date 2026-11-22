@@ -134,7 +134,7 @@ function runOnce(command: string, argument: string) {
 }
 
 export type Turn =
-  | { ok: true; reply: string; model: string | null }
+  | { ok: true; reply: string; model: string | null; followups: string[] }
   | {
       ok: false;
       reason: string;
@@ -142,8 +142,9 @@ export type Turn =
       needsProvider: boolean;
     };
 
-/** One message per work area that is waiting for an AI provider. */
+/** A submitted message waiting for dispatch in its originating chat. */
 export interface Held {
+  ref?: string | undefined;
   /** What the user typed, as shown in the conversation. */
   text: string;
   /** What is sent to Firstmate (may carry the work area's context). */
@@ -156,13 +157,20 @@ export interface Held {
   reason?: WaitReason | undefined;
 }
 const heldKey = "amun.held-messages";
-const held = new Map<string, Held>();
+const held = new Map<string, Held[]>();
 try {
   for (const [areaId, value] of Object.entries(
-    JSON.parse(localStorage.getItem(heldKey) ?? "{}") as Record<string, Held>,
-  ))
-    if (typeof value?.text === "string" && typeof value?.scoped === "string")
-      held.set(areaId, value);
+    JSON.parse(localStorage.getItem(heldKey) ?? "{}") as Record<
+      string,
+      Held | Held[]
+    >,
+  )) {
+    const queue = (Array.isArray(value) ? value : [value]).filter(
+      (item) =>
+        typeof item?.text === "string" && typeof item.scoped === "string",
+    );
+    if (queue.length) held.set(areaId, queue);
+  }
 } catch {
   // A damaged entry only loses the waiting state, never the message itself.
 }
@@ -183,15 +191,21 @@ const saveHeld = () => {
 };
 /** Work areas with a turn in flight, so a waiting message is never sent twice. */
 export const inFlight = new Set<string>();
-export const heldMessage = (areaId: string) => held.get(areaId) ?? null;
-export function holdMessage(areaId: string, message: Held) {
-  held.set(areaId, message);
+const emptyQueue: readonly Held[] = [];
+export const heldQueue = (areaId: string): readonly Held[] =>
+  held.get(areaId) ?? emptyQueue;
+export const heldMessage = (areaId: string) => held.get(areaId)?.[0] ?? null;
+export function holdMessage(areaId: string, message: Held, front = false) {
+  const queue = held.get(areaId) ?? [];
+  held.set(areaId, front ? [message, ...queue] : [...queue, message]);
   saveHeld();
 }
 /** Removes and returns the waiting message, so it can be sent exactly once. */
 export function releaseMessage(areaId: string) {
-  const message = held.get(areaId) ?? null;
-  held.delete(areaId);
+  const queue = held.get(areaId);
+  const message = queue?.[0] ?? null;
+  if (queue && queue.length > 1) held.set(areaId, queue.slice(1));
+  else held.delete(areaId);
   saveHeld();
   return message;
 }
@@ -317,7 +331,16 @@ export async function askFirstmate(
         : null
       : replyFromTranscript(before, session.text, text);
   return reply
-    ? { ok: true, reply, model: session.model }
+    ? {
+        ok: true,
+        reply,
+        model: session.model,
+        followups: Array.isArray(result.followups)
+          ? result.followups.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : [],
+      }
     : {
         ok: false,
         needsProvider: false,
