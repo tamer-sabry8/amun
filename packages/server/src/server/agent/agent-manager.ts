@@ -3006,6 +3006,7 @@ export class AgentManager {
     agentId: string,
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
+    onTimeline?: (item: AgentTimelineItem) => void,
   ): Promise<AgentRunResult> {
     const events = this.streamAgent(agentId, prompt, options);
     const timeline: AgentTimelineItem[] = [];
@@ -3016,6 +3017,7 @@ export class AgentManager {
     for await (const event of events) {
       if (event.type === "timeline") {
         timeline.push(event.item);
+        onTimeline?.(event.item);
       } else if (event.type === "turn_completed") {
         usage = event.usage;
       } else if (event.type === "turn_failed") {

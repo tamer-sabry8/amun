@@ -217,6 +217,8 @@ export interface ShareFleetSnapshotsOptions {
   load?: (fmHome: string) => FleetSnapshot | null;
   /** Keeps a snapshot for the next run of the app. */
   save?: (fmHome: string, snapshot: FleetSnapshot) => void;
+  /** Defer a new background scan while Firstmate has foreground work. */
+  deferRefresh?: (fmHome: string) => boolean;
   now?: () => number;
 }
 
@@ -258,6 +260,11 @@ export function shareFleetSnapshots(
     const entry = entryFor(fmHome);
     if (entry.inFlight) return entry.inFlight;
     if (entry.value && now() < entry.freshUntil) return Promise.resolve(entry.value);
+    if (options.deferRefresh?.(fmHome)) {
+      return entry.value
+        ? Promise.resolve(entry.value)
+        : Promise.reject(new FleetSnapshotNotReadyError());
+    }
     const started = now();
     const running = readOnce(fmHome)
       .then((snapshot) => {

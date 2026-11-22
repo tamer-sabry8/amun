@@ -168,13 +168,27 @@ export function agentManagerHost(
         await agentManager.setAgentModel(agent.id, launch.model).catch(() => undefined);
       return { agentId: agent.id };
     },
-    async runAgent(agentId, text, collectFollowups) {
-      const result = await agentManager.runAgent(agentId, text);
-      // The owner's reply is the first one in the run, not the last: a wake
-      // handled in the same run must not take its place (owner's trace, 19
-      // November 2026: "yes" was answered with a wake's "shipshape").
+    async runAgent(agentId, text, collectFollowups, onCaptainReply) {
+      const foreground: { type: string; text?: unknown }[] = [];
+      let earlyReply = false;
+      const result = await agentManager.runAgent(agentId, text, undefined,
+        onCaptainReply ? (item) => {
+          if (earlyReply) return;
+          // A subsequent user message seals the captain's portion even
+          // while Pi continues running tools for a watcher wake.
+          if (item.type === "user_message") {
+            const [answer] = repliesInRun(foreground);
+            if (answer) {
+              earlyReply = true;
+              onCaptainReply(answer);
+              return;
+            }
+          }
+          foreground.push(item);
+        } : undefined,
+      );
       const [reply, ...later] = repliesInRun(result.timeline);
-      if (collectFollowups) {
+      if (collectFollowups && !earlyReply) {
         return { finalText: reply ?? result.finalText, followups: later.filter((text) => !isAllClear(text)) };
       }
       for (const text of later) laterReplies.current?.({ agentId, text });
@@ -256,6 +270,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   const snapshots = shareFleetSnapshots(
     (fmHome) => readFleetSnapshot({ root: paths.firstmateRoot, fmHome }),
     {
+      deferRefresh: (fmHome) => primary.pending(fmHome) > 0,
       load(fmHome) {
         try {
           const kept = fleetSnapshotSchema.safeParse(
@@ -463,7 +478,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   let closing = false;
   const prdTimer = setInterval(async () => {
     const home = paths.fmHome;
-    if (closing || checkingPrd || !primary.agentFor(home) || primary.pending(home)) return;
+    if (closing || checkingPrd || !primary.agentFor(home)) return;
     checkingPrd = true;
     const getRequests = () => (work.store.snapshot() as {
       requests: { ref: string; status: string; updatedAt: string }[];
@@ -474,7 +489,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         if (now - at > 10 * 60_000) attemptedPrdRelays.delete(ref);
       }
       const report = await findPrdReport(home, getRequests(), new Set(attemptedPrdRelays.keys()), now);
-      if (!report || closing || primary.pending(home)) return;
+      if (!report || closing) return;
       const isPending = () => getRequests().some((request) =>
         request.ref === report.ref && (request.status === "sent" || request.status === "working"),
       );
@@ -483,6 +498,11 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       const agentId = primary.agentFor(home);
       if (!agentId) return;
       if (report.forwardVerbatim) {
+        // The renderer has saved the dispatch acknowledgement when this
+        // request is working. Its result can now arrive during a wake.
+        if (primary.pending(home) && !getRequests().some((request) =>
+          request.ref === report.ref && request.status === "working",
+        )) return;
         attemptedPrdRelays.set(report.ref, now);
         showUnprompted({ fmHome: home, agentId, text: forwardPrdReport(safeReport) }, true);
         return;

@@ -285,6 +285,7 @@ type PiMcpInjection =
 interface PiPaseoExtensionOptions {
   systemPrompt?: string;
   mcpServers?: Record<string, PiMcpServerConfig>;
+  firstmateResumeStartup?: boolean;
 }
 
 interface PiTempFile {
@@ -614,12 +615,16 @@ async function createPiSessionCopy(sessionFile: string, cwd: string): Promise<Pi
 function createPiPaseoExtensionFile({
   systemPrompt,
   mcpServers = {},
+  firstmateResumeStartup = false,
 }: PiPaseoExtensionOptions): PiTempFile {
   const dir = mkdtempSync(join(tmpdir(), "paseo-pi-extension-"));
   const filePath = join(dir, "paseo-integration.mjs");
   writeFileSync(
     filePath,
     `
+      ${firstmateResumeStartup ? `import { execFile } from "node:child_process";
+      import { join, resolve } from "node:path";` : ""}
+
 	function decodePayload(encoded) {
 	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 	}
@@ -707,6 +712,43 @@ function createPiPaseoExtensionFile({
 	  }));`
         : ""
     }
+
+      ${firstmateResumeStartup ? `
+      // Upstream Pi resume intentionally emits a manual nudge. Run its native
+      // startup once from this Pi process, so it can establish its own lock.
+      let startup;
+      let startupShown = false;
+      const startupAbort = new AbortController();
+      pi.on("session_start", () => {
+        if (startup || !process.env.FM_HOME || !process.env.FM_ROOT_OVERRIDE) return;
+        const root = resolve(process.env.FM_ROOT_OVERRIDE);
+        if (resolve(process.cwd()) !== root) return;
+        startup = new Promise((done) => {
+          execFile(join(root, "bin", "fm-session-start.sh"), [], {
+            cwd: root, timeout: 125000, maxBuffer: 4 * 1024 * 1024,
+            signal: startupAbort.signal,
+          }, (error, stdout) => done({ error: error?.message, stdout }));
+        });
+      });
+      pi.on("session_shutdown", () => startupAbort.abort());
+      pi.on("before_agent_start", async () => {
+        if (!startup || startupShown) return;
+        const result = await startup;
+        if (startupShown || startupAbort.signal.aborted) return;
+        startupShown = true;
+        const complete = !result.error && result.stdout.includes("SESSION START") &&
+          !/READ-ONLY SESSION|STARTUP TRUNCATED/.test(result.stdout);
+        const cue = complete
+          ? "Amun already ran the native session startup to completion in this Pi process. Reuse this digest. Do not rerun startup. If the first watcher arm is required, arm it now."
+          : "The native resume startup attempt could not be confirmed. Report the diagnostic and remain read-only until ownership is verified.";
+        return {
+          message: {
+            customType: "amun-firstmate-resume",
+            content: cue + "\\n\\n" + (result.stdout || result.error || "No startup digest was returned."),
+            display: false,
+          },
+        };
+      });` : ""}
 
 	  pi.on("session_start", async (_event, ctx) => {
 	    emitEntryCapture(ctx, "session_start");
@@ -2672,6 +2714,9 @@ export class PiRpcAgentClient implements AgentClient {
     const paseoExtension = createPiPaseoExtensionFile({
       systemPrompt: composeAgentSystemPrompt(resumeConfig.config),
       mcpServers: mcp?.kind === "builtin" ? mcp.servers : undefined,
+      firstmateResumeStartup:
+        mcpEnv.AMUN_FIRSTMATE_PRIMARY === "1" ||
+        (Boolean(mcpEnv.FM_HOME) && resumeConfig.config.title === "First Mate"),
     });
     const tempFiles = mcpConfigFile ? [mcpConfigFile, paseoExtension] : [paseoExtension];
     const cleanupTempFiles = () => {
