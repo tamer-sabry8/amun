@@ -9,9 +9,25 @@ import path from "node:path";
 
 const maxBytes = 512 * 1024;
 
-/** Absolute Markdown paths a report names, in order and without repeats. */
+/**
+ * The Markdown files a report names, as absolute paths, in order and without
+ * repeats. Reports often give one full path and then a sibling by name alone
+ * ("/…/badge-desk/prd-v0.1.docx and prd-v0.1.md"): a bare file name is read
+ * in the folder of the full path just before it.
+ */
 export function reportedMarkdownPaths(text: string): string[] {
-  const found = text.match(/\/[^\s"'`<>()]+?\.md(?=$|[\s"'`<>(),;:]|\.(?:\s|$))/g) ?? [];
+  const found: string[] = [];
+  let folder: string | null = null;
+  const token = /(\/[^\s"'`<>()]+|[A-Za-z0-9][\w.-]*\.md)(?=$|[\s"'`<>(),;:]|\.(?:\s|$))/g;
+  for (const match of text.matchAll(token)) {
+    const value = match[1]!.replace(/[.,;:]+$/, "");
+    if (value.startsWith("/")) {
+      folder = path.dirname(value);
+      if (value.toLowerCase().endsWith(".md")) found.push(value);
+    } else if (folder && !value.includes("/")) {
+      found.push(path.join(folder, value));
+    }
+  }
   return [...new Set(found)].slice(0, 8);
 }
 

@@ -24,6 +24,19 @@ describe("reportedMarkdownPaths", () => {
   });
 });
 
+describe("reportedMarkdownPaths with a sibling named alone", () => {
+  it("reads the Markdown named after a full .docx path (Badge Desk, 22 November 2026)", () => {
+    expect(
+      reportedMarkdownPaths(
+        "amun-r-05e8b1651352 Badge Desk short PRD v0.1 DRAFT ready: /Users/t/.treehouse/fm/5/firstmate/data/prds/badge-desk/prd-v0.1.docx and prd-v0.1.md. Summary: reasoned from the one-line description",
+      ),
+    ).toEqual(["/Users/t/.treehouse/fm/5/firstmate/data/prds/badge-desk/prd-v0.1.md"]);
+  });
+  it("ignores a bare name with no full path before it", () => {
+    expect(reportedMarkdownPaths("Wrote prd-v0.1.md somewhere.")).toEqual([]);
+  });
+});
+
 describe("documentKind", () => {
   it("tells a PRD and a BRD from other documents", () => {
     expect(documentKind("prd-v0.1", "Sales Prospects - Product Requirements Document")).toBe("prd");
