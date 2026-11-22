@@ -11,10 +11,12 @@ export class ProductDocuments {
   objectives(productId: string) {
     const rows = this.db
       .prepare(
-        `SELECT o.id,o.statement,a.ask AS question,a.blocking_refs AS refs,
+        // An objective without an interview (a PRD the crew wrote for a
+        // chat request) is listed too, with no question and no sources.
+        `SELECT o.id,o.statement,coalesce(a.ask,'') AS question,coalesce(a.blocking_refs,'[]') AS refs,
       (SELECT d.chosen FROM decisions d WHERE d.product_id=o.product_id AND json_extract(d.sources_json,'$[0]')=i.request_id ORDER BY d.rowid DESC LIMIT 1) AS answer
-      FROM objectives o JOIN product_interviews i ON i.objective_id=o.id JOIN attention_items a ON a.id=i.request_id
-      WHERE o.product_id=? ORDER BY o.rowid DESC`,
+      FROM objectives o LEFT JOIN product_interviews i ON i.objective_id=o.id LEFT JOIN attention_items a ON a.id=i.request_id
+      WHERE o.product_id=? AND (i.objective_id IS NULL OR a.id IS NOT NULL) ORDER BY o.rowid DESC`,
       )
       .all(productId) as {
       id: string;

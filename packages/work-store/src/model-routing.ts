@@ -8,6 +8,14 @@ import {
 import { ActionStore } from "./outbox.ts";
 import { bindAction } from "../../domain/src/governance.ts";
 import { AuthoringError } from "./product-documents.ts";
+/**
+ * A product with no allowed models was never restricted by its owner: a
+ * product made from a chat starts with an empty list, and the shipped app has
+ * no screen to fill it. Any model is allowed then; a list, once set, limits.
+ */
+export function modelAllowed(allowed: readonly string[], model: string) {
+  return allowed.length === 0 || allowed.includes(model);
+}
 export class ModelRouting {
   constructor(private db: Database) {}
   record(product: string, id: string, model: string, role: string) {
@@ -137,7 +145,7 @@ export class ModelRouting {
     const model =
       this.list(product).find((r) => r.task === task && r.difficulty === level)
         ?.model ?? fallback;
-    if (!this.policy(product).includes(model))
+    if (!modelAllowed(this.policy(product), model))
       throw new AuthoringError("Choose a model allowed for this product.");
     return model;
   }

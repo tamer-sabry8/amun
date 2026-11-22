@@ -1,4 +1,5 @@
-import { findPrdReport, forwardPrdReport, isPrdRelayReply, prdRelayPrompt } from "./prd-report-relay.js";
+import { findPrdReport, forwardPrdReport, isPrdRelayReply, prdRelayPrompt, type PrdReport } from "./prd-report-relay.js";
+import { crewHome, readCrewDocument, reportedMarkdownPaths } from "./crew-documents.js";
 import { scheduleBlockerChecks } from "./blocker-checks.js";
 import type { IncomingMessage, Server as HTTPServer } from "node:http";
 import type { Duplex } from "node:stream";
@@ -51,6 +52,17 @@ const laterReplies: { current: ((reply: { agentId: string; text: string }) => vo
 };
 import { serveNotionForFirstMate } from "./notion-for-first-mate.js";
 import { serveTrackersForFirstMate } from "./trackers-for-first-mate.js";
+
+
+/** The work contract's limit on an `apply-reply` text. */
+const APPLY_REPLY_LIMIT = 200_000;
+
+/** Where each request's own message is, from the work snapshot. */
+interface RequestLocations {
+  requests: { ref: string; messageId: string }[];
+  messages: { id: string; workAreaId: string }[];
+  chats: { messages: { id: string; workAreaId: string }[] }[];
+}
 
 export const AMUN_WS_PATH = "/amun";
 const FLEET_POLL_MS = 5_000;
@@ -503,6 +515,69 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     { replayState: false },
   );
 
+  // A matched PRD report names the documents PRD wrote. Amun files each
+  // Markdown file inside PRD's own home with that request: in the Library,
+  // and for a product as its next PRD version, where the existing review,
+  // approval and "Generate stories" take over. Approval stays the captain's.
+  const registeredCrewDocuments = new Set<string>();
+  async function registerCrewDocuments(home: string, report: PrdReport): Promise<string[]> {
+    const files = reportedMarkdownPaths(report.text).filter(
+      (file) => !registeredCrewDocuments.has(`${report.ref} ${file}`),
+    );
+    if (!files.length) return [];
+    const crew = await crewHome({ fmHome: home, taskId: "prd" });
+    if (!crew) return [];
+    const snapshot = work.store.snapshot() as RequestLocations;
+    const request = snapshot.requests.find((item) => item.ref === report.ref);
+    const messages = [
+      ...snapshot.messages,
+      ...snapshot.chats.flatMap((chat) => chat.messages),
+    ];
+    const areaId = request
+      ? messages.find((message) => message.id === request.messageId)?.workAreaId
+      : undefined;
+    if (!areaId) return [];
+    const filed: string[] = [];
+    for (const file of files) {
+      registeredCrewDocuments.add(`${report.ref} ${file}`);
+      const document = await readCrewDocument({ file, home: crew });
+      if (!document) continue;
+      // Backticks are escaped so the document cannot close the block early.
+      const block = JSON.stringify({
+        do: "document",
+        request: report.ref,
+        title: document.title,
+        type: document.kind,
+        body: document.markdown,
+      }).replaceAll("`", "\\u0060");
+      if (document.kind === "prd") {
+        work.workspace.registerCrewPrd?.(report.ref, document.markdown, document.title);
+      }
+      const text = "```amun\n" + block + "\n```";
+      // apply-reply takes at most 200,000 characters; a longer document stays
+      // a file, and only a document the store confirms is called filed.
+      if (text.length > APPLY_REPLY_LIMIT) continue;
+      const events = work.store.handle({
+        version: 1,
+        kind: "work",
+        action: "apply-reply",
+        text,
+        workAreaId: areaId,
+        chatId: null,
+        saveText: false,
+      }) as unknown[];
+      const saved = events.some(
+        (event) =>
+          typeof event === "object" &&
+          event !== null &&
+          (event as { kind?: unknown; ok?: unknown }).kind === "work-result" &&
+          (event as { ok?: unknown }).ok === true,
+      );
+      if (saved) filed.push(document.title);
+    }
+    return filed;
+  }
+
   // A known PRD completion can reach Firstmate directly from its native report.
   // The ordinary watcher still handles supervision and uncorrelated reports.
   const attemptedPrdRelays = new Map<string, number>();
@@ -526,6 +601,16 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         request.ref === report.ref && (request.status === "sent" || request.status === "working"),
       );
       if (!isPending()) return;
+      let filed: string[] = [];
+      try {
+        filed = await registerCrewDocuments(home, report);
+        if (filed.length) {
+          for (const ws of wss.clients) send(ws, { event: "work.updated" });
+        }
+      } catch (error) {
+        // Filing is best effort: the report still reaches the captain below.
+        input.logger.warn({ err: error }, "Amun could not file PRD's documents");
+      }
       const safeReport = { ...report, text: work.redactor.text(report.text) };
       const agentId = primary.agentFor(home);
       if (!agentId) return;
@@ -542,7 +627,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       const space = (await spaces.list())[0];
       if (!space || closing || primary.pending(home) || !isPending()) return;
       attemptedPrdRelays.set(report.ref, now);
-      const { reply, followups } = await primary.send(space, prdRelayPrompt(safeReport), true);
+      const { reply, followups } = await primary.send(space, prdRelayPrompt(safeReport, filed), true);
       if (closing) return;
       if (isPrdRelayReply(reply, report.ref) && isPending()) {
         showUnprompted({ fmHome: home, agentId, text: reply }, true);
