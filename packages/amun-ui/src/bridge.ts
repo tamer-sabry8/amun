@@ -7,6 +7,7 @@ import {
 import {
   chatResult,
   backlogResult,
+  trackerDeliveryResult,
   operationResult,
   healthRequest,
   healthResponse,
@@ -232,6 +233,11 @@ export function initializeBridge() {
       const backlog = backlogResult.safeParse(message.data);
       if (backlog.success) {
         for (const listener of eventListeners) listener(backlog.data);
+        return;
+      }
+      const delivery = trackerDeliveryResult.safeParse(message.data);
+      if (delivery.success) {
+        for (const listener of eventListeners) listener(delivery.data);
         return;
       }
       const native = nativePiEvent.safeParse(message.data);

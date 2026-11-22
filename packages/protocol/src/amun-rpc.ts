@@ -301,6 +301,8 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
         browser: z.enum(["edge", "dia"]).optional(),
       }),
       z.object({ action: z.literal("publish"), planId: z.string().min(1).max(128), retry: z.boolean().optional() }),
+      /** What a work area has in Jira and Linear, read back (read only). */
+      z.object({ action: z.literal("delivery"), workAreaId: z.string().min(1).max(128) }),
     ]),
   }),
 ]);

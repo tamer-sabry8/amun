@@ -167,6 +167,7 @@ export class AmunRpcHandler {
     planId?: string;
     retry?: boolean;
     browser?: string;
+    workAreaId?: string;
   }) {
     const trackers = this.deps.trackers;
     if (!trackers) throw new Error("Linear and Jira are not available in this daemon");

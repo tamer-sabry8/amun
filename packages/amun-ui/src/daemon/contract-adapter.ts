@@ -934,6 +934,34 @@ export class ContractAdapter {
       return [result, this.workspace(), this.work()];
     }
     if (message.kind === "workspace") return this.handleWorkspace(message);
+    if (message.kind === "tracker-delivery") {
+      // Read only: what this work area has in Jira and Linear now.
+      const workAreaId = String(message.workAreaId ?? "");
+      const empty = {
+        version: 1,
+        kind: "tracker-delivery-result",
+        workAreaId,
+        items: [],
+        readAt: null,
+        unread: [],
+      };
+      if (!workAreaId) return [empty];
+      const reply = await this.daemon
+        .request<Record<string, unknown>>("trackers.request", {
+          message: { action: "delivery", workAreaId },
+        })
+        .catch(() => null);
+      return [
+        reply
+          ? {
+              ...empty,
+              items: Array.isArray(reply.items) ? reply.items : [],
+              readAt: typeof reply.readAt === "string" ? reply.readAt : null,
+              unread: Array.isArray(reply.unread) ? reply.unread : [],
+            }
+          : empty,
+      ];
+    }
     if (message.kind === "backlog-read" || message.kind === "ado-operation") {
       const reply = await this.daemon
         .request<unknown>("ado.request", {

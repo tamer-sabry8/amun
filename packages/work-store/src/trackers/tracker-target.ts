@@ -120,7 +120,7 @@ function reference(
   return value;
 }
 
-async function jiraSites(session: TrackerSession) {
+export async function jiraSites(session: TrackerSession) {
   const result = await session.call("getAccessibleAtlassianResources", {});
   if (result.isError) throw Error("Jira sites unavailable");
   const resources = obj(obj(toolData(result)).data).resources;
