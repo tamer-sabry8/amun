@@ -23,15 +23,27 @@ let session: Session | null = null;
 const waiting = new Map<string, (result: unknown) => void>();
 let listening = false;
 let contextGeneration = 0;
-/** Drops the conversation and settles every call still waiting on the old one. */
-function resetContext(text: string) {
+/** Ids of sent captain turns, which Firstmate is already answering. */
+const sentTurns = new Set<string>();
+/**
+ * Drops the conversation and settles every call still waiting on the old one.
+ * With `keepTurns`, a captain turn already sent keeps waiting for its answer:
+ * Firstmate is still answering it, and the answer belongs to the chat it was
+ * sent from (a lost answer also loses its rename, client or question card).
+ */
+function resetContext(text: string, keepTurns = false) {
   contextGeneration++;
   session = null;
   priming = null;
   reading = null;
-  const pending = [...waiting.values()];
-  waiting.clear();
-  for (const done of pending) done({ kind: "message", text });
+  const pending = [...waiting.entries()].filter(
+    ([id]) => !(keepTurns && sentTurns.has(id)),
+  );
+  for (const [id] of pending) {
+    waiting.delete(id);
+    sentTurns.delete(id);
+  }
+  for (const [, done] of pending) done({ kind: "message", text });
 }
 function listen() {
   if (listening) return;
@@ -46,6 +58,7 @@ function listen() {
     const wasOpen = !!session || !!priming || waiting.size > 0;
     resetContext(
       "The conversation changed. Read it before sending another message.",
+      true,
     );
     void (wasOpen ? prime() : readSavedModel());
     for (const listener of modelListeners) listener();
@@ -71,6 +84,7 @@ function listen() {
     )
       return;
     waiting.delete(event.data.id);
+    sentTurns.delete(event.data.id);
     done(event.data.result);
   });
 }
@@ -109,6 +123,7 @@ function runOnce(command: string, argument: string) {
           });
         }, 60_000)
       : undefined;
+    if (command === "conversation-send") sentTurns.add(id);
     waiting.set(id, (result) => {
       clearTimeout(timer);
       resolve(result as { kind: string; [key: string]: unknown });
@@ -124,6 +139,7 @@ function runOnce(command: string, argument: string) {
       });
     } catch {
       waiting.delete(id);
+      sentTurns.delete(id);
       clearTimeout(timer);
       resolve({
         kind: "message",
@@ -298,14 +314,33 @@ export async function askFirstmate(
     };
   const result = await run("conversation-send", argument);
   // The turn may or may not have run before the switch: never replace the new
-  // conversation with it, and never send it again on the user's behalf.
-  if (generation !== contextGeneration)
-    return {
-      ok: false,
-      needsProvider: false,
-      reason:
-        "The conversation changed while this message was being sent. Read the conversation before sending it again.",
-    };
+  // conversation with it, and never send it again on the user's behalf. An
+  // answer that did arrive still belongs to the chat that sent it.
+  if (generation !== contextGeneration) {
+    const answered =
+      result.kind === "conversation" &&
+      typeof result.latestReply === "string" &&
+      result.latestReply.trim()
+        ? result.latestReply.trim()
+        : null;
+    return answered
+      ? {
+          ok: true,
+          reply: answered,
+          model: (result.model as string | null) ?? null,
+          followups: Array.isArray(result.followups)
+            ? result.followups.filter(
+                (value): value is string => typeof value === "string",
+              )
+            : [],
+        }
+      : {
+          ok: false,
+          needsProvider: false,
+          reason:
+            "The conversation changed while this message was being sent. Read the conversation before sending it again.",
+        };
+  }
   if (result.kind !== "conversation") {
     const reason =
       typeof result.text === "string" && result.text

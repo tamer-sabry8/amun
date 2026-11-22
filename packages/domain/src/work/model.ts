@@ -312,7 +312,7 @@ export function newWorkNamed(
     );
   const named =
     quoted ??
-    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bfor\s+client\b|\bclient\s*(?:is|:)\b|\bdue\b|\bdeadline\b|\bready\b|\bby\b|$)/i.exec(
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|:\s|\band\b|\bto\b|\bthat\b|\bwhich\b|\bfor\s+client\b|\bclient\s*(?:is|:)\b|\bdue\b|\bdeadline\b|\bready\b|\bby\b|$)/i.exec(
       first,
     );
   // "Create a new project for Gitex to be high priority": the name follows
@@ -674,9 +674,9 @@ export function rfpDetails(text: string, now: Date = new Date()) {
   const end = String.raw`(?=\s*(?:[,.;\n]|$)|\s+(?:and|due|deadline)\b)`;
   const value = String.raw`\s*(?:is|:)?\s*["“]?([^",.;\n]+?)["”]?` + end;
   const client = known(
-    /\bclient\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
+    /\bclient\b\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
       new RegExp(
-        String.raw`\bclient\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline|ready|by|to\s+be|and\s+(?:ready|due|high|low|medium|urgent|top|priority))\b|\s+(?:low|medium|normal|high|top|urgent|critical)[\s-]+priority\b|\s+priority\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
+        String.raw`\bclient\b\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline|ready|by|to\s+be|and\s+(?:ready|due|high|low|medium|urgent|top|priority))\b|\s+(?:low|medium|normal|high|top|urgent|critical)[\s-]+priority\b|\s+priority\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
         "i",
       ).exec(text)?.[1],
   );
