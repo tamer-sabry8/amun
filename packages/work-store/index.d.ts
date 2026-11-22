@@ -55,6 +55,7 @@ export interface WorkspaceLike {
   registerCrewPrd?(
     ref: string,
     markdown: string,
+    title?: string,
   ): { productId: string; objectiveId: string; version: number } | null;
   author?(
     input: unknown,

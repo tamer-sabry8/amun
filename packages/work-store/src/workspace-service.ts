@@ -403,9 +403,10 @@ export class WorkspaceService {
    * one gives the product a PRD objective named after it. Nothing is approved
    * here: approval stays the captain's, in the PRD review. Projects have no
    * PRD, so their documents go to the Library only (null). Saving the same
-   * text again adds no version.
+   * text again adds no version. The PRD is also kept as a product source,
+   * as an uploaded document would be, so story drafting has its evidence.
    */
-  registerCrewPrd(ref: string, markdown: string) {
+  registerCrewPrd(ref: string, markdown: string, title = "PRD") {
     const body = this.redactor.text(markdown).trim();
     if (!body) return null;
     return this.db
@@ -439,6 +440,31 @@ export class WorkspaceService {
         const saved = this.documents
           .objectives(row.productId)
           .find((o) => o.id === objective.id)!.prd!;
+        const hash = createHash("sha256").update(body).digest("hex");
+        if (
+          !this.db
+            .prepare("SELECT 1 FROM sources WHERE product_id=? AND hash=?")
+            .get(row.productId, hash)
+        ) {
+          const sourceId = randomUUID();
+          this.db
+            .prepare(
+              "INSERT INTO sources(id,product_id,kind,external_id,title,retrieved_at,hash) VALUES(?,?,'md',?,?,?,?)",
+            )
+            .run(
+              sourceId,
+              row.productId,
+              ref,
+              this.redactor.text(title).slice(0, 200) || "PRD",
+              new Date().toISOString(),
+              hash,
+            );
+          this.db
+            .prepare(
+              "INSERT INTO source_documents(source_id,body,image) VALUES(?,?,NULL)",
+            )
+            .run(sourceId, body);
+        }
         return {
           productId: row.productId,
           objectiveId: objective.id,

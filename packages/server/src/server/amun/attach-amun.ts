@@ -54,6 +54,9 @@ import { serveNotionForFirstMate } from "./notion-for-first-mate.js";
 import { serveTrackersForFirstMate } from "./trackers-for-first-mate.js";
 
 
+/** The work contract's limit on an `apply-reply` text. */
+const APPLY_REPLY_LIMIT = 200_000;
+
 /** Where each request's own message is, from the work snapshot. */
 interface RequestLocations {
   requests: { ref: string; messageId: string }[];
@@ -547,17 +550,30 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         type: document.kind,
         body: document.markdown,
       }).replaceAll("`", "\\u0060");
-      work.store.handle({
+      if (document.kind === "prd") {
+        work.workspace.registerCrewPrd?.(report.ref, document.markdown, document.title);
+      }
+      const text = "```amun\n" + block + "\n```";
+      // apply-reply takes at most 200,000 characters; a longer document stays
+      // a file, and only a document the store confirms is called filed.
+      if (text.length > APPLY_REPLY_LIMIT) continue;
+      const events = work.store.handle({
         version: 1,
         kind: "work",
         action: "apply-reply",
-        text: "```amun\n" + block + "\n```",
+        text,
         workAreaId: areaId,
         chatId: null,
         saveText: false,
-      });
-      if (document.kind === "prd") work.workspace.registerCrewPrd?.(report.ref, document.markdown);
-      filed.push(document.title);
+      }) as unknown[];
+      const saved = events.some(
+        (event) =>
+          typeof event === "object" &&
+          event !== null &&
+          (event as { kind?: unknown; ok?: unknown }).kind === "work-result" &&
+          (event as { ok?: unknown }).ok === true,
+      );
+      if (saved) filed.push(document.title);
     }
     return filed;
   }

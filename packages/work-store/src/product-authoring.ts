@@ -1,4 +1,4 @@
-import { ModelRouting } from "./model-routing.ts";
+import { modelAllowed, ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
 import { randomUUID } from "node:crypto";
 import type { Database } from "./sqlite.ts";
@@ -55,7 +55,7 @@ export class ProductAuthoring {
       const row = this.db
         .prepare("SELECT allowed_models_json FROM products WHERE id=?")
         .get(productId) as { allowed_models_json: string } | undefined;
-      if (!row || !JSON.parse(row.allowed_models_json).includes(model))
+      if (!row || !modelAllowed(JSON.parse(row.allowed_models_json), model))
         throw new AuthoringError("Choose a model allowed for this product.");
     };
     validate();

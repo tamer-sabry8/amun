@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import { currentModel } from "./firstmate.ts";
 import { parsePrd, prdExtensions, writePrd } from "../prd-markdown.ts";
 import { PrototypeCard } from "./prototype-card.tsx";
 import { code, list, Problem, stack } from "./view-parts.tsx";
@@ -412,7 +413,8 @@ export function PrdView({
     [selection, select] = useState(""),
     [asked, setAsked] = useState(false),
     [sourcesOpen, setSourcesOpen] = useState(false);
-  const model = context.allowedModels[0] ?? "";
+  // A product with no allowed models is unrestricted: use Firstmate's.
+  const model = context.allowedModels[0] ?? currentModel() ?? "firstmate";
   const objective =
     context.objectives.find((o) => o.id === chosen) ?? context.objectives[0];
   if (!objective)

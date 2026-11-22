@@ -103,6 +103,7 @@ import { VersionHistory } from "./document-versions.tsx";
 import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
+  currentModel,
   heldMessage,
   heldQueue,
   observeHeldMessages,
@@ -1762,7 +1763,8 @@ export function WorkSession({
           : null;
       const objective = product?.objectives.find((o) => o.prd) ?? null;
       const prd = objective?.prd ?? null;
-      const model = product?.allowedModels[0] ?? "";
+      // A product with no allowed models is unrestricted: use Firstmate's.
+      const model = product?.allowedModels[0] ?? currentModel() ?? "firstmate";
       const say = (text: string) =>
         work("message", { workAreaId: areaId, role: "firstmate", text });
       if (!productId)
@@ -1784,10 +1786,6 @@ export function WorkSession({
       )
         say(
           `The stories for PRD v${prd.version} are already drafted. Open the PRD to review them.`,
-        );
-      else if (!model)
-        say(
-          "Choose a model for this product under Accounts and models, then ask again.",
         );
       else
         bridge.send({

@@ -29,6 +29,34 @@ function objectives(db: ReturnType<typeof fixture>["db"]) {
 }
 
 describe("a crew PRD for a matched request", () => {
+  it("is also kept once as a product source, so stories can be drafted from it", () => {
+    const { db, workspace } = fixture();
+    workspace.registerCrewPrd(
+      ref,
+      "# Sales Prospects - PRD\n\nFind prospects.",
+      "Sales Prospects - PRD",
+    );
+    workspace.registerCrewPrd(
+      ref,
+      "# Sales Prospects - PRD\n\nFind prospects.",
+      "Sales Prospects - PRD",
+    );
+    expect(
+      db
+        .prepare(
+          "SELECT s.kind,s.external_id AS ref,s.title,d.body FROM sources s JOIN source_documents d ON d.source_id=s.id WHERE s.product_id='p'",
+        )
+        .all(),
+    ).toEqual([
+      {
+        kind: "md",
+        ref,
+        title: "Sales Prospects - PRD",
+        body: "# Sales Prospects - PRD\n\nFind prospects.",
+      },
+    ]);
+  });
+
   it("becomes PRD v1 of the request's product, under an objective named after it, unapproved", () => {
     const { db, workspace } = fixture();
     const saved = workspace.registerCrewPrd(
