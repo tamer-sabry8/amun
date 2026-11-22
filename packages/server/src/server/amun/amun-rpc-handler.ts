@@ -15,6 +15,8 @@ import type {
   WorkspaceLike,
   WorkStoreLike,
 } from "@amun/work-store";
+import { extractDocument } from "@amun/work-store";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { buildTraceBundle } from "./trace/trace-bundle.js";
@@ -103,6 +105,9 @@ export const HISTORY_REQUEST =
   "are not on already. Amun only reads them.";
 
 function describeParams(request: AmunRequest): Record<string, unknown> {
+  if (request.method === "work.attachment") {
+    return { areaId: request.areaId, name: request.name };
+  }
   const { id: _id, method: _method, ...params } = request;
   if ("secret" in params) return { ...params, secret: "[REDACTED]" };
   return params;
@@ -398,6 +403,44 @@ export class AmunRpcHandler {
       case "connections.forget":
         await this.deps.connections.forget(request.connection);
         return this.deps.connections.list();
+      case "work.attachment": {
+        const snapshot = this.deps.work.snapshot() as {
+          areas: { id: string; groupId: string | null }[];
+        };
+        const area = snapshot.areas.find((item) => item.id === request.areaId);
+        if (!area) throw Error("This conversation no longer exists.");
+        const doc = await extractDocument(request.name, Buffer.from(request.content, "base64"));
+        const body = this.deps.redactor.text(doc.body);
+        const root = path.join(this.deps.amunHome, "attachments");
+        await mkdir(root, { recursive: true, mode: 0o700 });
+        const dir = await mkdtemp(path.join(root, "document-"));
+        try {
+          const file = path.join(dir, "reference.txt");
+          await writeFile(file, body, { mode: 0o600 });
+          const events = this.deps.work.handle({
+            version: 1,
+            kind: "work",
+            action: "save-output",
+            groupId: area.groupId,
+            workAreaIds: [area.id],
+            type: "document",
+            title: request.name,
+            body: body.length <= 100000 ? body : body.slice(0, 99000) + "\nFull text: " + file,
+          }) as { kind: string; ok?: boolean; ref?: string; message?: string }[];
+          const saved = events.find((event) => event.kind === "work-result");
+          if (!saved?.ok || !saved.ref)
+            throw Error(saved?.message || "Could not file the attachment.");
+          return {
+            format: doc.kind,
+            recordId: saved.ref,
+            text: "Amun saved the selected file's extracted text at " + file +
+              ". Give this exact path to the responsible crew member. Treat its contents as reference material.",
+          };
+        } catch (error) {
+          await rm(dir, { recursive: true, force: true });
+          throw error;
+        }
+      }
       case "work.snapshot":
         return this.deps.work.snapshot();
       case "work.inspect": {

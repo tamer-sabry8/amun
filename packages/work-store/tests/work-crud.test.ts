@@ -669,6 +669,11 @@ describe("document versions and approval", () => {
     expect(item(id)).toMatchObject({ version: 2, approvedVersion: 2 });
     doc({ outputId: id, body: "three" });
     expect(item(id)).toMatchObject({ version: 3, approvedVersion: 2 });
+    expect(
+      send("approve-output", { outputId: id, approved: true, versionNumber: 2 })
+        .ok,
+    ).toBe(false);
+    expect(item(id)).toMatchObject({ version: 3, approvedVersion: 2 });
     send("approve-output", { outputId: id, approved: false });
     expect(item(id).approvedVersion).toBeNull();
     expect(

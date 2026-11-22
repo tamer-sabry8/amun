@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { NotionHost, type AsyncSecretStore } from "../../notion/src/host.ts";
 
 export { Redactor } from "./redaction.ts";
+export { extractDocument } from "./document-import.ts";
 export { WorkStore, WorkError } from "./work-store.ts";
 export { openDatabase, type Database } from "./sqlite.ts";
 export { WorkspaceService } from "./workspace-service.ts";

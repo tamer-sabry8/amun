@@ -1,3 +1,4 @@
+import { approvalLabel, approvalOf } from "./document-approval.ts";
 // Right rail (Q26, Q57–Q59): Activity · Downloads · Library · Decisions.
 // Library and Decisions open scoped to the active work and can expand into
 // the main workspace.
@@ -446,7 +447,13 @@ export function LibraryPanel({
   const [linking, setLinking] = useState<string | null>(null);
   const view = snapshot.setup.libraryView;
   const groupBy = snapshot.setup.libraryGroupBy;
-  const items: LibraryItem[] = [...snapshot.library, ...extra];
+  const items: LibraryItem[] = [
+    ...snapshot.library.map((item) => ({
+      ...item,
+      status: approvalLabel(approvalOf(item)) || item.status,
+    })),
+    ...extra,
+  ];
   const scope = {
     workAreaId: all ? null : workAreaId,
     groupIds: visibleGroups(snapshot),

@@ -16,6 +16,7 @@ import {
 import { generalConversationName } from "../../../domain/src/work/model.ts";
 import { workspaceSnapshot, type WorkspaceSnapshot } from "@amun/contracts";
 import {
+  workAttachment,
   workCommand,
   workDelegate,
   workSnapshot,
@@ -878,6 +879,52 @@ export class ContractAdapter {
         .request<unknown>("tools.request", { message })
         .catch(() => null);
       return report ? [report] : [];
+    }
+    if (message.kind === "work-attachment") {
+      const file = workAttachment.parse(message);
+      const header = {
+        version: 1,
+        kind: "work-attachment-result",
+        requestId: file.requestId,
+        name: file.name,
+        portion: null,
+      };
+      try {
+        if (file.bytes.length > 8 * 1024 * 1024)
+          throw Error("Choose a file up to 8 MiB.");
+        const pieces: string[] = [];
+        for (let offset = 0; offset < file.bytes.length; offset += 16384)
+          pieces.push(
+            String.fromCharCode(...file.bytes.subarray(offset, offset + 16384)),
+          );
+        const saved = await this.daemon.request<{
+          text: string;
+          format: string;
+          recordId: string;
+        }>("work.attachment", {
+          areaId: file.workAreaId,
+          name: file.name,
+          content: btoa(pieces.join("")),
+        });
+        void this.refresh()
+          .then(() => this.onChange?.())
+          .catch(() => undefined);
+        return [{ ...header, ...saved, read: "all", note: null }];
+      } catch (error) {
+        return [
+          {
+            ...header,
+            format: "",
+            read: "none",
+            text: "",
+            recordId: null,
+            note:
+              error instanceof Error
+                ? error.message
+                : "Could not read this file.",
+          },
+        ];
+      }
     }
     if (message.kind === "content-search") {
       // Read only: Amun's own store and Firstmate's saved steps.

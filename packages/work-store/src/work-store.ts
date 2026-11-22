@@ -2019,6 +2019,16 @@ export class WorkStore {
           throw new WorkError("That document is no longer there.", {
             reason: "missing_output",
           });
+        if (
+          command.versionNumber !== undefined &&
+          command.versionNumber !== Number(row.latest)
+        )
+          throw new WorkError(
+            "The document changed. Open its latest version before approving.",
+            {
+              reason: "stale_version",
+            },
+          );
         this.run(
           "UPDATE library_outputs SET approved_version=?,approved_at=? WHERE id=?",
           command.approved ? Number(row.latest) : null,
