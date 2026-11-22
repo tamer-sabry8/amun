@@ -55,9 +55,18 @@ export async function findPrdReport(
     await file.close();
   }
   for (const line of lines.reverse()) {
-    const match = /^done \[at=(\d+)\]: corr=([0-9a-f]{16}) (.+)$/.exec(line);
+    // PRD writes "corr=…" first or after the request reference
+    // ("done [at=…]: amun-r-… corr=… text"); either order is the same report,
+    // and the pending-reply record below still has to confirm it.
+    const match = /^done \[at=(\d+)\]: (.+)$/.exec(line);
     if (!match) continue;
-    const [, epoch, correlation, body] = match;
+    const [, epoch, rest] = match;
+    const corr = /(?:^|\s)corr=([0-9a-f]{16})(?=\s|$)/.exec(rest);
+    if (!corr) continue;
+    const correlation = corr[1];
+    const body = (rest.slice(0, corr.index) + rest.slice(corr.index + corr[0].length))
+      .replace(/\s+/g, " ")
+      .trim();
     if (Math.abs(now - Number(epoch) * 1000) > reportWindowMs) continue;
     const refs = new Set(body.match(/\bamun-r-[0-9a-f]{12}\b/g));
     if (refs.size !== 1) continue;

@@ -86,3 +86,41 @@ describe("the relay of a PRD whose documents Amun filed", () => {
     expect(prdRelayPrompt(report)).not.toContain("already filed");
   });
 });
+
+it("matches a report whose request reference comes before corr= (Badge Desk v0.2, 22 November 2026)", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "amun-prd-relay-"));
+  try {
+    const state = path.join(home, "state");
+    const status = path.join(state, "prd.status");
+    const pending = path.join(state, "pending-replies");
+    await mkdir(pending, { recursive: true });
+    const ref = "amun-r-c6c62c4ce969";
+    const corr = "7084efcf8aab5d44";
+    const epoch = Math.floor(Date.now() / 1000);
+    await writeFile(
+      path.join(pending, corr),
+      [
+        "schema=fm-pending-reply.v1",
+        `corr_id=${corr}`,
+        "task_id=prd",
+        `parent_status=${status}`,
+        `request_summary=${ref} Revise the PRD`,
+        `delivered_epoch=${epoch}`,
+      ].join("\n"),
+    );
+    await writeFile(
+      status,
+      `done [at=${epoch}]: ${ref} corr=${corr} Badge Desk PRD v0.2 DRAFT: /h/prd-v0.2.docx and prd-v0.2.md\n`,
+    );
+    const requests = [{ ref, status: "working", updatedAt: new Date().toISOString() }];
+    await expect(findPrdReport(home, requests, new Set())).resolves.toEqual({
+      ref,
+      text: `${ref} Badge Desk PRD v0.2 DRAFT: /h/prd-v0.2.docx and prd-v0.2.md`,
+    });
+    // A corr that is not the confirmed dispatch still matches nothing.
+    await writeFile(status, `done [at=${epoch}]: ${ref} corr=ffffffffffffffff Other\n`);
+    await expect(findPrdReport(home, requests, new Set())).resolves.toBeNull();
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
