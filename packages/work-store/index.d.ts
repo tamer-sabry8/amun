@@ -1,4 +1,8 @@
 // Hand-written surface the daemon uses; the bundle in dist/ is built from src/.
+export declare function extractDocument(
+  name: string,
+  bytes: Buffer,
+): Promise<{ kind: string; body: string; image: Buffer | null }>;
 export interface WorkStoreLike {
   inspectNavigation?(
     ref: string,

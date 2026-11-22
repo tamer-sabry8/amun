@@ -2070,6 +2070,9 @@ export function WorkSession({
     // Every request gets a stable reference; Firstmate repeats it in its
     // backlog links, hand-offs and replies (owner, 20 November 2026).
     const ref = newRequestRef();
+    const attachedDocuments = files.flatMap((file) =>
+      file.recordId ? [file.recordId] : [],
+    );
     const saved = await workAsync("message", {
       workAreaId: areaId,
       role: "you",
@@ -2080,11 +2083,17 @@ export function WorkSession({
             ref,
             label: asked.label,
             fields: asked.fields,
-            documentIds: (
-              (asked.record as { documents?: { id: string }[] }).documents ?? []
-            ).map((item) => item.id),
+            documentIds: [
+              ...new Set([
+                ...(
+                  (asked.record as { documents?: { id: string }[] })
+                    .documents ?? []
+                ).map((item) => item.id),
+                ...attachedDocuments,
+              ]),
+            ],
           }
-        : { kind: "request", ref },
+        : { kind: "request", ref, documentIds: attachedDocuments },
     });
     if (saved.ok && saved.ref)
       await workAsync("register-request", {
@@ -3208,7 +3217,9 @@ export function WorkSession({
                     <span className="row">
                       <Icon name="prd" width={18} height={18} />
                       <strong className="grow">{item.title}</strong>
-                      <span className="tag">{item.status}</span>
+                      <span className="tag">
+                        {approvalLabel(approvalOf(item)) || item.status}
+                      </span>
                     </span>
                     <span className="note">
                       {typeName(item.type)} · opens beside the conversation
@@ -3639,20 +3650,24 @@ export function WorkSession({
                       )}
                     </>
                   ) : (
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setMenu(null);
-                        work("approve-output", {
-                          outputId: output.id,
-                          approved: approvalOf(output).state !== "approved",
-                        });
-                      }}
-                    >
-                      {approvalOf(output).state === "approved"
-                        ? "Remove approval"
-                        : "Mark as approved"}
-                    </button>
+                    (openVersion === null ||
+                      openVersion === output.version) && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          work("approve-output", {
+                            outputId: output.id,
+                            versionNumber: output.version,
+                            approved: approvalOf(output).state !== "approved",
+                          });
+                        }}
+                      >
+                        {approvalOf(output).state === "approved"
+                          ? "Remove approval"
+                          : "Mark as approved"}
+                      </button>
+                    )
                   )}
                   <button
                     role="menuitem"

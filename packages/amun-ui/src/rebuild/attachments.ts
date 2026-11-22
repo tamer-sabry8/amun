@@ -10,6 +10,7 @@ import { pastedImage } from "../pasted-image.ts";
 export interface Attached {
   id: string;
   name: string;
+  recordId: string | null;
   state: "reading" | "ready";
   read: "all" | "part" | "none";
   portion: number | null;
@@ -59,6 +60,7 @@ export function useAttachments(workAreaId: string) {
       if (!event.success) return;
       patch(event.data.requestId, {
         state: "ready",
+        recordId: event.data.recordId,
         read: event.data.read,
         portion: event.data.portion,
         text: event.data.text,
@@ -76,6 +78,7 @@ export function useAttachments(workAreaId: string) {
         {
           id,
           name: file.name,
+          recordId: null,
           state: "reading",
           read: "all",
           portion: null,

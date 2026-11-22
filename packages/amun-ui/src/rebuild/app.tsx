@@ -886,7 +886,8 @@ export function App() {
       );
       return;
     }
-    openWork(areaId, undefined, { kind: "output", id: item.id });
+    const origin = areaId === layout.workAreaId ? chatId : null;
+    openWork(areaId, undefined, { kind: "output", id: item.id }, origin);
     dispatch({ type: "rail", item: null });
   };
   /** Documents delivered or referenced in one chat, for Library's This chat. */
@@ -905,7 +906,8 @@ export function App() {
           } | null;
           if (card?.kind === "delivered" && card.outputId)
             return [card.outputId];
-          if (card?.kind === "ask-card") return card.documentIds ?? [];
+          if (card?.kind === "ask-card" || card?.kind === "request")
+            return card.documentIds ?? [];
           return [];
         }),
       ),

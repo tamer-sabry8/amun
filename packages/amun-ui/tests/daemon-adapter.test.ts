@@ -150,6 +150,7 @@ class FakeDaemon implements AmunTransport {
       "primary.send": { reply: "Aye, Captain." },
       "connections.list": this.connections,
       "connections.save": this.connections[0],
+      "connections.check": { ...this.connections[0], status: "ready" },
       "trace.history": { asked: true, ledger: false, archive: false },
       "crew.peek": { live: true, text: "running tests\n12 passed" },
       "trace.export": {
@@ -819,6 +820,20 @@ describe("daemon contract adapter", () => {
       kind: "auth-notice",
       message: "Azure DevOps refused the token.",
     });
+    daemon.connections[0]!.status = "configured";
+    const list = { version: 1, kind: "auth", action: "list" };
+    const results = await Promise.all([
+      adapter.handle(list),
+      adapter.handle(list),
+    ]);
+    for (const [result] of results)
+      expect(result).toMatchObject({
+        kind: "auth-connections",
+        connections: [{ id: "ado-1", status: "ready" }],
+      });
+    expect(
+      daemon.calls.filter((call) => call.method === "connections.check"),
+    ).toHaveLength(1);
   });
 
   it("answers a diagnostics request with the daemon's trace bundle", async () => {

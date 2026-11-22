@@ -982,7 +982,11 @@ export const workCommand = z.discriminatedUnion("action", [
     versionNumber: z.number().int().min(1),
   }),
   // Only the owner's title menu sends this; nothing else approves a document.
-  act("approve-output", { outputId: id, approved: z.boolean() }),
+  act("approve-output", {
+    outputId: id,
+    approved: z.boolean(),
+    versionNumber: z.number().int().min(1).optional(),
+  }),
   // Only the owner's title menu sends this; it never publishes or merges.
   act("record-acceptance", {
     outputId: id,

@@ -276,10 +276,13 @@ export function Composer({
       return;
     }
     takeOff(sendButton.current?.firstElementChild);
-    onSend(commandAsRequest(text) ?? text, files);
+    // The parent can consume a document seed and remount this composer during
+    // onSend. Clear the stored draft before that remount reads it.
+    if (draftKey) rememberDraft(draftKey, "");
     setPlus(false);
     setDraft("");
     setFiles([]);
+    onSend(commandAsRequest(text) ?? text, files);
   };
   const keys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen) {
