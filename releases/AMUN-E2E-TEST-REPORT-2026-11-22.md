@@ -4,16 +4,16 @@ Tested by Claude Code through computer use on the installed Mac app, following `
 
 ## 1. DMG build and installation receipt
 
-| Item | Result |
-| --- | --- |
-| Supplied DMG `Amun-PR56-65fd8f8-arm64.dmg` | **Crashed at every launch.** dyld refused `Electron Framework` ("different Team IDs"): signed ad-hoc with hardened runtime on. Do not distribute it. |
-| Fix | PR [tamer-sabry8/amun#57](https://github.com/tamer-sabry8/amun/pull/57): `npm run dist:mac:beta`, plus an after-sign check that fails ad-hoc builds with hardened runtime. |
-| Rebuilt DMG | `~/Documents/ChatGPT/Amun/releases/Amun-0.16.1-adhocfix-65fd8f8-arm64.dmg`, SHA-256 `53789141ae723e81238120e665c821b25ffde68d1cba010e4b0ec34f4209a223`, build 155 s |
-| Signature (as built, unmodified) | `flags=0x2(adhoc)`, `codesign --verify --deep --strict` OK, launches to Home |
-| Installed `Amun.app` size | 538,400,948 bytes (sum of file sizes), **+667,396 bytes (+0.67 MB)** vs 537,733,552 baseline |
-| Memory | 487 MiB (5 processes) ~20 s after launch; **671 MiB (7 processes) after ~1 h of the tests, over the 500 MiB budget** (Firstmate/Pi processes excluded) |
-| Startup time | Not measured precisely (window-count probe lacked Accessibility permission). First window appeared within a few seconds. |
-| Crashes after the fix | None |
+| Item                                       | Result                                                                                                                                                                     |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Supplied DMG `Amun-PR56-65fd8f8-arm64.dmg` | **Crashed at every launch.** dyld refused `Electron Framework` ("different Team IDs"): signed ad-hoc with hardened runtime on. Do not distribute it.                       |
+| Fix                                        | PR [tamer-sabry8/amun#57](https://github.com/tamer-sabry8/amun/pull/57): `npm run dist:mac:beta`, plus an after-sign check that fails ad-hoc builds with hardened runtime. |
+| Rebuilt DMG                                | `~/Documents/ChatGPT/Amun/releases/Amun-0.16.1-adhocfix-65fd8f8-arm64.dmg`, SHA-256 `53789141ae723e81238120e665c821b25ffde68d1cba010e4b0ec34f4209a223`, build 155 s        |
+| Signature (as built, unmodified)           | `flags=0x2(adhoc)`, `codesign --verify --deep --strict` OK, launches to Home                                                                                               |
+| Installed `Amun.app` size                  | 538,400,948 bytes (sum of file sizes), **+667,396 bytes (+0.67 MB)** vs 537,733,552 baseline                                                                               |
+| Memory                                     | 487 MiB (5 processes) ~20 s after launch; **671 MiB (7 processes) after ~1 h of the tests, over the 500 MiB budget** (Firstmate/Pi processes excluded)                     |
+| Startup time                               | Not measured precisely (window-count probe lacked Accessibility permission). First window appeared within a few seconds.                                                   |
+| Crashes after the fix                      | None                                                                                                                                                                       |
 
 ## 2. Jira and Linear status
 
@@ -24,29 +24,29 @@ Tested by Claude Code through computer use on the installed Mac app, following `
 
 ## 3. Timing: Firstmate and crew (wall clock, Gulf time)
 
-| Test | Step | Start | Finish | Duration |
-| --- | --- | --- | --- | --- |
-| 1 Sales Prospects | Folder created from Home | 16:03:20 | 16:03:23 | ≤3 s |
-| 1 | Firstmate first reply (Pi cold start, dispatch PRD + Researcher) | 16:03:20 | 16:06:57 | **3 m 37 s** |
-| 1 | "Don't interview me" message delivered to Firstmate (queued, no indicator) | 16:07:46 | 16:13:57 | **6 m 11 s** |
-| 1 | Researcher: Sellbird review | ~16:07 | 16:09:36 | ~2 m 40 s |
-| 1 | PRD v0.1 reverse-engineered | 16:14:05 | 16:17:19 | 3 m 14 s |
-| 1 | Jira request → Firstmate answer | 16:19:08 | 16:20:16 | 1 m 08 s |
-| 1 | Epics and stories + Jira CSV (10 epics, 32 stories) | 16:19:08 | 16:21:41 | 2 m 33 s |
-| 2 Invoiced | Firstmate dispatch | 16:21:28 | 16:22:38 | 1 m 10 s |
-| 2 | Researcher: billr review | 16:22:38 | 16:23:21 | 43 s |
-| 2 | PRD: BRD v0.1 (written before the review landed) | 16:22:38 | 16:23:41 | 63 s |
-| 2 | Rename + Linear request → answer | 16:27:28 | 16:28:10 | 42 s |
-| 2 | Epics and stories + Linear CSV | 16:27:28 | 16:29:19 | 1 m 51 s |
-| 3 Mira | Firstmate dispatch (started Product Marketing) | 16:27:37 | 16:35:29 | **7 m 52 s** |
-| 3 | Research + competitive analysis | — | 16:36:14 | — |
-| 3 | Pricing analysis and recommendation | — | 16:36:21 | — |
-| 3 | Epics, stories, Sprint 1–2 plan | — | 16:36:36 | — |
-| 3 | Wireframes (7 screens, LTR/RTL) | — | 16:39:54 | ~4 m 25 s after dispatch |
-| 3 | Launch request → reply | 16:46:10 | 16:48:10 | 2 m |
-| 3 | Launch simulation package (verdict: no-go) | 16:46:10 | 16:49:23 | 3 m 13 s |
-| 4 | Six queued messages answered | 16:46:42–16:47:56 | 16:48:21–16:49:11 | 1.5–2.5 m each, not first-in-first-out |
-| 4 | General question in a product chat | 16:49:05 (delivered) | 16:49:11 | 6 s |
+| Test              | Step                                                                       | Start                | Finish            | Duration                               |
+| ----------------- | -------------------------------------------------------------------------- | -------------------- | ----------------- | -------------------------------------- |
+| 1 Sales Prospects | Folder created from Home                                                   | 16:03:20             | 16:03:23          | ≤3 s                                   |
+| 1                 | Firstmate first reply (Pi cold start, dispatch PRD + Researcher)           | 16:03:20             | 16:06:57          | **3 m 37 s**                           |
+| 1                 | "Don't interview me" message delivered to Firstmate (queued, no indicator) | 16:07:46             | 16:13:57          | **6 m 11 s**                           |
+| 1                 | Researcher: Sellbird review                                                | ~16:07               | 16:09:36          | ~2 m 40 s                              |
+| 1                 | PRD v0.1 reverse-engineered                                                | 16:14:05             | 16:17:19          | 3 m 14 s                               |
+| 1                 | Jira request → Firstmate answer                                            | 16:19:08             | 16:20:16          | 1 m 08 s                               |
+| 1                 | Epics and stories + Jira CSV (10 epics, 32 stories)                        | 16:19:08             | 16:21:41          | 2 m 33 s                               |
+| 2 Invoiced        | Firstmate dispatch                                                         | 16:21:28             | 16:22:38          | 1 m 10 s                               |
+| 2                 | Researcher: billr review                                                   | 16:22:38             | 16:23:21          | 43 s                                   |
+| 2                 | PRD: BRD v0.1 (written before the review landed)                           | 16:22:38             | 16:23:41          | 63 s                                   |
+| 2                 | Rename + Linear request → answer                                           | 16:27:28             | 16:28:10          | 42 s                                   |
+| 2                 | Epics and stories + Linear CSV                                             | 16:27:28             | 16:29:19          | 1 m 51 s                               |
+| 3 Mira            | Firstmate dispatch (started Product Marketing)                             | 16:27:37             | 16:35:29          | **7 m 52 s**                           |
+| 3                 | Research + competitive analysis                                            | —                    | 16:36:14          | —                                      |
+| 3                 | Pricing analysis and recommendation                                        | —                    | 16:36:21          | —                                      |
+| 3                 | Epics, stories, Sprint 1–2 plan                                            | —                    | 16:36:36          | —                                      |
+| 3                 | Wireframes (7 screens, LTR/RTL)                                            | —                    | 16:39:54          | ~4 m 25 s after dispatch               |
+| 3                 | Launch request → reply                                                     | 16:46:10             | 16:48:10          | 2 m                                    |
+| 3                 | Launch simulation package (verdict: no-go)                                 | 16:46:10             | 16:49:23          | 3 m 13 s                               |
+| 4                 | Six queued messages answered                                               | 16:46:42–16:47:56    | 16:48:21–16:49:11 | 1.5–2.5 m each, not first-in-first-out |
+| 4                 | General question in a product chat                                         | 16:49:05 (delivered) | 16:49:11          | 6 s                                    |
 
 Stalls: Firstmate cold start (~3.5 min); messages sent while Firstmate is mid-turn wait silently (up to 6 min); every screen switch costs a Firstmate turn (see B3).
 
