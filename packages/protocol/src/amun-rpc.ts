@@ -297,6 +297,8 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
       z.object({
         action: z.enum(["status", "connect", "check", "disconnect", "cancel", "targets"]),
         provider: z.enum(["linear", "jira"]),
+        /** The captain's sign-in browser, for connect. */
+        browser: z.enum(["edge", "dia"]).optional(),
       }),
       z.object({ action: z.literal("publish"), planId: z.string().min(1).max(128), retry: z.boolean().optional() }),
     ]),

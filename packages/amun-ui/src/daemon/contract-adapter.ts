@@ -170,6 +170,46 @@ export interface DaemonConnection {
   message: string | null;
 }
 
+interface TrackerStatus {
+  status?: string;
+  message?: string | null;
+  identity?: { sites?: { url?: string | null; name?: string }[] } | null;
+}
+
+/**
+ * A Jira or Linear status as the Tools card reads it: "auth-status" with the
+ * id jira-mcp / linear-mcp, and where the sign-in leads once it works.
+ */
+export function trackerStatusEvent(
+  provider: "jira" | "linear",
+  status: TrackerStatus,
+) {
+  const sites = (status.identity?.sites ?? [])
+    .map((site) =>
+      (site.url ?? site.name ?? "")
+        .replace(/^https:\/\/(linear\.app\/)?/, "")
+        .replace(/\/$/, ""),
+    )
+    .filter(Boolean);
+  const known = ["missing", "configured", "checking", "ready", "error"];
+  const value = known.includes(String(status.status))
+    ? String(status.status)
+    : "error";
+  const detail =
+    value === "ready" && sites.length
+      ? provider === "jira"
+        ? sites.join(", ")
+        : `Workspace ${sites.join(", ")}`
+      : "";
+  return {
+    version: 1,
+    kind: "auth-status",
+    id: `${provider}-mcp`,
+    status: value,
+    ...(detail ? { detail: detail.slice(0, 512) } : {}),
+  };
+}
+
 /** What a connection check found, in words the captain can act on. */
 export function describeAdo(view: DaemonConnection): string {
   if (view.status !== "ready")
@@ -1287,6 +1327,11 @@ export class ContractAdapter {
   /** Connections: Azure DevOps through the daemon (token kept in Keychain). */
   private async handleAuth(message: Message): Promise<unknown[]> {
     const action = String(message.action);
+    if (
+      action.startsWith("tracker-") &&
+      (message.provider === "jira" || message.provider === "linear")
+    )
+      return this.trackerCard(action, message.provider, message.browser);
     if (action === "list") return [await this.authConnections(true)];
     if (action === "readiness")
       return this.accountStatus(String(message.provider));
@@ -1334,9 +1379,61 @@ export class ContractAdapter {
   }
 
   /**
+   * The Jira and Linear cards in Settings › Tools. A finished browser sign-in
+   * arrives later from the daemon as an "auth-status" renderer event.
+   */
+  private async trackerCard(
+    action: string,
+    provider: "jira" | "linear",
+    browser: unknown,
+  ): Promise<unknown[]> {
+    const name = provider === "jira" ? "Jira" : "Linear";
+    const daemonAction = {
+      "tracker-connect": "connect",
+      "tracker-check": "check",
+      "tracker-cancel": "cancel",
+      "tracker-disconnect": "disconnect",
+      "tracker-status": "status",
+    }[action];
+    if (!daemonAction) return [this.notice(UNAVAILABLE)];
+    try {
+      const status = await this.daemon.request<TrackerStatus>(
+        "trackers.request",
+        {
+          message: {
+            action: daemonAction,
+            provider,
+            ...(daemonAction === "connect"
+              ? { browser: browser === "dia" ? "dia" : "edge" }
+              : {}),
+          },
+        },
+      );
+      const event = trackerStatusEvent(provider, status);
+      if (daemonAction === "disconnect")
+        return [
+          event,
+          this.notice(
+            `${name} disconnected. Its saved sign-in was removed from this Mac. Items already published stay in ${name}.`,
+          ),
+        ];
+      return status.status === "error" || status.status === "missing"
+        ? daemonAction === "status"
+          ? [event]
+          : [event, this.notice(status.message ?? `${name} is not connected.`)]
+        : [event];
+    } catch {
+      return [
+        trackerStatusEvent(provider, { status: "error" }),
+        this.notice(`Amun could not reach ${name}. Try again in a moment.`),
+      ];
+    }
+  }
+
+  /**
    * Linear and Jira sign in through each provider's hosted MCP server in the
    * browser; the grant stays in the daemon's Keychain. A finished sign-in
-   * arrives later as a renderer event ("tracker-status").
+   * arrives later as a renderer event ("auth-status").
    */
   private async trackerAuth(
     action: string,

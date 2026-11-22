@@ -126,6 +126,8 @@ export interface TrackerHostOptions {
 
 /** One Linear and one Jira connection for this Amun workspace. */
 export class TrackerHost {
+  /** The browser the captain chose for each provider's sign-in. */
+  private readonly browsers = new Map<TrackerId, "edge" | "dia">();
   private readonly entries = new Map<
     TrackerId,
     {
@@ -166,7 +168,11 @@ export class TrackerHost {
               (async (p: HostedProvider, u: string) => {
                 await promisify(execFile)(
                   "/usr/bin/open",
-                  hostedBrowserArgs(p, options.browser?.() ?? "edge", u),
+                  hostedBrowserArgs(
+                    p,
+                    this.browsers.get(id) ?? options.browser?.() ?? "edge",
+                    u,
+                  ),
                   { timeout: 10_000 },
                 );
               })
@@ -219,11 +225,16 @@ export class TrackerHost {
    * Signs in through the browser (`connect`) or checks the saved grant
    * (`check`), and reads who it is. Nothing is written to the tracker.
    */
-  async connect(provider: TrackerId, interactive: boolean) {
+  async connect(
+    provider: TrackerId,
+    interactive: boolean,
+    browser: "edge" | "dia" = "edge",
+  ) {
     const entry = this.entry(provider);
+    this.browsers.set(provider, browser);
     try {
       await this.withGrant(provider, async () => {
-        if (interactive) await entry.connection.connect("edge", true);
+        if (interactive) await entry.connection.connect(browser, true);
         else
           await entry.connection.use(async (session) => {
             entry.identity = await identify(provider, session);

@@ -56,6 +56,24 @@ export const authCommand = z.discriminatedUnion("action", [
       "notion-status",
     ]),
   }),
+  // Jira and Linear: browser sign-in through each provider's hosted MCP
+  // server, like Notion. The grant stays in the daemon's Keychain.
+  z.strictObject({
+    ...base,
+    action: z.literal("tracker-connect"),
+    provider: z.enum(["jira", "linear"]),
+    browser: z.enum(["edge", "dia"]),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.enum([
+      "tracker-check",
+      "tracker-cancel",
+      "tracker-disconnect",
+      "tracker-status",
+    ]),
+    provider: z.enum(["jira", "linear"]),
+  }),
   z.strictObject({ ...base, action: z.literal("readiness"), provider }),
   z.strictObject({ ...base, action: z.literal("list") }),
   z.strictObject({
@@ -104,6 +122,8 @@ export const authEvent = z.discriminatedUnion("kind", [
     kind: z.literal("auth-status"),
     id,
     status,
+    /** Where a sign-in leads, e.g. the Jira site; never a credential. */
+    detail: z.string().max(512).optional(),
   }),
   z.strictObject({
     version: z.literal(1),

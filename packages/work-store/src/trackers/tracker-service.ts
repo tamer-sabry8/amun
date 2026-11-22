@@ -36,6 +36,7 @@ type Message = {
   provider?: unknown;
   planId?: unknown;
   retry?: unknown;
+  browser?: unknown;
 };
 
 export class TrackerService {
@@ -139,7 +140,11 @@ export class TrackerService {
         break;
       case "connect":
       case "check":
-        status = await this.host.connect(provider, action === "connect");
+        status = await this.host.connect(
+          provider,
+          action === "connect",
+          m.browser === "dia" ? "dia" : "edge",
+        );
         break;
       case "disconnect":
         status = await this.host.disconnect(provider);

@@ -124,6 +124,32 @@ function errorCode(error: unknown): string {
 
 const isTrackerKind = (kind: string): kind is "linear" | "jira" => kind === "linear" || kind === "jira";
 
+/**
+ * A Linear or Jira status in the renderer's own "auth-status" shape: the id
+ * the Tools card reads, and where the sign-in leads (never a credential).
+ */
+export function trackerStatusEvent(status: Record<string, unknown>): Record<string, unknown> {
+  const provider = status.provider === "jira" ? "jira" : "linear";
+  const identity = status.identity as { sites?: { url?: string | null; name?: string }[] } | null | undefined;
+  const sites = (identity?.sites ?? [])
+    .map((site) => (site.url ?? site.name ?? "").replace(/^https:\/\/(linear\.app\/)?/, "").replace(/\/$/, ""))
+    .filter(Boolean);
+  const detail =
+    status.status === "ready" && sites.length
+      ? provider === "jira"
+        ? sites.join(", ")
+        : `Workspace ${sites.join(", ")}`
+      : undefined;
+  const known = ["missing", "configured", "checking", "ready", "error"];
+  return {
+    version: 1,
+    kind: "auth-status",
+    id: `${provider}-mcp`,
+    status: known.includes(String(status.status)) ? status.status : "error",
+    ...(detail ? { detail: detail.slice(0, 512) } : {}),
+  };
+}
+
 /** Transport-free dispatcher so the same handler serves WebSocket and tests. */
 export class AmunRpcHandler {
   /** One-time requests to the First Mate that are being answered now. */
@@ -135,13 +161,22 @@ export class AmunRpcHandler {
    * Linear or Jira. A browser sign-in can take minutes, so it answers
    * "checking" at once and the result follows as a renderer event.
    */
-  private async tracker(message: { action: string; provider?: string; planId?: string; retry?: boolean }) {
+  private async tracker(message: {
+    action: string;
+    provider?: string;
+    planId?: string;
+    retry?: boolean;
+    browser?: string;
+  }) {
     const trackers = this.deps.trackers;
     if (!trackers) throw new Error("Linear and Jira are not available in this daemon");
     if (message.action === "connect") {
       void trackers.handle(message).then(
-        (status) => this.deps.emit?.({ version: 1, ...status }),
-        () => this.deps.emit?.({ version: 1, kind: "tracker-status", provider: message.provider, status: "error", identity: null, message: "Sign-in did not complete." }),
+        (status) => this.deps.emit?.(trackerStatusEvent(status)),
+        () =>
+          this.deps.emit?.(
+            trackerStatusEvent({ provider: message.provider, status: "error", identity: null }),
+          ),
       );
       return { kind: "tracker-status", provider: message.provider, status: "checking", identity: null, message: null };
     }

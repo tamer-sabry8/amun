@@ -18,9 +18,15 @@ function handlerWith(owned: Set<string>) {
       forget: async () => undefined,
     },
     trackers: {
-      handle: async (message: unknown) => {
+      handle: async (message: { provider?: string }) => {
         calls.push(message);
-        return { kind: "tracker-status", provider: "linear", status: "ready", identity: null, message: null };
+        return {
+          kind: "tracker-status",
+          provider: message.provider ?? "linear",
+          status: "ready",
+          identity: { user: null, sites: [{ id: "c", name: "acme", url: "https://acme.atlassian.net" }] },
+          message: null,
+        };
       },
       owns: (planId: string) => owned.has(planId),
       publish: async (planId: string) => {
@@ -54,7 +60,10 @@ describe("Linear and Jira over Amun RPC", () => {
     expect(response).toMatchObject({ ok: true, result: { kind: "tracker-status", status: "checking" } });
     await settle();
     expect(calls).toEqual([{ action: "connect", provider: "jira" }]);
-    expect(emitted).toEqual([expect.objectContaining({ kind: "tracker-status", status: "ready" })]);
+    // The finished sign-in reaches the Tools card in its own shape.
+    expect(emitted).toEqual([
+      { version: 1, kind: "auth-status", id: "jira-mcp", status: "ready", detail: "acme.atlassian.net" },
+    ]);
     expect(ado).toEqual([]);
   });
 
