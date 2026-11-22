@@ -37,11 +37,7 @@ The beta is ad-hoc signed for Apple-chip Macs; it is not notarized. From the rep
 
 ```sh
 npm ci
-npm run build:desktop-inputs
-cd packages/desktop && npm run build:main
-CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config electron-builder.yml \
-  --mac dmg --arm64 --publish never \
-  -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false
+npm run dist:mac:beta
 ```
 
-Hardened runtime must be off for an ad-hoc-signed build: macOS refuses to load Electron in an ad-hoc-signed app with it on.
+Hardened runtime must be off for an ad-hoc-signed build: macOS refuses to load Electron in an ad-hoc-signed app with it on. `dist:mac:beta` sets this, and the after-sign check fails any ad-hoc build that has hardened runtime on.
