@@ -2,22 +2,23 @@
 
 ## Summary
 
+Read the [Amun rules](../../Amun_rules.md) for the captain’s standing expectations. The handoff records implementation, verification, open work, and decision history.
+
 - **What this is.** Amun was rebuilt on branch `claude/project-thread-3te02r` (PR #33).
   - The UI is the same as the old Amun.
   - Underneath it sit the Paseo daemon and Tamer's own Firstmate.
 - **Who decides what.** Every product decision below came from Tamer, answered one question at a time on 18 November 2026. Each question had multiple choices and one recommended option.
-- **Firstmate is never changed.** `vendor/firstmate` is a pristine copy of upstream, and CI checks this on every push. Amun only reads Firstmate's files, and only acts through the First Mate.
 - **Where it stands now.** PR #33 (the rebuild), PR #35 and PR #36 are merged into `main`. Tamer tested `main` on his Mac on 18 November 2026; what that found, what was fixed and what to do next are in the next section.
 
 This file was first written for the PR #33 merge. Later work adds to it; nothing in it is historical unless it says so.
 
 ## Where things stand and what to do next
 
-Newest first. Read the 20 November 2026 afternoon update before anything else, then "Read this first: Firstmate is the only path".
+For the integration details, see [Firstmate integration](#firstmate-integration). The updates below record the work at the time each was written.
 
 ### Update, 20 November 2026, evening: the chat workflow (branch `claude/amun-chat-ux-20261120`)
 
-Read this first if your work touches chats, the sidebar, Firstmate's card, search or deliveries. The owner's brief is `AMUN-CHAT-UX-CLAUDE-HANDOFF.md` in his Amun releases folder. He approved every screen on `docs/preview/2026-11-20-chat-ux/index.html` ("approved all", 20 November 2026). His decisions on request references and the installed-size limit are in `AGENTS.md`, "Chat workflow".
+Read this first if your work touches chats, the sidebar, Firstmate's card, search or deliveries. The owner's brief is `AMUN-CHAT-UX-CLAUDE-HANDOFF.md` in his Amun releases folder. He approved every screen on `docs/preview/2026-11-20-chat-ux/index.html` ("approved all", 20 November 2026). The [Amun rules](../../Amun_rules.md) cover request references and installed size.
 
 What is built:
 
@@ -59,27 +60,10 @@ Read this section first. It is written for an agent that has not seen the sessio
 
 `docs/HANDOFF-NEXT-AGENT.md` is out of date (13 November, old `apps/` layout). This file is the current handoff.
 
-#### The rules, in one place
+#### Decisions superseded in this session
 
-These are Tamer's. `AGENTS.md` has the full text; these are the ones that decide most work.
-
-1. **Firstmate is the only path.** Tamer is the captain and talks only to Firstmate. Firstmate delegates all real work to its second mates and crew, watches them, and reports back. Amun never starts, messages, stops or supervises crew, never creates worktrees, and never writes into the Firstmate home. `vendor/firstmate` stays untouched; CI fails if it changes. See "Read this first: Firstmate is the only path" below.
-2. **Every AI request goes through Firstmate through Pi.** No separate router model, no embedding model, no second agent.
-3. **Almost every on-screen action is told to Firstmate** (new, 20 November 2026; details below). Moving between screens is not.
-4. **Every UI change needs Tamer's approval before it is built.** Show the real current screen beside the proposal in Lavish (`lavish-axi <file>`, then `lavish-axi poll <file>` as a tracked background job), say which workflow it enables, and wait. Run UI work through the `/impeccable` skill. Approval of a workflow is not approval of its look.
-5. **Design preferences.** Plain, friendly words, never technical ones. Reuse what a screen already has. Add nothing to the prompt box. Desktop app: wide layouts. Text must never be cut off, overlap or wrap badly; he checks this closely. Draw previews large.
-6. **Ask one question at a time**, with choices and a recommended option.
-7. **Report honestly:** what was run, what was not, what is unverified.
-8. **Sign-ins are Tamer's.** Never type credentials.
-9. **Migrations are append-only.** There are 45 after this branch.
-10. **Do not reopen pull request 10.** Do not start the Roadmap redesign (see below) or the neumorphic redesign (T022c) without asking.
-11. **Merging:** wait for CI on the final commit, resolve the Codex reviewer's comments, merge with a merge commit, and ask before the first merge of a session.
-
-Withdrawn rules, do not restore:
-
-- **20 November 2026: "signing in does not authorize publishing" and the exact-content review that went with it** are removed from `AGENTS.md` at Tamer's instruction. **The code still asks before it publishes** to Notion and Azure DevOps (reviewed plans). He was asked whether the code should stop asking too, for Notion only or not at all; **not answered yet. Do not change publishing behaviour until he answers.**
-- 20 November 2026: the rule that a Claude subscription is used only through Claude Code (see pull request 45 below).
-- 19 November 2026: `/stow` is not offered.
+- Tamer withdrew the blanket sign-in and exact-content review wording on 20 November 2026. At that point the Notion and Azure DevOps code still used reviewed plans. See the [Amun rules](../../Amun_rules.md) for current approval scope.
+- Tamer withdrew the Claude Code-only restriction for Claude subscriptions on 20 November 2026. PR #45 documents the Pi path below.
 
 #### What Tamer asked for in this session, and where each item stands
 
@@ -308,9 +292,9 @@ Not checked with his real Firstmate: that it closes a ticked task, defers to the
 
 Until this is in his build, a reminder can be closed by telling Firstmate in any chat: "Close the reminder moca-pilot-group: it is done."
 
-#### Tasks under projects, and initiatives (asked, not designed)
+#### Project tasks and standalone work
 
-Tamer asked for tasks under a project with a tick box to complete them, and tasks that belong to no project ("initiatives"). Today a task in Amun is its own work area beside projects, and Firstmate keeps its own task list (tasks-axi). Pull request 46 only ticks off Firstmate's reminders. Where project tasks live and how they line up with Firstmate's list is a larger change; ask him one question at a time before designing it.
+Tamer asked for tasks under a project with a tick box to complete them. See [Rule 31](../../Amun_rules.md#terminology) for the name of standalone work. The existing standalone work area uses the internal `task` type. Firstmate keeps its own task list in `tasks-axi`. PR #46 handled completing Firstmate’s reminders. Project task storage and its relationship with Firstmate’s list remain open.
 
 #### Pi updated to 1.5.2
 
@@ -483,10 +467,6 @@ To repeat the isolated walk: build with `npm run build -w @amun/work-store && np
 - Whether to turn on the first-run wizard, and whether its picks go to Firstmate.
 - Which connector comes first.
 
-### The number one rule
-
-**Everything starts with Firstmate and goes through Firstmate, no matter what.** Tamer restated this on 18 November 2026 for all the work below. If a feature would start, steer, stop, resume, fork or replay an agent any other way, stop and ask him first. The single exception he has approved is the Council's Chair (decision 21).
-
 ### What happened on 18 November 2026
 
 | Pull request | What it did                                                                                                                                                                                                                                   | State  |
@@ -568,15 +548,9 @@ Branch `claude/amun-handoff-work-20261119` (PR #38). The only visible changes ar
 
 Not tested on a Mac with real Pi: all three behaviour changes above are unit-tested only. Check on the Mac: ask the First Mate for a heartbeat and see its reply in "Chat with Firstmate"; restart Amun and see the earlier conversation continue; ask for real work in a conversation and see a secondmate or crewmate appear on the Agents screen.
 
-## Read this first: Firstmate is the only path
+## Firstmate integration
 
-**For the next developer or LLM:** Amun is a window onto Tamer's Firstmate. It is not a second orchestrator. Every agent, every piece of crew work, every worktree and every decision goes through Firstmate. Paseo is plumbing: it hosts the First Mate process, carries messages between it and the UI, and stores Amun's data. If a change would start, steer or stop work any other way, it is the wrong direction. Ask Tamer before making it.
-
-### Why
-
-- **Firstmate already does this job, and does it well.** Its watcher, status files, supervision ladder, captain holds and treehouse worktrees only know about crew that Firstmate started. Work started anywhere else is invisible to it, so nothing supervises it, nothing reports on it, and its decisions never reach the captain.
-- **Tamer wants to keep upgrading Firstmate from upstream.** So `vendor/firstmate` stays a pristine `git subtree` (decision 3, and `firstmate-layer/README.md`). CI fails if anything under it changes (`scripts/check-firstmate-pristine.sh`). Amun's additions live in `firstmate-layer/` and `packages/server/src/server/amun/`.
-- **The First Mate decides where rules and agents go, not Amun.** Amun never writes into the Firstmate home. That covers `captain.md`, `secondmates.md`, `config/crew-dispatch.json`, memory and backlog files. Amun relays the captain's words, and the First Mate files them.
+The watcher, status files, supervision ladder, captain holds, and treehouse worktrees track work started by Firstmate. Amun-specific additions live in `firstmate-layer/` and `packages/server/src/server/amun/`. `scripts/check-firstmate-pristine.sh` checks the upstream subtree in CI.
 
 ### How the pieces fit
 
@@ -614,23 +588,11 @@ Pi (the First Mate) ──runs──▶ Firstmate scripts in the home (fm-spawn,
 
 Amun's own data, such as products, mapped sources, PRDs, conversations and avatar choices, lives in Amun's work store under `~/.amun`. Amun may write that freely.
 
-### Do
+### Integration references
 
-- Route every change to crew, agents, rules or backlog through the First Mate (`primary.send`) or through Firstmate's own scripts.
-- Read Firstmate state through its scripts (`fm-fleet-snapshot.sh --json`, `fm-peek.sh`), or read `state/` and `data/` without writing to them.
-- Keep `vendor/firstmate` pristine. Update it only with `git subtree pull`.
-- When a Paseo feature looks useful, check it against Firstmate first, and ask Tamer one question at a time with a recommended option. Decision 19 is the model: worktrees and profiles didn't conflict, but the agent tools did.
-- When Paseo adds a built-in tool, put it on the kept or blocked list in `first-mate-tools.ts`. A test forces this choice.
-
-### Don't
-
-- Don't start, message, cancel or kill agents with Paseo's `create_agent`, `send_agent_prompt`, `kill_agent` or similar, from the UI or from the First Mate.
-- Don't create worktrees with Paseo (`create_workspace`). Crew get treehouse worktrees from `fm-spawn`.
-- Don't use Paseo schedules that start agents (`create_schedule`). Use a heartbeat to the First Mate instead.
-- Don't use Paseo agent profiles to pick models for crew. Firstmate's `config/crew-dispatch.json` does that, and the First Mate owns it.
-- Don't write into the Firstmate home, and don't edit anything under `vendor/firstmate`.
-- Don't start a second First Mate for the same home. Firstmate allows one live primary per home, and `PrimarySessions` keeps exactly one.
-- Don't bypass the First Mate to answer holds. `answerHoldDirect` exists, but it is off by default and needs Tamer's approval to turn on.
+- `fm-fleet-snapshot.sh --json` and `fm-peek.sh` expose Firstmate state for read-only views.
+- `first-mate-tools.ts` contains the kept and blocked Paseo tool lists. A test checks coverage when Paseo adds a built-in tool.
+- `PrimarySessions` tracks the primary session for each home. `answerHoldDirect` is off by default.
 
 ## What Amun manages: the objects and the flows
 
@@ -668,8 +630,6 @@ Amun is a product manager's workspace. The product source of truth is Tamer's R1
 7. **Portfolio and updates (J7).** The captain sees progress and blockers across products, and drafts stakeholder updates from cited records.
 8. **Memory, tasks and reminders (J8).** The captain syncs selected memory to Notion, keeps personal and work tasks, and gets reminders.
 
-Every outward action needs the captain's approval: publishing, sprint commitments, merges and sending. Amun never invents an action a provider does not have.
-
 ## Connectors still to add
 
 Every connector follows the Firstmate-only path and Tamer's sign-in policy (`AGENTS.md`, "Connector authentication"):
@@ -701,7 +661,7 @@ Ask Tamer which connector comes first before building, one question at a time.
 1. **Get `main`.** `git clone https://github.com/tamer-sabry8/amun && cd amun`, or `git checkout main && git pull` in an existing clone.
 2. **Install.** Use Node 22.13 or later (`.node-version` pins the CI version; the work store uses `node:sqlite`). Run `npm ci`.
 3. **Firstmate's tools.** `vendor/firstmate` needs `tmux` or `herdr`, `treehouse`, `tasks-axi`, `jq` and `git` on your PATH. Amun checks for them and shows the install command for any missing tool (`checkHostTools` in `packages/server/src/server/amun/primary-session.ts`).
-4. **Your Firstmate home.** Amun uses `~/Projects/firstmate` by default. To use another folder, set `AMUN_FIRSTMATE_HOME`. Amun never writes rules into that folder.
+4. **Your Firstmate home.** Amun uses `~/Projects/firstmate` by default. To use another folder, set `AMUN_FIRSTMATE_HOME`.
 5. **Pi.** Install Pi and sign in once. The First Mate runs as `pi --mode rpc`, so no terminal window opens.
 6. **Build and run the daemon.** Run `npm run build:server`, then `npm start`. The daemon listens on `127.0.0.1:6767`, and Amun's RPC is at `ws://127.0.0.1:6767/amun`. Set `PASEO_LISTEN` to change the port.
 7. **Run the UI.** Run `cd packages/amun-ui && npx vite build && npx vite preview --port 6768`, then open `http://127.0.0.1:6768/index.html?daemon=ws://127.0.0.1:6767/amun`. For the desktop app, run `cd packages/desktop && npm run dev`.
@@ -763,7 +723,6 @@ Each decision lists:
   - Use your own install
 - **Answer:** Pristine git subtree plus an Amun layer.
 - **Why:** Firstmate stays byte-for-byte identical to upstream and updates with one command. Amun's additions live outside it, in `firstmate-layer/` and `packages/server/src/server/amun/`.
-- **Rule:** Tamer's rule is "never change Firstmate". `scripts/check-firstmate-pristine.sh` enforces it in CI.
 
 ### 4. Delivery tools
 
@@ -1019,15 +978,6 @@ Still open from this round: a new First Mate agent is created each time the daem
 Two more fixes went into PR #36 after its review: a task that Firstmate holds again after it was answered is shown as a new question, not as already answered (`settleHoldAnswers` in `packages/amun-ui/src/daemon/contract-adapter.ts`), and `/stow` is refused (see "Open items").
 
 What is still open is listed once, under "Where things stand and what to do next".
-
-## Standing rules from Tamer
-
-- Everything starts with Firstmate and goes through Firstmate, no matter what. This is the number one rule (restated 18 November 2026).
-- Ask one question at a time, with multiple choices and a recommended option, before any code or workflow change.
-- Never modify Firstmate. It must stay updatable from upstream.
-- Any UI or UX change uses the impeccable skill and needs approval of a before/after preview.
-- The final UI must match his screenshots of the old Amun. Every red annotation is fixed and self-tested.
-- Paseo features must not conflict with Firstmate, especially worktrees and agent profiles.
 
 ## Built so far
 
