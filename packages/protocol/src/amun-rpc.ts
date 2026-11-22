@@ -146,7 +146,9 @@ export type BoardColumn = z.infer<typeof boardColumnSchema>;
 
 // --- Connections (Azure DevOps first; secrets stay in the daemon's Keychain) --
 
-export const connectionKindSchema = z.enum(["ado", "github", "notion", "obsidian"]);
+// Linear and Jira sign in through their hosted MCP servers in the browser:
+// connections.save starts that sign-in and takes no secret.
+export const connectionKindSchema = z.enum(["ado", "github", "notion", "obsidian", "linear", "jira"]);
 export const connectionSchema = z.object({
   kind: connectionKindSchema,
   baseUrl: z.string().url().max(2048),
@@ -241,7 +243,8 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
     id: z.string(),
     method: z.literal("connections.save"),
     connection: connectionSchema,
-    secret: z.string().min(1).max(65536),
+    /** Azure DevOps: the personal access token. Linear and Jira: none. */
+    secret: z.string().min(1).max(65536).optional(),
   }),
   z.object({ id: z.string(), method: z.literal("connections.check"), connection: connectionSchema }),
   z.object({ id: z.string(), method: z.literal("connections.forget"), connection: connectionSchema }),
@@ -284,6 +287,20 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   // commands). Sign-in is Notion's hosted MCP server in an external browser;
   // answers that need the browser or the network arrive as renderer.event.
   z.object({ id: z.string(), method: z.literal("notion.request"), message: z.record(z.string(), z.unknown()) }),
+  // Linear and Jira: status, browser sign-in, check, disconnect, the places a
+  // plan can name, and publishing a plan the captain already approved.
+  z.object({
+    id: z.string(),
+    method: z.literal("trackers.request"),
+    message: z.discriminatedUnion("action", [
+      z.object({ action: z.literal("list") }),
+      z.object({
+        action: z.enum(["status", "connect", "check", "disconnect", "cancel", "targets"]),
+        provider: z.enum(["linear", "jira"]),
+      }),
+      z.object({ action: z.literal("publish"), planId: z.string().min(1).max(128), retry: z.boolean().optional() }),
+    ]),
+  }),
 ]);
 export type AmunRequest = z.infer<typeof amunRequestSchema>;
 export type AmunMethod = AmunRequest["method"];

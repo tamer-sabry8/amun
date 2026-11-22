@@ -136,3 +136,34 @@ export declare function openNotion(
   opened: OpenedWorkStore,
   options: { root: string; workspace: string; secrets: NotionSecretStore },
 ): NotionLike;
+/** Linear or Jira connection status; never the grant. */
+export interface TrackerStatusLike {
+  provider: "linear" | "jira";
+  status: "missing" | "configured" | "checking" | "ready" | "error";
+  identity: {
+    user: string | null;
+    sites: { id: string; name: string; url: string | null }[];
+  } | null;
+  message: string | null;
+}
+/** Linear and Jira: hosted MCP sign-in, and publishing of approved plans. */
+export interface TrackersLike {
+  /**
+   * { action: "list" | "status" | "connect" | "check" | "disconnect" |
+   * "cancel" | "targets", provider } or { action: "publish", planId, retry }.
+   */
+  handle(message: unknown): Promise<Record<string, unknown>>;
+  /** True when the plan goes to Linear or Jira. */
+  owns(planId: string): boolean;
+  /** Publishes an approved Linear or Jira plan; the work store's events. */
+  publish(planId: string, retry?: boolean): Promise<unknown[]>;
+  /** Looks up writes a crash left uncertain; never sends anything new. */
+  recover(): Promise<unknown[]>;
+  /** Read only: the sites, projects, boards, sprints, teams and cycles a plan can name. */
+  targets(provider: "linear" | "jira"): Promise<string>;
+  stop(): void;
+}
+export declare function openTrackers(
+  opened: OpenedWorkStore,
+  options: { root: string; workspace: string; secrets: NotionSecretStore },
+): TrackersLike;
