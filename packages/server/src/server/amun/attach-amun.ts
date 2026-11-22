@@ -21,6 +21,7 @@ import {
   openAdo,
   openCouncil,
   openNotion,
+  openTrackers,
   openWorkStore,
   recordFirstMateReply,
 } from "@amun/work-store";
@@ -50,6 +51,7 @@ const laterReplies: { current: ((reply: { agentId: string; text: string }) => vo
   current: null,
 };
 import { serveNotionForFirstMate } from "./notion-for-first-mate.js";
+import { serveTrackersForFirstMate } from "./trackers-for-first-mate.js";
 
 
 /** Where each request's own message is, from the work snapshot. */
@@ -267,6 +269,13 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     workspace: "amun",
     secrets: keychainSecretStore(),
   });
+  // Linear and Jira sign in through their hosted MCP servers; each grant is
+  // one Keychain entry for this workspace and provider.
+  const trackers = openTrackers(work, {
+    root: path.join(paths.amunHome, "trackers"),
+    workspace: "amun",
+    secrets: keychainSecretStore(),
+  });
   // The Council keeps its advisors, sessions and questions in Amun's own home.
   const council = openCouncil(work, {
     root: path.join(paths.amunHome, "roast-room"),
@@ -316,6 +325,10 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     tools: work.tools,
     council,
     notion,
+    trackers,
+    workChanged: () => {
+      for (const ws of wss.clients) send(ws, { event: "work.updated" });
+    },
     emit: (message) => {
       const event: AmunEvent = { event: "renderer.event", message };
       for (const ws of wss.clients) send(ws, event);
@@ -348,6 +361,20 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
   } catch (error) {
     input.logger.warn({ err: error }, "Notion for the First Mate not available");
   }
+  // The First Mate sees Linear and Jira status and plan targets (read only).
+  let trackersForFirstMate: ReturnType<typeof serveTrackersForFirstMate> | null = null;
+  try {
+    trackersForFirstMate = serveTrackersForFirstMate({ amunHome: paths.amunHome, trackers });
+  } catch (error) {
+    input.logger.warn({ err: error }, "Linear and Jira for the First Mate not available");
+  }
+  // A Linear or Jira write a crash left unconfirmed is looked up, never resent.
+  void trackers.recover().then(
+    (events) => {
+      if (events.length) for (const ws of wss.clients) send(ws, { event: "work.updated" });
+    },
+    (error: unknown) => input.logger.warn({ err: error }, "Linear and Jira recovery did not finish"),
+  );
   const wss = new WebSocketServer({ noServer: true, maxPayload: 12 * 1024 * 1024 });
   const watched = new Map<WebSocket, Set<string>>();
   const lastSent = new Map<string, string>();
@@ -648,6 +675,8 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       council.stop();
       notionForFirstMate?.close();
       notion.stop();
+      trackersForFirstMate?.close();
+      trackers.stop();
       work.close();
       input.httpServer.off("upgrade", onUpgrade);
       for (const ws of wss.clients) ws.close();

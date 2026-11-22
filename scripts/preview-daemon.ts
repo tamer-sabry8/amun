@@ -259,6 +259,14 @@ const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
   "fleet.snapshot": () => ({ tasks: [] }),
   "holds.list": () => [],
   "connections.list": () => [],
+  // Jira and Linear: nothing connected in the preview.
+  "trackers.request": (params) => ({
+    kind: "tracker-status",
+    provider: (params.message as { provider?: string } | undefined)?.provider ?? "jira",
+    status: "missing",
+    identity: null,
+    message: null,
+  }),
   "models.list": () => ({
     current: "preview",
     models: [{ id: "preview", label: "Preview (no model)" }],

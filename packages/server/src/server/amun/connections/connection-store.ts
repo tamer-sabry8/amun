@@ -5,7 +5,9 @@ import path from "node:path";
 import { adoCollectionUrl, patIsWellFormed, probeAdo, type AdoProject, type FetchLike } from "./ado-probe.js";
 import type { SecretStore } from "./secret-store.js";
 
-export type ConnectionKind = "ado" | "github" | "notion" | "obsidian";
+// Linear and Jira are listed for the protocol, but they sign in through the
+// tracker host (hosted MCP), never through this store.
+export type ConnectionKind = "ado" | "github" | "notion" | "obsidian" | "linear" | "jira";
 
 export interface Connection {
   kind: ConnectionKind;

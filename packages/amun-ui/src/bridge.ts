@@ -38,6 +38,8 @@ interface BridgeState {
   connectionsLoaded: boolean;
   connections: Extract<AuthEvent, { kind: "auth-connections" }>["connections"];
   modelStatus: Record<string, string>;
+  /** Where a connected sign-in leads (Jira site, Linear workspace). */
+  statusDetail: Record<string, string>;
   prompt: Extract<AuthEvent, { kind: "auth-prompt" }> | null;
   notice: string;
   search: { id: string; kind: string; title: string }[];
@@ -50,6 +52,7 @@ let state: BridgeState = {
   connectionsLoaded: false,
   connections: [],
   modelStatus: {},
+  statusDetail: {},
   prompt: null,
   notice: "",
   search: [],
@@ -91,7 +94,12 @@ export function initializeBridge() {
       clearTimeout(timer);
       port?.close();
       port = undefined;
-      update({ status: "Reconnecting", prompt: null, modelStatus: {} });
+      update({
+        status: "Reconnecting",
+        prompt: null,
+        modelStatus: {},
+        statusDetail: {},
+      });
       for (const listener of eventListeners) listener({ kind: "service-lost" });
       return;
     }
@@ -163,6 +171,10 @@ export function initializeBridge() {
         else
           update({
             modelStatus: { ...state.modelStatus, [event.id]: event.status },
+            statusDetail: {
+              ...state.statusDetail,
+              [event.id]: event.detail ?? "",
+            },
             ...(["checking", "configured", "ready", "cancelled"].includes(
               event.status,
             )

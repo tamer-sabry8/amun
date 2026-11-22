@@ -6,9 +6,24 @@ export async function createOAuthLoopback(options: {
   issuer: string;
   port?: number;
   timeoutMs?: number;
+  /**
+   * Defaults to true. False only for an issuer that does not advertise
+   * `authorization_response_iss_parameter_supported`: an absent `iss` is then
+   * accepted, but a different one is still refused.
+   */
+  requireIss?: boolean;
 }) {
   const issuer = new URL(options.issuer);
-  if (issuer.protocol !== "https:" || issuer.origin !== options.issuer)
+  // An issuer is an origin (Notion, Linear) or an https URL with a path
+  // (Atlassian), never with credentials, a query or a fragment.
+  if (
+    issuer.protocol !== "https:" ||
+    issuer.username ||
+    issuer.password ||
+    issuer.search ||
+    issuer.hash ||
+    (issuer.origin !== options.issuer && issuer.href !== options.issuer)
+  )
     throw Error("Invalid authorization issuer");
   const port = options.port ?? 0;
   const timeout = options.timeoutMs ?? 600_000;
@@ -84,7 +99,9 @@ export async function createOAuthLoopback(options: {
     if (
       supplied.length !== expected.length ||
       !timingSafeEqual(supplied, expected) ||
-      query.get("iss") !== options.issuer
+      (query.has("iss") || options.requireIss !== false
+        ? query.get("iss") !== options.issuer
+        : false)
     )
       return bad();
     const value = query.get("code");
