@@ -12,6 +12,7 @@ import type {
   NotionLike,
   Redactor,
   ToolsServiceLike,
+  TrackersLike,
   WorkspaceLike,
   WorkStoreLike,
 } from "@amun/work-store";
@@ -64,6 +65,10 @@ export interface AmunRpcDeps {
   modelChoice?: FirstMateModelChoice;
   /** Notion: sign-in, destination, disconnect and linked memory. */
   notion?: NotionLike;
+  /** Linear and Jira: hosted MCP sign-in and publishing of approved plans. */
+  trackers?: TrackersLike;
+  /** Tells every UI the work store changed (a plan's results landed). */
+  workChanged?: () => void;
   /** Sends the renderer a message after its request was answered. */
   emit?: (message: Record<string, unknown>) => void;
   /** The Council (Roast Room). */
@@ -117,12 +122,88 @@ function errorCode(error: unknown): string {
   return error instanceof Error && error.name !== "Error" ? error.name : "InternalError";
 }
 
+const isTrackerKind = (kind: string): kind is "linear" | "jira" => kind === "linear" || kind === "jira";
+
+/**
+ * A Linear or Jira status in the renderer's own "auth-status" shape: the id
+ * the Tools card reads, and where the sign-in leads (never a credential).
+ */
+export function trackerStatusEvent(status: Record<string, unknown>): Record<string, unknown> {
+  const provider = status.provider === "jira" ? "jira" : "linear";
+  const identity = status.identity as { sites?: { url?: string | null; name?: string }[] } | null | undefined;
+  const sites = (identity?.sites ?? [])
+    .map((site) => (site.url ?? site.name ?? "").replace(/^https:\/\/(linear\.app\/)?/, "").replace(/\/$/, ""))
+    .filter(Boolean);
+  const detail =
+    status.status === "ready" && sites.length
+      ? provider === "jira"
+        ? sites.join(", ")
+        : `Workspace ${sites.join(", ")}`
+      : undefined;
+  const known = ["missing", "configured", "checking", "ready", "error"];
+  return {
+    version: 1,
+    kind: "auth-status",
+    id: `${provider}-mcp`,
+    status: known.includes(String(status.status)) ? status.status : "error",
+    ...(detail ? { detail: detail.slice(0, 512) } : {}),
+  };
+}
+
 /** Transport-free dispatcher so the same handler serves WebSocket and tests. */
 export class AmunRpcHandler {
   /** One-time requests to the First Mate that are being answered now. */
   private readonly onceInFlight = new Set<string>();
 
   constructor(private readonly deps: AmunRpcDeps) {}
+
+  /**
+   * Linear or Jira. A browser sign-in can take minutes, so it answers
+   * "checking" at once and the result follows as a renderer event.
+   */
+  private async tracker(message: {
+    action: string;
+    provider?: string;
+    planId?: string;
+    retry?: boolean;
+    browser?: string;
+  }) {
+    const trackers = this.deps.trackers;
+    if (!trackers) throw new Error("Linear and Jira are not available in this daemon");
+    if (message.action === "connect") {
+      void trackers.handle(message).then(
+        (status) => this.deps.emit?.(trackerStatusEvent(status)),
+        () =>
+          this.deps.emit?.(
+            trackerStatusEvent({ provider: message.provider, status: "error", identity: null }),
+          ),
+      );
+      return { kind: "tracker-status", provider: message.provider, status: "checking", identity: null, message: null };
+    }
+    if (message.action === "publish" && message.planId) {
+      if (!trackers.owns(message.planId)) return { kind: "tracker-publish", planId: message.planId, handled: false };
+      this.publishTracked(message.planId, message.retry === true);
+      return { kind: "tracker-publish", planId: message.planId, handled: true };
+    }
+    return trackers.handle(message);
+  }
+
+  /** Publishes in the background; the updated work snapshot is pushed after. */
+  private publishTracked(planId: string, retry: boolean) {
+    void this.deps.trackers
+      ?.publish(planId, retry)
+      .then((events) => {
+        if (events.length) this.deps.workChanged?.();
+      })
+      .catch((error: unknown) => {
+        this.deps.trace.record({
+          source: "amun",
+          kind: "tracker-publish-failed",
+          planId,
+          message: this.deps.redactor.text(error instanceof Error ? error.message : String(error)).slice(0, 300),
+        });
+      });
+  }
 
   async handleRaw(raw: unknown): Promise<AmunResponse> {
     const parsed = amunRequestSchema.safeParse(raw);
@@ -397,10 +478,17 @@ export class AmunRpcHandler {
       case "connections.list":
         return this.deps.connections.list();
       case "connections.save":
+        if (isTrackerKind(request.connection.kind))
+          return this.tracker({ action: "connect", provider: request.connection.kind });
+        if (!request.secret) throw new Error("Paste the personal access token to connect.");
         return this.deps.connections.save(request.connection, request.secret);
       case "connections.check":
+        if (isTrackerKind(request.connection.kind))
+          return this.tracker({ action: "check", provider: request.connection.kind });
         return this.deps.connections.check(request.connection);
       case "connections.forget":
+        if (isTrackerKind(request.connection.kind))
+          return this.tracker({ action: "disconnect", provider: request.connection.kind });
         await this.deps.connections.forget(request.connection);
         return this.deps.connections.list();
       case "work.attachment": {
@@ -457,8 +545,19 @@ export class AmunRpcHandler {
           (await this.deps.primary.send(space, prompt)).reply, request.space
         );
       }
-      case "work.command":
-        return this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
+      case "work.command": {
+        const events = this.deps.work.handle({ ...request.command, version: 1, kind: "work" });
+        // The captain approved a Linear or Jira plan: publish exactly what was
+        // approved. Anything the store refused was not approved and is skipped.
+        const planId = request.command.planId;
+        if (
+          request.command.action === "approve-plan" &&
+          typeof planId === "string" &&
+          this.deps.trackers?.owns(planId)
+        )
+          this.publishTracked(planId, false);
+        return events;
+      }
       case "work.search": {
         const snapshot = this.deps.work.snapshot() as { setup?: { activeGroupId?: string | null }; areas?: { id: string; groupId: string | null }[] };
         const group = snapshot.setup?.activeGroupId ?? null;
@@ -512,6 +611,8 @@ export class AmunRpcHandler {
           (message) => this.deps.emit?.(message),
         );
       }
+      case "trackers.request":
+        return this.tracker(request.message);
       case "council.request": {
         if (!this.deps.council) throw new Error("The Council is not available in this daemon");
         return this.deps.council.handle({ ...request.message, version: 1, kind: "council" });

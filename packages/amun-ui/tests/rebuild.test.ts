@@ -1420,7 +1420,8 @@ describe("renaming from the chat", () => {
   it("is in what Firstmate is told, and plans no longer offer Amun as a place", () => {
     expect(amunProtocol).toContain('{"do":"rename","name":"…"}');
     expect(amunProtocol).toContain("needs no approval");
-    expect(amunProtocol).toContain('"destination":"ado|notion"');
+    expect(amunProtocol).toContain('"destination":"ado|notion|jira|linear"');
+    expect(amunProtocol).not.toContain('"destination":"ado|notion|amun');
   });
 });
 

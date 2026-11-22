@@ -10,6 +10,7 @@ import { ToolsService } from "./tools-service.ts";
 import { CouncilHost } from "../../council/src/host.ts";
 import { fileURLToPath } from "node:url";
 import { NotionHost, type AsyncSecretStore } from "../../notion/src/host.ts";
+import { TrackerService } from "./trackers/tracker-service.ts";
 
 export { Redactor } from "./redaction.ts";
 export { extractDocument } from "./document-import.ts";
@@ -115,5 +116,23 @@ export function openNotion(
       run: (command, provider) => workspace.memorySync.run(command, provider),
       snapshot: () => workspace.snapshot(),
     },
+  });
+}
+
+export { TrackerService } from "./trackers/tracker-service.ts";
+
+/**
+ * Linear and Jira over the same work store: browser sign-in through each
+ * provider's hosted MCP server (grant in `secrets`, the Keychain), and
+ * publishing of plans the captain approved for either, with read-back.
+ */
+export function openTrackers(
+  opened: OpenedWorkStore,
+  options: { root: string; workspace: string; secrets: AsyncSecretStore },
+): TrackerService {
+  const { db, store, redactor } = opened;
+  return new TrackerService(db, store, {
+    ...options,
+    registerSecret: (value) => redactor.register(value),
   });
 }

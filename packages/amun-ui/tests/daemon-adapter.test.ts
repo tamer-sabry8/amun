@@ -219,6 +219,43 @@ class FakeDaemon implements AmunTransport {
           : "missing",
         reason: null,
       } as T;
+    if (method === "trackers.request") {
+      const message = params.message as { action: string; provider: string };
+      return (
+        message.action === "connect"
+          ? {
+              provider: message.provider,
+              status: "checking",
+              identity: null,
+              message: null,
+            }
+          : message.action === "disconnect"
+            ? {
+                provider: message.provider,
+                status: "missing",
+                identity: null,
+                message: null,
+              }
+            : {
+                provider: message.provider,
+                status: "ready",
+                identity: {
+                  user: null,
+                  sites: [
+                    {
+                      id: "x",
+                      name: "acme",
+                      url:
+                        message.provider === "jira"
+                          ? "https://acme.atlassian.net"
+                          : "https://linear.app/acme",
+                    },
+                  ],
+                },
+                message: null,
+              }
+      ) as T;
+    }
     if (method === "trace.export" && this.traceFails)
       throw new Error("disk full");
     if (method === "connections.save" && params.secret === "bad")
@@ -1175,4 +1212,75 @@ it("unifies the captain's existing Firstmate secondmate IDs (researcher, prd, de
   );
   expect(researchEntries).toHaveLength(1);
   expect(researchEntries[0]!.id).toBe("crew:researcher");
+});
+
+describe("Jira and Linear cards", () => {
+  it("signs in through the daemon in the chosen browser and reports Checking", async () => {
+    const { daemon, adapter } = make();
+    const events = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "tracker-connect",
+      provider: "jira",
+      browser: "dia",
+    });
+    expect(daemon.calls.at(-1)).toEqual({
+      method: "trackers.request",
+      params: {
+        message: { action: "connect", provider: "jira", browser: "dia" },
+      },
+    });
+    expect(events).toEqual([
+      { version: 1, kind: "auth-status", id: "jira-mcp", status: "checking" },
+    ]);
+    for (const event of events)
+      expect(authEvent.safeParse(event).success).toBe(true);
+  });
+
+  it("shows where a working sign-in leads, and never a credential", async () => {
+    const { adapter } = make();
+    const [jira] = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "tracker-check",
+      provider: "jira",
+    });
+    const [linear] = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "tracker-status",
+      provider: "linear",
+    });
+    expect(jira).toEqual({
+      version: 1,
+      kind: "auth-status",
+      id: "jira-mcp",
+      status: "ready",
+      detail: "acme.atlassian.net",
+    });
+    expect(linear).toMatchObject({
+      id: "linear-mcp",
+      detail: "Workspace acme",
+    });
+    expect(authEvent.safeParse(jira).success).toBe(true);
+  });
+
+  it("says plainly what disconnect removed", async () => {
+    const { adapter } = make();
+    const events = await adapter.handle({
+      version: 1,
+      kind: "auth",
+      action: "tracker-disconnect",
+      provider: "linear",
+    });
+    expect(events).toEqual([
+      { version: 1, kind: "auth-status", id: "linear-mcp", status: "missing" },
+      {
+        version: 1,
+        kind: "auth-notice",
+        message:
+          "Linear disconnected. Its saved sign-in was removed from this Mac. Items already published stay in Linear.",
+      },
+    ]);
+  });
 });

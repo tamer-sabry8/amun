@@ -1,5 +1,5 @@
-// Settings › Tools: one card per outside service (Azure DevOps, GitHub,
-// Notion, Obsidian). Same bridge messages and checks as the earlier
+// Settings › Tools: one card per outside service (Azure DevOps, Jira,
+// Linear, Notion, GitHub, Obsidian). Same bridge messages and checks as the earlier
 // Connections tab; only the view is new.
 import {
   useEffect,
@@ -14,7 +14,11 @@ import { obsidianEndpoints } from "../../../../packages/contracts/src/auth.ts";
 import { bridge } from "../bridge.ts";
 import { Icon } from "../icons.tsx";
 
-type Kind = "ado" | "github" | "notion" | "obsidian";
+type Kind = "ado" | "jira" | "linear" | "github" | "notion" | "obsidian";
+/** Signed in through the provider's hosted MCP server, like Notion. */
+type Tracker = "jira" | "linear";
+const isTracker = (kind: Kind): kind is Tracker =>
+  kind === "jira" || kind === "linear";
 const services: {
   kind: Kind;
   name: string;
@@ -26,6 +30,20 @@ const services: {
     name: "Azure DevOps",
     purpose: "Read and update your team’s work items, repositories and wiki.",
     defaultUrl: "",
+  },
+  // Owner approval, 22 November 2026 (docs/preview/2026-11-22-jira-linear-tools).
+  {
+    kind: "jira",
+    name: "Jira",
+    purpose: "Create epics, stories and sprints in Jira once you approve them.",
+    defaultUrl: "https://mcp.atlassian.com/v2/mcp",
+  },
+  {
+    kind: "linear",
+    name: "Linear",
+    purpose:
+      "Create projects and issues in Linear once you approve them. Cycles are made in Linear itself.",
+    defaultUrl: "https://mcp.linear.app/mcp",
   },
   {
     kind: "notion",
@@ -76,7 +94,7 @@ function SaveForm({
   defaultUrl,
   onDone,
 }: {
-  kind: Exclude<Kind, "notion">;
+  kind: Exclude<Kind, "notion" | Tracker>;
   name: string;
   defaultUrl: string;
   onDone(): void;
@@ -252,6 +270,101 @@ function NotionControls({ status }: { status: string | undefined }) {
   );
 }
 
+/**
+ * Jira and Linear sign in like Notion: in the chosen browser, through the
+ * provider's own page; there is no destination to paste, because each plan
+ * names its site and project or team and the review card shows them.
+ */
+function TrackerControls({
+  provider,
+  name,
+  place,
+  status,
+  detail,
+}: {
+  provider: Tracker;
+  name: string;
+  place: string;
+  status: string | undefined;
+  detail: string | undefined;
+}) {
+  const [browser, setBrowser] = useState<"edge" | "dia">("edge");
+  const [confirming, setConfirming] = useState(false);
+  const checking = status === "checking";
+  return (
+    <div style={{ display: "grid", gap: 8, gridColumn: "1 / -1" }}>
+      <p className="muted small">
+        You sign in and choose your {place} in your browser. Amun never asks you
+        to paste a token.
+      </p>
+      {status === "ready" && detail && (
+        <span className="muted small">{detail} · Connected</span>
+      )}
+      <label className="field">
+        Sign-in browser
+        <select
+          value={browser}
+          onChange={(event) => setBrowser(event.target.value as "edge" | "dia")}
+        >
+          <option value="edge">Microsoft Edge</option>
+          <option value="dia">Dia</option>
+        </select>
+      </label>
+      {confirming ? (
+        <div role="group" aria-label={`Confirm ${name} disconnect`}>
+          <p className="small">
+            Remove this workspace’s saved {name} sign-in? Items already
+            published stay in {name}.
+          </p>
+          <span className="row">
+            <button
+              className="btn"
+              onClick={() => {
+                setConfirming(false);
+                auth({ action: "tracker-disconnect", provider });
+              }}
+            >
+              Confirm disconnect
+            </button>
+            <button className="btn quiet" onClick={() => setConfirming(false)}>
+              Keep connection
+            </button>
+          </span>
+        </div>
+      ) : (
+        <span className="row wrap">
+          <button
+            className="btn"
+            disabled={checking}
+            onClick={() =>
+              auth({ action: "tracker-connect", provider, browser })
+            }
+          >
+            Connect {name} in browser
+          </button>
+          <button
+            className="btn quiet"
+            onClick={() => auth({ action: "tracker-check", provider })}
+          >
+            Test {name} connection
+          </button>
+          {checking && (
+            <button
+              className="btn quiet"
+              onClick={() => auth({ action: "tracker-cancel", provider })}
+            >
+              Cancel {name} sign-in
+            </button>
+          )}
+          <button className="btn quiet" onClick={() => setConfirming(true)}>
+            Disconnect {name}
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 // Reconnect GitHub with permission to change code in private repositories.
 // Same device sign-in steps as before: copy the code, open the browser,
 // check, or cancel.
@@ -400,6 +513,25 @@ export function ConnectionCards() {
     notionTested.current = true;
     auth({ action: "notion-check" });
   }, [notionNow]);
+  // Same for Jira and Linear: what is saved, then one test of a saved sign-in.
+  const jiraNow = state.modelStatus["jira-mcp"];
+  const linearNow = state.modelStatus["linear-mcp"];
+  const trackersTested = useRef(new Set<Tracker>());
+  useEffect(() => {
+    auth({ action: "tracker-status", provider: "jira" });
+    auth({ action: "tracker-status", provider: "linear" });
+  }, []);
+  useEffect(() => {
+    for (const [provider, now] of [
+      ["jira", jiraNow],
+      ["linear", linearNow],
+    ] as const) {
+      if (now !== "configured" || trackersTested.current.has(provider))
+        continue;
+      trackersTested.current.add(provider);
+      auth({ action: "tracker-check", provider });
+    }
+  }, [jiraNow, linearNow]);
   useEffect(() => {
     if (!waiting) return;
     auth({ action: "list" });
@@ -413,21 +545,24 @@ export function ConnectionCards() {
           (item) => item.kind === service.kind,
         );
         const notion = service.kind === "notion";
+        const tracker = isTracker(service.kind);
         const status = notion
           ? (state.modelStatus["notion-mcp"] ?? mine[0]?.status)
-          : service.kind === "ado" && !state.connectionsLoaded && !mine.length
-            ? "checking"
-            : mine.some((item) => item.status === "error")
-              ? "error"
-              : mine.some((item) => item.status === "unknown")
-                ? "unknown"
-                : mine.length
-                  ? mine.every((item) => item.status === "ready")
-                    ? "ready"
-                    : mine.some((item) => item.status === "checking")
-                      ? "checking"
-                      : "configured"
-                  : "missing";
+          : tracker
+            ? (state.modelStatus[`${service.kind}-mcp`] ?? "missing")
+            : service.kind === "ado" && !state.connectionsLoaded && !mine.length
+              ? "checking"
+              : mine.some((item) => item.status === "error")
+                ? "error"
+                : mine.some((item) => item.status === "unknown")
+                  ? "unknown"
+                  : mine.length
+                    ? mine.every((item) => item.status === "ready")
+                      ? "ready"
+                      : mine.some((item) => item.status === "checking")
+                        ? "checking"
+                        : "configured"
+                    : "missing";
         const view = viewOf(status);
         return (
           <div className="rb-provider" key={service.kind}>
@@ -441,7 +576,7 @@ export function ConnectionCards() {
               {view.text}
             </span>
             <span className="muted small">{service.purpose}</span>
-            {!notion && adding !== service.kind ? (
+            {!notion && !tracker && adding !== service.kind ? (
               <button className="btn" onClick={() => setAdding(service.kind)}>
                 {mine.length ? "Add another" : "Connect"}
               </button>
@@ -466,6 +601,14 @@ export function ConnectionCards() {
             )}
             {notion ? (
               <NotionControls status={status} />
+            ) : isTracker(service.kind) ? (
+              <TrackerControls
+                provider={service.kind}
+                name={service.name}
+                place={service.kind === "jira" ? "Jira site" : "workspace"}
+                status={status}
+                detail={state.statusDetail[`${service.kind}-mcp`]}
+              />
             ) : (
               mine.map((item) => (
                 <div
@@ -537,9 +680,9 @@ export function ConnectionCards() {
             {service.kind === "github" && (
               <GithubAccess onDone={() => undefined} />
             )}
-            {!notion && adding === service.kind && (
+            {!notion && !tracker && adding === service.kind && (
               <SaveForm
-                kind={service.kind as Exclude<Kind, "notion">}
+                kind={service.kind as Exclude<Kind, "notion" | Tracker>}
                 name={service.name}
                 defaultUrl={service.defaultUrl}
                 onDone={() => setAdding(null)}

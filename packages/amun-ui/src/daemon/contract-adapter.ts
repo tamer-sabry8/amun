@@ -162,12 +162,52 @@ export interface DaemonView {
 
 export interface DaemonConnection {
   id: string;
-  kind: "ado" | "github" | "notion" | "obsidian";
+  kind: "ado" | "github" | "notion" | "obsidian" | "linear" | "jira";
   baseUrl: string;
   status: string;
   user: string | null;
   projects: { id: string; name: string }[];
   message: string | null;
+}
+
+interface TrackerStatus {
+  status?: string;
+  message?: string | null;
+  identity?: { sites?: { url?: string | null; name?: string }[] } | null;
+}
+
+/**
+ * A Jira or Linear status as the Tools card reads it: "auth-status" with the
+ * id jira-mcp / linear-mcp, and where the sign-in leads once it works.
+ */
+export function trackerStatusEvent(
+  provider: "jira" | "linear",
+  status: TrackerStatus,
+) {
+  const sites = (status.identity?.sites ?? [])
+    .map((site) =>
+      (site.url ?? site.name ?? "")
+        .replace(/^https:\/\/(linear\.app\/)?/, "")
+        .replace(/\/$/, ""),
+    )
+    .filter(Boolean);
+  const known = ["missing", "configured", "checking", "ready", "error"];
+  const value = known.includes(String(status.status))
+    ? String(status.status)
+    : "error";
+  const detail =
+    value === "ready" && sites.length
+      ? provider === "jira"
+        ? sites.join(", ")
+        : `Workspace ${sites.join(", ")}`
+      : "";
+  return {
+    version: 1,
+    kind: "auth-status",
+    id: `${provider}-mcp`,
+    status: value,
+    ...(detail ? { detail: detail.slice(0, 512) } : {}),
+  };
 }
 
 /** What a connection check found, in words the captain can act on. */
@@ -1078,6 +1118,23 @@ export class ContractAdapter {
       message.kind === "crew-session-read"
     )
       return this.handleCrew(message);
+    if (message.kind === "plan-publish" && typeof message.planId === "string") {
+      // "Check now" or "Retry" on a Linear or Jira plan the captain approved.
+      // The daemon publishes only within that approval; other plans are not
+      // its to publish, and nothing changes for them.
+      const reply = await this.daemon
+        .request<{ handled?: boolean }>("trackers.request", {
+          message: {
+            action: "publish",
+            planId: message.planId,
+            ...(message.retry === true ? { retry: true } : {}),
+          },
+        })
+        .catch(() => null);
+      if (!reply?.handled) return [];
+      await this.refresh().catch(() => undefined);
+      return [this.work()];
+    }
     return [];
   }
 
@@ -1270,6 +1327,11 @@ export class ContractAdapter {
   /** Connections: Azure DevOps through the daemon (token kept in Keychain). */
   private async handleAuth(message: Message): Promise<unknown[]> {
     const action = String(message.action);
+    if (
+      action.startsWith("tracker-") &&
+      (message.provider === "jira" || message.provider === "linear")
+    )
+      return this.trackerCard(action, message.provider, message.browser);
     if (action === "list") return [await this.authConnections(true)];
     if (action === "readiness")
       return this.accountStatus(String(message.provider));
@@ -1284,6 +1346,8 @@ export class ContractAdapter {
       return [this.notice(UNAVAILABLE)];
     const connection = message.connection as
       { kind?: unknown; baseUrl?: unknown } | undefined;
+    if (connection?.kind === "linear" || connection?.kind === "jira")
+      return this.trackerAuth(action, connection.kind);
     if (connection?.kind !== "ado")
       return [
         this.notice(
@@ -1310,6 +1374,98 @@ export class ContractAdapter {
       return [
         this.notice(error instanceof Error ? error.message : String(error)),
         await this.authConnections(),
+      ];
+    }
+  }
+
+  /**
+   * The Jira and Linear cards in Settings › Tools. A finished browser sign-in
+   * arrives later from the daemon as an "auth-status" renderer event.
+   */
+  private async trackerCard(
+    action: string,
+    provider: "jira" | "linear",
+    browser: unknown,
+  ): Promise<unknown[]> {
+    const name = provider === "jira" ? "Jira" : "Linear";
+    const daemonAction = {
+      "tracker-connect": "connect",
+      "tracker-check": "check",
+      "tracker-cancel": "cancel",
+      "tracker-disconnect": "disconnect",
+      "tracker-status": "status",
+    }[action];
+    if (!daemonAction) return [this.notice(UNAVAILABLE)];
+    try {
+      const status = await this.daemon.request<TrackerStatus>(
+        "trackers.request",
+        {
+          message: {
+            action: daemonAction,
+            provider,
+            ...(daemonAction === "connect"
+              ? { browser: browser === "dia" ? "dia" : "edge" }
+              : {}),
+          },
+        },
+      );
+      const event = trackerStatusEvent(provider, status);
+      if (daemonAction === "disconnect")
+        return [
+          event,
+          this.notice(
+            `${name} disconnected. Its saved sign-in was removed from this Mac. Items already published stay in ${name}.`,
+          ),
+        ];
+      return status.status === "error" || status.status === "missing"
+        ? daemonAction === "status"
+          ? [event]
+          : [event, this.notice(status.message ?? `${name} is not connected.`)]
+        : [event];
+    } catch {
+      return [
+        trackerStatusEvent(provider, { status: "error" }),
+        this.notice(`Amun could not reach ${name}. Try again in a moment.`),
+      ];
+    }
+  }
+
+  /**
+   * Linear and Jira sign in through each provider's hosted MCP server in the
+   * browser; the grant stays in the daemon's Keychain. A finished sign-in
+   * arrives later as a renderer event ("auth-status").
+   */
+  private async trackerAuth(
+    action: string,
+    provider: "linear" | "jira",
+  ): Promise<unknown[]> {
+    const name = provider === "linear" ? "Linear" : "Jira";
+    const daemonAction =
+      action === "save"
+        ? "connect"
+        : action === "forget"
+          ? "disconnect"
+          : "check";
+    try {
+      const status = await this.daemon.request<{
+        status?: string;
+        message?: string | null;
+      }>("trackers.request", { message: { action: daemonAction, provider } });
+      const said =
+        daemonAction === "disconnect"
+          ? `${name} disconnected and its sign-in removed from this Mac.`
+          : status.status === "checking"
+            ? `Finish signing in to ${name} in your browser.`
+            : status.status === "ready"
+              ? `${name} is connected.`
+              : (status.message ?? `${name} is not connected.`);
+      return [
+        this.notice(said),
+        { version: 1, kind: "tracker-status", provider, ...status },
+      ];
+    } catch {
+      return [
+        this.notice(`Amun could not reach ${name}. Try again in a moment.`),
       ];
     }
   }
