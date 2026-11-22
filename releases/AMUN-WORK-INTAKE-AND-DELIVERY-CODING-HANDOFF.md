@@ -1,91 +1,175 @@
-# Implement Amun’s Product, Project and Initiative workflow
+# Implement Amun’s Product, Project and Initiative workflow — Status & Next Agent Assignment (22 November 2026)
 
-This is the next coding assignment after the “Password anywhere” Lavish review on 22 November 2026. Start from the latest GitHub `main` in a separate branch and worktree. The review used an example name and created no live work. The repo inspection used `696f836` as its baseline. Recheck the code and live evidence before changing either Amun or Firstmate.
+This handoff is written for an AI agent that has **no prior context about Amun**. Read this entire file and `AGENTS.md` at the repository root before running any commands or editing code.
 
-- [Amun rules](https://github.com/tamer-sabry8/amun/blob/main/Amun_rules.md) and [rebuild handoff](https://github.com/tamer-sabry8/amun/blob/main/docs/rebuild/HANDOFF.md)
-- [Delivery implementation and evidence from PR #51](https://github.com/tamer-sabry8/amun/blob/main/releases/AMUN-STORIES-BACKLOG-SPRINTS-CLAUDE-PROMPT.md)
-- [Lavish walkthrough](http://127.0.0.1:4387/session/a209c64e85f499ea) and its local source `/Users/tamersabry/Documents/ChatGPT/Amun/.lavish/password-anywhere-flow/index.html`
+---
 
-## Ownership and approvals
+## 0. Quick Onboarding for a New Agent: What Amun Is & How It Works
 
-Amun is the workspace and keeps the work records, chats, drafts and receipts. The captain talks to Firstmate through Pi. Firstmate delegates to registered roles in the selected operational home. Paseo hosts and transports. Existing provider review and exact-scope gates apply separately to document approval, backlog publication, sprint commitment, code review, merge and release. A name or a chat message authorizing creation of a local area cannot authorize provider writes.
+### What Amun Is
 
-The captain’s review requested the chat routing, Project interview, lightweight Initiative tracking, explicit tracker and board selection, sprint location and chats, and delivery and launch evidence described below. The captain directly requested the Product Manager problem-statement and PRD coverage changes. The launch UI, Project checklist and other new visual treatments below are proposals. Use the existing approval process for those visuals and keep coding and verification moving on independent items. The review authorizes no live write or deployment.
+Amun is a local-first macOS desktop application (Electron + TypeScript + React) built for a Product Manager (the captain, Tamer).
 
-## 1. Implement intake and reuse the right chat
+1. **Captain → Firstmate → Crew (Core Architecture):**
+   - The captain talks **only** to one lead AI coordinator called **Firstmate** (running via the **Pi** runtime in the captain's Firstmate home, hosted over WebSocket RPC by the **Paseo** daemon in `packages/server`).
+   - Firstmate orchestrates and delegates all real work to specialist crew members (**secondmates** managed by Firstmate/Herdr, such as `researcher` / **Research & Insights**, `prd` / **Product Manager**, `designer` / **UX**, `product-marketing` / **Product Marketing**, `solution-architect` / **Solution & AI Architecture**, etc.).
+   - Never bypass Firstmate, never write directly into Firstmate's operational home directory from Amun code, and never remove delegation, supervision, or approval gates.
+2. **Where the Code Lives (`main` branch at `https://github.com/tamer-sabry8/amun`):**
+   - `packages/domain/src/work/`: Pure domain logic (work intake, routing, chats, request references `amun-r-…`, PRD discovery & 20-point coverage, decomposition, release & launch state machine, permissions).
+   - `packages/contracts/src/`: Zod schemas between the UI and daemon (`work.ts`, `backlog.ts`, `auth.ts`, `native-pi.ts`).
+   - `packages/work-store/src/`: SQLite work store (`work-store.ts`, `migrations.ts`) and tracker services (`ado-service.ts`, `ado-governed-writes.ts`, `ado-operations.ts`).
+   - `packages/amun-ui/src/`: The React UI (`rebuild/app.tsx`, `rebuild/home.tsx`, `rebuild/work-session.tsx`, `rebuild/screens.tsx`, `rebuild/work-cards.tsx`, `rebuild/project-checklist-and-release.tsx`, `daemon/contract-adapter.ts`).
+   - `packages/server/src/server/amun/`: Paseo daemon endpoints for Amun, Firstmate turns, connections, and delivery sync.
+   - `packages/desktop/`: Electron shell and `electron-builder.yml` packaging config.
 
-- For explicit named creation, use the active or sole eligible group. Work and Personal are examples of configured scopes. Ask once when the scope remains ambiguous. Keep group boundaries. Create or open the named work area and deliver the original message once in its first chat. For a same-group duplicate, ask whether to use the existing work or explicitly create another. Preserve ordinary chats and their drafts. Ask before moving a chat or reassigning selected unfinished requests. Keep request identity, delivery receipts and original chat links through moves, retries and restart.
-- Product owns an ongoing outcome, discovery, roadmap, and releases. Keep the interview, PRD version and approval in its originating chat with the document in Library. Link a bounded Project if it implements the Product and the captain authorizes the association.
-- Project starts with a scoped interview in its own chat. Establish the client or sponsor where applicable, delivery outcome, due date, deliverables, tasks, dependencies, owner and who accepts the work. Reuse an existing brief or linked Product facts. Ask one unresolved material question at a time. Small projects can track next actions and completion in the Project work area and chat. Preview any proposed dedicated checklist. Use board and sprint workflows only where the scope calls for them. Record acceptance and handover.
-- Initiative is the user-facing label for a standalone task under rule 31. Extend named intake and visible labels while preserving the stored `task` type and legacy input compatibility. Project, Product and story tasks keep their terminology. For small Initiatives use the Initiative work area and chat to retain the outcome, next action, optional deadline, reminder and completion evidence. Use existing Portfolio visibility. If work grows, offer explicit in-place conversion to Project and preserve ID, chat, history, links and group. A Product represents a separate ongoing ownership decision.
-- Start in `packages/domain/src/work/model.ts` (`newWorkNamed`, `routeNewWork`), `packages/amun-ui/src/rebuild/app.tsx`, `home.tsx`, `sidebar.tsx`, and the work-store `convert-task` command. Verify work areas opened from Home and existing chats. Verify file intake and preservation of existing behavior. The named Home fast path sets priority and due date. The fallback Project intake can parse “for client X”. Carry the explicit client through both paths and ask only if the project needs a client or sponsor and it is still unknown. `screens.tsx` filters Sprints to Product and Project.
+---
 
-## 2. Update the existing Product Manager through Firstmate
+## 1. Status Checklist: What Is DONE vs. What Is NOT DONE
 
-Locate the live registered `prd` secondmate in the selected operational home via Firstmate. The local roster snapshot in `/Users/tamersabry/Projects/firstmate/data/secondmates.md` lists `prd` and `researcher`. Verify both against the active roster and scope. Ask Firstmate to install or update the PRD guidance through its native ownership path and return the persisted change and verification. Use the approved isolated home for testing. Keep Amun-owned briefing and integration code in Amun. Preserve upstream Firstmate, the operational home ownership boundary and the existing reviewer challenge, document delivery and register conventions.
+All 17 coding items from the 22 November 2026 workflow handoff were implemented and merged into `main` in **PR #56** (`f7694e3`):
 
-Send Firstmate this instruction, scoped to the existing Product Manager charter or its supported workflow guidance:
+| #      | Work Item                                                                                                                                                                                                                           | Status                                                        | Where It Lives / Notes                                                                                                                                                                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1**  | Explicit named intake (`Product`, `Project`, `Initiative`, `RFP`), group scope (`Work`, `Personal`), same-group duplicate prompt, ordinary questions staying in `General` / current chat                                            | **DONE**                                                      | `packages/domain/src/work/model.ts` (`newWorkNamed`, `routeNewWork`), `packages/amun-ui/src/rebuild/app.tsx`, `home.tsx`                                                                                                                                                                                          |
+| **2**  | Chat moves & selective unfinished request reassignment (`amun-r-…`) preserving request identity, delivery receipts, and original chat links                                                                                         | **DONE**                                                      | `packages/domain/src/work/requests.ts`, `packages/work-store/src/work-store.ts`, `packages/amun-ui/src/rebuild/work-session.tsx`                                                                                                                                                                                  |
+| **3**  | Rule 31: Standalone `task` user-facing label renamed to **Initiative** / **Initiatives** (keeping internal `type: "task"` and legacy `"task"` prompt compatibility)                                                                 | **DONE**                                                      | `view-model.ts`, `shell.ts`, `flows.ts`, `home.tsx`, `sidebar.tsx`, `screens.tsx`, `settings.tsx`, `move-offers.ts`                                                                                                                                                                                               |
+| **4**  | In-place conversion from **Initiative** to **Project** (`convert-task`) preserving ID, chat, history, links, and group + linking a Project to a Product (`Implements product` / `relate-areas` / `link-product`)                    | **DONE**                                                      | `packages/amun-ui/src/rebuild/work-session.tsx`, `screens.tsx`, `view-model.ts`                                                                                                                                                                                                                                   |
+| **5**  | Project intake parsing `"for client X"`, priority, and due date across both Home fast-path and fallback intake + scoped Project delivery interview in chat                                                                          | **DONE**                                                      | `packages/domain/src/work/model.ts`, `app.tsx`, `home.tsx`, `view-model.ts`                                                                                                                                                                                                                                       |
+| **6**  | Small-project checklist & handover receipt UI inside the Project side panel (after before/after visual approval)                                                                                                                    | **DONE**                                                      | `packages/amun-ui/src/rebuild/project-checklist-and-release.tsx` (`ProjectChecklistPane`), `work-session.tsx`, preview in `docs/preview/2026-11-22-work-intake-and-delivery/index.html`                                                                                                                           |
+| **7**  | Live Mac browser verification of intake, duplicate detection, chat identity, linking, and Initiative-to-Project conversion                                                                                                          | **DONE (Preview daemon) / NEEDS FULL DMG RUN**                | Verified in browser against built UI; needs full end-to-end packaged DMG run with live Firstmate & timing measurements (see Section 2 below).                                                                                                                                                                     |
+| **8**  | Unify existing Herdr/Firstmate secondmates (`researcher` ↔ `"Research & Insights"`, `prd` ↔ `"Product Manager"`, `designer` ↔ `"UX"`, `product-marketing` ↔ `"Product Marketing"`) + relay `prd-discovery-charter-v1` via Firstmate | **DONE**                                                      | `packages/amun-ui/src/daemon/contract-adapter.ts` (`secondmateRoleAliases`, `toWorkSnapshot` deduplication, `registerPool`), `packages/domain/src/work/held-tasks.ts`                                                                                                                                             |
+| **9**  | Single problem-statement format (_Evidence-led 5W+H_ default, _Jobs to Be Done_, _Outcome–Evidence–Scope_) + 20-point PRD coverage checklist                                                                                        | **DONE**                                                      | `packages/domain/src/work/held-tasks.ts`, `packages/domain/src/work/release-launch.ts` (`evaluatePrdDiscovery`)                                                                                                                                                                                                   |
+| **10** | Controlled discovery & PRD verification (3+ why probes, 1 format, 20-point coverage, non-applicable reason check)                                                                                                                   | **DONE (Unit) / NEEDS LIVE FIRSTMATE E2E**                    | Unit tested in `packages/domain/tests/release-launch.test.ts`; live multi-product reverse-engineering tests assigned below.                                                                                                                                                                                       |
+| **11** | PRD decomposition into epics, stories, acceptance criteria, and first-release slice                                                                                                                                                 | **DONE**                                                      | `packages/domain/src/work/release-launch.ts` (`validatePrdDecomposition`)                                                                                                                                                                                                                                         |
+| **12** | Tracker & board resolution, local draft fallback, preview before publish, provider ID/parent/membership read-back, and partial/uncertain write reconciliation                                                                       | **DONE for ADO & Notion / NOT DONE for Jira & Linear**        | **IMPORTANT GAP FOR NEXT AGENT:** Only Azure DevOps (`ado`) and Notion (`notion`) connectors exist today. **Jira** and **Linear** connectors (`connections.save`, `connections.check`, governed epic/story/sprint creation & read-back) are **NOT built yet** and must be implemented for the tests in Section 2! |
+| **13** | Sprints filtered to Product & Project, Summary/Planning views, work-area sprint chat, and governed new Sprint creation (`create-sprint` / `createTeamIteration`)                                                                    | **DONE (ADO)**                                                | `packages/contracts/src/backlog.ts`, `packages/work-store/src/ado-governed-writes.ts`, `ado-operations.ts`, `ado-service.ts`. Needs Jira & Linear sprint creation support added.                                                                                                                                  |
+| **14** | Live tracker verification of PRD → Epics → Stories → Sprints                                                                                                                                                                        | **NOT DONE for Jira & Linear**                                | Assigned to next agent in Section 2 below.                                                                                                                                                                                                                                                                        |
+| **15** | Delivery tracking across Sprints, Chat, Activity, and Portfolio (`workProgress` from sprints, story counts, blockers, stale indicators)                                                                                             | **DONE**                                                      | `packages/amun-ui/src/rebuild/work-cards.tsx`, `screens.tsx`                                                                                                                                                                                                                                                      |
+| **16** | Production release & launch tracking card (`Readiness`, `Scheduled`, `Deploying`, `Verified live`, `Failed`, `Rolled back`) with Repo version/SHA binding and Release-Owner Receipt for air-gapped/client sites                     | **DONE**                                                      | `packages/amun-ui/src/rebuild/project-checklist-and-release.tsx` (`ProductionReleaseCard`), `screens.tsx` (Roadmap › By release), `work-cards.tsx` (Portfolio › Summary)                                                                                                                                          |
+| **17** | Verification of production release/launch tracking (stale artifact, failed smoke check, partial evidence, cancellation, rollback, manual receipt)                                                                                   | **DONE (Unit & Preview) / NEEDS LIVE MIRA LAUNCH SIMULATION** | Unit tested in `packages/domain/tests/release-launch.test.ts`; live simulation assigned in Test 3 below.                                                                                                                                                                                                          |
 
-> In every PRD interview, establish the customer’s real pain before settling the solution. Review supplied sources and existing answers first. Run at least three distinct why probes. Establish why the pain occurs in the current workflow, why the suspected cause or limitation persists, and why its impact matters to the customer and business. Resolve probes from available evidence where possible and bring consequential unknowns to me via Firstmate, one question at a time, with choices, your recommendation and a custom answer. Summarize the evidence and conclusions in the PRD. Label assumptions, conflicting evidence and validation needs. Keep claims such as causes, frequencies, customer quotes and baselines traceable to evidence or identified as unknown.
->
-> Finish discovery with one clear problem statement in a single format from the list below. Choose the best fit and say why. Keep the statement about customer pain and the desired outcome. If the specific user, real pain, impact or evidence remains materially unclear, keep it in discovery or visibly provisional and record what would validate it. A working draft can still progress.
->
-> For missing market, competitive or technical evidence, give Firstmate a bounded research question, scope, authorized sources and a return request. Firstmate should delegate to the registered Research secondmate and return findings with sources, uncertainty and limitations to Product Manager. Product Manager owns synthesis, the captain interview and the brief. Firstmate stays the captain-facing channel. Preserve the reviewer challenge and record how substantive issues were resolved or escalated before the PRD is ready.
+---
 
-### Choose exactly one final problem-statement format
+## 2. Assignment for the Next Agent (Computer Use + DMG Build + 4 End-to-End Stress Tests)
 
-| Format                         | Required content                                                                                                                                                                                         |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Evidence-led 5W+H, the default | Specific segment, desired outcome, when and where the failure occurs, evidenced cause or current limitation, customer and business impact. Quantify only with a source or label the measurement pending. |
-| Jobs to Be Done                | Trigger, specific customer, desired progress, obstacle, current workaround and cost, delay or risk. Useful when motivation and switching behavior matter.                                                |
-| Outcome–Evidence–Scope         | Segment, context and supported cause, source-backed evidence, customer and business impact, measurable desired change and explicit non-goals. Useful for stakeholder alignment.                          |
+### Primary Goal of This Assignment
 
-### PRD interview coverage
+The captain wants you to:
 
-Maintain a checklist in the brief or its interview notes. Mark each topic evidenced, captain-confirmed, assumption, open or not applicable with a reason. Reuse answers already in authorized sources. Ask one question only when the missing answer changes a decision. Affected readiness decisions wait for material gaps. The PRD should cover most applicable topics substantively. An open issue or assumption is visible and cannot count as a confirmed answer.
+1. **Build the latest macOS DMG (`Amun-<version>-arm64.dmg`), install `Amun.app`, and launch the real packaged desktop app on this Mac using your Computer Use capabilities.**
+   - Check and report the installed `Amun.app` size in Finder (per `AGENTS.md`, compare against the ~537.7 MB baseline).
+2. **Build any missing connector code required by the tests below (specifically Jira and Linear connections, epic/story/sprint creation, and sprint start)** if they are not already wired in Settings › Tools and the governed plan/backlog pipeline.
+3. **Run the 4 real-world stress tests below through the Amun UI using Computer Use.**
+4. **Measure Firstmate & Crew timing on every turn** (how many seconds Firstmate takes to acknowledge, how long each secondmate takes to finish research/PRD/BRD/wireframes/stories, and where timeouts, stalls, or slow turns happen).
+5. **Document every UX gap, missing button, confusing flow, or routing bug you encounter** while using the interface as a real user.
 
-| #   | What the Product Manager establishes                                                              |
-| --- | ------------------------------------------------------------------------------------------------- |
-| 1   | Specific customer and boundaries with adjacent segments                                           |
-| 2   | Customer job and desired outcome                                                                  |
-| 3   | Current workflow and handoffs                                                                     |
-| 4   | Painful step, frequency and consequence                                                           |
-| 5   | Alternatives, workarounds or doing nothing                                                        |
-| 6   | Sources that establish the pain and confidence in those sources                                   |
-| 7   | Customer-visible improvement when it works                                                        |
-| 8   | Ideal end-to-end experience                                                                       |
-| 9   | Smallest valuable scope                                                                           |
-| 10  | Core capabilities needed                                                                          |
-| 11  | Launch must-haves and non-goals                                                                   |
-| 12  | Business objective and why it matters                                                             |
-| 13  | Primary success measure, baseline and target where known, guardrails                              |
-| 14  | Demand, reachable market and willingness to pay where relevant                                    |
-| 15  | Alternatives on value, price, speed, quality and switching cost where relevant                    |
-| 16  | Decision makers, approvers, contributors and affected stakeholders                                |
-| 17  | Functional and nonfunctional requirements, edge cases, permissions, data, integrations and errors |
-| 18  | Technical, privacy, security, legal, operational and third-party constraints                      |
-| 19  | Risks, contradictions, assumptions, open decisions and owners                                     |
-| 20  | Delivery sequence, dependencies, deferred scope and launch prerequisites                          |
+### How to Build the Latest DMG and Install `Amun.app`
 
-Default to a PRD for product build requirements. Reuse the structured interview for a PR/FAQ if the requested decision is about the customer proposition or market opportunity, or a BRD if it is about business process, stakeholders and constraints. Keep exact approved versions and show the review decision in the original chat and Library. For the “Password anywhere” example, the name establishes only identity. A first interview question can ask who has the pain. The sample cannot establish any real customer segment, pain, or metric.
+From `/Users/tamersabry/Documents/Antigravity/Amun_App` (on a new branch created from `main`):
 
-## 3. Convert an approved PRD to backlog and sprint work
+```bash
+# 1. Build all desktop inputs (Roast Room council, Paseo server, work-store, cli, and @amun/ui)
+npm run build:desktop-inputs
 
-- Default to capability and outcome decomposition. Validate the result with story mapping and slice a usable first release. Use a lifecycle map when the work primarily moves an object through states. Trace PRD outcome and requirement to epic, story and testable acceptance criteria. Show gap, duplicate and non-goal decisions. Keep stories independently valuable and include essential security, privacy and permissions where the slice requires them.
-- Read the selected tool and verified connection, then resolve the exact workspace or collection, project, team, board or backlog and sprint or iteration. Reuse configured eligible destinations and ask only when ambiguous. Keep separate provider and work-area identities. If the board lacks a verified type, mapping or permission, explain the limitation and keep a local draft. Show the exact destination and reviewed hierarchy before publishing. Read back provider IDs, parent links and membership. Reconcile partial or uncertain writes using the original request before retrying.
-- In **Sprints**, select the Product or Project and show its sprint Summary and Planning views. Its sprint chat lives under the work area. Link planning outcomes back to the exact request. Keep work-area context when viewing a shared team sprint. Draft the goal, dates, capacity, story scope and owner suggestions. Verify creating a new sprint as its own operation, including team visibility and read-back. Committing reviewed membership and assignments is a separate action.
-- Build on `screens.tsx`, `sprint-azure.ts`, `sprint-binding.ts`, `packages/domain/src/work/planning.ts`, `packages/work-store/src/ado-*` and `packages/server/src/server/amun/delivery-sync.ts`. PR #51 records controlled Azure evidence and the live test scope still to verify. Confirm live evidence at execution time. Extend other providers only within the existing approved integration scope.
+# 2. Build the Electron main process and package the macOS arm64 DMG (ad-hoc signed for local Mac testing)
+npm run build:main -w @getpaseo/desktop
+npx --workspace=@getpaseo/desktop electron-builder --config packages/desktop/electron-builder.yml --mac dmg zip -c.mac.identity="-" -c.mac.notarize=false
+```
 
-## 4. Track delivery and launch
+- The built DMG and `Amun.app` will be in `packages/desktop/release/` (e.g. `packages/desktop/release/mac-arm64/Amun.app` and `packages/desktop/release/Amun-0.16.1-arm64.dmg`).
+- Mount/install `Amun.app` (or copy to `/Applications/Amun.app`), measure its byte size, launch it, and drive it via **Computer Use**.
 
-- Reuse Sprints for scoped stories and blockers, the work-area chat for decisions and results, Activity for action receipts and Portfolio for progress. Link stories to provider status, dependencies, owners, QA evidence and PRs where available. Display stale or unknown evidence. Firstmate delegates actual delivery and QA to registered roles using native worktrees. Review code changes before opening a PR. Merge approval and green checks belong to the exact head.
-- Prepare a production release design in Lavish that links the work area, Roadmap and originating chat. Track environment, release owner, exact artifact or commit, readiness evidence, approval, deployment ID and state, smoke checks, rollback and post-launch metrics. Distinguish readiness, scheduled, deploying, verified live, failed and rolled back. When there is no verified deployment adapter, start with read-only pipeline status plus a release-owner receipt. Require evidence of the exact live version and smoke result to show verified live. Repo inspection did not establish a general automated production workflow. Link an existing pipeline via its authorized integration if one is available.
+---
 
-## Implementation order and acceptance
+### The 4 End-to-End Tests to Execute & Measure
 
-1. Land Initiative naming and intake behavior in the existing work-area flow. Test all three request forms, known and ambiguous scope, same-group duplicates, retry, chat identity, legacy records and in-place conversion.
-2. Have Firstmate relay and verify the Product Manager update. Run a controlled discovery with missing evidence, a contradiction and a research follow-up. Verify three meaningful why probes, no invented facts, no duplicate question, one selected format, traceable interview coverage, reviewer feedback, exact approval and Library recovery across reopening.
-3. Prove PRD-to-story-to-existing-sprint with the authorized test scope and independent read-back. Verify multiple eligible tools, unverified board, stale data, possible duplicate, partial publication, exact request navigation, and team versus work-area context. Verify new sprint creation separately before claiming it works.
-4. Show delivery and launch tracking visuals for approval. Prove the pipeline or manual receipt path using controlled data first. Include cancellation, stale artifact, failed smoke check, partial evidence and rollback in acceptance. Run GitHub CI and distinguish automated, isolated Mac and authorized live evidence.
+#### Test 1: Product `"Sales Prospects"` (Reverse-Engineer from `ethanplusai/sellbird` → PRD → Jira Epics, Stories & Sprints)
 
-Report what worked and what remains unverified. Keep the review artifacts and this handoff available to the next agent.
+- **What to do in Amun:**
+  1. Create a new **Product** named **`Sales Prospects`**.
+  2. Vision: A SaaS product that finds prospects for our users (clients), building the interface on top of `https://github.com/ethanplusai/sellbird`.
+  3. Instruct Firstmate to **autonomously reverse-engineer** from `https://github.com/ethanplusai/sellbird`:
+     - The **Vision**
+     - The **Problem Statement** (using the new single problem-statement format rule)
+     - The **Features** and full **PRD** (all on its own from the repository without requiring you to hand-write them).
+  4. **Connect to Jira:**
+     - Check if Amun has a working Jira connection in Settings › Tools (`packages/work-store` / `packages/server` / `packages/amun-ui`).
+     - **If there is no Jira connection or Jira backlog/sprint write path, write the code to add Jira support** (connection setup, authentication, project/board resolution, and governed creation of Epics, Stories, and Sprints).
+  5. From the reverse-engineered `Sales Prospects` PRD, have Amun create **Epics**, **Stories**, and **Sprints** in Jira, including **creating new sprints** for the captain.
+  6. **Record:** Total time taken for repo analysis, PRD generation, Jira connection, and epic/story/sprint creation, plus any missing UI buttons or friction.
+
+#### Test 2: Project `"Invoiced"` (Reverse-Engineer from `ethanplusai/billr` → Simple BRD → Linear Epics, Stories & Sprints)
+
+- **What to do in Amun:**
+  1. Create a new **Project** named **`Invoiced`** — a SaaS product to _"bill your clients from it"_, reverse-engineered from `https://github.com/ethanplusai/billr`.
+  2. Have Firstmate/crew reverse-engineer the repo and build a **simple BRD (Business Requirements Document)**.
+  3. **Connect to Linear:**
+     - Check if Amun has a working Linear connection in Settings › Tools (`packages/work-store` / `packages/server` / `packages/amun-ui`).
+     - **If Linear is not connected or lacks code for governed writes, write the code to add Linear support** (connection setup, team/project/cycle resolution, and governed creation of Epics/Projects, Issues/Stories, and Cycles/Sprints).
+  4. Create the **Epics**, **Stories**, and **Sprints (Cycles)** for `Invoiced` and publish them to **Linear**.
+  5. **Record:** Timing for each step, how Project vs. Product flows felt in the UI, and any missing buttons or broken flows.
+
+#### Test 3: Product `"Mira"` (Reverse-Engineer from `chatwoot/chatwoot` → PRD + Competitive Analysis + Pricing + Wireframes + Linear Sprints → Simulate Code Done & Launch)
+
+- **What to do in Amun:**
+  1. Create a new **Product** named **`Mira`** — a customer service chat product reverse-engineered from `https://github.com/chatwoot/chatwoot`.
+  2. Have Firstmate coordinate its crew (`Product Manager`, `Research & Insights`, `Product Marketing`, `UX`) to produce:
+     - **PRD**
+     - **Competitive Analysis**
+     - **Pricing analysis & Pricing Recommendation**
+     - **Wireframes**
+     - **Epics, Stories, and Sprints**
+  3. Add the sprints and stories to **Linear** and **start the sprint**.
+  4. **Simulate that code is done & run Launch Activities:**
+     - Look at how the interface lets the captain (or Firstmate) know/simulate that code and stories are done so launch activities can begin.
+     - _Note from the captain:_ "then ask me to simulate that code is done (not sure how u tell me) so we can do the launch activities."
+     - Test moving stories to Done, opening the **Production Launch** card (on Portfolio / Roadmap) and running the launch activities (readiness check, repo tag/SHA approval, release-owner receipt / smoke verification, and post-launch updates/collateral).
+     - Document clearly if there is a missing button or unclear handoff between _"Sprint stories are done"_ and _"Start launch activities"_.
+
+#### Test 4: Chat Switching & "Trick Amun" Routing Stress Test
+
+- **What to do in Amun:**
+  1. Rapidly switch between chats across `Sales Prospects`, `Invoiced`, `Mira`, and `General`.
+  2. Start a chat inside one folder (e.g., inside `Sales Prospects`), then type a prompt that is actually about `Invoiced` or `Mira`, or ask to create another product/project from inside an existing project folder, or ask a completely unrelated general question in the middle of a product thread.
+  3. Try to trick Amun several times with ambiguous names, spelling variants, cross-folder follow-ups, and out-of-order replies.
+  4. Observe and record:
+     - Which chats appear under which folder in the sidebar (`Recent`, `Folders`, `General`).
+     - What Amun understands automatically vs. when it holds the message with a move/keep card vs. when it misfiles or loses context.
+     - Whether unread indicators, drafts, and `[Amun request amun-r-…]` delivery links land on the exact right message when switching tabs while Firstmate is still working.
+
+---
+
+## 3. What to Deliver in Your Report Back to the Captain
+
+Create a clear, structured report (and update this handoff) covering:
+
+1. **DMG Build & Installation Receipt:** Exact DMG path, installed `Amun.app` byte size vs. 537.7 MB baseline, startup time, and memory reading.
+2. **Jira & Linear Integration Status:** What code you added to connect and publish Epics, Stories, and Sprints/Cycles to Jira and Linear, and what credentials/tokens are needed from the captain if not already in Keychain/env.
+3. **Timing & Latency Table for Firstmate & Secondmates:**
+   - Wall-clock duration for every prompt across Tests 1–4 (time to Firstmate initial reply, time to crew delegation, time to final document/artifact delivery, and any stalls or missed wakeups).
+4. **UI/UX Gap & Friction Audit:**
+   - Every missing button, awkward transition, or broken flow discovered during Tests 1–4 (especially around: reverse-engineering a GitHub repo URL, connecting Jira/Linear, starting a sprint, knowing when code is done to trigger launch activities, and tricking chat routing).
+
+---
+
+## 4. Reference: Original 22 November 2026 Specification (Completed in PR #56)
+
+_(Kept below for specification reference)_
+
+### Section 1: Intake and Chat Reuse
+
+- Explicit named creation (`Product`, `Project`, `Initiative`, `RFP`) uses the active or sole eligible group, asks once when ambiguous, asks on same-group duplicates (`Open <name>`, `Create another`, `Keep it here`), preserves ordinary chats/drafts, and keeps request identity (`amun-r-…`) across moves, retries, and restarts.
+- Standalone tasks use the user-facing label **Initiative** (Rule 31) while keeping internal `task` type and legacy `"task"` input compatibility, and support in-place conversion to **Project** (`convert-task`). Bounded Projects can link to a Product via `Implements product` (`relate-areas` / `link-product`).
+
+### Section 2: Product Manager Discovery Charter & 20-Point Coverage
+
+- Product Manager (`prd`) runs 3+ distinct why probes, collaborates with `researcher` (**Research & Insights**), `product-marketing` (**Product Marketing**), and `designer` (**UX**), selects one problem-statement format (_Evidence-led 5W+H_ default, _Jobs to Be Done_, or _Outcome–Evidence–Scope_), and tracks the 20-topic PRD coverage checklist (`evidenced`, `captain-confirmed`, `assumption`, `open`, `not_applicable` with reason).
+
+### Section 3: Backlog Decomposition & Governed Sprint Planning
+
+- Traces PRD requirements to Epics, Stories, acceptance criteria, and a first-release slice while excluding non-goals.
+- Governed `create-sprint` creates the iteration node, subscribes the team, and independently reads back team iteration visibility, separate from committing story membership.
+
+### Section 4: Delivery & Production Launch Tracking
+
+- Tracks delivery across Sprints, Chat, Activity, and Portfolio (`workProgress`) and tracks production launches across `Readiness`, `Scheduled`, `Deploying`, `Verified live`, `Failed`, and `Rolled back` with exact repo version/SHA approval binding and Release-Owner Receipts for connected or air-gapped client environments.
