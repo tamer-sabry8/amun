@@ -873,6 +873,38 @@ describe("sending a command from the menu", () => {
   });
 });
 
+describe("names and clients from the 22 November 2026 packaged-app run", () => {
+  it("ends an unquoted name at a colon that starts its description", () => {
+    expect(
+      newWorkNamed(
+        "Create a new Project called Invoiced: a SaaS product to bill your clients from it, reverse-engineered from https://github.com/ethanplusai/billr.",
+      ),
+    ).toEqual({ type: "project", name: "Invoiced" });
+    expect(
+      newWorkNamed(
+        "Create a new Product called Mira: a customer service chat product reverse-engineered from https://github.com/chatwoot/chatwoot.",
+      ),
+    ).toEqual({ type: "product", name: "Mira" });
+    // A colon inside a word (a time, a ratio) is still part of the name.
+    expect(newWorkNamed("Create a new project called Standup 9:30")).toEqual({
+      type: "project",
+      name: "Standup 9:30",
+    });
+  });
+  it("reads a client only from the word client, never from clients", () => {
+    expect(
+      rfpDetails(
+        "Create a new Project called Invoiced: a SaaS product to bill your clients from it",
+      ).client,
+    ).toBeNull();
+    expect(
+      rfpDetails(
+        "Create a new Project called Gitex Demo for client DMT, high priority",
+      ).client,
+    ).toBe("DMT");
+  });
+});
+
 describe("a message that asks for new work by name (owner's trace, 19 November 2026)", () => {
   it("names the kind and the name, so the work is made and Firstmate starts", () => {
     expect(

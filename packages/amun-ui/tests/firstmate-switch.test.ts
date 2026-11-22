@@ -59,25 +59,42 @@ it("settles an outstanding prime on a context switch and primes the new context"
   expect(fm.currentModel()).toBe("github-copilot/claude-sonnet-5.5");
 });
 
-it("does not let a turn sent before a switch answer, resend or replace the new context", async () => {
+it("keeps the answer to a turn sent before a switch, without resending it or replacing the new context", async () => {
   const fm = await import("../src/rebuild/firstmate.ts");
   const before = fake.sent.length;
-  const turn = fm.askFirstmate("Hello");
+  const turn = fm.askFirstmate("Rename this to Invoiced");
   await tick();
   expect(fake.sent.length).toBe(before + 1);
   expect(fake.sent.at(-1)!.command).toBe("conversation-send");
+  // The captain opens another product's chat while Firstmate is answering.
   fake.product = "one";
   fake.update();
-  const result = await turn;
-  expect(result).toMatchObject({ ok: false, needsProvider: false });
-  expect(fm.currentModel()).toBeNull();
   await tick();
   // Only the new context's prime was sent: the turn was not resent.
   const after = fake.sent.slice(before).map((c) => c.command);
   expect(after).toEqual(["conversation-send", "conversation"]);
   const stale = fake.sent[before]!;
-  reply(stale.id, conversation(two, "github-copilot/old", "Assistant: stale"));
+  reply(stale.id, {
+    ...conversation(two, "github-copilot/old", "Assistant: done"),
+    latestReply: 'Done.\n```amun\n{"do":"rename","name":"Invoiced"}\n```',
+  });
+  // The answer still reaches the chat that sent it, rename included.
+  await expect(turn).resolves.toMatchObject({
+    ok: true,
+    reply: 'Done.\n```amun\n{"do":"rename","name":"Invoiced"}\n```',
+  });
+  // It never becomes the new context's conversation.
   expect(fm.currentModel()).toBeNull();
+});
+
+it("still settles a sent turn when the service is lost", async () => {
+  const fm = await import("../src/rebuild/firstmate.ts");
+  const turn = fm.askFirstmate("Hello again");
+  await tick();
+  const sent = fake.sent.at(-1)!;
+  expect(sent.command).toMatch(/^conversation/);
+  fake.event({ kind: "service-lost" });
+  await expect(turn).resolves.toMatchObject({ ok: false });
 });
 
 it("shows the saved model on the label without opening the conversation", async () => {
