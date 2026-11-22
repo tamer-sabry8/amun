@@ -41,6 +41,7 @@ export interface EnsureAgentLoadedDeps {
   validProviders?: Iterable<AgentProvider>;
   broadcastTimeline?: boolean;
   purpose?: "history" | "interactive";
+  launchEnv?: Record<string, string>;
   logger: Logger;
 }
 
@@ -117,7 +118,11 @@ export async function ensureAgentLoaded(
         handle,
         buildConfigOverrides(record),
         agentId,
-        { ...extractTimestamps(record), attention: extractAttention(record) },
+        {
+          ...extractTimestamps(record),
+          attention: extractAttention(record),
+          ...(deps.launchEnv ? { launchEnv: deps.launchEnv } : {}),
+        },
         deps.purpose ? { purpose: deps.purpose } : undefined,
       );
       deps.logger.info({ agentId, provider: record.provider }, "Agent resumed from persistence");

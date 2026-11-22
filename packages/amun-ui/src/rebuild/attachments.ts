@@ -49,72 +49,96 @@ export function useAttachments(workAreaId: string) {
   const [files, setFiles] = useState<Attached[]>([]);
   const current = useRef(files);
   current.current = files;
-  const patch = (id: string, change: Partial<Attached>) =>
-    setFiles((list) =>
-      list.map((file) => (file.id === id ? { ...file, ...change } : file)),
-    );
+  const pending = useRef(new Map<string, Promise<Attached>>());
   useEffect(() => {
     setFiles([]);
-    return bridge.onEvent((raw) => {
-      const event = workAttachmentResult.safeParse(raw);
-      if (!event.success) return;
-      patch(event.data.requestId, {
-        state: "ready",
-        recordId: event.data.recordId,
-        read: event.data.read,
-        portion: event.data.portion,
-        text: event.data.text,
-      });
-    });
+    pending.current.clear();
   }, [workAreaId]);
-
   const add = (picked: File[]) => {
     for (const file of picked) {
       // A file already in the draft is not read twice.
       if (current.current.some((item) => item.name === file.name)) continue;
       const id = crypto.randomUUID();
-      setFiles((list) => [
-        ...list,
-        {
-          id,
-          name: file.name,
-          recordId: null,
-          state: "reading",
-          read: "all",
-          portion: null,
-          text: "",
-          image: null,
-          settled: false,
+      const entry: Attached = {
+        id,
+        name: file.name,
+        recordId: null,
+        state: "reading",
+        read: "none",
+        portion: null,
+        text: "",
+        image: null,
+        settled: false,
+      };
+      setFiles((list) => [...list, entry]);
+      const extracted = new Promise<Partial<Attached>>((resolve) => {
+        const finish = (change: Partial<Attached>) => {
+          stop();
+          clearTimeout(timer);
+          resolve(change);
+        };
+        const stop = bridge.onEvent((raw) => {
+          const result = workAttachmentResult.safeParse(raw);
+          if (!result.success || result.data.requestId !== id) return;
+          const { read, portion, text, recordId } = result.data;
+          finish({ read, portion, text, recordId });
+        });
+        const timer = setTimeout(() => finish({ read: "none" }), 30000);
+        void file
+          .arrayBuffer()
+          .then((buffer) =>
+            bridge.send({
+              version: 1,
+              kind: "work-attachment",
+              requestId: id,
+              workAreaId,
+              name: file.name,
+              bytes: new Uint8Array(buffer),
+            }),
+          )
+          .catch(() => finish({ read: "none" }));
+      });
+      const image = file.type.startsWith("image/")
+        ? pastedImage(file).catch(() => null)
+        : null;
+      const reading = Promise.all([extracted, image]).then(
+        ([change, picture]) => {
+          const ready: Attached = {
+            ...entry,
+            ...change,
+            image: picture,
+            state: "ready",
+          };
+          setFiles((list) =>
+            list.map((item) => (item.id === id ? ready : item)),
+          );
+          return ready;
         },
-      ]);
-      if (file.type.startsWith("image/"))
-        void pastedImage(file)
-          .then((image) => patch(id, { image }))
-          .catch(() => undefined);
-      void file.arrayBuffer().then((buffer) =>
-        bridge.send({
-          version: 1,
-          kind: "work-attachment",
-          requestId: id,
-          workAreaId,
-          name: file.name,
-          bytes: new Uint8Array(buffer),
-        }),
       );
+      pending.current.set(id, reading);
     }
   };
-  const remove = (name: string) =>
+  const remove = (name: string) => {
+    for (const file of current.current)
+      if (file.name === name) pending.current.delete(file.id);
     setFiles((list) => list.filter((file) => file.name !== name));
-  const settle = (id: string) => patch(id, { settled: true });
+  };
+  const settle = (id: string) =>
+    setFiles((list) =>
+      list.map((file) => (file.id === id ? { ...file, settled: true } : file)),
+    );
   /** Resolves once every file has been read, then empties the draft. */
-  const take = async () => {
-    for (let waited = 0; waited < 120; waited++) {
-      if (current.current.every((file) => file.state === "ready")) break;
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-    const ready = current.current;
-    setFiles([]);
-    return ready;
+  const take = () => {
+    const picked = current.current;
+    current.current = [];
+    if (picked.length) setFiles([]);
+    return Promise.all(
+      picked.map((file) => {
+        const read = pending.current.get(file.id);
+        pending.current.delete(file.id);
+        return read ?? file;
+      }),
+    );
   };
   /** Starts the Mac's area selection; the capture joins this draft. */
   const screenshot = () => {

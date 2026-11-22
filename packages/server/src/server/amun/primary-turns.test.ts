@@ -70,6 +70,29 @@ describe("messages to the First Mate", () => {
     expect(sessions.pending(space.fmHome)).toBe(0);
   });
 
+  it("returns a completed captain reply while keeping the next turn queued behind a wake", async () => {
+    const { made, turns } = host();
+    const original = made.runAgent;
+    let early: ((text: string) => void) | undefined;
+    made.runAgent = (id, text, collectFollowups, onCaptainReply) => {
+      if (collectFollowups) early = onCaptainReply;
+      return original(id, text);
+    };
+    const sessions = new PrimarySessions(made, "/root");
+    const first = sessions.send(space, "captain request", true);
+    const second = sessions.send(space, "next");
+    await settled();
+    early?.("Dispatched");
+    expect((await first).reply).toBe("Dispatched");
+    expect(sessions.pending(space.fmHome)).toBe(2);
+    expect(turns.map((turn) => turn.text)).toEqual(["captain request"]);
+    turns[0].resolve("Dispatched");
+    await settled();
+    expect(turns.map((turn) => turn.text)).toEqual(["captain request", "next"]);
+    turns[1].resolve("Done");
+    expect((await second).reply).toBe("Done");
+  });
+
   it("closes a turn that failed, so the next message is not blocked by it", async () => {
     const { made, turns, cancelled } = host();
     const sessions = new PrimarySessions(made, "/root");

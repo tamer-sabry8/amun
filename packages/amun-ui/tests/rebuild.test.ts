@@ -364,7 +364,6 @@ describe("shell chrome", () => {
         open: null,
         onChat: noop,
         onNewChat: noop,
-        onSearchChats: noop,
         onMoveChat: noop,
       }),
     );
@@ -399,14 +398,13 @@ describe("shell chrome", () => {
         open: null,
         onChat: noop,
         onNewChat: noop,
-        onSearchChats: noop,
         onMoveChat: noop,
       }),
     );
     expect(html).toContain('aria-label="Sprints"');
     expect(html).toContain('aria-label="Expand sidebar"');
   });
-  it("offers New chat, Search chats and the three views in fixed order", () => {
+  it("keeps one Search tile, New chat and the three views in fixed order", () => {
     const html = renderToStaticMarkup(
       createElement(Sidebar, {
         route: "home",
@@ -419,12 +417,12 @@ describe("shell chrome", () => {
         open: null,
         onChat: noop,
         onNewChat: noop,
-        onSearchChats: noop,
         onMoveChat: noop,
       }),
     );
     expect(html).toContain("New chat");
-    expect(html).toContain('aria-label="Search chats"');
+    expect(html).not.toContain('aria-label="Search chats"');
+    expect(html).toContain('aria-label="Search"');
     expect(
       [...html.matchAll(/role="tab"[^>]*aria-label="([^"]+)"/g)].map(
         (match) => match[1],

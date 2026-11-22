@@ -27,6 +27,7 @@ import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
 import { requestRefOf } from "./requests.ts";
 import {
   newRequestRef,
+  readRequestBlocks,
   requestLine,
   requestProtocol,
   requestStatusLine,
@@ -103,6 +104,7 @@ import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   heldMessage,
+  heldQueue,
   observeHeldMessages,
   inFlight,
   holdMessage,
@@ -521,6 +523,7 @@ type TrackerTypes = {
   task: string | null;
   needs: { type: string; fields: string[] }[];
 };
+const preparing = new Map<string, Promise<void>>();
 const trackerCache = new Map<string, TrackerTypes>();
 /**
  * The work item types of the area's Azure DevOps project, so Firstmate
@@ -1783,9 +1786,10 @@ export function WorkSession({
         eventId: crypto.randomUUID(),
       });
   };
-  const waiting = useSyncExternalStore(observeHeldMessages, () =>
-    heldMessage(threadKey),
+  const queue = useSyncExternalStore(observeHeldMessages, () =>
+    heldQueue(threadKey),
   );
+  const waiting = queue[0];
   /** Sends one turn to Firstmate. The user's message is already in the thread. */
   const deliver = async (
     text: string,
@@ -1796,20 +1800,19 @@ export function WorkSession({
     retry = false,
     /** This turn carries Amun's rules for a conversation that lacked them. */
     briefing = false,
+    ref?: string,
   ) => {
-    if (inFlight.has(threadKey)) {
+    if (!retry && (inFlight.has(threadKey) || heldMessage(threadKey))) {
       // A turn is still out (for example a waiting message being retried):
       // a new message waits behind it instead of being dropped.
-      if (!retry) {
-        const queued = {
-          text,
-          scoped,
-          activityId,
-          image,
-          reason: "busy" as const,
-        };
-        holdMessage(threadKey, queued);
-      }
+      holdMessage(threadKey, {
+        text,
+        scoped,
+        activityId,
+        image,
+        reason: "busy",
+        ref,
+      });
       return;
     }
     inFlight.add(threadKey);
@@ -1831,10 +1834,13 @@ export function WorkSession({
       ).ref;
     // The chat's row shows that Firstmate is writing, only while it is.
     setWriting(entryKey, true);
-    const turn = await askFirstmate(scoped, image);
+    const turn = await askFirstmate(scoped, image).catch((error: unknown) => ({
+      ok: false as const,
+      needsProvider: false,
+      reason:
+        error instanceof Error ? error.message : "Firstmate could not answer.",
+    }));
     setWriting(entryKey, false);
-    setBusy(false);
-    inFlight.delete(threadKey);
     if (turn.ok) {
       const parsed = parseAmunActions(turn.reply);
       const renamed = parsed.actions.find((item) => item.do === "rename");
@@ -1871,37 +1877,39 @@ export function WorkSession({
                     : // Handing work over is always said, even from a silent reply.
                       handed.join(" "));
       if (said)
-        work("message", {
+        await workAsync("message", {
           workAreaId: areaId,
           role: "firstmate",
           text: said,
+          card: {
+            kind: "request-reply",
+            refs: Array.from(
+              new Set([
+                ...(ref ? [ref] : []),
+                ...readRequestBlocks(turn.reply)
+                  .reports.filter((report) => report.status === "delivered")
+                  .map((report) => report.request),
+              ]),
+            ),
+          },
           model: turn.model,
         });
       if (briefing) markBriefed();
       // Reports and documents: linked to a request only by its reference.
       if (/```amun/.test(turn.reply))
-        work("apply-reply", {
+        await workAsync("apply-reply", {
           text: turn.reply,
           workAreaId: areaId,
           chatId: savedIn,
           saveText: false,
         });
+      for (const followup of turn.followups)
+        await workAsync("record-firstmate-reply", {
+          text: followup,
+          model: turn.model,
+        });
       for (const proposed of parsed.actions) raise(proposed);
-      // Only the message this turn carried leaves the wait; a newer one stays.
-      if (heldMessage(threadKey)?.scoped === scoped) {
-        releaseMessage(threadKey);
-      }
-      if (heldMessage(threadKey)) retryWaiting();
     } else if (turn.needsProvider) {
-      const newer = heldMessage(threadKey);
-      if (newer && newer.scoped !== scoped) {
-        // A message queued behind this turn now waits for the provider too.
-        if (turn.needsProvider && waitReason(newer) === "busy") {
-          const message = { ...newer, reason: "provider" as const };
-          holdMessage(threadKey, message);
-        }
-        return;
-      }
       // Kept, not failed: it goes out once a provider is connected.
       const message = {
         text,
@@ -1909,16 +1917,20 @@ export function WorkSession({
         activityId: row,
         image,
         reason: "provider" as const,
+        ref,
       };
-      holdMessage(threadKey, message);
+      setBusy(false);
+      inFlight.delete(threadKey);
+      holdMessage(threadKey, message, true);
       return;
     } else {
       setProblem(turn.reason);
       // This turn failed for a reason other than a provider: it is not kept.
-      if (heldMessage(threadKey)?.scoped === scoped) releaseMessage(threadKey);
       // A message queued behind this failed turn is still sent.
-      if (heldMessage(threadKey)) retryWaiting();
     }
+    setBusy(false);
+    inFlight.delete(threadKey);
+    if (heldMessage(threadKey)) retryWaiting();
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
       work("activity", {
@@ -2059,144 +2071,176 @@ export function WorkSession({
       return;
     }
     // Files in the draft travel with this message.
-    const files = await attachments.take();
-    const text =
-      typed.trim() || `Attached ${files.map((file) => file.name).join(", ")}`;
-    // One message waits at a time; a new one replaces the wait, not the text.
-    releaseMessage(threadKey);
-    lastRequest.current = text;
-    // A chat started from a card carries the card with its first message.
-    const asked = askCard;
-    // Every request gets a stable reference; Firstmate repeats it in its
-    // backlog links, hand-offs and replies (owner, 20 November 2026).
-    const ref = newRequestRef();
-    const attachedDocuments = files.flatMap((file) =>
-      file.recordId ? [file.recordId] : [],
-    );
-    const saved = await workAsync("message", {
-      workAreaId: areaId,
-      role: "you",
-      text,
-      card: asked
-        ? {
-            kind: "ask-card",
-            ref,
-            label: asked.label,
-            fields: asked.fields,
-            documentIds: [
-              ...new Set([
-                ...(
-                  (asked.record as { documents?: { id: string }[] })
-                    .documents ?? []
-                ).map((item) => item.id),
-                ...attachedDocuments,
-              ]),
-            ],
-          }
-        : { kind: "request", ref, documentIds: attachedDocuments },
+    const picked = attachments.files;
+    const readingFiles = attachments.take();
+    const earlier = preparing.get(threadKey);
+    let prepared!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      prepared = resolve;
     });
-    if (saved.ok && saved.ref)
-      await workAsync("register-request", {
-        ref,
-        messageId: saved.ref,
-        // General has no project; a folder's work is the project until
-        // Firstmate says otherwise.
-        projectAreaId:
-          context.area.name === generalConversationName ? null : areaId,
+    preparing.set(threadKey, ready);
+    let delivery: Promise<void> | undefined;
+    try {
+      await earlier;
+      const text =
+        typed.trim() ||
+        `Attached ${picked.map((file) => file.name).join(", ")}`;
+      lastRequest.current = text;
+      // A chat started from a card carries the card with its first message.
+      const asked = askCard;
+      // Every request gets a stable reference; Firstmate repeats it in its
+      // backlog links, hand-offs and replies (owner, 20 November 2026).
+      const ref = newRequestRef();
+      const files = await readingFiles;
+      const attachedDocuments = files.flatMap((file) =>
+        file.recordId ? [file.recordId] : [],
+      );
+      const saved = await workAsync("message", {
+        workAreaId: areaId,
+        role: "you",
+        text,
+        card: asked
+          ? {
+              kind: "ask-card",
+              ref,
+              label: asked.label,
+              fields: asked.fields,
+              documentIds: [
+                ...new Set([
+                  ...(
+                    (asked.record as { documents?: { id: string }[] })
+                      .documents ?? []
+                  ).map((item) => item.id),
+                  ...attachedDocuments,
+                ]),
+              ],
+            }
+          : { kind: "request", ref, documentIds: attachedDocuments },
       });
-    if (asked) setAsk(entryKey, null);
-    // The owner's words are saved here now, so their question can be settled.
-    decided?.();
-    // A conversation that has not been told Amun's rules gets them with this
-    // message: the first one for a work area, and the first after Firstmate's
-    // conversation was started afresh.
-    const briefing = !context.messages.length || needsBriefing();
-    // A Firstmate whose memory has started fresh is given this chat's recap
-    // with the message, without showing anything.
-    const recap = needsBriefing() ? chatRecap(context.messages) : "";
-    // Read before this message is added: what agents finished since the
-    // owner last wrote goes to Firstmate with it.
-    const news = agentNews(context.messages);
-    const record = snapshot.rfps.find((item) => item.id === areaId);
-    const tracker = await askTrackerTypes(areaId);
-    const reasons = await askFailureReasons(
-      snapshot.plans.filter((plan) => plan.workAreaId === areaId),
-    );
-    const header = areaTurnContext(
-      context.area,
-      typeLabels[context.area.type],
-      context.group,
-      record,
-      openBlockers(snapshot.blockers, areaId).map(
-        (item) => `${item.title} (${blockerLine(item, now)})`,
-      ),
-      factsFor(snapshot, context.area.groupId ?? null)
-        .slice(0, 30)
-        .map(factLine),
-      standingPermissionLines(snapshot, context.area.groupId ?? null),
-      [trackerLine(tracker), takeSprintContext(areaId)]
-        .filter(Boolean)
-        .join(" "),
-      publicationLines(snapshot, areaId),
-      context.objectives.map((item) => `${item.metric} (${item.line})`),
-      snapshot.areas
-        .filter(
-          (item) => item.groupId === context.area.groupId && item.id !== areaId,
-        )
-        .map((item) => item.name),
-      notionPageLines(snapshot, areaId),
-      failedPublicationLines(snapshot, areaId, reasons),
-    );
-    // In a fork, Firstmate is told which chat this is and what to set aside.
-    // In a fork or a chat of its own, Firstmate is told which chat this is.
-    const siblings = chatsOf(context.area, snapshot.chats, snapshot.messages);
-    const which = !chat
-      ? // The first chat is named too once the folder has others, so
-        // "continue with that" is never read as another chat's.
-        siblings.some((item) => item.chatId !== null && !item.empty)
-        ? chatNote(
-            context.area.firstChat.title ??
-              text.replace(/\s+/g, " ").slice(0, 60),
-            true,
-            [],
-          ) + "\n"
-        : ""
-      : chat.kind === "fork"
-        ? forkNote(chat, context.messages) + "\n"
-        : chatNote(
-            chat.title || text.replace(/\s+/g, " ").slice(0, 60),
-            context.messages.some((message) => message.role === "you"),
-            siblings
-              .filter((item) => item.chatId !== chat.id && !item.empty)
-              .map((item) => item.title),
-          ) + "\n";
-    const about = asked
-      ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
-      : "";
-    const asks = `${requestLine(ref)}\n${text}`;
-    const scoped = briefing
-      ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
-      : `${header}${which}${asks}${about}`;
-    const withFiles = files.length
-      ? `${scoped}\n\n${attachmentBlock(files)}`
-      : scoped;
-    // Saved documents travel after the owner's words, labelled as reference.
-    const fresh = latest.current;
-    const documents = documentContext({
-      snapshot: fresh.snapshot,
-      areaId,
-      request: text,
-      openId: fresh.pane?.kind === "output" ? fresh.pane.id : null,
-      used: news.length + withFiles.length,
-    });
-    await deliver(
-      text,
-      news + (documents ? `${withFiles}\n\n${documents}` : withFiles),
-      null,
-      files.find((file) => file.image)?.image ?? undefined,
-      false,
-      briefing,
-    );
+      if (saved.ok && saved.ref)
+        await workAsync("register-request", {
+          ref,
+          messageId: saved.ref,
+          // General has no project; a folder's work is the project until
+          // Firstmate says otherwise.
+          projectAreaId:
+            context.area.name === generalConversationName ? null : areaId,
+        });
+      if (asked) setAsk(entryKey, null);
+      // The owner's words are saved here now, so their question can be settled.
+      decided?.();
+      // A conversation that has not been told Amun's rules gets them with this
+      // message: the first one for a work area, and the first after Firstmate's
+      // conversation was started afresh.
+      const briefing = !context.messages.length || needsBriefing();
+      // A Firstmate whose memory has started fresh is given this chat's recap
+      // with the message, without showing anything.
+      const recap = needsBriefing() ? chatRecap(context.messages) : "";
+      // Read before this message is added: what agents finished since the
+      // owner last wrote goes to Firstmate with it.
+      const news = agentNews(context.messages);
+      const record = snapshot.rfps.find((item) => item.id === areaId);
+      const [tracker, reasons] = await Promise.all([
+        askTrackerTypes(areaId),
+        askFailureReasons(
+          snapshot.plans.filter((plan) => plan.workAreaId === areaId),
+        ),
+      ]);
+      const header = areaTurnContext(
+        context.area,
+        typeLabels[context.area.type],
+        context.group,
+        record,
+        openBlockers(snapshot.blockers, areaId).map(
+          (item) => `${item.title} (${blockerLine(item, now)})`,
+        ),
+        factsFor(snapshot, context.area.groupId ?? null)
+          .slice(0, 30)
+          .map(factLine),
+        standingPermissionLines(snapshot, context.area.groupId ?? null),
+        [trackerLine(tracker), takeSprintContext(areaId)]
+          .filter(Boolean)
+          .join(" "),
+        publicationLines(snapshot, areaId),
+        context.objectives.map((item) => `${item.metric} (${item.line})`),
+        snapshot.areas
+          .filter(
+            (item) =>
+              item.groupId === context.area.groupId && item.id !== areaId,
+          )
+          .map((item) => item.name),
+        notionPageLines(snapshot, areaId),
+        failedPublicationLines(snapshot, areaId, reasons),
+      );
+      // In a fork, Firstmate is told which chat this is and what to set aside.
+      // In a fork or a chat of its own, Firstmate is told which chat this is.
+      const siblings = chatsOf(context.area, snapshot.chats, snapshot.messages);
+      const which = !chat
+        ? // The first chat is named too once the folder has others, so
+          // "continue with that" is never read as another chat's.
+          siblings.some((item) => item.chatId !== null && !item.empty)
+          ? chatNote(
+              context.area.firstChat.title ??
+                text.replace(/\s+/g, " ").slice(0, 60),
+              true,
+              [],
+            ) + "\n"
+          : ""
+        : chat.kind === "fork"
+          ? forkNote(chat, context.messages) + "\n"
+          : chatNote(
+              chat.title || text.replace(/\s+/g, " ").slice(0, 60),
+              context.messages.some((message) => message.role === "you"),
+              siblings
+                .filter((item) => item.chatId !== chat.id && !item.empty)
+                .map((item) => item.title),
+            ) + "\n";
+      const about = asked
+        ? `\n\nThe owner is asking about this record, as it was when they opened the chat:\n${JSON.stringify(asked.record)}`
+        : "";
+      const asks = [
+        requestLine(ref),
+        text,
+        "",
+        "Dispatch crew work through Firstmate’s native workflow as soon as the inputs are known. Reuse a completed session startup. If startup is required, complete it before arming the watcher. Keep the request reference first in the dispatch and in the crew’s completion report. Acknowledge dispatch briefly and end the turn.",
+        `For a read-only PRD review with an exact source and an existing available PRD second mate, send one brief using fm-send.sh prd and let that command enforce its native lease and delivery checks. Follow any lease refusal. Ask PRD to load the document once in full (one Read call if it fits, multiple only when required) and send a concise, captain-ready plain-text answer. If you authorize Amun to forward that exact answer when it arrives, start your dispatch with the literal prefix "${ref} amun-relay=read-only ". Only set this marker for read-only reports, never for approvals or writes.`,
+        "When reporting a result, include the tracked fenced amun status, with delivered for a completed answer even if there is no document.",
+      ].join("\n");
+      const scoped = briefing
+        ? `${amunProtocol}\n${requestProtocol}\n\n${header}${which}${recap}${asks}${about}`
+        : `${header}${which}${asks}${about}`;
+      const withFiles = files.length
+        ? `${scoped}\n\n${attachmentBlock(files)}`
+        : scoped;
+      // Saved documents travel after the owner's words, labelled as reference.
+      const fresh = latest.current;
+      const documents = documentContext({
+        snapshot: {
+          ...fresh.snapshot,
+          library: fresh.snapshot.library.filter(
+            (item) => !files.some((file) => file.recordId === item.id),
+          ),
+        },
+        limit: 32000,
+        areaId,
+        request: text,
+        openId: fresh.pane?.kind === "output" ? fresh.pane.id : null,
+        used: news.length + withFiles.length,
+      });
+      delivery = deliver(
+        text,
+        news + (documents ? `${withFiles}\n\n${documents}` : withFiles),
+        null,
+        files.find((file) => file.image)?.image ?? undefined,
+        false,
+        briefing,
+        ref,
+      );
+    } finally {
+      prepared();
+      if (preparing.get(threadKey) === ready) preparing.delete(threadKey);
+    }
+    await delivery;
   };
   /** Tries the waiting message again. It leaves the wait before it is sent. */
   const retryWaiting = () => {
@@ -2211,6 +2255,7 @@ export function WorkSession({
       message.image,
       true,
       message.scoped.includes(amunProtocol),
+      message.ref,
     );
   };
   const sendRef = useRef(send);
@@ -2293,6 +2338,8 @@ export function WorkSession({
     const request = ref
       ? snapshot.requests.find((item) => item.ref === ref)
       : undefined;
+    if (ref && queue.some((item) => item.ref === ref))
+      return <span className="tag warn">Queued</span>;
     if (!request || request.status === "sent") return null;
     const deliveries = (context?.messages ?? []).flatMap((message) => {
       const delivered = deliveredOf(message.card);
@@ -2312,6 +2359,20 @@ export function WorkSession({
       <RequestLine
         request={request}
         deliveries={deliveries}
+        replyId={
+          context?.messages.findLast((message) => {
+            const card = message.card as {
+              kind?: string;
+              refs?: unknown;
+            } | null;
+            return (
+              message.role === "firstmate" &&
+              card?.kind === "request-reply" &&
+              Array.isArray(card.refs) &&
+              card.refs.includes(ref)
+            );
+          })?.id ?? null
+        }
         line={requestStatusLine(
           request,
           new Set(deliveries.map((item) => item.title)).size,
@@ -3116,7 +3177,7 @@ export function WorkSession({
                   </div>
                 </div>
               )}
-              {waiting && (
+              {waiting && (!waiting.ref || waiting.reason !== "busy") && (
                 <>
                   <span
                     className="tag warn"
@@ -3438,7 +3499,6 @@ export function WorkSession({
           autoFocus
           skills
           onBoard={(url) => onPane({ kind: "browser", url })}
-          busy={busy}
           model={model}
           placeholder={
             area.type === "rfp"

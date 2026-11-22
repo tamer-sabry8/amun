@@ -151,3 +151,28 @@ describe("a one-time request to the First Mate", () => {
     expect(await ask()).toEqual({ asked: false });
   });
 });
+
+it("hands the crew a private redacted file and links the full brief to its area", async () => {
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { openWorkStore } = await import("@amun/work-store");
+  const root = await fs.mkdtemp(path.join(tmpdir(), "amun-attachment-test-"));
+  const opened = openWorkStore(":memory:");
+  try {
+    const events = opened.store.handle({version: 1, kind: "work", action: "create-area", groupId: null, type: "product", name: "Review"});
+    const areaId = (events[0] as {ref:string}).ref;
+    const handler = new AmunRpcHandler({amunHome: root, work: opened.store, redactor: opened.redactor, trace: {record() {}}} as unknown as AmunRpcDeps);
+    const body = "A paragraph about the product.\n".repeat(1900) + "token=private-test-value";
+    const response = await handler.handle({id: "1", method: "work.attachment", areaId, name: "brief.md", content: Buffer.from(body).toString("base64")}) as { text: string; recordId: string };
+    const [directory] = await fs.readdir(path.join(root, "attachments"));
+    const file = path.join(root, "attachments", directory!, "reference.txt");
+    expect(response.text).toContain(file);
+    const extracted = await fs.readFile(file, "utf8");
+    expect(extracted).toEqual(opened.redactor.text(body));
+    expect((opened.store.snapshot() as {library: unknown[]}).library).toContainEqual(expect.objectContaining({ id: response.recordId, workAreaIds: [areaId], body: extracted }));
+  } finally {
+    opened.close();
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});

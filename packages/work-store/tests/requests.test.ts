@@ -80,6 +80,78 @@ describe("request references", () => {
   const prd = "amun-r-aaaaaaaaaaaa";
   const email = "amun-r-bbbbbbbbbbbb";
 
+  it("records a plain crew answer in its originating chat and preserves delivery against delayed progress", () => {
+    const { gitex } = setup();
+    const chatId = send("new-chat", { workAreaId: gitex }).ref!;
+    ask(gitex, "Read the full PRD.", prd, chatId);
+    send("message", {
+      workAreaId: gitex,
+      chatId,
+      role: "firstmate",
+      text: "PRD is reading.",
+    });
+    expect(
+      send("record-firstmate-reply", {
+        text:
+          "PRD finished reading.\n" +
+          block({
+            do: "report",
+            request: prd,
+            status: "delivered",
+            role: "PRD",
+          }),
+      }).ok,
+    ).toBe(true);
+    send("apply-reply", {
+      text: block({
+        do: "report",
+        request: prd,
+        status: "working",
+        role: "PRD",
+      }),
+      workAreaId: gitex,
+      chatId,
+    });
+    expect(snap().requests.find((request) => request.ref === prd)?.status).toBe(
+      "delivered",
+    );
+    expect(
+      snap()
+        .chats.find((chat) => chat.id === chatId)
+        ?.messages.map((message) => message.text),
+    ).toEqual([
+      "Read the full PRD.",
+      "PRD is reading.",
+      "PRD finished reading.",
+    ]);
+  });
+
+  it("shows an early PRD completion only once when its ordinary wake arrives", () => {
+    const { gitex } = setup();
+    ask(gitex, "Read the PRD.", prd);
+    const status = {
+      do: "report",
+      request: prd,
+      status: "delivered",
+      role: "PRD",
+    };
+    recordFirstMateReply(
+      store,
+      "PRD has finished.\n" + block(status),
+      null,
+      true,
+    );
+    recordFirstMateReply(
+      store,
+      "PRD sent its finished report.\n" + block(status),
+    );
+    expect(
+      allMessages()
+        .filter((message) => message.role === "firstmate")
+        .map((message) => message.text),
+    ).toEqual(["PRD has finished."]);
+  });
+
   it("links two results that finish out of order to the exact message that asked", () => {
     const { gitex } = setup();
     const chat = send("new-chat", { workAreaId: gitex }).ref!;

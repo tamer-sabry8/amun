@@ -164,6 +164,7 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   },
   "request-report": { own: "Firstmate reported it itself." },
   "apply-reply": { own: "Firstmate's own reply." },
+  "record-firstmate-reply": { own: "Firstmate's own reply." },
   "request-change": {
     own: "Sent to Firstmate as the owner's own request to change project.",
   },

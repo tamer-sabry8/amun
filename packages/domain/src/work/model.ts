@@ -274,10 +274,17 @@ const newWorkRequest =
 // in the sentence, after what the owner wants done with it.
 const newWorkLater =
   /^(?:please\s+)?(?:create|start|add|open|begin|set up|make|plan|write|draft)\b[^.\n]{0,60}?\b(?:an?\s+)?new\s+(product|project|task|rfp)\b/i;
+function creationSentence(text: string) {
+  for (const sentence of text.trim().split(/(?:[.!?]\s+|\n+)/)) {
+    const request = sentence.trim().replace(/^I (?:still )?want to /i, "");
+    if (newWorkRequest.test(request) || newWorkLater.test(request))
+      return request;
+  }
+  return "";
+}
 /** True only when the message itself asks for new work of a named kind. */
 export function asksForNewWork(text: string): boolean {
-  const first = text.trim().split("\n")[0]?.trim() ?? "";
-  return newWorkRequest.test(first) || newWorkLater.test(first);
+  return Boolean(creationSentence(text));
 }
 
 /**
@@ -289,8 +296,8 @@ export function asksForNewWork(text: string): boolean {
 export function newWorkNamed(
   text: string,
 ): { type: "product" | "project" | "task" | "rfp"; name: string } | null {
-  const first = text.trim().split("\n")[0]?.trim() ?? "";
-  if (!asksForNewWork(first)) return null;
+  const first = creationSentence(text);
+  if (!first) return null;
   const kind = /\b(?:new\s+)?(product|project|task|rfp)\b/i.exec(
     first.replace(/^.*?\bnew\s+(?=(?:product|project|task|rfp)\b)/i, ""),
   );
@@ -311,7 +318,9 @@ export function newWorkNamed(
     /\b(?:product|project|task|rfp)\s+for\s+(?!(?:the|a|an|my|our|your|this|that|these|those|me|us|it|them|him|her)\b)([A-Z0-9][^"”'.,;\n]{0,79}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bwith\b|\bby\b|\bon\b|\bdue\b|\bready\b|$)/.exec(
       first,
     );
-  const name = (named?.[1] ?? forName?.[1])?.trim();
+  const name =
+    quoted?.[1]?.trim() ??
+    (named?.[1] ?? forName?.[1])?.trim().replace(/\s+for me$/i, "");
   if (!kind || !name) return null;
   return {
     type: kind[1]!.toLowerCase() as "product" | "project" | "task" | "rfp",

@@ -1070,6 +1070,11 @@ export async function createPaseoDaemon(
       return ensureUnarchivedAgentLoaded(agentId, {
         agentManager,
         agentStorage,
+        launchEnv: expected.firstmateHome ? {
+          FM_HOME: expected.firstmateHome,
+          FM_ROOT_OVERRIDE: expected.cwd,
+          ...(expected.provider === "pi" ? { AMUN_FIRSTMATE_PRIMARY: "1" } : {}),
+        } : undefined,
         logger: rootLogger.child({ module: "amun" }),
       });
     },

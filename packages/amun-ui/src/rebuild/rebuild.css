@@ -2108,6 +2108,9 @@
   opacity: 0;
   transition: opacity 120ms;
 }
+.rb-turn:has(.rb-req-wrap, .tag.warn) .rb-msg-acts {
+  margin-bottom: 2px;
+}
 .rb-turn:hover .rb-msg-acts,
 .rb-msg-acts:focus-within {
   opacity: 1;
@@ -4357,40 +4360,6 @@
   color: var(--muted);
 }
 /* Home: back to the last chat. */
-.rb-continue {
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  justify-content: flex-start;
-  text-align: left;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  color: var(--ink);
-}
-.rb-continue:hover {
-  background: color-mix(in srgb, var(--ink) 4%, var(--card));
-}
-.rb-continue .label {
-  flex: none;
-  font-size: 12px;
-  color: var(--muted);
-}
-.rb-continue .what {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rb-continue .go {
-  flex: none;
-  color: var(--accent);
-  font-size: 13px;
-}
 /* Reading a chat. */
 .rb-new-replies {
   display: flex;

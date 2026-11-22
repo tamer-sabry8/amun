@@ -1050,3 +1050,11 @@ describe("grouping chats by Amun's own rules (owner, 20 November 2026)", () => {
     ).toEqual({ route: "none" });
   });
 });
+
+it("recognizes an explicit creation request after the owner's problem statement", () => {
+  expect(
+    newWorkNamed(
+      "Our product managers need one place to work. I still want to create a new product named Amun for me",
+    ),
+  ).toEqual({ type: "product", name: "Amun" });
+});
