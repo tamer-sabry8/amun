@@ -258,7 +258,7 @@ describe("read-back across plans, sites and memberships", () => {
     );
     expect(
       deliveryRecords(db, "area").find((r) => r.key === "TRA-12")!.sprintId,
-    ).toBe("linear:cycle:4");
+    ).toBe("linear:cycle:TRA:4");
   });
 
   it("reads each Jira item from its own site and drops a sprint Jira no longer reports", async () => {
@@ -328,5 +328,66 @@ describe("read-back across plans, sites and memberships", () => {
     const moved = delivery.items.find((i) => i.key === "SCRUM-17")!;
     expect(moved.status).toBe("In Progress");
     expect(moved.sprintId).toBeNull();
+  });
+});
+
+describe("provider sprints keep their site or team (Codex review on #63)", () => {
+  it("scopes an existing Jira sprint id by its site", () => {
+    const db = fixture();
+    addPlan(
+      db,
+      "site-a",
+      [
+        {
+          id: "a1",
+          summary: "On site A",
+          fields: {
+            site: "a.atlassian.net",
+            project: "A",
+            type: "Task",
+            sprint: "6",
+          },
+        },
+      ],
+      [
+        {
+          id: "a1",
+          state: "created",
+          externalId: "A-1",
+          url: "https://a.atlassian.net/browse/A-1",
+        },
+      ],
+    );
+    addPlan(
+      db,
+      "site-b",
+      [
+        {
+          id: "b1",
+          summary: "On site B",
+          fields: {
+            site: "b.atlassian.net",
+            project: "B",
+            type: "Task",
+            sprint: "6",
+          },
+        },
+      ],
+      [
+        {
+          id: "b1",
+          state: "created",
+          externalId: "B-1",
+          url: "https://b.atlassian.net/browse/B-1",
+        },
+      ],
+    );
+    const records = deliveryRecords(db, "area");
+    expect(records.find((r) => r.key === "A-1")!.sprintId).toBe(
+      "jira:sprint:a.atlassian.net:6",
+    );
+    expect(records.find((r) => r.key === "B-1")!.sprintId).toBe(
+      "jira:sprint:b.atlassian.net:6",
+    );
   });
 });

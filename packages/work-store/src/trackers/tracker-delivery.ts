@@ -112,7 +112,7 @@ export function deliveryRecords(
     // id or title) or something already in the provider (a key, a sprint id
     // or a Linear cycle number), which gets the provider's own scope.
     const scoped = (id: string) => `${plan.id}:${id}`;
-    const local = (ref: string | null, kind: StepKind) => {
+    const local = (ref: string | null, kind: StepKind, scope: string) => {
       if (!ref) return null;
       const wanted = ref.trim().toLowerCase();
       const found = steps.find(
@@ -122,7 +122,7 @@ export function deliveryRecords(
       );
       if (found) return scoped(found.item.id);
       return kind === "sprint"
-        ? providerSprint(provider, ref)
+        ? providerSprint(provider, scope, ref)
         : `${provider}:key:${ref}`;
     };
     for (const { item, step } of steps) {
@@ -138,8 +138,18 @@ export function deliveryRecords(
         acceptance: lines(step.acceptance),
         key: result.externalId ?? null,
         url: result.url ?? null,
-        epicId: step.kind === "story" ? local(step.parent, "epic") : null,
-        sprintId: step.kind === "story" ? local(step.sprint, "sprint") : null,
+        epicId:
+          step.kind === "story" ? local(step.parent, "epic", step.site) : null,
+        sprintId:
+          step.kind === "story"
+            ? local(
+                step.sprint,
+                "sprint",
+                provider === "linear"
+                  ? linearTeam(result.externalId ?? null, step.team ?? "")
+                  : step.site,
+              )
+            : null,
         status: null,
         start: step.kind === "sprint" ? step.start : null,
         end: step.kind === "sprint" ? step.end : null,
@@ -197,9 +207,24 @@ export async function readDelivery(
   return { items, readAt: read ? now().toISOString() : null, unread };
 }
 
-/** A provider sprint (Jira sprint id, Linear cycle number) not in any plan. */
-export const providerSprint = (provider: TrackerId, id: string) =>
-  provider === "linear" ? `linear:cycle:${id}` : `jira:sprint:${id}`;
+/**
+ * A provider sprint not in any plan, scoped where its id is unique: a Jira
+ * sprint id within its site, a Linear cycle number within its team.
+ */
+export const providerSprint = (
+  provider: TrackerId,
+  scope: string,
+  id: string,
+) =>
+  provider === "linear"
+    ? `linear:cycle:${scope.toUpperCase()}:${id}`
+    : `jira:sprint:${scope.toLowerCase()}:${id}`;
+
+/** The Linear team of an issue key (TRA-12 → TRA). */
+export const linearTeam = (key: string | null, fallback: string) =>
+  key && /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(key)
+    ? key.replace(/-\d+$/, "")
+    : fallback;
 
 const hostOf = (url: string | null) => {
   try {
@@ -222,6 +247,7 @@ async function readJira(
   for (const host of hosts)
     await readJiraSite(
       new JiraWriter(session, jiraSite(sites, host)),
+      host,
       mine.filter((item) => hostOf(item.url) === host),
       all.filter((item) => hostOf(item.url) === host),
     );
@@ -229,6 +255,7 @@ async function readJira(
 
 async function readJiraSite(
   jira: JiraWriter,
+  host: string,
   mine: DeliveryItem[],
   all: DeliveryItem[],
 ) {
@@ -259,7 +286,7 @@ async function readJiraSite(
       ? all.find((s) => s.kind === "sprint" && s.key === sprint)
       : undefined;
     item.sprintId = sprint
-      ? (known?.itemId ?? providerSprint("jira", sprint))
+      ? (known?.itemId ?? providerSprint("jira", host, sprint))
       : null;
   }
 }
@@ -271,7 +298,9 @@ async function readLinear(session: TrackerSession, mine: DeliveryItem[]) {
     const now = await linear.issueNow(item.key);
     item.status = now.status;
     // Linear cannot create cycles, so a cycle is only ever a membership.
-    item.sprintId = now.cycle ? providerSprint("linear", now.cycle) : null;
+    item.sprintId = now.cycle
+      ? providerSprint("linear", linearTeam(item.key, ""), now.cycle)
+      : null;
     item.title = now.title ?? item.title;
     item.url = now.url ?? item.url;
   }
