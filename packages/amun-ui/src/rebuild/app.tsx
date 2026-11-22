@@ -4,6 +4,8 @@ import type { SavedPlanningLink } from "./planning-draft.ts";
 // switched off and how to restore it.
 import {
   asksForNewWork,
+  groupMentioned,
+  rfpDetails,
   routeNewWork,
   generalConversationName,
 } from "../../../../packages/domain/src/work/model.ts";
@@ -677,6 +679,7 @@ export function App() {
         name,
         ...(offer.request.priority ? { priority: offer.request.priority } : {}),
         ...(offer.request.dueDate ? { dueAt: offer.request.dueDate } : {}),
+        ...(offer.request.client ? { client: offer.request.client } : {}),
       });
       if (!made.ok || !made.ref) return setNote(made.message);
       targetId = made.ref;
@@ -740,6 +743,7 @@ export function App() {
     const group =
       groupId ??
       snapshot.setup.activeGroupId ??
+      groupMentioned(text, snapshot.groups) ??
       (snapshot.groups.length === 1 ? snapshot.groups[0]!.id : null);
     const routed = files.length
       ? ({ route: "none" } as const)
@@ -754,18 +758,34 @@ export function App() {
           inside: null,
         });
     if (routed.route === "create" && group) {
-      const made = await workAsync("create-area", {
-        // The owner's own message follows into this work, so Firstmate knows.
-        told: true,
-        groupId: group,
-        type: routed.request.type,
-        name: routed.request.name,
-        ...(routed.request.priority
-          ? { priority: routed.request.priority }
-          : {}),
-        ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
-      });
-      if (made.ok && made.ref) return openWork(made.ref, text);
+      if (routed.request.type === "rfp") {
+        const facts = rfpDetails(text);
+        const made = await workAsync("save-rfp", {
+          told: true,
+          groupId: group,
+          name: routed.request.name,
+          client: facts.client ?? "",
+          deadline: facts.deadline ?? routed.request.dueDate,
+          responseOwner: facts.responseOwner,
+          accountOwner: facts.accountOwner,
+          presales: facts.presales,
+        });
+        if (made.ok && made.ref) return openWork(made.ref, text);
+      } else {
+        const made = await workAsync("create-area", {
+          // The owner's own message follows into this work, so Firstmate knows.
+          told: true,
+          groupId: group,
+          type: routed.request.type,
+          name: routed.request.name,
+          ...(routed.request.priority
+            ? { priority: routed.request.priority }
+            : {}),
+          ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
+          ...(routed.request.client ? { client: routed.request.client } : {}),
+        });
+        if (made.ok && made.ref) return openWork(made.ref, text);
+      }
     }
     if (routed.route === "existing") {
       const general = await looseChat(group);

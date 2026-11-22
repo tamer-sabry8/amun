@@ -1035,6 +1035,7 @@ describe("registering the agents with Firstmate", () => {
     expect(once().map((call) => call.params.key)).toEqual([
       "register-agents-v1",
       "draft-reminders-v1",
+      "prd-discovery-charter-v1",
     ]);
     expect(once()[0]!.params).toMatchObject({ space: "alpha" });
     expect(String(once()[1]!.params.text)).toMatch(
@@ -1114,4 +1115,44 @@ it("shows a keyed PRD decision in attention and marks its parked crewmate blocke
   expect(
     fleetAgents(view).find((agent) => agent.id === "crew:prd")?.state,
   ).toBe("waiting");
+});
+
+it("unifies the captain's existing Firstmate secondmate IDs (researcher, prd, designer, product-marketing) with Amun's pool roles without duplicating", () => {
+  const view = {
+    spaces: [],
+    fleet: [
+      {
+        id: "researcher",
+        current_state: {
+          state: "working",
+          detail: "gathering user journey evidence",
+        },
+      },
+      {
+        id: "prd",
+        current_state: { state: "working", detail: "interviewing the captain" },
+      },
+      {
+        id: "designer",
+        current_state: { state: "parked", detail: "ready for user flows" },
+      },
+      {
+        id: "product-marketing",
+        current_state: { state: "working", detail: "comparing alternatives" },
+      },
+    ],
+    holds: [],
+    work: null,
+  };
+  const agents = fleetAgents(view);
+  expect(
+    agents
+      .filter((a) => a.id.startsWith("crew:"))
+      .map((a) => [a.id, a.role, a.state]),
+  ).toEqual([
+    ["crew:researcher", "Research & Insights", "working"],
+    ["crew:prd", "Product Manager", "working"],
+    ["crew:designer", "UX", "idle"],
+    ["crew:product-marketing", "Product Marketing", "working"],
+  ]);
 });

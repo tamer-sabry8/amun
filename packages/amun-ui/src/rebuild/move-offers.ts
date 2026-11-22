@@ -143,7 +143,13 @@ export function moveQuestion(
   return {
     label: one ? "Question" : "Suggestion",
     title: one
-      ? `This looks like a new ${offer.request.type === "rfp" ? "RFP" : offer.request.type}`
+      ? `This looks like a new ${
+          offer.request.type === "rfp"
+            ? "RFP"
+            : offer.request.type === "task"
+              ? "Initiative"
+              : offer.request.type
+        }`
       : "This may belong in its own folder",
     detail: one
       ? `“${offer.request.name}” is not part of ${here ?? "this chat"}. Your message has not been sent yet.`

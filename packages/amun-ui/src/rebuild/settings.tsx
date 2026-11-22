@@ -58,7 +58,7 @@ const conditions = [
   [null, "Everything else"],
   ["delivery", "Client delivery tickets"],
   ["product", "Product work"],
-  ["task", "Tasks"],
+  ["task", "Initiatives"],
   ["rfp", "RFPs"],
 ] as const;
 const actions = [

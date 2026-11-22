@@ -17,7 +17,8 @@ export async function runAdoOperation(
         | "suggest-sprint-stories"
         | "apply-sprint-moves"
         | "inspect-sprint-submission"
-        | "compare-prd";
+        | "compare-prd"
+        | "create-sprint";
     }
   >,
   target: AdoDestination,

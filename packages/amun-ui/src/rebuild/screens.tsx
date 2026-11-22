@@ -60,7 +60,7 @@ import {
 } from "../../../../packages/domain/src/work/council.ts";
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
-import { ProgressCard, WorkSheet } from "./work-cards.tsx";
+import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -2473,6 +2473,7 @@ export function Portfolio({
   const tracked = portfolioOrder(
     areas.filter((area) => area.type === "product" || area.type === "project"),
     now,
+    (area) => workProgress(area, snapshot),
   );
   const others = areas.filter(
     (area) => area.type !== "product" && area.type !== "project",
@@ -2488,7 +2489,7 @@ export function Portfolio({
     <Page
       title="Portfolio"
       wide
-      line="Every product, project, task and RFP. Open one to see where it stands."
+      line="Every product, project, Initiative and RFP. Open one to see where it stands."
       footer={
         <Composer
           placeholder="Ask Firstmate. Its answer opens in the conversation."

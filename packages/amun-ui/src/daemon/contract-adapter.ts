@@ -8,6 +8,7 @@ import {
   draftingRule,
   heldInstruction,
   heldOutcome,
+  prdDiscoveryCharterRule,
 } from "../../../domain/src/work/held-tasks.ts";
 import {
   firstmateNotice,
@@ -35,9 +36,28 @@ const slug = (text: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+/**
+ * Known Firstmate/Herdr secondmate ids that already own an Amun catalog role
+ * (for example in the captain's data/secondmates.md roster).
+ */
+const secondmateRoleAliases: Record<string, string> = {
+  researcher: "Research & Insights",
+  prd: "Product Manager",
+  designer: "UX",
+  "product-marketing": "Product Marketing",
+  video: "Content",
+  "solution-architect": "Solution & AI Architecture",
+  bid: "Proposal & Bid",
+  presales: "Presales & Solutioning",
+};
+
 /** A secondmate whose id names a pool specialist shows on that card. */
 export function poolRole(taskId: string): string | null {
   const id = slug(taskId);
+  if (secondmateRoleAliases[id]) return secondmateRoleAliases[id]!;
+  for (const [alias, role] of Object.entries(secondmateRoleAliases)) {
+    if (id.startsWith(alias + "-")) return role;
+  }
   const found = agentCatalog.find((profile) => {
     const name = slug(profile.name);
     return id === name || id.startsWith(name + "-");
@@ -737,6 +757,16 @@ export class ContractAdapter {
         space,
         key: "draft-reminders-v1",
         text: draftingRule,
+      })
+      .catch(() => undefined);
+    // The owner's Product Manager (`prd`) discovery charter and 20-point
+    // coverage rule, collaborating with Research & Insights (`researcher`),
+    // Product Marketing (`product-marketing`), and UX (`designer`).
+    void this.daemon
+      .request("primary.once", {
+        space,
+        key: "prd-discovery-charter-v1",
+        text: prdDiscoveryCharterRule,
       })
       .catch(() => undefined);
   }

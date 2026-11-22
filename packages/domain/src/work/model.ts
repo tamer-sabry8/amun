@@ -269,11 +269,11 @@ export function intake(input: {
 export const generalConversationName = "Chat with Firstmate";
 
 const newWorkRequest =
-  /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b/i;
+  /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|initiative|rfp|delivery project|client project)\b/i;
 // "Create a new PRD for a new product named X": the new work is named later
 // in the sentence, after what the owner wants done with it.
 const newWorkLater =
-  /^(?:please\s+)?(?:create|start|add|open|begin|set up|make|plan|write|draft)\b[^.\n]{0,60}?\b(?:an?\s+)?new\s+(product|project|task|rfp)\b/i;
+  /^(?:please\s+)?(?:create|start|add|open|begin|set up|make|plan|write|draft)\b[^.\n]{0,60}?\b(?:an?\s+)?new\s+(product|project|task|initiative|rfp)\b/i;
 function creationSentence(text: string) {
   for (const sentence of text.trim().split(/(?:[.!?]\s+|\n+)/)) {
     const request = sentence.trim().replace(/^I (?:still )?want to /i, "");
@@ -298,8 +298,11 @@ export function newWorkNamed(
 ): { type: "product" | "project" | "task" | "rfp"; name: string } | null {
   const first = creationSentence(text);
   if (!first) return null;
-  const kind = /\b(?:new\s+)?(product|project|task|rfp)\b/i.exec(
-    first.replace(/^.*?\bnew\s+(?=(?:product|project|task|rfp)\b)/i, ""),
+  const kind = /\b(?:new\s+)?(product|project|task|initiative|rfp)\b/i.exec(
+    first.replace(
+      /^.*?\bnew\s+(?=(?:product|project|task|initiative|rfp)\b)/i,
+      "",
+    ),
   );
   // A quoted name is taken whole ("Research and Development"); only an
   // unquoted one ends at "and", "to", "that" or "which".
@@ -309,21 +312,30 @@ export function newWorkNamed(
     );
   const named =
     quoted ??
-    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|$)/i.exec(
+    /\b(?:named|called|name|titled)\s*[:\-]?\s*([^"”'.,;\n]{1,80}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bfor\s+client\b|\bclient\s*(?:is|:)\b|\bdue\b|\bdeadline\b|\bready\b|\bby\b|$)/i.exec(
       first,
     );
   // "Create a new project for Gitex to be high priority": the name follows
-  // "for". Only a proper name counts, so "a product for the pilot" names nothing.
+  // "for". Only a proper name counts, so "a product for the pilot" or
+  // "a project for client X" names nothing here.
   const forName =
-    /\b(?:product|project|task|rfp)\s+for\s+(?!(?:the|a|an|my|our|your|this|that|these|those|me|us|it|them|him|her)\b)([A-Z0-9][^"”'.,;\n]{0,79}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bwith\b|\bby\b|\bon\b|\bdue\b|\bready\b|$)/.exec(
+    /\b(?:product|project|task|initiative|rfp)\s+for\s+(?!(?:the|a|an|my|our|your|this|that|these|those|me|us|it|them|him|her|client)\b)([A-Z0-9][^"”'.,;\n]{0,79}?)\s*(?:[.,;\n]|\band\b|\bto\b|\bthat\b|\bwhich\b|\bwith\b|\bby\b|\bon\b|\bdue\b|\bready\b|\bfor\s+client\b|$)/.exec(
+      first,
+    );
+  const colonName =
+    /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|initiative|rfp)\s*:\s*["“']?([^"”'.,;\n]{1,80}?)["”']?\s*(?:[.,;\n]|$)/i.exec(
       first,
     );
   const name =
     quoted?.[1]?.trim() ??
-    (named?.[1] ?? forName?.[1])?.trim().replace(/\s+for me$/i, "");
+    (named?.[1] ?? forName?.[1] ?? colonName?.[1])
+      ?.trim()
+      .replace(/\s+for me$/i, "");
   if (!kind || !name) return null;
+  const rawKind = kind[1]!.toLowerCase();
   return {
-    type: kind[1]!.toLowerCase() as "product" | "project" | "task" | "rfp",
+    type: (rawKind === "initiative" ? "task" : rawKind) as
+      "product" | "project" | "task" | "rfp",
     name,
   };
 }
@@ -417,6 +429,8 @@ export interface NewWorkRequest {
   priority: WorkPriority | null;
   /** YYYY-MM-DD, only when the message names a day. */
   dueDate: string | null;
+  /** Stated client ("for client X"), when it is a project. */
+  client?: string | null;
 }
 
 /**
@@ -449,10 +463,13 @@ export function routeNewWork(input: {
 }): NewWorkRoute {
   const named = newWorkNamed(input.text);
   if (!named) return { route: "none" };
+  const client =
+    named.type === "project" ? rfpDetails(input.text).client : null;
   const request: NewWorkRequest = {
     ...named,
     priority: statedPriority(input.text),
     dueDate: statedDueDate(input.text, input.today),
+    ...(client ? { client } : {}),
   };
   const twin = input.areas.find((area) => sameWorkName(area.name, named.name));
   if (input.inside) {
@@ -506,7 +523,7 @@ export function nameFromRequest(text: string, fallback = "Untitled") {
       ? value
       : (identifier.exec(value)?.[1] ?? value.split(afterName)[0]) || value;
   const lead =
-    /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i;
+    /^(?:please\s+)?(?:create|start|track|add|open|begin|set up|make|plan)\s+(?:an?\s+|the\s+|my\s+)?(?:new\s+)?(?:product|project|task|initiative|rfp|delivery project|client project)\b\s*(?:for|from|about|on|to|:|-|–)?\s*/i;
   const afterLead = lead.test(line) ? line.replace(lead, "") : null;
   const leadingQuote =
     afterLead === null ? null : /^["“]([^"”]+)["”]/.exec(afterLead);
@@ -659,7 +676,7 @@ export function rfpDetails(text: string, now: Date = new Date()) {
   const client = known(
     /\bclient\s*(?:is|:)?\s*["“]([^"”]+)["”]/i.exec(text)?.[1] ??
       new RegExp(
-        String.raw`\bclient\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline)\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
+        String.raw`\bclient\s*(?:is|:)?\s*([^,;\n]+?)(?=\s*(?:,|;|\n|\.(?:\s|$)|$)|\s+(?:due|deadline|ready|by|to\s+be|and\s+(?:ready|due|high|low|medium|urgent|top|priority))\b|\s+(?:low|medium|normal|high|top|urgent|critical)[\s-]+priority\b|\s+priority\b|\s+(?:(?:rfp|response|account|sales)\s+)?owner\b)`,
         "i",
       ).exec(text)?.[1],
   );

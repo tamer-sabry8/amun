@@ -70,11 +70,37 @@ function Ring({
   );
 }
 
-/** What Amun knows of a work's progress. Null until Azure DevOps is read. */
-export function workProgress(area: Area): WorkProgress | null {
-  // Nothing reads Azure DevOps for this yet, whatever the work is.
-  void area;
-  return null;
+/**
+ * What Amun knows of a work's progress from verified sprint or backlog evidence.
+ * Returns null when no stories are tracked yet; stale/unknown evidence is flagged.
+ */
+export function workProgress(
+  area: Area,
+  snapshot?: Snapshot,
+): WorkProgress | null {
+  if (!snapshot) return null;
+  const sprints = snapshot.sprints.filter(
+    (s) => s.workAreaId === area.id && !s.draft && s.total > 0,
+  );
+  if (!sprints.length) return null;
+  const total = sprints.reduce((sum, s) => sum + s.total, 0);
+  const done = sprints.reduce((sum, s) => sum + s.done, 0);
+  const blocked = sprints.reduce((sum, s) => sum + s.blocked, 0);
+  if (total <= 0) return null;
+  const donePercent = Math.max(
+    0,
+    Math.min(100, Math.round((done / total) * 100)),
+  );
+  const stale = sprints.some((s) => s.changedInAdo);
+  const parts = [
+    `${done} of ${total} stories done`,
+    ...(blocked > 0 ? [`${blocked} blocked`] : []),
+    ...(stale ? ["changed in ADO · refresh to verify"] : []),
+  ];
+  return {
+    donePercent,
+    line: parts.join(" · "),
+  };
 }
 
 export function ProgressCard({
@@ -88,7 +114,7 @@ export function ProgressCard({
   now: number;
   onOpen(): void;
 }) {
-  const progress = workProgress(area);
+  const progress = workProgress(area, snapshot);
   const card = portfolioCard(area, now, progress);
   const tone = card.atRisk ? "bad" : "good";
   const waiting = snapshot.attention.filter(
@@ -168,7 +194,7 @@ export function WorkSheet({
 }) {
   const [tab, setTab] = useState<Tab>("summary");
   const sheet = useRef<HTMLDivElement>(null);
-  const progress = workProgress(area);
+  const progress = workProgress(area, snapshot);
   const card = portfolioCard(area, now, progress);
   const tone = card.atRisk ? "bad" : "good";
   const blockers = openBlockers(snapshot.blockers, area.id);
@@ -328,18 +354,34 @@ export function WorkSheet({
             <>
               <div className="rb-sum-head">
                 <h3>Current summary</h3>
-                <button
-                  className="btn solid"
-                  onClick={() => {
-                    onClose();
-                    onAsk(
-                      area.id,
-                      `Give me a short summary of ${area.name}: where it stands, what changed, and what needs my attention.`,
-                    );
-                  }}
-                >
-                  Ask Firstmate for a summary
-                </button>
+                <div className="row wrap">
+                  {area.type === "task" && (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        onClose();
+                        onAsk(
+                          area.id,
+                          `Please convert ${area.name} from an Initiative to a Project.`,
+                        );
+                      }}
+                    >
+                      Convert to Project
+                    </button>
+                  )}
+                  <button
+                    className="btn solid"
+                    onClick={() => {
+                      onClose();
+                      onAsk(
+                        area.id,
+                        `Give me a short summary of ${area.name}: where it stands, what changed, and what needs my attention.`,
+                      );
+                    }}
+                  >
+                    Ask Firstmate for a summary
+                  </button>
+                </div>
               </div>
               <p className={area.purpose ? undefined : "muted"}>
                 {area.purpose ||
@@ -347,7 +389,42 @@ export function WorkSheet({
               </p>
             </>
           )}
-          {tab === "stories" && needsAzure("its stories")}
+          {tab === "stories" &&
+            (() => {
+              const areaSprints = snapshot.sprints.filter(
+                (s) => s.workAreaId === area.id && s.stories.length > 0,
+              );
+              if (!areaSprints.length) return needsAzure("its stories");
+              return (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {areaSprints.map((sprint) => (
+                    <section key={sprint.id} aria-label={sprint.name}>
+                      <h4>
+                        {sprint.name}
+                        {sprint.changedInAdo && (
+                          <span className="tag warn" style={{ marginLeft: 8 }}>
+                            Stale · changed in ADO
+                          </span>
+                        )}
+                      </h4>
+                      <ol className="rb-notes">
+                        {sprint.stories.map((story) => (
+                          <li key={story.id}>
+                            <span className="muted small">
+                              {story.owner ?? "Owner unknown"} ·{" "}
+                              {story.points === null
+                                ? "Points unknown"
+                                : `${story.points} pts`}
+                            </span>
+                            <p>{story.title}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  ))}
+                </div>
+              );
+            })()}
           {tab === "pulls" && needsAzure("its pull requests")}
           {tab === "activity" &&
             (activity.length ? (

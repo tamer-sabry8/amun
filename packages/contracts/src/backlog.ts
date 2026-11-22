@@ -314,6 +314,30 @@ export const adoOperation = z.discriminatedUnion("action", [
   z.strictObject({ ...operationContext, action: z.literal("targets") }),
   z.strictObject({
     ...operationContext,
+    action: z.literal("create-sprint"),
+    space: id,
+    workAreaId: id,
+    chatId: id.nullable().optional(),
+    ref: z.string().regex(/^amun-r-[0-9a-f]{12}$/),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(128)
+      .regex(/^[^\\/:"*?<>|]+$/),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    finishDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+  }),
+  z.strictObject({
+    ...operationContext,
     action: z.literal("preview"),
     level: id.optional(),
     intent: z.enum(["publish", "commit"]),
@@ -362,6 +386,15 @@ export const operationResult = z.object({
   preview: z.string().optional(),
   requestRef: z.string().optional(),
   suggestions: z.array(goalSuggestion).optional(),
+  createdSprint: z
+    .object({
+      id,
+      name: id,
+      path: id,
+      start: z.string().max(64),
+      finish: z.string().max(64),
+    })
+    .optional(),
   receipts: z
     .array(
       z.object({

@@ -305,6 +305,47 @@ export class AdoService {
           )),
         };
       }
+      if (request.action === "create-sprint") {
+        if (!dispatch) throw Error("Firstmate is unavailable.");
+        const existing = await d.sprints(request.team);
+        const twin = existing.find(
+          (s) =>
+            s.name.trim().toLowerCase() === request.name.trim().toLowerCase(),
+        );
+        if (twin) {
+          return {
+            ...meta,
+            kind: "ado-operation-result",
+            requestRef: request.ref,
+            createdSprint: twin,
+            message: `Iteration “${twin.name}” already exists on ${request.team} (${twin.path}).`,
+          };
+        }
+        const prompt =
+          `Request ${request.ref} · Create new sprint iteration “${request.name}”` +
+          (request.startDate && request.finishDate
+            ? ` (${request.startDate} to ${request.finishDate})`
+            : "") +
+          ` for team ${request.team} in ${project}. Amun executes and verifies team visibility through its governed Azure adapter after you accept. Do not perform a second write. Reply with exactly ACCEPT ${request.ref} to accept, or explain the hold.`;
+        const accepted =
+          (await dispatch(request.space, prompt)).trim() ===
+          "ACCEPT " + request.ref;
+        if (!accepted || !mapped())
+          throw Error("Firstmate did not confirm sprint creation.");
+        const created = await client.createTeamIteration({
+          team: request.team,
+          name: request.name,
+          startDate: request.startDate,
+          finishDate: request.finishDate,
+        });
+        return {
+          ...meta,
+          kind: "ado-operation-result",
+          requestRef: request.ref,
+          createdSprint: created,
+          message: `Created and verified iteration “${created.name}” (${created.path}) for ${request.team}.`,
+        };
+      }
       return runAdoOperation(this.db, request, target, d, client, mapped, {
         workspace: this.workspace,
         dispatch,

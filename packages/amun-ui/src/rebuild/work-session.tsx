@@ -1737,10 +1737,45 @@ export function WorkSession({
           workAreaId: areaId,
           role: "firstmate",
           text: !result
-            ? `“${name}” is not a task, so there is nothing to convert.`
+            ? `“${name}” is not an Initiative, so there is nothing to convert.`
             : result.ok
               ? `Done. “${name}” is now a project. Its conversation, history, links, objective and tracker are kept, and nothing outside Amun was changed.`
               : `I could not convert “${name}”. ${result.message}`,
+        });
+      })();
+    else if (proposed.do === "link-product")
+      void (async () => {
+        const snap = latest.current.snapshot;
+        const groupId = context?.area.groupId ?? null;
+        const product = findNamed(
+          snap.areas.filter(
+            (item) =>
+              item.type === "product" &&
+              item.groupId === groupId &&
+              item.id !== areaId,
+          ),
+          proposed.product,
+          (item) => item.name,
+        );
+        if (!product) {
+          work("message", {
+            workAreaId: areaId,
+            role: "firstmate",
+            text: `I could not find a Product named “${proposed.product}” in this group to link.`,
+          });
+          return;
+        }
+        const linked = await workAsync("relate-areas", {
+          fromId: areaId,
+          toId: product.id,
+          relation: "implements",
+        });
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: linked.ok
+            ? `Linked. This project now implements “${product.name}”.`
+            : linked.message,
         });
       })();
     else if (proposed.do === "delegate")
@@ -1994,6 +2029,7 @@ export function WorkSession({
             ? { priority: routed.request.priority }
             : {}),
           ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
+          ...(routed.request.client ? { client: routed.request.client } : {}),
         });
         if (made.ok && made.ref) {
           sendAsTyped(typed);
@@ -2589,6 +2625,17 @@ export function WorkSession({
                     >
                       Rename
                     </button>
+                    {area.type === "task" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          work("convert-task", { areaId, convert: true });
+                        }}
+                      >
+                        Convert to Project
+                      </button>
+                    )}
                     {area.type === "project" && (
                       <button
                         role="menuitem"
@@ -2600,6 +2647,56 @@ export function WorkSession({
                         {area.client ? "Change client" : "Set client"}
                       </button>
                     )}
+                    {area.type === "project" &&
+                      snapshot.areas.filter(
+                        (item) =>
+                          item.type === "product" &&
+                          item.groupId === area.groupId &&
+                          item.id !== areaId,
+                      ).length > 0 && (
+                        <>
+                          <div className="rb-menu-title">
+                            Implements product
+                          </div>
+                          {snapshot.areas
+                            .filter(
+                              (item) =>
+                                item.type === "product" &&
+                                item.groupId === area.groupId &&
+                                item.id !== areaId,
+                            )
+                            .map((product) => {
+                              const isLinked = snapshot.relations.some(
+                                (rel) =>
+                                  rel.kind === "implements" &&
+                                  ((rel.fromId === areaId &&
+                                    rel.toId === product.id) ||
+                                    (rel.fromId === product.id &&
+                                      rel.toId === areaId)),
+                              );
+                              return (
+                                <button
+                                  key={product.id}
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setMenu(null);
+                                    if (!isLinked)
+                                      work("relate-areas", {
+                                        fromId: areaId,
+                                        toId: product.id,
+                                        relation: "implements",
+                                      });
+                                  }}
+                                >
+                                  {product.name}
+                                  {isLinked && (
+                                    <span className="hint">Linked</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                        </>
+                      )}
                     <button
                       role="menuitem"
                       onClick={() => setConfirmDelete(true)}
@@ -2668,7 +2765,23 @@ export function WorkSession({
           {area.type === "project" && area.client && clientDraft === null && (
             <span className="tag">Client: {area.client}</span>
           )}
-          {area.convertedFrom && <span className="tag">Was a task</span>}
+          {area.convertedFrom && <span className="tag">Was an Initiative</span>}
+          {context.related.map((rel) =>
+            rel.area ? (
+              <button
+                key={rel.area.id}
+                className="tag"
+                title={`Open ${rel.area.name}`}
+                onClick={() => onWork(rel.area!.id, null)}
+              >
+                {rel.kind === "implements"
+                  ? area.type === "project"
+                    ? `Implements: ${rel.area.name}`
+                    : `Project: ${rel.area.name}`
+                  : `From: ${rel.area.name}`}
+              </button>
+            ) : null,
+          )}
           <span className="grow" />
           {area.productId && !open && (
             <>
@@ -3357,7 +3470,7 @@ export function WorkSession({
                         work("convert-task", { areaId, convert: false })
                       }
                     >
-                      Keep as task
+                      Keep as Initiative
                     </button>
                   </div>
                   <span className="note">

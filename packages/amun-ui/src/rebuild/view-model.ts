@@ -33,7 +33,7 @@ export type Area = Snapshot["areas"][number];
 export const typeLabels: Record<Area["type"], string> = {
   product: "Product",
   project: "Project",
-  task: "Task",
+  task: "Initiative",
   rfp: "RFP",
 };
 
@@ -333,6 +333,7 @@ export type AmunAction =
   | { do: "fact-forget"; fact: string }
   | { do: "delete" }
   | { do: "convert" }
+  | { do: "link-product"; product: string }
   | {
       do: "delegate";
       agent: string;
@@ -556,6 +557,10 @@ function action(raw: unknown): AmunAction | null {
     case "convert":
       // No id from the model: it always means the work this chat is in.
       return { do: "convert" };
+    case "link-product": {
+      const product = text(input.product, 160);
+      return product ? { do: "link-product", product } : null;
+    }
     case "delete":
       // Only ever a request: the owner confirms it in the chat.
       return { do: "delete" };
@@ -822,8 +827,10 @@ export function areaTurnContext(
     : "";
   const client =
     area.type === "project"
-      ? ` This project exists in Amun. Its saved due date is ${area.dueAt ?? "unset"}. The client of this project is ${area.client || "not set"}; that is authoritative for this project only.`
-      : "";
+      ? ` This project exists in Amun. Its saved due date is ${area.dueAt ?? "unset"}. The client of this project is ${area.client || "not set"}; that is authoritative for this project only. For a Project, run a scoped interview in this chat (client or sponsor where applicable, delivery outcome, due date, deliverables, tasks, dependencies, owner and who accepts the work), reusing any existing brief or linked Product facts, asking one unresolved material question at a time, and recording acceptance and handover.`
+      : area.type === "task"
+        ? ` This Initiative (stored type task) exists in Amun. Its saved due date is ${area.dueAt ?? "unset"}. Retain its outcome, next action, optional deadline, reminder and completion evidence in this Initiative chat. If its scope grows into multiple deliverables or sprints, offer in-place conversion to a Project.`
+        : "";
   const types = tracker ? ` ${tracker}` : "";
   return `[${typeLabel}: ${area.name}${group ? " · " + group : ""}. Everything below is about this work area only; details from other work areas or earlier conversations do not apply to it.${client}${stuck}${tracked}${others}${remembered}${allowed}${publications}${failedList}${pageList}${types}]\n${workTypeGuard(area.type, record)}`;
 }
@@ -855,7 +862,8 @@ export const amunProtocol = [
   '{"do":"fact-correct","fact":"words from the fact","value":"the corrected fact"} corrects a remembered fact straight away when the owner says it is wrong; {"do":"fact-forget","fact":"words from the fact"} forgets one when the owner asks. Neither needs approval or is a plan, and both only change what Amun remembers on this Mac. A fact kept in Notion stays there until the owner removes it. A pinned memory entry is never changed this way. Say in one short line what you changed.',
   `{"do":"delegate","agent":"…","title":"short name of the job","task":"everything the agent needs to do it"} (add "repo":"https://github.com/owner/name", the connected repository, when the owner asks for a change to code in it: pick an agent whose profile fits code and README edits, normally Solution & AI Architecture, never Product Manager; it works in Amun\'s own copy, you never edit code yourself, and the owner reviews the exact change before any pull request is opened; add "acceptance":true when the owner asks for an acceptance checklist for a story or deliverable: give it to QA, and the checklist comes back for the owner to accept or not) hands a job to one of your agents, who does it and reports back to you; you then pass the result on. You are the coordinator: anything that is real work (a PRD, research, test cases, a competitive review, pricing options, release notes, a stakeholder pack) goes to the agent whose job it is, never written by you. Answer quick questions and make small changes yourself. Pick the agent by what it is for, tell the owner in one line who is on it, and never claim the work is done before the result arrives. Your agents: ${agentCatalog.map((agent) => `${agent.name} (${agent.summary})`).join("; ")}.`,
   "When the owner states a length for a document (for example 1-2 pages or under 90 words), say it in the delegate task as a line of its own, in the owner's words, and keep to it.",
-  '{"do":"convert"} turns this task into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
+  '{"do":"convert"} turns this Initiative (stored type task) into a project, in place, when the owner explicitly asks for it. The conversation, history, links, objective and tracker stay, it stays in its group, and nothing outside Amun is created or moved. Amun reports whether it worked, so never say it is converted yourself; only that you have asked Amun to.',
+  '{"do":"link-product","product":"name of the product"} links this bounded Project to an existing Product in the same group as implementing it, when the owner authorizes the association. It needs no provider plan and reuses the linked Product facts.',
   '{"do":"delete"} asks the owner to confirm deleting the work this conversation is about. Use it when they ask to delete or remove it. You cannot delete it yourself, so never say it is deleted; say you have asked them to confirm.',
   '{"do":"plan","planKind":"stories|sprint_plan|roadmap|edit","destination":"ado|notion","summary":"…","items":[{"summary":"…","fields":{}}]} proposes changes to Azure DevOps or Notion, the only places a plan can be published to. Amun raises the plan and may refuse it; never say a review card or plan is ready, shown or waiting, only that you have asked Amun to raise it for approval. Nothing is published until the owner approves exactly that list. Write item fields with these exact lowercase names. Azure DevOps, new item: type, description, acceptance (one criterion per line), area, iteration, parent (the number of an existing work item in this same project to create it under, for example a Task under #123: set type to the task type and parent to "123"), and the required fields of the work item type listed above for this project, plus "Original Estimate", "Remaining Work" and "Completed Work" (numbers, in hours) and "Activity" when the project has them. Where a field lists allowed values, only one of those is accepted. Never pick a required value yourself: ask the owner for exactly the values the type needs, listing the allowed values for a choice, then put them in the fields of the item under those names. Amun can set that parent link: it checks the parent exists, shows "Under #123" on the review card for the owner to approve, and verifies the link after creating. Never say Amun cannot set a parent or that the item will be standalone. Azure DevOps, existing item (moving it to a sprint or changing who it is assigned to): workitem (its number) plus iteration and/or assignedto (a name or email), and nothing else. Notion, new page: title (the page title), body; it goes under the Notion destination chosen in Settings, which the review card shows. Notion, update of a page Amun created (listed above in this work area): page (its exact page id or link from that list), plus title (optional; kept when left out) and either body (the whole new text) or append (only the lines to add at the end of the existing text), never both; the review card shows the exact result for the owner to approve. Amun cannot update any page it did not create, so say so plainly and do not raise a plan for one. Leave out any other field, because it will be refused, and never name a different project. If an item was not created, its reason is listed under the failed publications above: use it, tell the owner what is needed, and raise a corrected plan; never guess. Stories cannot yet be added to a local draft sprint, and a plan is never local: if the owner asks for a local-only change or says not to publish or change Azure DevOps or Notion, do not raise a plan; say plainly that adding stories to a draft sprint is not available yet and nothing was changed.',
   '{"do":"question","title":"…","detail":"…","options":["…"]} asks only for information that would change the result. When a crew member is blocked on the owner, include this question with the actual decision and choices in your reply so Amun can surface it. Reuse an already-open question for the same decision.',
