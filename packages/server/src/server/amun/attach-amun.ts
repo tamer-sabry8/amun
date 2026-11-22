@@ -85,6 +85,7 @@ export interface AttachAmunInput {
 export interface StoredAgentMatch {
   provider: string;
   cwd: string;
+  firstmateHome?: string;
 }
 
 export interface AmunAttachment {
@@ -135,7 +136,11 @@ export function agentManagerHost(
           async resumeAgent(agentId: string, launch: PrimaryLaunch) {
             // Only this home's First Mate: same harness, same Firstmate checkout.
             // The stored record is checked before any session is opened.
-            const agent = await loadAgent(agentId, { provider: launch.provider, cwd: launch.cwd });
+            const agent = await loadAgent(agentId, {
+              provider: launch.provider,
+              cwd: launch.cwd,
+              ...(launch.env.FM_HOME ? { firstmateHome: launch.env.FM_HOME } : {}),
+            });
             if (!agent) return false;
             if (agent.provider !== launch.provider || agent.cwd !== launch.cwd) {
               // Never leave a rejected First Mate running beside the new one.

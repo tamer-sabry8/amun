@@ -2715,8 +2715,7 @@ export class PiRpcAgentClient implements AgentClient {
       systemPrompt: composeAgentSystemPrompt(resumeConfig.config),
       mcpServers: mcp?.kind === "builtin" ? mcp.servers : undefined,
       firstmateResumeStartup:
-        mcpEnv.AMUN_FIRSTMATE_PRIMARY === "1" ||
-        (Boolean(mcpEnv.FM_HOME) && resumeConfig.config.title === "First Mate"),
+        options?.purpose !== "history" && launchContext?.env?.AMUN_FIRSTMATE_PRIMARY === "1",
     });
     const tempFiles = mcpConfigFile ? [mcpConfigFile, paseoExtension] : [paseoExtension];
     const cleanupTempFiles = () => {
