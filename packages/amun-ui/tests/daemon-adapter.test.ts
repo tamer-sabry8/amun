@@ -26,6 +26,7 @@ import {
   holdId,
   holdAttention,
   fleetAgents,
+  toWorkSnapshot,
   holdsDue,
   holdSignature,
   settleHoldAnswers,
@@ -1155,4 +1156,23 @@ it("unifies the captain's existing Firstmate secondmate IDs (researcher, prd, de
     ["crew:designer", "UX", "idle"],
     ["crew:product-marketing", "Product Marketing", "working"],
   ]);
+
+  // Also ensure that if the work store had a stored pool agent for "Research & Insights",
+  // toWorkSnapshot deduplicates by role so the live crew:researcher replaces it cleanly.
+  const store = openWorkStore(":memory:").store;
+  store.handle({
+    version: 1,
+    kind: "work",
+    action: "add-agent",
+    description: "Research & Insights",
+  });
+  const snap = toWorkSnapshot(
+    { ...view, work: store.snapshot() },
+    "2026-11-22T10:00:00Z",
+  );
+  const researchEntries = snap.agents.filter(
+    (a) => a.role === "Research & Insights",
+  );
+  expect(researchEntries).toHaveLength(1);
+  expect(researchEntries[0]!.id).toBe("crew:researcher");
 });

@@ -520,12 +520,18 @@ export function toWorkSnapshot(
   answers: ReadonlyMap<string, HoldAnswer> = new Map(),
 ): WorkSnapshot {
   const base = workSnapshot.parse(view.work ?? EMPTY_WORK);
+  const fleet = fleetAgents(view);
+  const fleetRoles = new Set(fleet.map((agent) => agent.role.toLowerCase()));
   return workSnapshot.parse({
     ...base,
     setup: { ...base.setup, completed: true },
     agents: [
-      ...fleetAgents(view),
-      ...base.agents.filter((agent) => agent.id !== FIRST_MATE_ID),
+      ...fleet,
+      ...base.agents.filter(
+        (agent) =>
+          agent.id !== FIRST_MATE_ID &&
+          !fleetRoles.has(agent.role.toLowerCase()),
+      ),
     ],
     attention: [...holdAttention(view, now, answers), ...base.attention],
   });
