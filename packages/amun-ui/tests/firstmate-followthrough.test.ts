@@ -141,3 +141,31 @@ describe("Firstmate's instructions", () => {
     expect(text).toContain("BRD approved no");
   });
 });
+
+describe("stories from a PRD in a chat (stories, backlogs and sprints brief)", () => {
+  it("tells Firstmate to ask Amun to draft them, not to write a file, with no tracker", () => {
+    expect(amunProtocol).toContain('{"do":"draft-stories"}');
+    expect(amunProtocol).toContain("Backlog comparison pending");
+    expect(amunProtocol).toContain("instead of a plan, a CSV or a file");
+    // The only thing still unavailable is a local draft sprint holding stories.
+    expect(amunProtocol).toContain(
+      "only adding stories to a local draft sprint is not available yet",
+    );
+    expect(amunProtocol).not.toContain(
+      "say plainly that adding stories to a draft sprint is not available yet and nothing was changed",
+    );
+  });
+  it("reads the action with nothing the model could steer", async () => {
+    const { parseAmunActions } = await import("../src/rebuild/view-model.ts");
+    const parsed = parseAmunActions(
+      "Asked Amun.\n```amun\n" +
+        JSON.stringify({
+          do: "draft-stories",
+          productId: "other",
+          objectiveId: "x",
+        }) +
+        "\n```",
+    );
+    expect(parsed.actions).toEqual([{ do: "draft-stories" }]);
+  });
+});

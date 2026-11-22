@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   findPrdReport,
   forwardPrdReport,
@@ -72,4 +72,17 @@ it("relays a completed PRD report only for the request in its delivered dispatch
   } finally {
     await rm(home, { recursive: true, force: true });
   }
+});
+
+describe("the relay of a PRD whose documents Amun filed", () => {
+  const report = { ref: "amun-r-f8e2e9ff68e2", text: "amun-r-f8e2e9ff68e2 PRD v0.1 saved: /h/prd-v0.1.md" };
+  it("tells Firstmate where the filed documents are, by name", () => {
+    const prompt = prdRelayPrompt(report, ["Sales Prospects - Product Requirements Document"]);
+    expect(prompt).toContain('["Sales Prospects - Product Requirements Document"]');
+    expect(prompt).toContain("next PRD version");
+    expect(prompt).toContain("never paste a document");
+  });
+  it("claims nothing was filed when nothing was", () => {
+    expect(prdRelayPrompt(report)).not.toContain("already filed");
+  });
 });

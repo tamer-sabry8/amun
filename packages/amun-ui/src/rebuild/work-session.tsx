@@ -1750,7 +1750,58 @@ export function WorkSession({
               : `I could not convert “${name}”. ${result.message}`,
         });
       })();
-    else if (proposed.do === "link-product")
+    else if (proposed.do === "draft-stories") {
+      // The same draft as the PRD review's "Generate stories", started from
+      // this chat: the stories appear here, under the review of that version
+      // (stories, backlogs and sprints brief: "Draft editable stories from
+      // {source version}; mark backlog comparison pending").
+      const productId = context?.area.productId ?? null;
+      const product =
+        productId && workspace?.productContext?.productId === productId
+          ? workspace.productContext
+          : null;
+      const objective = product?.objectives.find((o) => o.prd) ?? null;
+      const prd = objective?.prd ?? null;
+      const model = product?.allowedModels[0] ?? "";
+      const say = (text: string) =>
+        work("message", { workAreaId: areaId, role: "firstmate", text });
+      if (!productId)
+        say(
+          "Stories are drafted from a product’s PRD, and this work is not a product. Nothing was changed.",
+        );
+      else if (!product || !objective || !prd)
+        say(
+          "There is no PRD for this product in Amun yet. Once one is saved here, I can draft its stories in this chat.",
+        );
+      else if (!prd.approved)
+        say(
+          `PRD v${prd.version} is saved in Amun and waits for your approval. Open the PRD, approve v${prd.version}, then ask again and I’ll draft its stories here.`,
+        );
+      else if (
+        product.storyDrafts.some(
+          (d) => d.objectiveId === objective.id && d.version === prd.version,
+        )
+      )
+        say(
+          `The stories for PRD v${prd.version} are already drafted. Open the PRD to review them.`,
+        );
+      else if (!model)
+        say(
+          "Choose a model for this product under Accounts and models, then ask again.",
+        );
+      else
+        bridge.send({
+          version: 1,
+          kind: "product-authoring",
+          productId: product.productId,
+          objectiveId: objective.id,
+          expectedVersion: prd.version,
+          action: "stories",
+          origin: { areaId, chatId: savedIn },
+          model,
+          difficulty: "standard",
+        });
+    } else if (proposed.do === "link-product")
       void (async () => {
         const snap = latest.current.snapshot;
         const groupId = context?.area.groupId ?? null;

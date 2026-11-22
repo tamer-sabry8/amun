@@ -397,6 +397,57 @@ export class WorkspaceService {
       .immediate();
   }
 
+  /**
+   * Saves a PRD the crew wrote for a matched request as the next PRD version
+   * of the product that request came from ("Source kept in Amun"). The first
+   * one gives the product a PRD objective named after it. Nothing is approved
+   * here: approval stays the captain's, in the PRD review. Projects have no
+   * PRD, so their documents go to the Library only (null). Saving the same
+   * text again adds no version.
+   */
+  registerCrewPrd(ref: string, markdown: string) {
+    const body = this.redactor.text(markdown).trim();
+    if (!body) return null;
+    return this.db
+      .transaction(() => {
+        const row = this.db
+          .prepare(
+            "SELECT a.product_id AS productId,p.name AS name FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id JOIN products p ON p.id=a.product_id WHERE r.ref=? AND a.status<>'deleted'",
+          )
+          .get(ref) as { productId: string; name: string } | undefined;
+        if (!row) return null;
+        let objective =
+          this.documents.objectives(row.productId).find((o) => o.prd) ??
+          this.documents.objectives(row.productId)[0];
+        if (!objective) {
+          this.db
+            .prepare(
+              "INSERT INTO objectives(id,product_id,statement,status) VALUES(?,?,?,'crew-prd')",
+            )
+            .run(randomUUID(), row.productId, row.name);
+          objective = this.documents.objectives(row.productId)[0]!;
+        }
+        const current = objective.prd?.version ?? 0;
+        if (objective.prd?.markdown !== body)
+          this.documents.changePrd(
+            row.productId,
+            objective.id,
+            current,
+            "save-prd",
+            body,
+          );
+        const saved = this.documents
+          .objectives(row.productId)
+          .find((o) => o.id === objective.id)!.prd!;
+        return {
+          productId: row.productId,
+          objectiveId: objective.id,
+          version: saved.version,
+        };
+      })
+      .immediate();
+  }
+
   async author(
     input: unknown,
     firstmate: ProductModel,

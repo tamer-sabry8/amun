@@ -51,6 +51,11 @@ export interface WorkspaceLike {
     text: string,
     ok: boolean,
   ): void;
+  /** Saves a crew PRD for a matched request as the product's next version. */
+  registerCrewPrd?(
+    ref: string,
+    markdown: string,
+  ): { productId: string; objectiveId: string; version: number } | null;
   author?(
     input: unknown,
     firstmate: (
