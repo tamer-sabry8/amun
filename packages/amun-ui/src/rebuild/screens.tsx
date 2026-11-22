@@ -61,6 +61,7 @@ import {
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
 import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
+import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -1257,19 +1258,43 @@ export function Roadmap({
       )}
       {view === "release" && items.length > 0 && (
         <div className="rb-board">
-          {releaseGroups(items).map((group) => (
-            <section
-              key={group.release}
-              className="rb-col"
-              aria-label={group.release}
-            >
-              <header>
-                {group.release}
-                <span className="count">{group.items.length}</span>
-              </header>
-              {group.items.map(tile)}
-            </section>
-          ))}
+          {releaseGroups(items).map((group) => {
+            const firstItem = group.items[0];
+            const releaseAreaId = areaId || firstItem?.workAreaId || "";
+            const areaSprints = releaseAreaId
+              ? snapshot.sprints.filter((s) => s.workAreaId === releaseAreaId)
+              : [];
+            const doneStories = areaSprints.reduce((sum, s) => sum + s.done, 0);
+            const totalStories = areaSprints.reduce(
+              (sum, s) => sum + Math.max(s.total, s.stories.length),
+              0,
+            );
+            return (
+              <section
+                key={group.release}
+                className="rb-col"
+                aria-label={group.release}
+              >
+                <header>
+                  {group.release}
+                  <span className="count">{group.items.length}</span>
+                </header>
+                {group.items.map(tile)}
+                {releaseAreaId && group.release !== "Unassigned" && (
+                  <ProductionReleaseCard
+                    snapshot={snapshot}
+                    workAreaId={releaseAreaId}
+                    releaseName={group.release}
+                    {...(firstItem?.title
+                      ? { roadmapTitle: firstItem.title }
+                      : {})}
+                    doneStories={doneStories}
+                    totalStories={totalStories}
+                  />
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
       {view === "timeline" && items.length > 0 && (

@@ -180,6 +180,11 @@ import {
   type AmunAction,
   type Snapshot,
 } from "./view-model.ts";
+import {
+  ProjectChecklistPane,
+  projectChecklistDocType,
+} from "./project-checklist-and-release.tsx";
+import { parseProjectChecklist } from "../../../../packages/domain/src/work/release-launch.ts";
 
 const work = storeWork;
 
@@ -197,6 +202,8 @@ export type PaneTarget =
   | { kind: "browser"; url: string }
   /** "What happened": Firstmate's steps in this conversation, read only. */
   | { kind: "happened"; stepId?: string }
+  /** Small-project checklist & handover receipt (Item 6). */
+  | { kind: "checklist" }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -2516,7 +2523,22 @@ export function WorkSession({
               ? "Pull requests"
               : pane?.kind === "happened"
                 ? "What happened"
-                : (output?.title ?? "");
+                : pane?.kind === "checklist"
+                  ? "Project checklist"
+                  : (output?.title ?? "");
+  const checklistDoc =
+    area.type === "project"
+      ? snapshot.library.find(
+          (item) =>
+            item.section === "output" &&
+            item.type === projectChecklistDocType &&
+            item.workAreaIds.includes(areaId) &&
+            item.status !== "Archived",
+        )
+      : undefined;
+  const checklistTasks = checklistDoc
+    ? parseProjectChecklist(checklistDoc.body)
+    : [];
   const newOutput = async () => {
     const result = await workAsync("save-output", {
       groupId: area.groupId,
@@ -2765,6 +2787,12 @@ export function WorkSession({
           {area.type === "project" && area.client && clientDraft === null && (
             <span className="tag">Client: {area.client}</span>
           )}
+          {area.type === "project" && checklistTasks.length > 0 && (
+            <span className="tag good">
+              {checklistTasks.filter((t) => t.done).length} of{" "}
+              {checklistTasks.length} done
+            </span>
+          )}
           {area.convertedFrom && <span className="tag">Was an Initiative</span>}
           {context.related.map((rel) =>
             rel.area ? (
@@ -2828,6 +2856,22 @@ export function WorkSession({
                 Pull requests
               </button>
             </>
+          )}
+          {area.type === "project" && !open && (
+            <button
+              className="btn quiet"
+              onClick={() => {
+                inspectView({
+                  view: "Project checklist",
+                  areaId,
+                  project: area.name,
+                  source: "Project",
+                });
+                onPane({ kind: "checklist" });
+              }}
+            >
+              Project checklist
+            </button>
           )}
           {!open && (
             <button
@@ -4026,6 +4070,13 @@ export function WorkSession({
                       (message) => message.workAreaId === areaId,
                     ).length
                   }
+                />
+              )}
+              {pane.kind === "checklist" && (
+                <ProjectChecklistPane
+                  snapshot={snapshot}
+                  areaId={areaId}
+                  onAsk={(text) => setSeed({ text, nonce: Date.now() })}
                 />
               )}
               {pane.kind === "pulls" &&

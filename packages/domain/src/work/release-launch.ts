@@ -462,3 +462,63 @@ export function evaluateRelease(record: ReleaseRecord): ReleaseEvaluation {
     reasons,
   };
 }
+
+// ── Small-Project Checklist & Handover Parsing (Item 6) ─────────────────────
+
+export interface ProjectChecklistTask {
+  lineIndex: number;
+  done: boolean;
+  title: string;
+  owner: string | null;
+  due: string | null;
+}
+
+/**
+ * Parses markdown task lines (`- [ ] Task title · Owner · Due`) from a project
+ * checklist document. Supports `"title · owner · due"`, `"title — owner · due"`,
+ * or a plain task title.
+ */
+export function parseProjectChecklist(body: string): ProjectChecklistTask[] {
+  const lines = body.split("\n");
+  const tasks: ProjectChecklistTask[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = /^\s*[-*+]\s+\[([ xX])\]\s+(.+)$/.exec(lines[i]!);
+    if (!match) continue;
+    const done = match[1]!.toLowerCase() === "x";
+    const raw = match[2]!.trim();
+    const parts = raw
+      .split(/\s*(?:·|—|–|\|)\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const title = parts[0] ?? raw;
+    const owner = parts[1] ?? null;
+    const due = parts[2] ?? null;
+    tasks.push({ lineIndex: i, done, title, owner, due });
+  }
+  return tasks;
+}
+
+export function toggleProjectChecklistLine(
+  body: string,
+  lineIndex: number,
+): string {
+  const lines = body.split("\n");
+  const target = lines[lineIndex];
+  if (typeof target !== "string") return body;
+  lines[lineIndex] = target.replace(
+    /^(\s*[-*+]\s+\[)([ xX])(\]\s+)/,
+    (_, lead: string, mark: string, tail: string) =>
+      `${lead}${mark.toLowerCase() === "x" ? " " : "x"}${tail}`,
+  );
+  return lines.join("\n");
+}
+
+export function appendProjectChecklistTask(
+  body: string,
+  task: { title: string; owner?: string | null; due?: string | null },
+): string {
+  const meta = [task.owner?.trim(), task.due?.trim()].filter(Boolean);
+  const line = `- [ ] ${task.title.trim()}${meta.length ? " · " + meta.join(" · ") : ""}`;
+  const trimmed = body.trimEnd();
+  return trimmed ? `${trimmed}\n${line}\n` : `# Project checklist\n\n${line}\n`;
+}

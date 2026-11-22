@@ -21,6 +21,7 @@ import {
   type Area,
   type Snapshot,
 } from "./view-model.ts";
+import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
 
 const shortDay = (stamp: string) =>
   new Date(stamp).toLocaleDateString("en-GB", {
@@ -387,6 +388,35 @@ export function WorkSheet({
                 {area.purpose ||
                   "No summary yet. Firstmate writes a short paragraph: where it stands, what changed, and what needs attention."}
               </p>
+              {(area.type === "product" || area.type === "project") && (
+                <ProductionReleaseCard
+                  snapshot={snapshot}
+                  workAreaId={area.id}
+                  releaseName={
+                    snapshot.roadmap.find(
+                      (item) => item.workAreaId === area.id && item.release,
+                    )?.release ?? "v1.0"
+                  }
+                  {...(snapshot.roadmap.find(
+                    (item) => item.workAreaId === area.id,
+                  )?.title
+                    ? {
+                        roadmapTitle: snapshot.roadmap.find(
+                          (item) => item.workAreaId === area.id,
+                        )!.title,
+                      }
+                    : {})}
+                  doneStories={snapshot.sprints
+                    .filter((s) => s.workAreaId === area.id)
+                    .reduce((sum, s) => sum + s.done, 0)}
+                  totalStories={snapshot.sprints
+                    .filter((s) => s.workAreaId === area.id)
+                    .reduce(
+                      (sum, s) => sum + Math.max(s.total, s.stories.length),
+                      0,
+                    )}
+                />
+              )}
             </>
           )}
           {tab === "stories" &&

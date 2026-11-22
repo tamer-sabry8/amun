@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendProjectChecklistTask,
   evaluatePrdDiscovery,
   evaluateRelease,
+  parseProjectChecklist,
   prdCoverageTopics,
   problemStatementFormatLabels,
+  toggleProjectChecklistLine,
   validatePrdDecomposition,
   type PrdCoverageEntry,
   type ReleaseRecord,
@@ -288,5 +291,43 @@ describe("Production release & launch tracking state machine (Handoff §4)", () 
     expect(rolledBack.effectiveState).toBe("rolled_back");
     expect(rolledBack.badge).toBe("Rolled back");
     expect(rolledBack.reasons[0]).toContain("sha-6e5d4c3");
+  });
+});
+
+describe("Small-project checklist & handover helpers (Item 6)", () => {
+  it("appends, parses, and toggles checklist tasks with owner and due date", () => {
+    let body = "";
+    body = appendProjectChecklistTask(body, {
+      title: "Lock 5-minute booth demo script",
+      owner: "Tamer",
+      due: "25 Nov",
+    });
+    body = appendProjectChecklistTask(body, {
+      title: "Run live rehearsal with Client X and sign off",
+      owner: "Omar",
+      due: "Due 4 Dec",
+    });
+
+    const parsed = parseProjectChecklist(body);
+    expect(parsed).toEqual([
+      {
+        lineIndex: 2,
+        done: false,
+        title: "Lock 5-minute booth demo script",
+        owner: "Tamer",
+        due: "25 Nov",
+      },
+      {
+        lineIndex: 3,
+        done: false,
+        title: "Run live rehearsal with Client X and sign off",
+        owner: "Omar",
+        due: "Due 4 Dec",
+      },
+    ]);
+
+    const toggled = toggleProjectChecklistLine(body, 2);
+    expect(parseProjectChecklist(toggled)[0]?.done).toBe(true);
+    expect(parseProjectChecklist(toggled)[1]?.done).toBe(false);
   });
 });
