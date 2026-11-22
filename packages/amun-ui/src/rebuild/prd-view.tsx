@@ -518,7 +518,7 @@ export function PrdView({
         />
       )}
       <Understanding
-        key={objective.id}
+        key={"understanding:" + objective.id}
         objective={objective}
         productId={context.productId}
       />
@@ -554,7 +554,7 @@ export function PrdView({
         </p>
       </div>
       <PrdEditor
-        key={objective.id}
+        key={"editor:" + objective.id}
         objective={objective}
         productId={context.productId}
         onSelection={select}
