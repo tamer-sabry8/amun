@@ -120,9 +120,9 @@ describe("what a work area has in Jira and Linear", () => {
       ["epic", "SCRUM-13", null, null, "created"],
       ["sprint", "6", null, null, "created"],
       // A parent named by title and one named by plan item id both resolve.
-      ["story", "SCRUM-17", "e1", "s1", "created"],
-      ["story", "SCRUM-18", "e1", null, "created"],
-      ["story", null, "e1", null, "failed"],
+      ["story", "SCRUM-17", "plan:e1", "plan:s1", "created"],
+      ["story", "SCRUM-18", "plan:e1", null, "created"],
+      ["story", null, "plan:e1", null, "failed"],
     ]);
     const sprint = records.find((r) => r.kind === "sprint")!;
     expect([sprint.start, sprint.end]).toEqual(["2026-12-07", "2026-12-18"]);
@@ -165,5 +165,168 @@ describe("what a work area has in Jira and Linear", () => {
       { provider: "jira", reason: "Jira sites unavailable" },
     ]);
     expect(delivery.items).toHaveLength(5);
+  });
+});
+
+// Codex review on #61.
+function addPlan(
+  db: ReturnType<typeof fixture>,
+  id: string,
+  planItems: unknown[],
+  planResults: unknown[],
+  destination = "jira",
+) {
+  const row = db
+    .prepare("SELECT * FROM work_plans WHERE id='plan'")
+    .get() as Record<string, unknown>;
+  const values = {
+    ...row,
+    id,
+    destination,
+    items_json: JSON.stringify(planItems),
+    results_json: JSON.stringify(planResults),
+    approved_json: JSON.stringify(
+      (planItems as { id: string }[]).map((i) => i.id),
+    ),
+  };
+  const names = Object.keys(values);
+  db.prepare(
+    `INSERT INTO work_plans(${names.join(",")}) VALUES(${names.map(() => "?").join(",")})`,
+  ).run(...names.map((n) => (values as Record<string, unknown>)[n]));
+}
+
+describe("read-back across plans, sites and memberships", () => {
+  it("keeps each plan's items with their own epic when plans reuse item ids", () => {
+    const db = fixture();
+    addPlan(
+      db,
+      "plan2",
+      [
+        { id: "e1", summary: "Second epic", fields: { ...site, type: "Epic" } },
+        {
+          id: "t1",
+          summary: "Second task",
+          fields: { ...site, type: "Task", parent: "e1" },
+        },
+      ],
+      [
+        {
+          id: "e1",
+          state: "created",
+          externalId: "SCRUM-40",
+          url: "https://transfrmai.atlassian.net/browse/SCRUM-40",
+        },
+        {
+          id: "t1",
+          state: "created",
+          externalId: "SCRUM-41",
+          url: "https://transfrmai.atlassian.net/browse/SCRUM-41",
+        },
+      ],
+    );
+    const records = deliveryRecords(db, "area");
+    expect(records.find((r) => r.key === "SCRUM-41")!.epicId).toBe("plan2:e1");
+    expect(records.find((r) => r.key === "SCRUM-17")!.epicId).toBe("plan:e1");
+  });
+
+  it("names an existing provider sprint or Linear cycle by the provider's scope", () => {
+    const db = fixture();
+    addPlan(
+      db,
+      "linear",
+      [
+        {
+          id: "i1",
+          summary: "Bill a client",
+          fields: {
+            site: "transfrmai",
+            team: "TRA",
+            type: "Issue",
+            sprint: "4",
+          },
+        },
+      ],
+      [
+        {
+          id: "i1",
+          state: "created",
+          externalId: "TRA-12",
+          url: "https://linear.app/transfrmai/issue/TRA-12",
+        },
+      ],
+      "linear",
+    );
+    expect(
+      deliveryRecords(db, "area").find((r) => r.key === "TRA-12")!.sprintId,
+    ).toBe("linear:cycle:4");
+  });
+
+  it("reads each Jira item from its own site and drops a sprint Jira no longer reports", async () => {
+    const db = fixture();
+    addPlan(
+      db,
+      "other-site",
+      [
+        {
+          id: "x1",
+          summary: "Other site task",
+          fields: { site: "other.atlassian.net", project: "OPS", type: "Task" },
+        },
+      ],
+      [
+        {
+          id: "x1",
+          state: "created",
+          externalId: "OPS-1",
+          url: "https://other.atlassian.net/browse/OPS-1",
+        },
+      ],
+    );
+    const asked: [string, string][] = [];
+    const json = (value: unknown) => ({
+      content: [{ type: "text", text: JSON.stringify(value) }],
+    });
+    const session = {
+      tools: [
+        "getAccessibleAtlassianResources",
+        "getJiraIssue",
+        "executeRead",
+      ].map((name) => ({ name })),
+      async call(name: string, args: Record<string, unknown>) {
+        if (name === "getAccessibleAtlassianResources")
+          return json({
+            data: {
+              resources: [
+                { cloudId: "c-main", url: "https://transfrmai.atlassian.net" },
+                { cloudId: "c-other", url: "https://other.atlassian.net" },
+              ],
+            },
+          });
+        if (name === "executeRead")
+          return json({ data: { values: [], isLast: true } });
+        asked.push([String(args.cloudId), String(args.issueIdOrKey)]);
+        return json({
+          data: {
+            key: args.issueIdOrKey,
+            // Jira now reports SCRUM-17 in no sprint at all.
+            fields: {
+              summary: "Now",
+              status: { name: "In Progress" },
+              customFields: { Sprint: { value: [] } },
+            },
+          },
+        });
+      },
+    };
+    const delivery = await readDelivery(db, "area", {
+      configured: async () => true,
+      use: async (_provider, work) => work(session),
+    });
+    expect(asked).toContainEqual(["c-main", "SCRUM-17"]);
+    expect(asked).toContainEqual(["c-other", "OPS-1"]);
+    expect(asked).not.toContainEqual(["c-main", "OPS-1"]);
+    const moved = delivery.items.find((i) => i.key === "SCRUM-17")!;
+    expect(moved.status).toBe("In Progress");
+    expect(moved.sprintId).toBeNull();
   });
 });

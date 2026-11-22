@@ -118,3 +118,31 @@ describe("Jira and Linear on Amun's screens", () => {
     expect(failed.map((s) => s.title)).toEqual(["Never made"]);
   });
 });
+
+describe("Linear cycles and existing sprints, known only through membership", () => {
+  it("become Sprints entries with their stories", () => {
+    const sprints = trackerSprints(
+      {
+        ...delivery,
+        items: [
+          {
+            ...base,
+            provider: "linear",
+            itemId: "lin:i1",
+            kind: "story",
+            title: "Bill a client",
+            key: "TRA-12",
+            url: "https://linear.app/x/TRA-12",
+            sprintId: "linear:cycle:4",
+            status: "Todo",
+          },
+        ],
+      },
+      "Invoiced",
+    );
+    expect(sprints.map((s) => [s.id, s.name, s.team, s.total])).toEqual([
+      ["linear:4", "Cycle 4", "Linear", 1],
+    ]);
+    expect(sprints[0]!.stories[0]!.title).toBe("TRA-12 Bill a client");
+  });
+});
