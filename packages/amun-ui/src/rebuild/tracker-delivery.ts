@@ -103,14 +103,22 @@ export function trackerSprints(
   const memberships = [
     ...new Set(
       delivery.items
-        .filter((item) => item.kind === "story" && item.sprintId)
+        .filter(
+          (item) =>
+            item.kind === "story" &&
+            item.outcome === "created" &&
+            item.sprintId,
+        )
         .map((item) => item.sprintId!)
         .filter((id) => !created.some((sprint) => sprint.itemId === id)),
     ),
   ].flatMap((id) => {
-    const match = /^(jira|linear):(sprint|cycle):(.+)$/.exec(id);
+    // jira:sprint:<site>:<id> or linear:cycle:<team>:<number>.
+    const match = /^(jira|linear):(sprint|cycle):([^:]+):(.+)$/.exec(id);
     if (!match) return [];
     const provider = match[1] as "jira" | "linear";
+    const scope = match[3]!;
+    const number = match[4]!;
     return [
       {
         provider,
@@ -118,9 +126,12 @@ export function trackerSprints(
         itemId: id,
         kind: "sprint" as const,
         type: provider === "linear" ? "Cycle" : "Sprint",
-        title: `${provider === "linear" ? "Cycle" : "Sprint"} ${match[3]}`,
+        title:
+          provider === "linear"
+            ? `${scope} · Cycle ${number}`
+            : `Sprint ${number}`,
         acceptance: [],
-        key: match[3]!,
+        key: `${scope}:${number}`,
         url: null,
         epicId: null,
         sprintId: null,
@@ -134,7 +145,10 @@ export function trackerSprints(
   const sprints = [...created, ...memberships];
   return sprints.map((sprint) => {
     const stories = delivery.items.filter(
-      (item) => item.kind === "story" && item.sprintId === sprint.itemId,
+      (item) =>
+        item.kind === "story" &&
+        item.outcome === "created" &&
+        item.sprintId === sprint.itemId,
     );
     const done = stories.filter((s) =>
       /^(done|closed|completed|resolved)$/i.test(s.status ?? ""),

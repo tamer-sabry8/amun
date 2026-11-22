@@ -133,7 +133,7 @@ describe("Linear cycles and existing sprints, known only through membership", ()
             title: "Bill a client",
             key: "TRA-12",
             url: "https://linear.app/x/TRA-12",
-            sprintId: "linear:cycle:4",
+            sprintId: "linear:cycle:TRA:4",
             status: "Todo",
           },
         ],
@@ -141,8 +141,61 @@ describe("Linear cycles and existing sprints, known only through membership", ()
       "Invoiced",
     );
     expect(sprints.map((s) => [s.id, s.name, s.team, s.total])).toEqual([
-      ["linear:4", "Cycle 4", "Linear", 1],
+      ["linear:TRA:4", "TRA · Cycle 4", "Linear", 1],
     ]);
     expect(sprints[0]!.stories[0]!.title).toBe("TRA-12 Bill a client");
+  });
+});
+
+describe("memberships come only from confirmed stories (Codex review on #63)", () => {
+  it("keeps two teams' cycle 4 apart and ignores a story that was not created", () => {
+    const story = {
+      ...base,
+      provider: "linear" as const,
+      kind: "story" as const,
+      url: null,
+    };
+    const sprints = trackerSprints(
+      {
+        ...delivery,
+        items: [
+          {
+            ...story,
+            itemId: "p:1",
+            title: "TRA work",
+            key: "TRA-1",
+            sprintId: "linear:cycle:TRA:4",
+          },
+          {
+            ...story,
+            itemId: "p:2",
+            title: "OPS work",
+            key: "OPS-1",
+            sprintId: "linear:cycle:OPS:4",
+          },
+          {
+            ...story,
+            itemId: "p:3",
+            title: "Failed",
+            key: null,
+            sprintId: "linear:cycle:ENG:4",
+            outcome: "failed" as const,
+          },
+          {
+            ...story,
+            itemId: "p:4",
+            title: "Failed too",
+            key: null,
+            sprintId: "linear:cycle:TRA:4",
+            outcome: "unknown" as const,
+          },
+        ],
+      },
+      "Invoiced",
+    );
+    expect(sprints.map((s) => [s.id, s.total])).toEqual([
+      ["linear:TRA:4", 1],
+      ["linear:OPS:4", 1],
+    ]);
   });
 });
