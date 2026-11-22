@@ -35,3 +35,11 @@ Get owner approval on an annotated current and proposed UI preview before changi
 - The exported trace has the Island hold-answer RPC and subsequent chat traffic. It does not establish whether the answer was rendered in the originating chat.
 - The PRD status export records the generated draft and the brief approval. The reported Markdown file exists locally and is about 22 KB. The export does not establish that Amun imported it as a document or structured backlog.
 - Prior latency benchmark evidence remains on the latency branch. Repeat the full 504-line read with Computer Use when fixing the live refresh and wake regressions, and compare against the prior 20.8-second run and 10-second target.
+
+## Lavish review decisions
+
+The owner approved the document card and Library, local planning review, the Azure connection, and the composer. The revised preview shows independent chat and Island avatar states, red and amber halos, an avatar in the Island reply card, and a View plan link on a completed result. Those visual revisions need review.
+
+The first implementation pass connects selected uploads to their originating chat, keeps Library navigation in that conversation, displays saved version approval across both surfaces, checks stored Azure connections on load, and clears the persisted draft before consuming a document-prefilled composer.
+
+The local planning review needs a draft contract separate from provider publication. The existing Firstmate plan command produces a publication proposal and cannot represent the approved local flow. The next implementation slice must accept a plan scoped to the originating request and source document version, validate epic and sprint references before saving, and give the existing Backlog and Sprints screens a shared draft to open. Historical Markdown drafts require a reviewed conversion into that same contract. Crew-file intake and approval reconciliation also remain open.
