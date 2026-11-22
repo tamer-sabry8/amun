@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings › Tools: Jira and Linear cards (proposal for approval)</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --surface: #fbf9f4; --ink: #22201c; --muted: #5f5a52;
+    --line: #ddd6c9; --accent: #5b2a86; --ok: #23663a; --warn: #8a4b00;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  ::selection { background: #e3d3f2; color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  main { max-width: 1240px; margin: 0 auto; padding: 56px 32px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; }
+  h2 { font-size: 1.25rem; letter-spacing: -0.01em; margin: 64px 0 12px; }
+  h3 { font-size: 1rem; margin: 0 0 8px; }
+  p, li { max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 1.0625rem; margin: 0 0 8px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 20px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: .9375rem; }
+  .facts b { color: var(--ink); font-weight: 600; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; margin-top: 20px; }
+  figure { margin: 0; }
+  figcaption { font-weight: 600; margin: 0 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  figcaption span { font-weight: 400; color: var(--muted); font-size: .9375rem; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 20px; }
+  ol.changes { padding-left: 1.25rem; margin: 12px 0 0; }
+  ol.changes li { margin: 0 0 14px; }
+  ol.changes li strong { display: block; }
+  .muted { color: var(--muted); }
+  .q { margin: 0 0 16px; }
+  .q p { margin: 4px 0 0; }
+  .note { border-top: 1px solid var(--line); margin-top: 64px; padding-top: 20px; color: var(--muted); font-size: .9375rem; }
+  code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: #ece6da; padding: 1px 5px; border-radius: 4px; }
+  @media (max-width: 900px) { .pair, .states { grid-template-columns: 1fr; } main { padding: 32px 18px 64px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Settings › Tools: add Jira and Linear</h1>
+  <p class="lede">A proposal for your approval. Nothing on screen has changed yet. The “after” pictures are the real app with the two new cards placed in it, using its own styles.</p>
+  <p><strong>Workflow it enables:</strong> you connect Jira or Linear once by signing in in your browser. After that, Firstmate can raise a plan of epics, stories and sprints for either one. You approve it in the existing plan review card, and Amun publishes exactly that list and checks the result. The sign-in, publishing and checks are already built (PR #59); only these cards are missing.</p>
+  <ul class="facts">
+    <li><b>Reuses:</b> the Notion card, as it is</li>
+    <li><b>Adds:</b> two cards, nothing else on the screen</li>
+    <li><b>Changes:</b> no existing card, text or order of the others</li>
+  </ul>
+
+  <h2>Current screen beside the proposal</h2>
+  <div class="pair">
+    <figure>
+      <figcaption>Now <span>Settings › Tools, light theme, nothing connected</span></figcaption>
+      <img src="current-tools-light.webp" alt="Current Settings Tools screen with Azure DevOps, Notion, GitHub and Obsidian cards, each not connected" width="601" height="730">
+    </figure>
+    <figure>
+      <figcaption>Proposed <span>Jira and Linear added after Azure DevOps</span></figcaption>
+      <img src="after-missing-light.webp" alt="Proposed Settings Tools screen with Jira and Linear cards between Azure DevOps and Notion, both not connected" width="601" height="1168">
+    </figure>
+  </div>
+
+  <h2>What exactly is added</h2>
+  <ol class="changes">
+    <li><strong>A Jira card and a Linear card, placed right after Azure DevOps.</strong> This keeps the three work trackers together. If you prefer, they can go at the end, after Obsidian.</li>
+    <li><strong>The same parts as the Notion card:</strong> name, status (Not connected / Checking… / Connected / Not working), one line on what it is for, the “You sign in … in your browser. Amun never asks you to paste a token.” line, the Sign-in browser choice (Microsoft Edge or Dia), and the three buttons: Connect … in browser, Test … connection and Disconnect ….</li>
+    <li><strong>What each one is for:</strong> Jira: “Create epics, stories and sprints in Jira once you approve them.” Linear: “Create projects and issues in Linear once you approve them. Cycles are made in Linear itself.” The second sentence is there because Linear does not let Amun create or start cycles.</li>
+    <li><strong>One line once connected</strong>, showing where the sign-in leads, in the same small grey text the Azure DevOps card uses for a saved connection: “transfrmai.atlassian.net · Connected” or “Workspace transfrmai · Connected”.</li>
+    <li><strong>Disconnect asks first</strong>, in the same words and buttons as Notion: “Remove this workspace’s saved Jira sign-in? Items already published stay in Jira.” Then Confirm disconnect or Keep connection.</li>
+    <li><strong>No destination field.</strong> Unlike Notion, there is nothing to paste. Each plan names its Jira site and project, or its Linear team, and you see them on the review card before you approve.</li>
+  </ol>
+
+  <h2>States</h2>
+  <div class="states">
+    <figure>
+      <figcaption>Connected <span>light</span></figcaption>
+      <img src="after-connected-light.webp" alt="Jira and Linear cards both connected, each showing its site or workspace" width="601" height="1220">
+    </figure>
+    <figure>
+      <figcaption>Connected <span>dark</span></figcaption>
+      <img src="after-connected-dark.webp" alt="The same connected cards in the dark theme" width="601" height="1220">
+    </figure>
+    <figure>
+      <figcaption>Disconnect asked <span>Jira</span></figcaption>
+      <img src="after-confirm-light.webp" alt="Jira card asking to confirm disconnect, with Confirm disconnect and Keep connection buttons" width="601" height="1214">
+    </figure>
+  </div>
+
+  <h2>For you to decide</h2>
+  <div class="q"><h3>1. Place</h3><p>After Azure DevOps (shown), or at the end of the list?</p></div>
+  <div class="q"><h3>2. Wording</h3><p>Are the two “what it is for” lines and the connected line right? Mark any word you want changed.</p></div>
+  <div class="q"><h3>3. Browser choice</h3><p>Keep the Edge / Dia choice on each card, as Notion has it, or always use Microsoft Edge for Jira and Linear?</p></div>
+
+  <p class="note">The “after” pictures were made by placing the proposed cards into the running app (preview daemon, sample data) and capturing them. They are not a mock-up. Connected states use the real test site and workspace names. Built for review with the <code>/impeccable</code> skill; nothing is implemented until you approve.</p>
+</main>
+</body>
+</html>
