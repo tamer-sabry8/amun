@@ -20,23 +20,24 @@ function writeExecutable(filePath: string, contents: string): void {
   chmodSync(filePath, 0o755);
 }
 
-function createFakeMacBundle(options: { includeHelper: boolean }): {
+function createFakeMacBundle(options: { includeHelper: boolean; name?: "Amun" | "Paseo" }): {
   root: string;
   shimPath: string;
 } {
   const root = mkdtempSync(join(tmpdir(), "paseo-cli-shim-test-"));
-  const appPath = join(root, "Paseo.app");
+  const name = options.name ?? "Amun";
+  const appPath = join(root, `${name}.app`);
   const contentsPath = join(appPath, "Contents");
   const resourcesPath = join(contentsPath, "Resources");
   const shimPath = join(resourcesPath, "bin", "paseo");
-  const mainPath = join(contentsPath, "MacOS", "Paseo");
+  const mainPath = join(contentsPath, "MacOS", name);
   const helperPath = join(
     contentsPath,
     "Frameworks",
-    "Paseo Helper.app",
+    `${name} Helper.app`,
     "Contents",
     "MacOS",
-    "Paseo Helper",
+    `${name} Helper`,
   );
 
   mkdirSync(dirname(shimPath), { recursive: true });
@@ -143,10 +144,10 @@ describe("desktop packaging", () => {
     }
   });
 
-  it("launches the packaged macOS CLI through Helper instead of the main app executable", () => {
+  it.each(["Amun", "Paseo"] as const)("launches the packaged %s macOS CLI through Helper", (name) => {
     if (process.platform === "win32") return;
 
-    const bundle = createFakeMacBundle({ includeHelper: true });
+    const bundle = createFakeMacBundle({ includeHelper: true, name });
     try {
       const result = spawnSync(bundle.shimPath, ["--version"], { encoding: "utf8" });
 
@@ -170,7 +171,7 @@ describe("desktop packaging", () => {
       const result = spawnSync(bundle.shimPath, ["--version"], { encoding: "utf8" });
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("Bundled Paseo Helper executable not found");
+      expect(result.stderr).toContain("Bundled Amun Helper executable not found");
       expect(result.stdout).not.toContain("main-executable");
     } finally {
       rmSync(bundle.root, { recursive: true, force: true });
