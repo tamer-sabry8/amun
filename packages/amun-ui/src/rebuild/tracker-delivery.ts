@@ -95,9 +95,43 @@ export function trackerSprints(
   provider: "jira" | "linear";
   url: string | null;
 })[] {
-  const sprints = delivery.items.filter(
+  const created = delivery.items.filter(
     (item) => item.kind === "sprint" && item.outcome === "created",
   );
+  // A sprint that exists only as a membership: an existing Jira sprint, or a
+  // Linear cycle (Linear cannot create cycles, so it is never in a plan).
+  const memberships = [
+    ...new Set(
+      delivery.items
+        .filter((item) => item.kind === "story" && item.sprintId)
+        .map((item) => item.sprintId!)
+        .filter((id) => !created.some((sprint) => sprint.itemId === id)),
+    ),
+  ].flatMap((id) => {
+    const match = /^(jira|linear):(sprint|cycle):(.+)$/.exec(id);
+    if (!match) return [];
+    const provider = match[1] as "jira" | "linear";
+    return [
+      {
+        provider,
+        planId: "",
+        itemId: id,
+        kind: "sprint" as const,
+        type: provider === "linear" ? "Cycle" : "Sprint",
+        title: `${provider === "linear" ? "Cycle" : "Sprint"} ${match[3]}`,
+        acceptance: [],
+        key: match[3]!,
+        url: null,
+        epicId: null,
+        sprintId: null,
+        status: null,
+        start: null,
+        end: null,
+        outcome: "created" as const,
+      },
+    ];
+  });
+  const sprints = [...created, ...memberships];
   return sprints.map((sprint) => {
     const stories = delivery.items.filter(
       (item) => item.kind === "story" && item.sprintId === sprint.itemId,

@@ -107,7 +107,11 @@ export function deliveryRecords(
         return [];
       }
     });
-    // A parent or sprint may name another item of the plan by id or by title.
+    // Item ids are unique only within their plan, so every id here carries
+    // the plan's. A parent or sprint names another item of the same plan (by
+    // id or title) or something already in the provider (a key, a sprint id
+    // or a Linear cycle number), which gets the provider's own scope.
+    const scoped = (id: string) => `${plan.id}:${id}`;
     const local = (ref: string | null, kind: StepKind) => {
       if (!ref) return null;
       const wanted = ref.trim().toLowerCase();
@@ -116,7 +120,10 @@ export function deliveryRecords(
           step.kind === kind &&
           (item.id === ref || step.title.trim().toLowerCase() === wanted),
       );
-      return found ? found.item.id : ref;
+      if (found) return scoped(found.item.id);
+      return kind === "sprint"
+        ? providerSprint(provider, ref)
+        : `${provider}:key:${ref}`;
     };
     for (const { item, step } of steps) {
       const result = results.get(item.id);
@@ -124,7 +131,7 @@ export function deliveryRecords(
       items.push({
         provider,
         planId: plan.id,
-        itemId: item.id,
+        itemId: scoped(item.id),
         kind: step.kind,
         type: step.issueType,
         title: step.title,
@@ -190,17 +197,41 @@ export async function readDelivery(
   return { items, readAt: read ? now().toISOString() : null, unread };
 }
 
+/** A provider sprint (Jira sprint id, Linear cycle number) not in any plan. */
+export const providerSprint = (provider: TrackerId, id: string) =>
+  provider === "linear" ? `linear:cycle:${id}` : `jira:sprint:${id}`;
+
+const hostOf = (url: string | null) => {
+  try {
+    return url ? new URL(url).host.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Each item is read from the Jira site it was published to. */
 async function readJira(
   session: TrackerSession,
   mine: DeliveryItem[],
   all: DeliveryItem[],
 ) {
-  const host = mine[0]?.url ? new URL(mine[0].url).host.toLowerCase() : null;
-  if (!host) return;
-  const jira = new JiraWriter(
-    session,
-    jiraSite(await jiraSites(session), host),
+  const sites = await jiraSites(session);
+  const hosts = [...new Set(mine.map((item) => hostOf(item.url)))].filter(
+    (host): host is string => host !== null,
   );
+  for (const host of hosts)
+    await readJiraSite(
+      new JiraWriter(session, jiraSite(sites, host)),
+      mine.filter((item) => hostOf(item.url) === host),
+      all.filter((item) => hostOf(item.url) === host),
+    );
+}
+
+async function readJiraSite(
+  jira: JiraWriter,
+  mine: DeliveryItem[],
+  all: DeliveryItem[],
+) {
   const sprintsByBoard = new Map<number, Record<string, unknown>[]>();
   for (const item of mine) {
     if (item.kind === "sprint") {
@@ -221,12 +252,15 @@ async function readJira(
     const now = await jira.issue(item.key!);
     item.status = now.status;
     item.title = now.summary || item.title;
-    // Jira's own sprint membership wins over the plan's intent.
+    // Jira's own sprint membership wins over the plan's intent, including
+    // when the story was taken out of every sprint.
     const sprint = now.sprints[0];
-    if (sprint) {
-      const known = all.find((s) => s.kind === "sprint" && s.key === sprint);
-      item.sprintId = known ? known.itemId : sprint;
-    }
+    const known = sprint
+      ? all.find((s) => s.kind === "sprint" && s.key === sprint)
+      : undefined;
+    item.sprintId = sprint
+      ? (known?.itemId ?? providerSprint("jira", sprint))
+      : null;
   }
 }
 
@@ -236,6 +270,8 @@ async function readLinear(session: TrackerSession, mine: DeliveryItem[]) {
     if (item.kind !== "story" || !item.key) continue;
     const now = await linear.issueNow(item.key);
     item.status = now.status;
+    // Linear cannot create cycles, so a cycle is only ever a membership.
+    item.sprintId = now.cycle ? providerSprint("linear", now.cycle) : null;
     item.title = now.title ?? item.title;
     item.url = now.url ?? item.url;
   }
