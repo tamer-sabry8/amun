@@ -531,7 +531,7 @@ function TrackerStories({ delivery }: { delivery: TrackerDeliveryResult }) {
       </span>
       <p>
         {item.url ? (
-          <a href={item.url} target="_blank" rel="noreferrer">
+          <a className="link" href={item.url} target="_blank" rel="noreferrer">
             {itemLabel(item)}
           </a>
         ) : (
