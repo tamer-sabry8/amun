@@ -251,11 +251,53 @@ export function AzureConnectCard({
 }) {
   const state = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
   const connected = useAzureConnected();
+  const saved = state.connections.find(
+    (connection) => connection.kind === "ado",
+  );
   const [mode, setMode] = useState<"ask" | "connect" | "own">("ask");
   if (connected)
     return (
       <div className="rb-inline" role="status">
         <span>{state.notice || "Azure DevOps is connected."}</span>
+      </div>
+    );
+  if (mode === "ask" && !state.connectionsLoaded)
+    return (
+      <div className="rb-inline" role="status">
+        Checking for an Azure DevOps connection…
+      </div>
+    );
+  if (mode === "ask" && saved && saved.status !== "missing")
+    return (
+      <div className="rb-inline amber" role="status">
+        <strong>
+          {saved.status === "configured" || saved.status === "checking"
+            ? "Checking Azure DevOps…"
+            : "Amun couldn’t read from Azure DevOps"}
+        </strong>
+        {saved.status !== "configured" && saved.status !== "checking" && (
+          <div className="row wrap">
+            <button
+              className="btn"
+              onClick={() =>
+                bridge.send({
+                  version: 1,
+                  kind: "auth",
+                  action: "check",
+                  connection: { kind: saved.kind, baseUrl: saved.baseUrl },
+                })
+              }
+            >
+              Retry connection
+            </button>
+            <button className="btn quiet" onClick={() => setMode("connect")}>
+              Update sign-in
+            </button>
+            <button className="btn quiet" onClick={onDismiss}>
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
     );
   return (

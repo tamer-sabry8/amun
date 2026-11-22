@@ -1065,14 +1065,36 @@ export class ContractAdapter {
     }
   }
 
-  private async authConnections() {
+  private connectionCheck = new Map<string, Promise<DaemonConnection>>();
+
+  private async authConnections(verifySaved = false) {
     const list = await this.daemon
       .request<DaemonConnection[]>("connections.list")
       .catch(() => [] as DaemonConnection[]);
+    const verified = verifySaved
+      ? await Promise.all(
+          list.map((item) => {
+            if (item.kind !== "ado" || item.status !== "configured")
+              return item;
+            const pending = this.connectionCheck.get(item.id);
+            if (pending) return pending;
+            const check = this.daemon
+              .request<DaemonConnection>("connections.check", {
+                connection: { kind: item.kind, baseUrl: item.baseUrl },
+              })
+              .catch(() => ({ ...item, status: "unknown" }))
+              .finally(() => {
+                this.connectionCheck.delete(item.id);
+              });
+            this.connectionCheck.set(item.id, check);
+            return check;
+          }),
+        )
+      : list;
     return {
       version: 1,
       kind: "auth-connections",
-      connections: list.map(({ kind, baseUrl, id, status }) => ({
+      connections: verified.map(({ kind, baseUrl, id, status }) => ({
         kind,
         baseUrl,
         id,
@@ -1126,7 +1148,7 @@ export class ContractAdapter {
   /** Connections: Azure DevOps through the daemon (token kept in Keychain). */
   private async handleAuth(message: Message): Promise<unknown[]> {
     const action = String(message.action);
-    if (action === "list") return [await this.authConnections()];
+    if (action === "list") return [await this.authConnections(true)];
     if (action === "readiness")
       return this.accountStatus(String(message.provider));
     if (action === "login")

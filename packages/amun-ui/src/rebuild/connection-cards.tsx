@@ -415,17 +415,19 @@ export function ConnectionCards() {
         const notion = service.kind === "notion";
         const status = notion
           ? (state.modelStatus["notion-mcp"] ?? mine[0]?.status)
-          : mine.some((item) => item.status === "error")
-            ? "error"
-            : mine.some((item) => item.status === "unknown")
-              ? "unknown"
-              : mine.length
-                ? mine.every((item) => item.status === "ready")
-                  ? "ready"
-                  : mine.some((item) => item.status === "checking")
-                    ? "checking"
-                    : "configured"
-                : "missing";
+          : service.kind === "ado" && !state.connectionsLoaded && !mine.length
+            ? "checking"
+            : mine.some((item) => item.status === "error")
+              ? "error"
+              : mine.some((item) => item.status === "unknown")
+                ? "unknown"
+                : mine.length
+                  ? mine.every((item) => item.status === "ready")
+                    ? "ready"
+                    : mine.some((item) => item.status === "checking")
+                      ? "checking"
+                      : "configured"
+                  : "missing";
         const view = viewOf(status);
         return (
           <div className="rb-provider" key={service.kind}>

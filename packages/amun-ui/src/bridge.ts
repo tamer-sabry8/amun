@@ -35,6 +35,7 @@ interface BridgeState {
   generation: string | null;
   status: "Connecting" | "Connected" | "Reconnecting";
   workspace: WorkspaceSnapshot | null;
+  connectionsLoaded: boolean;
   connections: Extract<AuthEvent, { kind: "auth-connections" }>["connections"];
   modelStatus: Record<string, string>;
   prompt: Extract<AuthEvent, { kind: "auth-prompt" }> | null;
@@ -46,6 +47,7 @@ let state: BridgeState = {
   generation: null,
   status: "Connecting",
   workspace: null,
+  connectionsLoaded: false,
   connections: [],
   modelStatus: {},
   prompt: null,
@@ -108,7 +110,11 @@ export function initializeBridge() {
           update({ status: "Reconnecting" });
           return;
         }
-        update({ status: "Connected", generation: id });
+        update({
+          status: "Connected",
+          generation: id,
+          connectionsLoaded: false,
+        });
         bridge.send({ version: 1, kind: "workspace", action: "snapshot" });
         bridge.send({ version: 1, kind: "auth", action: "list" });
         bridge.send({ version: 1, kind: "work", action: "snapshot" });
@@ -150,7 +156,7 @@ export function initializeBridge() {
       if (auth.success) {
         const event = auth.data;
         if (event.kind === "auth-connections")
-          update({ connections: event.connections });
+          update({ connections: event.connections, connectionsLoaded: true });
         else if (event.kind === "auth-prompt") update({ prompt: event });
         else if (event.kind === "auth-notice")
           update({ notice: event.message });
