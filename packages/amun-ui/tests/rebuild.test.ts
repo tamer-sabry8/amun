@@ -557,7 +557,7 @@ describe("Home", () => {
       "Create a product",
       "Turn an idea into a brief",
       "Track an RFP",
-      "Start a task",
+      "Start an Initiative",
     ])
       expect(html).toContain(card);
     expect(html).not.toContain("Respond to an RFP");

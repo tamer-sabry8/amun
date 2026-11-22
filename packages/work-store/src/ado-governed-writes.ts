@@ -103,15 +103,111 @@ type Item = AdoReceipt & {
 };
 export class AdoWriteClient {
   private prefix: string;
+  private projectPrefix: string;
   constructor(
     private collection: string,
     private project: string,
     private transport: Transport,
   ) {
+    this.projectPrefix = new URL(
+      azurePathSegment(project) + "/",
+      collection.replace(/\/?$/, "/"),
+    ).href;
     this.prefix = new URL(
       azurePathSegment(project) + "/_apis/wit/",
       collection,
     ).href;
+  }
+  /**
+   * Governed creation of a project iteration node and subscription to a team,
+   * with independent read-back verification before claiming success.
+   */
+  async createTeamIteration(input: {
+    team: string;
+    name: string;
+    startDate?: string | null | undefined;
+    finishDate?: string | null | undefined;
+  }): Promise<{
+    id: string;
+    name: string;
+    path: string;
+    start: string;
+    finish: string;
+  }> {
+    const cleanName = input.name.trim();
+    if (!cleanName || /[\\/:"*?<>|]/.test(cleanName))
+      throw Error("Invalid Azure iteration name");
+    const attributes: Record<string, string> = {};
+    if (input.startDate) attributes.startDate = `${input.startDate}T00:00:00Z`;
+    if (input.finishDate)
+      attributes.finishDate = `${input.finishDate}T00:00:00Z`;
+    const body = Object.keys(attributes).length
+      ? { name: cleanName, attributes }
+      : { name: cleanName };
+    const node = (await this.call(
+      "POST",
+      "classificationnodes/iterations",
+      body,
+    )) as {
+      identifier?: string;
+      id?: string | number;
+      name?: string;
+      path?: string;
+    };
+    const identifier =
+      typeof node?.identifier === "string" && node.identifier
+        ? node.identifier
+        : typeof node?.id === "string" && node.id
+          ? node.id
+          : null;
+    if (!identifier) throw Error("Unconfirmed Azure iteration node receipt");
+    const teamUrl =
+      this.projectPrefix +
+      azurePathSegment(input.team) +
+      "/_apis/work/teamsettings/iterations?api-version=7.0";
+    const sub = await this.transport("POST", teamUrl, { id: identifier });
+    if (sub.status < 200 || sub.status >= 300)
+      throw new AdoRejected(sub.status, rejectionDetail(sub.data), "POST");
+    // Independent read-back from the team's iterations list.
+    const readBack = await this.transport("GET", teamUrl);
+    if (readBack.status < 200 || readBack.status >= 300)
+      throw new AdoRejected(
+        readBack.status,
+        rejectionDetail(readBack.data),
+        "GET",
+      );
+    const list =
+      readBack.data &&
+      typeof readBack.data === "object" &&
+      Array.isArray((readBack.data as { value?: unknown[] }).value)
+        ? (readBack.data as { value: Record<string, unknown>[] }).value
+        : [];
+    const found = list.find(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        (entry.id === identifier ||
+          (typeof entry.name === "string" &&
+            entry.name.toLowerCase() === cleanName.toLowerCase())),
+    );
+    if (
+      !found ||
+      typeof found.id !== "string" ||
+      typeof found.name !== "string" ||
+      typeof found.path !== "string"
+    )
+      throw Error("Azure team iteration read-back verification failed");
+    const attr =
+      found.attributes && typeof found.attributes === "object"
+        ? (found.attributes as Record<string, unknown>)
+        : {};
+    return {
+      id: found.id,
+      name: found.name,
+      path: found.path,
+      start: typeof attr.startDate === "string" ? attr.startDate : "",
+      finish: typeof attr.finishDate === "string" ? attr.finishDate : "",
+    };
   }
   private async call(method: string, route: string, body?: unknown) {
     const url =

@@ -157,7 +157,7 @@ export interface TaskShape {
   milestones: number;
   people: number;
   steps: number;
-  /** Shape recorded the last time the user chose "Keep as task". */
+  /** Shape recorded the last time the user chose "Keep as Initiative". */
   declinedAt?: { milestones: number; people: number; steps: number } | null;
 }
 export function conversionSuggestion(task: TaskShape) {
@@ -177,7 +177,7 @@ export function conversionSuggestion(task: TaskShape) {
     return null;
   return {
     text: `${task.milestones} ${task.milestones === 1 ? "milestone" : "milestones"} and ${task.people} ${task.people === 1 ? "person" : "people"}. Make it a project?`,
-    choices: ["Convert", "Keep as task"] as const,
+    choices: ["Convert", "Keep as Initiative"] as const,
     keeps: ["history", "links", "objective", "tracker"] as const,
   };
 }

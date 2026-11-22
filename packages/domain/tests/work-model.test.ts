@@ -1058,3 +1058,75 @@ it("recognizes an explicit creation request after the owner's problem statement"
     ),
   ).toEqual({ type: "product", name: "Amun" });
 });
+
+describe("work intake and initiative naming (22 November 2026 handoff)", () => {
+  const today = "2026-11-22";
+
+  it("handles the three explicit intake forms: Product, Project ('for client X'), and Initiative (+ legacy task)", () => {
+    const prod =
+      "Create a new product called Amun-SDK and help me build the vision and problem statement for it";
+    expect(
+      routeNewWork({ text: prod, today, areas: [], inside: null }),
+    ).toEqual({
+      route: "create",
+      request: {
+        type: "product",
+        name: "Amun-SDK",
+        priority: null,
+        dueDate: null,
+      },
+    });
+
+    const proj =
+      "Create a new project called Gitex for client X to be high priority and ready on Dec 6";
+    expect(newWorkNamed(proj)).toEqual({ type: "project", name: "Gitex" });
+    expect(
+      routeNewWork({ text: proj, today, areas: [], inside: null }),
+    ).toEqual({
+      route: "create",
+      request: {
+        type: "project",
+        name: "Gitex",
+        client: "X",
+        priority: "high",
+        dueDate: "2026-12-06",
+      },
+    });
+
+    const init1 =
+      "Start an Initiative called Q4 Demo Prep due Nov 30 high priority";
+    expect(newWorkNamed(init1)).toEqual({ type: "task", name: "Q4 Demo Prep" });
+    expect(
+      routeNewWork({ text: init1, today, areas: [], inside: null }),
+    ).toEqual({
+      route: "create",
+      request: {
+        type: "task",
+        name: "Q4 Demo Prep",
+        priority: "high",
+        dueDate: "2026-11-30",
+      },
+    });
+
+    const init2 = "Start an Initiative: Renew domain certificate";
+    expect(newWorkNamed(init2)).toEqual({
+      type: "task",
+      name: "Renew domain certificate",
+    });
+
+    const legacyTask = "Add a task: Renew domain certificate";
+    expect(newWorkNamed(legacyTask)).toEqual({
+      type: "task",
+      name: "Renew domain certificate",
+    });
+    expect(nameFromRequest("Start an Initiative: Prepare launch deck")).toBe(
+      "Prepare launch deck",
+    );
+  });
+
+  it("does not mistake 'for client X' as the project's own name when no project name was given", () => {
+    expect(
+      newWorkNamed("Create a new project for client X due Dec 6"),
+    ).toBeNull();
+  });
+});

@@ -379,7 +379,7 @@ export type WizardStep = (typeof wizardSteps)[number][0];
 export const workCards = [
   ["product", "Products"],
   ["project", "Client delivery"],
-  ["task", "Tasks"],
+  ["task", "Initiatives"],
   ["rfp", "RFP tracking"],
 ] as const;
 export const groupCards = ["Work", "Personal", "Side business"] as const;
@@ -510,7 +510,11 @@ export const welcomeCards = [
   ["product", "Create a product", "Start a product and its roadmap"],
   ["idea", "Turn an idea into a brief", "From a thought to a one-page brief"],
   ["rfp", "Track an RFP", "Owners, deadline and outcome"],
-  ["task", "Start a task", "Something to get done, with or without steps"],
+  [
+    "task",
+    "Start an Initiative",
+    "Something to get done, with or without steps",
+  ],
 ] as const;
 
 export const themeIds = [

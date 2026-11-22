@@ -1,7 +1,11 @@
 // Home (handoff §6): Welcome on first use; otherwise date, one "while you
 // were away" line, Needs your attention, compact Your work, composer.
 import { homeDraftKey } from "./chat-memory.ts";
-import { rfpDetails } from "../../../../packages/domain/src/work/model.ts";
+import {
+  rfpDetails,
+  statedDueDate,
+  statedPriority,
+} from "../../../../packages/domain/src/work/model.ts";
 import { acceptOffer, requestPlanChanges } from "./accept-offer.ts";
 import { useState, useSyncExternalStore } from "react";
 import { tickedTasks, type Ticked } from "./ticked-tasks.ts";
@@ -41,7 +45,7 @@ import {
 } from "./view-model.ts";
 
 const lower = (label: string) =>
-  label === "RFP" ? label : label.toLowerCase();
+  label === "RFP" || label === "Initiative" ? label : label.toLowerCase();
 export interface IntakeStep {
   step: string;
   text: string;
@@ -97,6 +101,11 @@ export function IntakeCard({
     }
     // "…for client X", read the same way an RFP's client is.
     const client = type === "project" ? rfpDetails(pending.text).client : null;
+    const priority = statedPriority(pending.text);
+    const dueDate = statedDueDate(
+      pending.text,
+      new Date().toISOString().slice(0, 10),
+    );
     const result = await workAsync("create-area", {
       // The owner's own message follows into this work, so Firstmate knows.
       told: true,
@@ -104,6 +113,8 @@ export function IntakeCard({
       type: type as "product" | "project" | "task" | "rfp",
       name,
       ...(client ? { client } : {}),
+      ...(priority ? { priority } : {}),
+      ...(dueDate ? { dueAt: dueDate } : {}),
     });
     return result.ok ? result.ref : null;
   };
@@ -790,7 +801,7 @@ export function Home({
                             ? "I have an idea: "
                             : id === "rfp"
                               ? "Track an RFP from "
-                              : "Start a task: ",
+                              : "Start an Initiative: ",
                     })
                   }
                 >

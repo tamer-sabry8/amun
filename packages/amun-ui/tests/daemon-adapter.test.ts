@@ -26,6 +26,7 @@ import {
   holdId,
   holdAttention,
   fleetAgents,
+  toWorkSnapshot,
   holdsDue,
   holdSignature,
   settleHoldAnswers,
@@ -1035,6 +1036,7 @@ describe("registering the agents with Firstmate", () => {
     expect(once().map((call) => call.params.key)).toEqual([
       "register-agents-v1",
       "draft-reminders-v1",
+      "prd-discovery-charter-v1",
     ]);
     expect(once()[0]!.params).toMatchObject({ space: "alpha" });
     expect(String(once()[1]!.params.text)).toMatch(
@@ -1114,4 +1116,63 @@ it("shows a keyed PRD decision in attention and marks its parked crewmate blocke
   expect(
     fleetAgents(view).find((agent) => agent.id === "crew:prd")?.state,
   ).toBe("waiting");
+});
+
+it("unifies the captain's existing Firstmate secondmate IDs (researcher, prd, designer, product-marketing) with Amun's pool roles without duplicating", () => {
+  const view = {
+    spaces: [],
+    fleet: [
+      {
+        id: "researcher",
+        current_state: {
+          state: "working",
+          detail: "gathering user journey evidence",
+        },
+      },
+      {
+        id: "prd",
+        current_state: { state: "working", detail: "interviewing the captain" },
+      },
+      {
+        id: "designer",
+        current_state: { state: "parked", detail: "ready for user flows" },
+      },
+      {
+        id: "product-marketing",
+        current_state: { state: "working", detail: "comparing alternatives" },
+      },
+    ],
+    holds: [],
+    work: null,
+  };
+  const agents = fleetAgents(view);
+  expect(
+    agents
+      .filter((a) => a.id.startsWith("crew:"))
+      .map((a) => [a.id, a.role, a.state]),
+  ).toEqual([
+    ["crew:researcher", "Research & Insights", "working"],
+    ["crew:prd", "Product Manager", "working"],
+    ["crew:designer", "UX", "idle"],
+    ["crew:product-marketing", "Product Marketing", "working"],
+  ]);
+
+  // Also ensure that if the work store had a stored pool agent for "Research & Insights",
+  // toWorkSnapshot deduplicates by role so the live crew:researcher replaces it cleanly.
+  const store = openWorkStore(":memory:").store;
+  store.handle({
+    version: 1,
+    kind: "work",
+    action: "add-agent",
+    description: "Research & Insights",
+  });
+  const snap = toWorkSnapshot(
+    { ...view, work: store.snapshot() },
+    "2026-11-22T10:00:00Z",
+  );
+  const researchEntries = snap.agents.filter(
+    (a) => a.role === "Research & Insights",
+  );
+  expect(researchEntries).toHaveLength(1);
+  expect(researchEntries[0]!.id).toBe("crew:researcher");
 });

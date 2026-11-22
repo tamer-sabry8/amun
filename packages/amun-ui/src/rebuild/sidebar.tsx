@@ -667,7 +667,7 @@ export function Sidebar({
             (folderAreas.length
               ? folderAreas.map((entry) => folderRow(entry))
               : emptyLine(
-                  "Products, projects, tasks and RFPs will show here.",
+                  "Products, projects, Initiatives and RFPs will show here.",
                 ))}
           {view === "general" && (
             <>

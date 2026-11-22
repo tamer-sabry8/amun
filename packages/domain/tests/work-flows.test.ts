@@ -195,7 +195,7 @@ describe("conversionSuggestion (F4, Q78)", () => {
       conversionSuggestion({ milestones: 3, people: 4, steps: 5 }),
     ).toMatchObject({
       text: "3 milestones and 4 people. Make it a project?",
-      choices: ["Convert", "Keep as task"],
+      choices: ["Convert", "Keep as Initiative"],
       keeps: ["history", "links", "objective", "tracker"],
     });
     expect(

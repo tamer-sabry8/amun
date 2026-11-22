@@ -291,3 +291,66 @@ it("keeps Azure's refusal text, redacted, on a rejected write", async () => {
   expect(error.detail).toContain("RuleValidationException");
   expect(error.detail).not.toContain("secret");
 });
+
+it("creates a project iteration node, subscribes the team, and independently verifies team iteration read-back", async () => {
+  const calls: { method: string; url: string; body: unknown }[] = [];
+  const client = new AdoWriteClient(base, "POCs", async (method, url, body) => {
+    calls.push({ method, url, body });
+    if (method === "POST" && url.includes("classificationnodes/iterations")) {
+      return {
+        status: 201,
+        data: {
+          identifier: "iter-guid-1",
+          name: "Sprint 6",
+          path: "\\POCs\\Iteration\\2026-Q4\\Sprint 6",
+        },
+      };
+    }
+    if (method === "POST" && url.includes("teamsettings/iterations")) {
+      return {
+        status: 201,
+        data: { id: "iter-guid-1", name: "Sprint 6" },
+      };
+    }
+    if (method === "GET" && url.includes("teamsettings/iterations")) {
+      return {
+        status: 200,
+        data: {
+          value: [
+            {
+              id: "iter-guid-1",
+              name: "Sprint 6",
+              path: "POCs\\2026-Q4\\Sprint 6",
+              attributes: {
+                startDate: "2026-12-01T00:00:00Z",
+                finishDate: "2026-12-14T00:00:00Z",
+                timeFrame: "future",
+              },
+            },
+          ],
+        },
+      };
+    }
+    return { status: 404, data: {} };
+  });
+
+  const created = await client.createTeamIteration({
+    team: "POCs Team",
+    name: "Sprint 6",
+    startDate: "2026-12-01",
+    finishDate: "2026-12-14",
+  });
+
+  expect(created).toEqual({
+    id: "iter-guid-1",
+    name: "Sprint 6",
+    path: "POCs\\2026-Q4\\Sprint 6",
+    start: "2026-12-01T00:00:00Z",
+    finish: "2026-12-14T00:00:00Z",
+  });
+  expect(calls.map((c) => c.method)).toEqual(["POST", "POST", "GET"]);
+  expect(calls[0]!.url).toContain(
+    "classificationnodes/iterations?api-version=7.0",
+  );
+  expect(calls[1]!.body).toEqual({ id: "iter-guid-1" });
+});
