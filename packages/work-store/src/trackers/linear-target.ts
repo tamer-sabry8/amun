@@ -44,6 +44,26 @@ export class LinearWriter {
     return obj(toolData(result));
   }
 
+  /**
+   * An issue's workflow state and cycle as Linear holds them now, for
+   * read-back in Amun. Read only; the answer's shape varies, so missing parts
+   * stay null.
+   */
+  async issueNow(id: string) {
+    const seen = await this.read("get_issue", { id });
+    const state = obj(seen.status ?? seen.state);
+    return {
+      id: text(seen.identifier) ?? id,
+      title: text(seen.title),
+      status: text(state.name) ?? text(seen.status) ?? text(seen.state),
+      cycle:
+        text(obj(seen.cycle).number) ??
+        text(seen.cycleNumber) ??
+        text(seen.cycleId),
+      url: text(seen.url),
+    };
+  }
+
   /** The team the plan names; refused when this workspace has none. */
   async team(team: string) {
     const result = await this.call("get_team", { query: team });

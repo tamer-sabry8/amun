@@ -139,6 +139,7 @@ export class JiraWriter {
       project: (text(data.key) ?? key).replace(/-\d+$/, ""),
       summary: text(fields.summary) ?? "",
       type: text(obj(fields.issuetype).name) ?? "",
+      status: text(obj(fields.status).name),
       parent: text(obj(fields.parent).key),
       labels: (Array.isArray(fields.labels) ? fields.labels : []).map(String),
       sprints: (Array.isArray(sprints) ? sprints : [])

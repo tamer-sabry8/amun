@@ -406,3 +406,43 @@ export const operationResult = z.object({
     )
     .optional(),
 });
+
+/**
+ * What a work area has in Jira and Linear, read back for the Stories tab and
+ * Sprints (read only). Amun's own record of what it published, with the
+ * status each provider reports now.
+ */
+export const trackerDeliveryRequest = z.object({
+  version: z.literal(1),
+  kind: z.literal("tracker-delivery"),
+  workAreaId: z.string().min(1).max(128),
+});
+const deliveryItem = z.object({
+  provider: z.enum(["jira", "linear"]),
+  planId: z.string(),
+  itemId: z.string(),
+  kind: z.enum(["epic", "story", "sprint"]),
+  type: z.string(),
+  title: z.string(),
+  acceptance: z.array(z.string()),
+  key: z.string().nullable(),
+  url: z.string().nullable(),
+  epicId: z.string().nullable(),
+  sprintId: z.string().nullable(),
+  status: z.string().nullable(),
+  start: z.string().nullable(),
+  end: z.string().nullable(),
+  outcome: z.enum(["created", "failed", "unknown"]),
+});
+export type TrackerDeliveryItem = z.infer<typeof deliveryItem>;
+export const trackerDeliveryResult = z.object({
+  version: z.literal(1),
+  kind: z.literal("tracker-delivery-result"),
+  workAreaId: z.string(),
+  items: z.array(deliveryItem),
+  readAt: z.string().nullable(),
+  unread: z.array(
+    z.object({ provider: z.enum(["jira", "linear"]), reason: z.string() }),
+  ),
+});
+export type TrackerDeliveryResult = z.infer<typeof trackerDeliveryResult>;

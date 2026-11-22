@@ -7,6 +7,7 @@
 // approve-plan, which binds the exact items (and so their site, project or
 // team, board, parent and sprint) to the fingerprint they saw.
 import type { Database } from "../sqlite.ts";
+import { readDelivery } from "./tracker-delivery.ts";
 import { PlanPublisher } from "../plan-publication.ts";
 import {
   TrackerHost,
@@ -125,6 +126,18 @@ export class TrackerService {
         events,
         writes: this.writes(planId),
       };
+    }
+    if (action === "delivery") {
+      const workAreaId = String(
+        (m as { workAreaId?: unknown }).workAreaId ?? "",
+      );
+      if (!workAreaId) throw Error("Choose a work area");
+      const delivery = await readDelivery(this.db, workAreaId, {
+        configured: async (provider) =>
+          (await this.host.status(provider)).status !== "missing",
+        use: (provider, work) => this.host.use(provider, work),
+      });
+      return { kind: "tracker-delivery", workAreaId, ...delivery };
     }
     if (action === "list")
       return {

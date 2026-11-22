@@ -49,6 +49,7 @@ import {
   type Sprint,
   type Horizon,
 } from "../../../../packages/domain/src/work/planning.ts";
+import { trackerAreas, useTrackerSprints } from "./tracker-delivery.ts";
 import {
   objectiveLine,
   trackerName,
@@ -1514,7 +1515,12 @@ export function Sprints({
         )
       : [];
   });
-  const overview = [...sprints, ...fromAzure];
+  // Jira sprints and Linear cycles that approved plans created here.
+  const fromTrackers = useTrackerSprints(
+    snapshot,
+    trackerAreas(snapshot, areaId).filter((id) => allowed.has(id)),
+  );
+  const overview = [...sprints, ...fromAzure, ...fromTrackers];
   const groups = sprintGroups(overview, now);
   const current =
     overview.find(
@@ -1528,6 +1534,9 @@ export function Sprints({
       item,
     ]),
   );
+  // Azure's state for its stories; Jira's or Linear's for theirs.
+  const stateOf = (story: { id: string; state?: string }) =>
+    azureDetail.get(story.id)?.state ?? story.state ?? "Planned";
   const openAzure = current?.id.startsWith("ado:")
     ? current.id.slice("ado:".length)
     : null;
@@ -1948,45 +1957,37 @@ export function Sprints({
             </p>
           ) : visibleStories.length ? (
             <div className="rb-board">
-              {[
-                ...new Set(
-                  visibleStories.map(
-                    (story) => azureDetail.get(story.id)?.state ?? "Planned",
-                  ),
+              {[...new Set(visibleStories.map((story) => stateOf(story)))].map(
+                (state) => (
+                  <section className="rb-col" key={state} aria-label={state}>
+                    <header>{state}</header>
+                    {visibleStories
+                      .filter((story) => stateOf(story) === state)
+                      .map((story) => (
+                        <div className="rb-tile" key={story.id}>
+                          <span className="name">{story.title}</span>
+                          <span className="meta">
+                            {story.owner ??
+                              (story.points === null
+                                ? "Not sized"
+                                : `${story.points} points`)}
+                          </span>
+                          {carryovers
+                            .filter(
+                              (c) =>
+                                c.toId === openAzure &&
+                                String(c.storyId) === story.id,
+                            )
+                            .map((c) => (
+                              <div key={c.ref}>
+                                Carried forward · {requestLink(c)}
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                  </section>
                 ),
-              ].map((state) => (
-                <section className="rb-col" key={state} aria-label={state}>
-                  <header>{state}</header>
-                  {visibleStories
-                    .filter(
-                      (story) =>
-                        (azureDetail.get(story.id)?.state ?? "Planned") ===
-                        state,
-                    )
-                    .map((story) => (
-                      <div className="rb-tile" key={story.id}>
-                        <span className="name">{story.title}</span>
-                        <span className="meta">
-                          {story.owner ??
-                            (story.points === null
-                              ? "Not sized"
-                              : `${story.points} points`)}
-                        </span>
-                        {carryovers
-                          .filter(
-                            (c) =>
-                              c.toId === openAzure &&
-                              String(c.storyId) === story.id,
-                          )
-                          .map((c) => (
-                            <div key={c.ref}>
-                              Carried forward · {requestLink(c)}
-                            </div>
-                          ))}
-                      </div>
-                    ))}
-                </section>
-              ))}
+              )}
             </div>
           ) : (
             <p className="muted">

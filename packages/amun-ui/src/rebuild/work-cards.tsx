@@ -22,6 +22,13 @@ import {
   type Snapshot,
 } from "./view-model.ts";
 import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
+import {
+  itemLabel,
+  trackerAreas,
+  trackerEpics,
+  useTrackerDelivery,
+} from "./tracker-delivery.ts";
+import type { TrackerDeliveryResult } from "@amun/contracts";
 
 const shortDay = (stamp: string) =>
   new Date(stamp).toLocaleDateString("en-GB", {
@@ -195,6 +202,8 @@ export function WorkSheet({
 }) {
   const [tab, setTab] = useState<Tab>("summary");
   const sheet = useRef<HTMLDivElement>(null);
+  // What approved plans put in Jira or Linear for this work.
+  const tracked = useTrackerDelivery(trackerAreas(snapshot, area.id))[area.id];
   const progress = workProgress(area, snapshot);
   const card = portfolioCard(area, now, progress);
   const tone = card.atRisk ? "bad" : "good";
@@ -424,7 +433,12 @@ export function WorkSheet({
               const areaSprints = snapshot.sprints.filter(
                 (s) => s.workAreaId === area.id && s.stories.length > 0,
               );
-              if (!areaSprints.length) return needsAzure("its stories");
+              if (!areaSprints.length)
+                return tracked?.items.length ? (
+                  <TrackerStories delivery={tracked} />
+                ) : (
+                  needsAzure("its stories")
+                );
               return (
                 <div style={{ display: "grid", gap: 10 }}>
                   {areaSprints.map((sprint) => (
@@ -492,6 +506,69 @@ export function WorkSheet({
             ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Epics and their stories in Jira or Linear, as the sprint sections above
+ * show Azure's: what Amun published, with the status the provider reports.
+ */
+function TrackerStories({ delivery }: { delivery: TrackerDeliveryResult }) {
+  const { grouped, loose, failed } = trackerEpics(delivery);
+  const where = [
+    ...new Set(
+      delivery.items.map((i) => (i.provider === "jira" ? "Jira" : "Linear")),
+    ),
+  ].join(" and ");
+  const story = (item: TrackerDeliveryResult["items"][number]) => (
+    <li key={item.itemId}>
+      <span className="muted small">
+        {item.status ?? "Status not read yet"}
+        {item.acceptance.length
+          ? ` · ${item.acceptance.length} acceptance ${item.acceptance.length === 1 ? "criterion" : "criteria"}`
+          : ""}
+      </span>
+      <p>
+        {item.url ? (
+          <a href={item.url} target="_blank" rel="noreferrer">
+            {itemLabel(item)}
+          </a>
+        ) : (
+          itemLabel(item)
+        )}
+      </p>
+    </li>
+  );
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <p className="muted small" role="status">
+        In {where}
+        {delivery.readAt
+          ? ` · read ${new Date(delivery.readAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+          : ""}
+        {delivery.unread.length
+          ? ` · ${delivery.unread.map((u) => `${u.provider === "jira" ? "Jira" : "Linear"} ${u.reason}`).join(", ")}; showing what Amun recorded`
+          : ""}
+      </p>
+      {grouped.map(({ epic, stories }) => (
+        <section key={epic.itemId} aria-label={epic.title}>
+          <h4>{itemLabel(epic)}</h4>
+          <ol className="rb-notes">{stories.map(story)}</ol>
+        </section>
+      ))}
+      {loose.length > 0 && (
+        <section aria-label="Other stories">
+          <h4>Other stories</h4>
+          <ol className="rb-notes">{loose.map(story)}</ol>
+        </section>
+      )}
+      {failed.length > 0 && (
+        <p className="muted small">
+          {failed.length} {failed.length === 1 ? "item was" : "items were"} not
+          created; see the plan’s receipt.
+        </p>
+      )}
     </div>
   );
 }
