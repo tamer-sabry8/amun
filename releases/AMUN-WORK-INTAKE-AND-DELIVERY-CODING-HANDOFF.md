@@ -68,13 +68,12 @@ The captain wants you to:
 From `/Users/tamersabry/Documents/Antigravity/Amun_App` (on a new branch created from `main`):
 
 ```bash
-# 1. Build all desktop inputs (Roast Room council, Paseo server, work-store, cli, and @amun/ui)
-npm run build:desktop-inputs
-
-# 2. Build the Electron main process and package the macOS arm64 DMG (ad-hoc signed for local Mac testing)
-npm run build:main -w @getpaseo/desktop
-npx --workspace=@getpaseo/desktop electron-builder --config packages/desktop/electron-builder.yml --mac dmg zip -c.mac.identity="-" -c.mac.notarize=false
+# Builds all desktop inputs, the Electron main process and the ad-hoc-signed macOS arm64 DMG
+npm ci
+npm run dist:mac:beta
 ```
+
+- Ad-hoc beta builds must have hardened runtime off (`dist:mac:beta` passes `-c.mac.hardenedRuntime=false`). With it on, macOS refuses to load Electron Framework and Amun crashes at launch ("different Team IDs"); this is what happened to `Amun-PR56-65fd8f8-arm64.dmg`. The after-sign check now fails such a build instead of producing a DMG that cannot open.
 
 - The built DMG and `Amun.app` will be in `packages/desktop/release/` (e.g. `packages/desktop/release/mac-arm64/Amun.app` and `packages/desktop/release/Amun-0.16.1-arm64.dmg`).
 - Mount/install `Amun.app` (or copy to `/Applications/Amun.app`), measure its byte size, launch it, and drive it via **Computer Use**.

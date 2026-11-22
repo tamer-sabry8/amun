@@ -15,6 +15,7 @@ export default defineConfig({
       "packages/desktop/src/features/amun-browser/**/*.test.ts",
       "packages/desktop/src/preload-sandbox.test.ts",
       "packages/desktop/src/amun-shell-env-cache.test.ts",
+      "packages/desktop/scripts/check-adhoc-signing.test.mjs",
     ],
   },
 });

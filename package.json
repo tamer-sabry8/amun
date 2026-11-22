@@ -33,6 +33,7 @@
     "test": "vitest run",
     "test:server": "npm run test:unit -w @getpaseo/server",
     "build:desktop-inputs": "npm run council:stage && npm run build:server && npm run build -w @amun/ui",
+    "dist:mac:beta": "npm run build:desktop-inputs && npm run build:main -w @getpaseo/desktop && cd packages/desktop && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.yml --mac dmg --arm64 --publish never -c.mac.identity=- -c.mac.notarize=false -c.mac.hardenedRuntime=false",
     "start": "npm run start -w @getpaseo/server",
     "lint": "eslint packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store packages/council packages/notion",
     "format:check": "prettier --check docs packages/contracts packages/domain packages/theme packages/amun-ui packages/work-store packages/council packages/notion",
