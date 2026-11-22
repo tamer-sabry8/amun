@@ -623,7 +623,8 @@ function createPiPaseoExtensionFile({
     filePath,
     `
       ${firstmateResumeStartup ? `import { execFile } from "node:child_process";
-      import { join, resolve } from "node:path";` : ""}
+      import { join, resolve } from "node:path";
+      import { readFileSync } from "node:fs";` : ""}
 
 	function decodePayload(encoded) {
 	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
@@ -718,6 +719,7 @@ function createPiPaseoExtensionFile({
       // startup once from this Pi process, so it can establish its own lock.
       let startup;
       let startupShown = false;
+      let startupComplete = false;
       const startupAbort = new AbortController();
       pi.on("session_start", () => {
         if (startup || !process.env.FM_HOME || !process.env.FM_ROOT_OVERRIDE) return;
@@ -736,9 +738,15 @@ function createPiPaseoExtensionFile({
         const result = await startup;
         if (startupShown || startupAbort.signal.aborted) return;
         startupShown = true;
-        const complete = !result.error && result.stdout.includes("SESSION START") &&
-          !/READ-ONLY SESSION|STARTUP TRUNCATED/.test(result.stdout);
-        const cue = complete
+        const state = process.env.FM_STATE_OVERRIDE || join(process.env.FM_HOME, "state");
+        try {
+          const owner = readFileSync(join(state, ".lock"), "utf8").trim();
+          const ready = readFileSync(join(state, ".session-start-complete"), "utf8").trim();
+          startupComplete = !result.error && owner === String(process.pid) && ready === owner;
+        } catch {
+          startupComplete = false;
+        }
+        const cue = startupComplete
           ? "Amun already ran the native session startup to completion in this Pi process. Reuse this digest. Do not rerun startup. If the first watcher arm is required, arm it now."
           : "The native resume startup attempt could not be confirmed. Report the diagnostic and remain read-only until ownership is verified.";
         return {
@@ -747,6 +755,24 @@ function createPiPaseoExtensionFile({
             content: cue + "\\n\\n" + (result.stdout || result.error || "No startup digest was returned."),
             display: false,
           },
+        };
+      });
+      pi.on("context", (event) => {
+        if (!startupComplete || startupAbort.signal.aborted) return;
+        // Native resume still emits a manual nudge. Suppress only the
+        // duplicate immediately beside this session's verified digest.
+        const messages = event.messages;
+        const digest = messages.findLastIndex((message) =>
+          message.role === "custom" && message.customType === "amun-firstmate-resume",
+        );
+        if (digest < 0) return;
+        return {
+          messages: messages.filter((message, index) =>
+            !(Math.abs(index - digest) === 1 && message.role === "custom" &&
+              message.customType === "firstmate-sessionstart-nudge" &&
+              typeof message.content === "string" &&
+              message.content.includes("now, exactly once, before executing any other instructions")),
+          ),
         };
       });` : ""}
 
