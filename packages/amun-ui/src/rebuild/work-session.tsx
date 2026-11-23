@@ -26,6 +26,7 @@ import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
 import { PublishReceipt, receiptOf } from "./publish-receipt.tsx";
 import { StoriesView, type StoriesFilter } from "./stories-view.tsx";
+import { OutputCards } from "./output-cards.tsx";
 
 /** The line a "show" leaves in the chat, opening that screen again. */
 function openedViewOf(card: unknown): {
@@ -3698,31 +3699,45 @@ export function WorkSession({
                   </button>
                 </div>
               ))}
-              {context.outputs
-                .filter((item) => item.section === "output")
-                .slice(0, 4)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    className="rb-inline"
-                    style={{ textAlign: "left", justifyContent: "stretch" }}
-                    aria-pressed={
-                      pane?.kind === "output" && pane.id === item.id
-                    }
-                    onClick={() => onPane({ kind: "output", id: item.id })}
-                  >
-                    <span className="row">
-                      <Icon name="prd" width={18} height={18} />
-                      <strong className="grow">{item.title}</strong>
-                      <span className="tag">
-                        {approvalLabel(approvalOf(item)) || item.status}
-                      </span>
-                    </span>
-                    <span className="note">
-                      {typeName(item.type)} · opens beside the conversation
-                    </span>
-                  </button>
-                ))}
+              <OutputCards
+                items={context.outputs.filter(
+                  (item) => item.section === "output",
+                )}
+                pane={pane}
+                onOpen={(item) =>
+                  onPane(
+                    item.type === projectChecklistDocType
+                      ? { kind: "checklist" }
+                      : { kind: "output", id: item.id },
+                  )
+                }
+                onStatus={async (item, next) => {
+                  // The card's status is the control (approved F1): Approved
+                  // binds to this exact version; Done keeps the text.
+                  if (next === "Approved")
+                    await workAsync("approve-output", {
+                      outputId: item.id,
+                      approved: true,
+                      versionNumber: item.version,
+                    });
+                  else {
+                    if (approvalOf(item).state !== "none")
+                      await workAsync("approve-output", {
+                        outputId: item.id,
+                        approved: false,
+                      });
+                    await workAsync("save-output", {
+                      outputId: item.id,
+                      groupId: item.groupId,
+                      type: item.type,
+                      title: item.title,
+                      body: item.body,
+                      status: next,
+                      workAreaIds: item.workAreaIds,
+                    });
+                  }
+                }}
+              />
               {questions.map((question) => {
                 const parsed =
                   question.options.length > 0

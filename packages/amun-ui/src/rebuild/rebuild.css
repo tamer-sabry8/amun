@@ -4981,3 +4981,48 @@ button.rb-opened:hover {
 .rb-came-from .link {
   color: var(--accent);
 }
+/* Document cards: status is the control (F1), approved 23 November 2026. */
+.rb-outcard-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  min-width: 0;
+}
+.rb-outcard-open strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-status-wrap {
+  position: relative;
+}
+.rb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rb-status-menu {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 6px);
+  z-index: 5;
+  display: grid;
+  min-inline-size: 240px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 35%);
+}
+.rb-status-menu button {
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  text-align: left;
+}
+.rb-status-menu button:hover {
+  background: var(--hover);
+}
