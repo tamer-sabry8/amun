@@ -43,6 +43,8 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
+import { parseProjectChecklist } from "../../domain/src/work/release-launch.ts";
+import { storyStatusWords } from "../../domain/src/work/delivery-chain.ts";
 import {
   readRequestBlocks,
   reportFingerprint,
@@ -1390,7 +1392,7 @@ export class WorkStore {
           : command.groupId;
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at) VALUES (?,?,?,?,?,?,?,'proposed',?)",
+          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at,chat_id,request_ref) VALUES (?,?,?,?,?,?,?,'proposed',?,?,?)",
           id,
           groupId,
           command.workAreaId,
@@ -1399,6 +1401,8 @@ export class WorkStore {
           this.clean(command.summary),
           JSON.stringify(command.items),
           now,
+          command.chatId ?? null,
+          command.requestRef ?? null,
         );
         this.attend({
           kind: "approval",
@@ -2967,11 +2971,95 @@ export class WorkStore {
           throw new WorkError("There is no chat for this Firstmate reply.");
         return { ref };
       }
+      case "start-delivery": {
+        const area = this.get(
+          "SELECT type,name,product_id,delivery FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.workAreaId,
+        );
+        if (!area) throw new WorkError("That work area no longer exists.");
+        if (area.type !== "project" && area.type !== "product")
+          throw new WorkError(
+            "Only a product or a project can run with stories and sprints.",
+          );
+        let productId = (area.product_id as string | null) ?? null;
+        if (area.delivery === 1 && productId) return { ref: productId };
+        if (!productId) {
+          productId = randomUUID();
+          this.run(
+            "INSERT INTO products(id,name,allowed_models_json,created_at) VALUES (?,?,'[]',?)",
+            productId,
+            String(area.name),
+            now,
+          );
+        }
+        this.run(
+          "UPDATE work_areas SET product_id=?,delivery=1 WHERE id=?",
+          productId,
+          command.workAreaId,
+        );
+        // The checklist's tasks become stories, Done kept (§3.2). The
+        // checklist itself stays in the Library as it was.
+        const checklist = this.get(
+          "SELECT o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND o.type='project_checklist' AND o.status<>'Archived' ORDER BY o.updated_at DESC LIMIT 1",
+          command.workAreaId,
+        );
+        for (const task of parseProjectChecklist(String(checklist?.body ?? "")))
+          this.run(
+            "INSERT INTO work_items(id,product_id,type,title,body,status) VALUES (?,?,'story',?,?,?)",
+            randomUUID(),
+            productId,
+            this.clean(task.title),
+            [
+              task.owner && `Owner: ${task.owner}`,
+              task.due && `Due: ${task.due}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            task.done ? storyStatusWords.done : storyStatusWords.todo,
+          );
+        return { ref: productId };
+      }
+      case "set-story-status": {
+        const item = this.get(
+          "SELECT type,remote_system FROM work_items WHERE id=?",
+          command.itemId,
+        );
+        if (!item) throw new WorkError("That story no longer exists.");
+        if (item.remote_system)
+          throw new WorkError(
+            "This story is worked in a connected tool, so its status changes there, through an approved plan.",
+          );
+        this.run(
+          "UPDATE work_items SET status=? WHERE id=?",
+          storyStatusWords[command.status],
+          command.itemId,
+        );
+        return { ref: command.itemId };
+      }
+      case "link-delivery": {
+        if (command.linked)
+          this.run(
+            "INSERT OR IGNORE INTO delivery_links(kind,from_id,to_id,created_at) VALUES (?,?,?,?)",
+            command.kind,
+            command.fromId,
+            command.toId,
+            now,
+          );
+        else
+          this.run(
+            "DELETE FROM delivery_links WHERE kind=? AND from_id=? AND to_id=?",
+            command.kind,
+            command.fromId,
+            command.toId,
+          );
+        return { ref: command.fromId };
+      }
       case "apply-reply": {
         if (!this.live(command.workAreaId))
           throw new WorkError("That work area no longer exists.");
-        const { visible, reports, documents, moves, unmatched } =
+        const { visible, reports, documents, moves, plans, unmatched } =
           readRequestBlocks(command.text);
+        const raising = command.raisePlans ? plans : [];
         // A PRD answer relayed early can arrive again through the normal
         // watcher. Only suppress the repeated plaintext completion.
         const completion = reports.length === 1 ? reports[0] : null;
@@ -2979,6 +3067,7 @@ export class WorkStore {
           command.saveText &&
           !documents.length &&
           !moves.length &&
+          !raising.length &&
           !unmatched.length &&
           completion?.status === "delivered"
             ? this.get(
@@ -3119,6 +3208,103 @@ export class WorkStore {
                 .map((report) => report.request),
             },
           );
+        }
+        // Plans in a reply nobody asked for (handoff item 9, 23 November
+        // 2026): raised through the same checks as the window, in the chat of
+        // the request they name, else where the reply's reports went, else
+        // where it arrived. The same plan arriving again is raised once.
+        const reported = [
+          ...new Set(
+            reports.flatMap((report) => {
+              const known = request(report.request);
+              return known ? [`${known.areaId}:${known.chatId ?? ""}`] : [];
+            }),
+          ),
+        ];
+        const reportedAt =
+          reported.length === 1
+            ? {
+                areaId: reported[0]!.split(":")[0]!,
+                chatId: reported[0]!.split(":")[1] || null,
+              }
+            : null;
+        for (const plan of raising) {
+          const known = request(plan.request);
+          const at = known ?? reportedAt ?? here;
+          // The whole plan, without the ids Amun gives its items: a replay is
+          // the same plan, but a revision (other fields, kind) is reviewed
+          // again.
+          const payload = (
+            kind: unknown,
+            items: { summary: string; fields: Record<string, unknown> }[],
+          ) =>
+            JSON.stringify([
+              kind,
+              items.map((item) => [
+                item.summary,
+                Object.entries(item.fields ?? {}).sort(([a], [b]) =>
+                  a.localeCompare(b),
+                ),
+              ]),
+            ]);
+          const wanted = payload(plan.planKind, plan.items);
+          const raised = this.all(
+            "SELECT kind,items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=?",
+            at.areaId,
+            plan.destination,
+            this.clean(plan.summary),
+          ).some((row) => {
+            try {
+              return (
+                payload(
+                  row.kind,
+                  JSON.parse(String(row.items_json)) as {
+                    summary: string;
+                    fields: Record<string, unknown>;
+                  }[],
+                ) === wanted
+              );
+            } catch {
+              return false;
+            }
+          });
+          if (raised) continue;
+          const proposal = workCommand.safeParse({
+            version: 1,
+            kind: "work",
+            action: "propose-plan",
+            groupId: null,
+            workAreaId: at.areaId,
+            planKind: plan.planKind,
+            destination: plan.destination,
+            summary: plan.summary,
+            items: plan.items.map((item) => ({ id: randomUUID(), ...item })),
+            chatId: at.chatId,
+            requestRef:
+              known?.ref ??
+              (reportedAt && reports.length === 1 ? reports[0]!.request : null),
+          });
+          let refused = proposal.success
+            ? ""
+            : "Amun could not read the plan Firstmate wrote.";
+          if (proposal.success)
+            try {
+              this.apply(
+                proposal.data as Exclude<WorkCommand, { action: "snapshot" }>,
+              );
+            } catch (error) {
+              if (!(error instanceof WorkError)) throw error;
+              refused = error.message;
+            }
+          // A refused plan never exists; say so where it would have been, so
+          // Firstmate is told with the owner's next message there.
+          if (refused)
+            say(
+              at,
+              "firstmate",
+              `Nothing was raised for your approval. ${refused}`,
+              { kind: "plan-refused" },
+            );
         }
         for (const document of documents) {
           const known = request(document.request);
@@ -3723,6 +3909,7 @@ export class WorkStore {
       });
     }
     this.closeAttention("failure:" + planId);
+    this.publishReceipt(planId, approved.items, all, state);
     const named = (state: "failed" | "unknown") =>
       all
         .filter((result) => result.state === state)
@@ -3746,6 +3933,114 @@ export class WorkStore {
         options: summary.button ? [summary.button] : [],
       });
     return { ref: planId, step: { ...summary, state } };
+  }
+
+  /**
+   * One receipt per approved plan, in the chat of the request that asked
+   * (else the chat the plan was raised in), updated in place as results
+   * arrive (Idea to Done §4.8, approved 23 November 2026). The request turns
+   * Ready only when everything was created.
+   */
+  private publishReceipt(
+    planId: string,
+    items: { id: string; summary: string; fields: Record<string, unknown> }[],
+    results: {
+      id: string;
+      state: "created" | "failed" | "unknown";
+      externalId?: string | undefined;
+      url?: string | undefined;
+    }[],
+    state: "published" | "partial" | "failed",
+  ) {
+    const plan = this.get(
+      "SELECT work_area_id,chat_id,request_ref,destination FROM work_plans WHERE id=?",
+      planId,
+    );
+    if (!plan) return;
+    const ref = (plan.request_ref as string | null) ?? null;
+    const asked = ref
+      ? this.get(
+          "SELECT m.work_area_id,m.chat_id FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
+          ref,
+        )
+      : undefined;
+    const areaId =
+      (asked?.work_area_id as string | undefined) ??
+      (plan.work_area_id as string | null);
+    if (!areaId || !this.live(areaId)) return;
+    const chatId = asked
+      ? ((asked.chat_id as string | null) ?? null)
+      : ((plan.chat_id as string | null) ?? null);
+    const byId = new Map(results.map((result) => [result.id, result]));
+    const rows = items.map((item) => {
+      const result = byId.get(item.id);
+      const parent = item.fields.parent;
+      return {
+        summary: item.summary,
+        type: typeof item.fields.type === "string" ? item.fields.type : null,
+        parent: typeof parent === "string" && parent ? parent : null,
+        state: result?.state ?? "unknown",
+        key: result?.externalId ?? null,
+        url: result?.url ?? null,
+        note:
+          result?.state === "failed" ? this.writeNote(planId, item.id) : null,
+      };
+    });
+    const created = rows.filter((row) => row.state === "created").length;
+    const card = {
+      kind: "publish-receipt",
+      planId,
+      destination: String(plan.destination),
+      request: ref,
+      state,
+      created,
+      total: rows.length,
+      items: rows.slice(0, 200),
+    };
+    const text = `Created in ${String(plan.destination)}: ${created} of ${rows.length}`;
+    const existing = this.get(
+      "SELECT id FROM work_messages WHERE role='card' AND instr(card_json,'\"publish-receipt\"')>0 AND instr(card_json,?)>0",
+      JSON.stringify(planId),
+    );
+    if (existing)
+      this.run(
+        "UPDATE work_messages SET card_json=?,text=? WHERE id=?",
+        JSON.stringify(card),
+        text,
+        existing.id,
+      );
+    else
+      this.apply({
+        version: 1,
+        kind: "work",
+        action: "message",
+        workAreaId: areaId,
+        chatId,
+        role: "card",
+        text,
+        card: card as never,
+        model: null,
+      } as never);
+    if (ref && this.get("SELECT 1 FROM work_requests WHERE ref=?", ref))
+      this.apply({
+        version: 1,
+        kind: "work",
+        action: "request-report",
+        ref,
+        status:
+          state === "published"
+            ? "delivered"
+            : state === "partial"
+              ? "needs-decision"
+              : "failed",
+        role: "Amun",
+        detail:
+          state === "published"
+            ? `Created ${created} items in ${String(plan.destination)}`
+            : `${created} of ${rows.length} created in ${String(plan.destination)}`,
+        parts: 0,
+        fingerprint: `receipt:${planId}:${state}:${created}`,
+      } as never);
   }
 
   /** Why the destination refused an item, as the publisher recorded it. */

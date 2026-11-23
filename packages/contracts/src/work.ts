@@ -811,6 +811,9 @@ export const workCommand = z.discriminatedUnion("action", [
     destination: z.string().min(1).max(64),
     summary: text,
     items: z.array(planItem).min(1).max(500),
+    /** The chat and request that asked, where the receipt goes. */
+    chatId: id.nullable().optional(),
+    requestRef: z.string().min(8).max(64).nullable().optional(),
   }),
   act("update-plan", { planId: id, items: z.array(planItem).min(1).max(500) }),
   act("approve-plan", {
@@ -1161,12 +1164,35 @@ export const workCommand = z.discriminatedUnion("action", [
    * `saveText`, the reply's own words are kept too: in the chat of the
    * request it is about, when every reference points to the same chat.
    */
+  /**
+   * Run a Project with stories and sprints instead of its checklist (Idea to
+   * Done §3.2). Gives it the same delivery record a Product has; checklist
+   * tasks become stories. One-way.
+   */
+  act("start-delivery", { workAreaId: id }),
+  /** Status of a story worked in Amun only; a tool's stories change there. */
+  act("set-story-status", {
+    itemId: id,
+    status: z.enum(["todo", "in_progress", "in_review", "done", "removed"]),
+  }),
+  /** Link two records of the delivery chain, or unlink them. */
+  act("link-delivery", {
+    kind: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
+    fromId: id,
+    toId: id,
+    linked: z.boolean().default(true),
+  }),
   act("apply-reply", {
     text: z.string().max(200000),
     workAreaId: id,
     chatId: id.nullable(),
     saveText: z.boolean().default(false),
     prdRelay: z.boolean().optional(),
+    /**
+     * Raise plan blocks for approval. Only for replies nobody asked for; the
+     * window raises the plans in replies to the owner's own messages.
+     */
+    raisePlans: z.boolean().optional(),
     model: z.string().max(200).nullable().default(null),
   }),
   act("record-firstmate-reply", {

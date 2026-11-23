@@ -289,6 +289,24 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   "revoke-rule": {
     tell: (c) => ({ what: "removed a standing rule", ids: [c.ruleId] }),
   },
+  "start-delivery": {
+    tell: (c, look) => ({
+      what: `switched ${look.area(c.workAreaId)} from its checklist to stories and sprints; its checklist tasks are now stories`,
+      ids: [c.workAreaId],
+    }),
+  },
+  "set-story-status": {
+    tell: (c) => ({
+      what: `set a story kept in Amun to ${c.status.replace("_", " ")}`,
+      ids: [c.itemId],
+    }),
+  },
+  "link-delivery": {
+    tell: (c) => ({
+      what: `${c.linked ? "linked" : "unlinked"} ${c.kind === "release_story" ? "a story and a release" : c.kind === "roadmap_release" ? "a roadmap item and a release" : "a roadmap item and its requirements"}`,
+      ids: [c.fromId, c.toId],
+    }),
+  },
   "propose-plan": {
     tell: (c, look) => ({
       what: `drew up a ${c.planKind.replace("_", " ")} plan for ${c.destination}: ${said(c.summary)} (${c.items.length} items). It waits for the captain's own approval and nothing is published yet`,

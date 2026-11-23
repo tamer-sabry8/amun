@@ -111,3 +111,147 @@ describe("a First Mate reply nobody asked for", () => {
     work.close();
   });
 });
+
+describe("a plan in a First Mate reply nobody asked for (handoff item 9)", () => {
+  const plan = (summary: string) =>
+    "I've asked Amun to raise the Invoiced plan for Linear for your approval.\n\n```amun\n" +
+    JSON.stringify({
+      do: "plan",
+      planKind: "stories",
+      destination: "linear",
+      summary,
+      items: [
+        {
+          summary: "Customers & contacts",
+          fields: { type: "Epic", team: "TRA", site: "transfrm" },
+        },
+        {
+          summary: "Add a customer",
+          fields: {
+            type: "Story",
+            team: "TRA",
+            parent: "Customers & contacts",
+          },
+        },
+      ],
+    }) +
+    "\n```";
+
+  it("is raised for approval, once, even when the same reply arrives again", () => {
+    const work = opened();
+    recordFirstMateReply(
+      work.store,
+      plan("Invoiced plan for Linear"),
+      "pi/model",
+    );
+    recordFirstMateReply(
+      work.store,
+      plan("Invoiced plan for Linear"),
+      "pi/model",
+    );
+    const plans = work.store
+      .snapshot()
+      .plans.filter((item) => item.destination === "linear");
+    expect(plans).toHaveLength(1);
+    expect(plans[0]).toMatchObject({
+      state: "proposed",
+      summary: "Invoiced plan for Linear",
+    });
+    expect(plans[0]!.items.map((item) => item.summary)).toEqual([
+      "Customers & contacts",
+      "Add a customer",
+    ]);
+    const general = work.store
+      .snapshot()
+      .areas.find((area) => area.name === standing)!;
+    expect(threadOf(work, general.id).map((message) => message.text)).toEqual([
+      "I've asked Amun to raise the Invoiced plan for Linear for your approval.",
+      "I've asked Amun to raise the Invoiced plan for Linear for your approval.",
+    ]);
+    work.close();
+  });
+
+  it("raises a revised plan again when only its fields changed", () => {
+    const work = opened();
+    recordFirstMateReply(work.store, plan("Invoiced plan for Linear"));
+    recordFirstMateReply(
+      work.store,
+      plan("Invoiced plan for Linear").replaceAll(
+        '"team":"TRA"',
+        '"team":"TRB"',
+      ),
+    );
+    expect(
+      work.store
+        .snapshot()
+        .plans.filter((item) => item.destination === "linear"),
+    ).toHaveLength(2);
+    work.close();
+  });
+
+  it("goes to the chat of the request it names", () => {
+    const work = opened();
+    const act = (action: string, extra: object) =>
+      (
+        work.store
+          .handle({ version: 1, kind: "work", action, ...extra })
+          .find(
+            (event) => (event as { kind?: string }).kind === "work-result",
+          ) as { ref: string | null }
+      ).ref;
+    const group = work.store.snapshot().groups[0]!.id;
+    const invoiced = act("create-area", {
+      groupId: group,
+      type: "project",
+      name: "Invoiced",
+    })!;
+    const ref = "amun-r-aaaaaaaaaaaa";
+    const messageId = act("message", {
+      workAreaId: invoiced,
+      role: "you",
+      text: "Publish the epics to Linear.",
+      card: { kind: "request", ref },
+    })!;
+    act("register-request", { ref, messageId, projectAreaId: invoiced });
+    const text = plan("Invoiced plan").replace(
+      '"do":"plan",',
+      `"do":"plan","request":"${ref}",`,
+    );
+    recordFirstMateReply(work.store, text);
+    const raised = work.store
+      .snapshot()
+      .plans.find((item) => item.summary === "Invoiced plan");
+    expect(raised?.workAreaId).toBe(invoiced);
+    work.close();
+  });
+
+  it("is not raised by a reply to the owner's own message (the window raises those)", () => {
+    const work = opened();
+    const group = work.store.snapshot().groups[0]!.id;
+    const area = (
+      work.store
+        .handle({
+          version: 1,
+          kind: "work",
+          action: "create-area",
+          groupId: group,
+          type: "project",
+          name: "Gitex",
+        })
+        .find(
+          (event) => (event as { kind?: string }).kind === "work-result",
+        ) as { ref: string }
+    ).ref;
+    work.store.handle({
+      version: 1,
+      kind: "work",
+      action: "apply-reply",
+      text: plan("Window plan"),
+      workAreaId: area,
+      chatId: null,
+      saveText: true,
+    });
+    expect(work.store.snapshot().plans).toHaveLength(0);
+    work.close();
+  });
+});

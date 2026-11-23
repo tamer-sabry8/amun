@@ -70,6 +70,57 @@ export interface RequestDocument {
   type: string;
   body: string;
 }
+export interface RequestPlan {
+  /** The request the plan is for, when Firstmate names one. */
+  request: string | null;
+  planKind: "stories" | "sprint_plan" | "roadmap" | "edit";
+  destination: string;
+  summary: string;
+  items: { summary: string; fields: Record<string, string | number | null> }[];
+}
+
+/**
+ * A plan block, read the same way the window reads one (view-model
+ * `parseAmunActions`), so a plan raised from a reply nobody asked for is the
+ * plan the owner would have seen in the window.
+ */
+export function readPlanBlock(
+  value: Record<string, unknown>,
+): RequestPlan | null {
+  if (value.do !== "plan") return null;
+  const items = Array.isArray(value.items)
+    ? value.items.flatMap((item) => {
+        const summary = clip((item as { summary?: unknown })?.summary, 500);
+        if (!summary) return [];
+        const fields: Record<string, string | number | null> = {};
+        const given = (item as { fields?: unknown }).fields;
+        if (given && typeof given === "object")
+          for (const [key, field] of Object.entries(given).slice(0, 12))
+            if (
+              typeof field === "string" ||
+              typeof field === "number" ||
+              field === null
+            )
+              fields[key.slice(0, 60)] =
+                typeof field === "string" ? field.slice(0, 500) : field;
+        return [{ summary, fields }];
+      })
+    : [];
+  const summary = clip(value.summary, 300);
+  if (!items.length || !summary) return null;
+  const kind = value.planKind;
+  return {
+    request: isRequestRef(value.request) ? value.request : null,
+    planKind:
+      kind === "sprint_plan" || kind === "roadmap" || kind === "edit"
+        ? kind
+        : "stories",
+    destination: clip(value.destination, 40) || "amun",
+    summary,
+    items: items.slice(0, 200),
+  };
+}
+
 const clip = (value: unknown, max: number) =>
   typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().slice(0, max)
@@ -85,6 +136,7 @@ export function readRequestBlocks(reply: string): {
   reports: RequestReport[];
   documents: RequestDocument[];
   moves: RequestMove[];
+  plans: RequestPlan[];
   /**
    * Reports with no reference, or a malformed one: never applied to a
    * request, but their words are still shown to the owner.
@@ -96,6 +148,7 @@ export function readRequestBlocks(reply: string): {
   const reports: RequestReport[] = [];
   const documents: RequestDocument[] = [];
   const moves: RequestMove[] = [];
+  const plans: RequestPlan[] = [];
   const unmatched: RequestReport[] = [];
   const blocks: Record<string, unknown>[] = [];
   const visible = reply
@@ -131,7 +184,10 @@ export function readRequestBlocks(reply: string): {
             accepted: value.accepted,
             text: clip(value.text, 400),
           });
-        else if (value.do === "document" && typeof value.title === "string")
+        else if (value.do === "plan") {
+          const plan = readPlanBlock(value);
+          if (plan) plans.push(plan);
+        } else if (value.do === "document" && typeof value.title === "string")
           documents.push({
             request: isRequestRef(value.request) ? value.request : null,
             title: clip(value.title, 200),
@@ -145,7 +201,7 @@ export function readRequestBlocks(reply: string): {
     })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { visible, reports, documents, moves, unmatched, blocks };
+  return { visible, reports, documents, moves, plans, unmatched, blocks };
 }
 
 /**

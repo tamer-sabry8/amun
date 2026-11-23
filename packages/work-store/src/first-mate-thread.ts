@@ -100,6 +100,7 @@ export function recordFirstMateReply(
         workAreaId: areaId,
         chatId,
         saveText: true,
+        raisePlans: true,
         ...(prdRelay ? { prdRelay } : {}),
         model,
       }),
