@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Amun · idea to done · what is built today</title>
+    <title>
+      Amun · idea to done · where it stands (23 November, end of day)
+    </title>
     <style>
       :root {
         --canvas: #0b0e14;
@@ -13,14 +15,17 @@
         --accent: #e8a33d;
         --line: #2a3040;
         --good: #4ade80;
+        --bad: #f87171;
+        --info: #7fb0ff;
         --page: #f4f1ea;
         --pink: #1d2330;
-        --pmuted: #5b6474;
+        --pmuted: #555e6e;
         --pline: #ddd6c8;
         --pcard: #fbf9f4;
         --live: #2f9e5b;
         --built: #2f6fd6;
-        --part: #d68a1a;
+        --design: #7a4fc2;
+        --part: #c27a12;
         --miss: #c8432b;
         font-family:
           -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
@@ -29,25 +34,33 @@
       * {
         box-sizing: border-box;
       }
+      ::selection {
+        background: #e8a33d55;
+      }
       body {
         margin: 0;
         background: var(--page);
         color: var(--pink);
         line-height: 1.5;
       }
-      header {
-        padding: 52px 5vw 10px;
-        max-width: 1700px;
+      header,
+      main {
+        max-width: 1720px;
         margin: auto;
+        padding: 0 4vw;
+      }
+      header {
+        padding-top: 52px;
       }
       h1 {
         font-size: 44px;
-        margin: 0 0 10px;
-        letter-spacing: -0.02em;
-        line-height: 1.1;
+        margin: 0 0 12px;
+        letter-spacing: -0.025em;
+        line-height: 1.08;
+        max-width: 24ch;
       }
       header p {
-        font-size: 19px;
+        font-size: 18.5px;
         color: var(--pmuted);
         max-width: 80ch;
         margin: 0 0 10px;
@@ -57,13 +70,13 @@
         flex-wrap: wrap;
         gap: 18px;
         margin: 20px 0 8px;
-        font-size: 16px;
+        font-size: 15.5px;
       }
       .legend span::before {
         content: "";
         display: inline-block;
-        width: 14px;
-        height: 14px;
+        width: 13px;
+        height: 13px;
         border-radius: 4px;
         margin-right: 8px;
         vertical-align: -2px;
@@ -71,11 +84,11 @@
       }
       .score {
         display: flex;
-        height: 26px;
+        height: 28px;
         border-radius: 8px;
         overflow: hidden;
-        max-width: 900px;
-        margin: 14px 0 4px;
+        max-width: 980px;
+        margin: 14px 0 6px;
         font-size: 13px;
         color: #fff;
         font-weight: 650;
@@ -84,40 +97,53 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        white-space: nowrap;
+        padding: 0 6px;
       }
-      main {
-        max-width: 1700px;
-        margin: auto;
-        padding: 20px 5vw 80px;
+      .changes {
+        background: #fff;
+        border: 2px solid var(--pink);
+        border-radius: 14px;
+        padding: 20px 26px;
+        margin: 24px 0 10px;
+        font-size: 16.5px;
+        max-width: 1200px;
+      }
+      .changes h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      .changes ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .changes li {
+        margin: 5px 0;
+      }
+      .changes a {
+        color: var(--pink);
       }
       .phase {
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
         color: var(--pmuted);
-        margin: 46px 0 6px 0;
+        margin: 50px 0 10px;
       }
       .step {
         display: grid;
-        grid-template-columns: 330px 1fr;
-        gap: 36px;
-        align-items: start;
+        grid-template-columns: 320px 1fr;
+        gap: 34px;
         position: relative;
         padding-bottom: 34px;
       }
       .step::before {
         content: "";
         position: absolute;
-        left: 164px;
+        left: 159px;
         top: 0;
         bottom: 0;
         width: 2px;
         background: #b9b1a1;
-        z-index: 0;
-      }
-      .step:last-child::before {
-        display: none;
       }
       .node {
         position: relative;
@@ -126,7 +152,8 @@
         border: 3px solid var(--c);
         border-radius: 12px;
         padding: 14px 16px;
-        font-size: 16px;
+        font-size: 15.5px;
+        align-self: start;
       }
       .node.pill {
         border-radius: 999px;
@@ -134,23 +161,12 @@
         font-weight: 700;
         font-size: 18px;
       }
-      .node.diamond {
-        border-radius: 4px;
-        transform: none;
+      .node.d {
         border-style: double;
-        border-width: 5px;
-      }
-      .node.diamond::before {
-        content: "◆ Decision";
-        display: block;
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--c);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        border-width: 6px;
       }
       .node h3 {
-        margin: 0 0 4px;
+        margin: 4px 0;
         font-size: 18px;
       }
       .node .st {
@@ -161,14 +177,14 @@
         background: var(--c);
         border-radius: 6px;
         padding: 2px 8px;
-        margin-bottom: 8px;
       }
-      .node .who {
-        font-size: 14px;
+      .node .where {
+        font-size: 13.5px;
         color: var(--pmuted);
+        margin-top: 6px;
       }
       .node .loop {
-        font-size: 14px;
+        font-size: 13.5px;
         margin-top: 8px;
         color: var(--pmuted);
         border-top: 1px dashed var(--pline);
@@ -179,6 +195,9 @@
       }
       .built {
         --c: var(--built);
+      }
+      .design {
+        --c: var(--design);
       }
       .part {
         --c: var(--part);
@@ -192,34 +211,57 @@
         border-radius: 14px;
         padding: 18px 20px;
       }
-      .detail p {
+      .detail > p {
         margin: 0 0 10px;
-        font-size: 17px;
-        max-width: 95ch;
+        font-size: 16.5px;
+        max-width: 100ch;
       }
-      .detail .ev {
-        font-size: 14px;
-        color: var(--pmuted);
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 12px;
       }
-      .src {
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        margin: 12px 0 8px;
-        color: var(--pmuted);
+      .tags span {
+        font-size: 13px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--pline);
+        background: #fff;
       }
-      .src.real::before {
-        content: "● ";
-        color: var(--live);
-      }
-      .src.code::before {
-        content: "● ";
+      .tags span.b {
+        border-color: var(--built);
         color: var(--built);
       }
-      .src.none::before {
-        content: "● ";
+      .tags span.v {
+        border-color: var(--design);
+        color: var(--design);
+      }
+      .tags span.m {
+        border-color: var(--miss);
         color: var(--miss);
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .pair.one {
+        grid-template-columns: 1fr;
+      }
+      .src {
+        font-size: 13px;
+        font-weight: 650;
+        margin: 6px 0 8px;
+        color: var(--pmuted);
+      }
+      .src.now::before {
+        content: "Today · ";
+        color: var(--miss);
+      }
+      .src.after::before {
+        content: "After · ";
+        color: var(--design);
       }
       .detail img {
         width: 100%;
@@ -228,72 +270,73 @@
         border: 1px solid var(--pline);
       }
       .gap {
-        border: 3px dashed var(--miss);
+        border: 3px dashed var(--pline);
         border-radius: 12px;
-        padding: 40px;
+        padding: 30px;
         text-align: center;
-        color: var(--miss);
-        font-size: 20px;
-        font-weight: 600;
-        background: #fff6f3;
-      }
-      .gap small {
-        display: block;
-        font-weight: 400;
         color: var(--pmuted);
         font-size: 16px;
-        margin-top: 8px;
+        background: #fff;
       }
-      /* drawn-from-code mocks */
       .app {
         background: var(--canvas);
         color: var(--ink);
         border-radius: 10px;
-        padding: 26px 32px;
-        font-size: 16px;
+        padding: 18px 22px;
+        font-size: 14.5px;
       }
       .app .muted {
         color: var(--muted);
       }
       .app .small {
-        font-size: 13.5px;
+        font-size: 12.5px;
       }
-      .tabs {
+      .bar {
         display: flex;
-        gap: 24px;
+        gap: 18px;
         color: var(--muted);
-        font-size: 15px;
+        font-size: 13.5px;
         border-bottom: 1px solid var(--line);
-        padding-bottom: 10px;
-        margin-bottom: 18px;
+        padding-bottom: 9px;
+        margin-bottom: 14px;
+        align-items: center;
+        flex-wrap: wrap;
       }
-      .tabs .on {
+      .bar b {
         color: var(--ink);
-        border-bottom: 2px solid var(--accent);
-        padding-bottom: 8px;
-        margin-bottom: -11px;
+      }
+      .bar .on {
+        color: var(--ink);
+        box-shadow: inset 0 -2px 0 var(--accent);
+        padding-bottom: 6px;
+        margin-bottom: -10px;
       }
       .acard {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
-        padding: 14px 18px;
-        margin: 10px 0;
+        padding: 12px 15px;
+        margin: 8px 0;
+      }
+      .amber {
+        border-color: #e8a33d99;
       }
       .row {
         display: flex;
-        gap: 12px;
+        gap: 10px;
         align-items: center;
+        flex-wrap: wrap;
       }
       .grow {
         flex: 1;
       }
       .tag {
-        font-size: 12.5px;
-        padding: 3px 10px;
+        font-size: 12px;
+        padding: 2px 9px;
         border-radius: 999px;
         border: 1px solid var(--line);
         color: var(--muted);
+        white-space: nowrap;
       }
       .tag.good {
         color: var(--good);
@@ -303,69 +346,156 @@
         color: var(--accent);
         border-color: #e8a33d80;
       }
+      .tag.info {
+        color: var(--info);
+        border-color: #7fb0ff66;
+      }
       .btn {
-        font-size: 14px;
-        padding: 7px 14px;
-        border-radius: 9px;
+        font-size: 13px;
+        padding: 6px 12px;
+        border-radius: 8px;
         border: 1px solid var(--line);
+        white-space: nowrap;
       }
       .btn.p {
         background: #5b2bb5;
         border-color: #5b2bb5;
       }
-      .amber {
-        border-color: #e8a33d99;
+      .lnk {
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .ways-in {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
       }
       table.t {
         width: 100%;
         border-collapse: collapse;
-        font-size: 14.5px;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
       }
       table.t td,
       table.t th {
-        padding: 8px;
+        padding: 6px;
         border-bottom: 1px solid var(--line);
         text-align: left;
       }
       table.t th {
         color: var(--muted);
         font-weight: 500;
-        font-size: 12.5px;
+        font-size: 12px;
       }
-      .tiles {
+      tr.ep td {
+        background: #151a25;
+        font-weight: 650;
+      }
+      .prog {
+        display: inline-block;
+        width: 80px;
+        height: 6px;
+        background: var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        vertical-align: middle;
+        margin: 0 6px;
+      }
+      .prog i {
+        display: block;
+        height: 100%;
+        background: var(--good);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        margin: 2px 0 10px;
+      }
+      .chips span {
+        font-size: 12px;
+        padding: 3px 9px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .chips span.on {
+        color: var(--ink);
+        background: #e8a33d24;
+        border-color: #e8a33d66;
+      }
+      .cols4 {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
       }
       .col {
         background: #11151e;
-        border-radius: 10px;
-        padding: 12px;
-        min-height: 160px;
+        border-radius: 8px;
+        padding: 8px;
       }
       .col h5 {
-        margin: 0 0 10px;
-        font-size: 13px;
+        margin: 0 0 6px;
+        font-size: 12px;
         color: var(--muted);
         font-weight: 600;
       }
-      .tile {
+      .item {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 9px;
-        padding: 10px 12px;
-        margin-bottom: 8px;
-        font-size: 14px;
+        border-radius: 7px;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+        font-size: 12.5px;
       }
-      .bubble {
-        margin-left: auto;
-        max-width: 70%;
+      .seg {
+        display: inline-flex;
+        padding: 3px;
+        gap: 2px;
+        border-radius: 9px;
+        background: #ffffff10;
+      }
+      .seg span {
+        padding: 4px 10px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .seg span.on {
+        background: var(--ink);
+        color: #11151e;
+        font-weight: 600;
+      }
+      .pf {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .pc {
         background: var(--card);
-        border-radius: 10px;
-        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 13px;
+      }
+      .pc b {
+        font-size: 15px;
+        display: block;
+        margin-bottom: 2px;
+      }
+      .act {
+        display: grid;
+        grid-template-columns: 50px 1fr auto;
+        gap: 10px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
       }
       .summary {
-        margin-top: 60px;
+        margin: 60px 0 90px;
         background: #fff;
         border: 2px solid var(--pink);
         border-radius: 14px;
@@ -387,34 +517,66 @@
   </head>
   <body>
     <header>
-      <h1>Idea → PRD → stories → sprints → production → done</h1>
+      <h1>Idea → PRD/BRD → stories → sprints → production → done</h1>
       <p>
-        The whole flow as Amun has it today, step by step, with the screen you
-        actually see at each step. Every status comes from the code on
-        <code>main</code> (PRs #50–#66) and the 22 November packaged-app test,
-        not from plans.
-      </p>
-      <p>
-        Screens are labelled: <b>real capture</b> from your Mac,
-        <b>drawn from the code</b> (the component exists but I have no capture
-        yet), or <b>no screen</b> (nothing is built).
+        Where every step stands at the end of 23 November, for Products and
+        Projects alike, with today’s screen beside the approved design. Statuses
+        come from the code on the open branches (PRs #67, #68, #69) and the 22
+        November packaged-app test.
       </p>
       <div class="legend">
-        <span style="--c: var(--live)">Built and proven live</span>
-        <span style="--c: var(--built)">Built, not proven in this flow</span>
-        <span style="--c: var(--part)">Partly built / broken</span>
-        <span style="--c: var(--miss)">Missing</span>
+        <span style="--c: var(--live)">Proven live on your Mac</span>
+        <span style="--c: var(--built)"
+          >Built today, not yet tried in the app</span
+        >
+        <span style="--c: var(--design)">Design approved, to build</span>
+        <span style="--c: var(--part)">Partly there</span>
+        <span style="--c: var(--miss)">Still missing</span>
       </div>
       <div class="score">
-        <div style="flex: 4; background: var(--live)">4 proven</div>
-        <div style="flex: 1; background: var(--built)">1 built</div>
-        <div style="flex: 6; background: var(--part)">6 partly</div>
-        <div style="flex: 5; background: var(--miss)">5 missing</div>
+        <div style="flex: 3; background: var(--live)">3 proven</div>
+        <div style="flex: 7; background: var(--built)">7 built today</div>
+        <div style="flex: 4; background: var(--design)">
+          4 approved, to build
+        </div>
+        <div style="flex: 1; background: var(--part)">1 partly</div>
+        <div style="flex: 1; background: var(--miss)">1 missing</div>
       </div>
       <p style="font-size: 15px">
-        16 steps. The flow breaks after “publish to the tool”: nothing carries
-        story progress back up to epics, the PRD or the roadmap.
+        16 steps. This morning 5 were missing and nothing linked the steps
+        together. Now every step is built or has an approved design. The one gap
+        left is closing stories in Jira and Linear from Amun (step 14).
       </p>
+      <div class="changes">
+        <h2>What changed today</h2>
+        <ul>
+          <li>
+            <b>Requirements approved:</b>
+            <a href="../../plans/2026-11-23-idea-to-done-requirements.md"
+              >Idea to Done</a
+            >, one flow for Products and Projects (PRD or BRD).
+          </li>
+          <li>
+            <b>#68 (built):</b> Firstmate’s lost plans are raised (the Invoiced
+            Linear bug); the delivery chain links requirements → epics → stories
+            → release → roadmap; the <b>receipt card</b> after publishing.
+          </li>
+          <li>
+            <b>#69 (built):</b> projects switch to stories and sprints; unblock
+            goes to the right chat; sprint counts fixed; near-duplicate names
+            caught; close-out and Delivered rules;
+            <b>Portfolio cards the same size</b> with the All · Projects ·
+            Products · Initiatives filter.
+          </li>
+          <li>
+            <b>Approved designs:</b> the receipt card (built) and every delivery
+            screen with its four ways in: ask in the chat, Sprints, Portfolio
+            card, Activity. Both pages are on branches #68 and #69 under
+            <code>docs/preview/2026-11-23-receipt-card</code> and
+            <code>docs/preview/2026-11-23-screens-and-ways-in</code>.
+          </li>
+        </ul>
+      </div>
     </header>
 
     <main>
@@ -423,535 +585,724 @@
       <div class="step live">
         <div class="node pill">
           Start: an idea
-          <div class="st" style="margin-top: 6px">Proven live</div>
+          <div class="st" style="margin-top: 6px">Proven + fix built</div>
         </div>
         <div class="detail">
+          <div class="tags">
+            <span class="b">#69 · “Sales Prospect” = “Sales Prospects”</span
+            ><span>Name and client parsing fixed in #58</span>
+          </div>
           <p>
-            You type “Create a new Product called Mira …” anywhere. Amun files a
-            Product, Project or Initiative folder in about 3 seconds and starts
-            its first chat. Duplicates ask “Open / Create another”. A request
-            typed inside another folder gets a “Move to a new folder / Keep it
-            here” card.
+            You type “Create a new Project called …” anywhere; Amun files the
+            folder in about 3 seconds and asks before making a twin, now
+            including singular/plural twins.
           </p>
-          <p class="ev">
-            Known bugs: names swallow text after a colon (“Invoiced: a SaaS
-            product”), some replies are lost, and near-duplicates slip through
-            (test report A1, A4, B7).
-          </p>
-          <div class="src real">
-            Real capture · the sidebar folders it creates
-          </div>
-          <img
-            src="shots/current-1-doc-card.webp"
-            alt="Sidebar folders and Firstmate chat"
-          />
-        </div>
-      </div>
-
-      <div class="step live">
-        <div class="node">
-          <div class="st">Proven live</div>
-          <h3>2 · Discovery</h3>
-          <div class="who">
-            Firstmate → Product Manager + Research, UX, Marketing
-          </div>
-        </div>
-        <div class="detail">
-          <p>
-            Firstmate hands the idea to the Product Manager crew member, who
-            runs why-probes, asks question cards and pulls in specialists. You
-            watch them on the Agents screen.
-          </p>
-          <p class="ev">
-            Proven: PRD in about 3 minutes, research and wireframes delivered.
-            Gap: question cards don’t reach “Needs your attention”, and busy
-            crew can look idle (B4, B9).
-          </p>
-          <div class="src real">Real capture · Agents</div>
-          <img src="shots/current-4-agents-unblock.webp" alt="Agents screen" />
-        </div>
-      </div>
-
-      <div class="phase">B · PRD</div>
-
-      <div class="step part">
-        <div class="node">
-          <div class="st">Partly built</div>
-          <h3>3 · Draft PRD lands in Amun</h3>
-          <div class="who">Crew file → Library + PRD tab (PR #60)</div>
-        </div>
-        <div class="detail">
-          <p>
-            When the crew reports a PRD with the request’s reference, Amun files
-            it as PRD v1 in the Library and the PRD tab. It worked for Badge
-            Desk. For Mira the PRD stayed in the crew’s files, so Amun says
-            “There is no PRD for this product in Amun yet”. A project’s BRD has
-            no PRD tab at all.
-          </p>
-          <div class="src real">
-            Real capture · Mira today: PRD v0.2 never reached Amun
-          </div>
-          <img
-            src="shots/real-mira-launch-chat.jpg"
-            alt="Mira chat saying no PRD in Amun"
-          />
-        </div>
-      </div>
-
-      <div class="step live">
-        <div class="node diamond">
-          <div class="st">Proven live</div>
-          <h3>4 · Approve the PRD?</h3>
-          <div class="who">You, in the PRD tab</div>
-          <div class="loop">
-            No → comments go back to Firstmate → new version → ask again
-          </div>
-        </div>
-        <div class="detail">
-          <p>
-            The PRD tab shows the version, coverage checklist and an Approve
-            button. Approval binds to that exact version, so an edit after
-            approval shows “Changed since approval”. Proven on Badge Desk.
-          </p>
-          <div class="src code">
-            Drawn from the code · <code>prd-view.tsx</code>
-          </div>
-          <div class="app">
-            <div class="tabs">
-              <span class="on">PRD</span><span>Backlog</span
-              ><span>Pull requests</span><span>What happened</span>
+          <div class="pair">
+            <div>
+              <div class="src now">Portfolio, cards of different sizes</div>
+              <div class="gap">
+                Your 23 November screenshot: Gitex Demo narrow, Mira wide, Type
+                and Status as dropdowns.
+              </div>
             </div>
-            <div class="row">
-              <strong class="grow" style="font-size: 20px"
-                >Badge Desk PRD</strong
-              ><span class="tag">Version 1</span
-              ><span class="tag accent">Draft</span
-              ><span class="btn p">Approve this version</span>
-            </div>
-            <div class="muted small" style="margin: 8px 0 16px">
-              Evidence-led 5W+H · 20-point coverage 18/20 · 2 gaps flagged
-            </div>
-            <div class="acard">
-              <strong>Problem</strong>
-              <div class="muted small">Who, what, where, when, why, how …</div>
-            </div>
-            <div class="acard">
-              <strong>Objectives</strong>
-              <div class="muted small">
-                3 objectives · each opens its stories
+            <div>
+              <div class="src after">
+                Built in #69: same-size cards, one-tap type filter
+              </div>
+              <div class="app">
+                <div class="row" style="margin-bottom: 10px">
+                  <div class="seg">
+                    <span class="on">All 25</span><span>Projects 14</span
+                    ><span>Products 7</span><span>Initiatives 4</span>
+                  </div>
+                </div>
+                <div class="pf">
+                  <div class="pc">
+                    <b>Gitex Demo</b
+                    ><span class="muted">DMT · 17 days left</span>
+                  </div>
+                  <div class="pc">
+                    <b>MoCA</b><span class="muted">53 days left</span>
+                  </div>
+                  <div class="pc">
+                    <b>Mira: a customer service chat…</b
+                    ><span class="muted">No due date</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="phase">C · Epics, stories and grooming</div>
-
       <div class="step live">
         <div class="node">
-          <div class="st">Proven live</div>
-          <h3>5 · Draft epics and stories</h3>
-          <div class="who">
-            Firstmate raises “draft-stories”; Amun drafts from the approved PRD
-          </div>
+          <span class="st">Proven</span>
+          <h3>2 · Discovery</h3>
+          <div class="where">Firstmate → Product Manager and specialists</div>
         </div>
         <div class="detail">
+          <div class="tags">
+            <span class="b"
+              >#69 · Unblock goes to the chat of the request the crewmate is
+              on</span
+            >
+          </div>
           <p>
-            From an approved PRD, Amun drafts epics, stories, acceptance
-            criteria and the first-release slice, about 5 minutes for 11 stories
-            and 34 tasks. You edit them in the PRD review. Products only: a
-            project (Invoiced) is refused with “this work is not a product”.
+            Unchanged flow. Fixed today: “Ask Firstmate to unblock it” goes to
+            the chat of the request the crewmate is working on, found by its
+            request reference (else General), and says where it goes.
           </p>
-          <div class="src code">
-            Drawn from the code · PRD review story drafts
-          </div>
-          <div class="app">
-            <table class="t">
-              <tr>
-                <th>Epic</th>
-                <th>Story</th>
-                <th>Acceptance</th>
-                <th>First release</th>
-              </tr>
-              <tr>
-                <td>Check-in</td>
-                <td>Scan a badge at the door</td>
-                <td class="muted">3 ▸</td>
-                <td><span class="tag good">Yes</span></td>
-              </tr>
-              <tr>
-                <td>Check-in</td>
-                <td>Print a visitor badge</td>
-                <td class="muted">2 ▸</td>
-                <td><span class="tag good">Yes</span></td>
-              </tr>
-              <tr>
-                <td>Reports</td>
-                <td>Daily attendance export</td>
-                <td class="muted">2 ▸</td>
-                <td><span class="tag">Later</span></td>
-              </tr>
-            </table>
-            <div class="muted small" style="margin-top: 10px">
-              Example rows · “Story drafts are ready in the PRD review”
+          <div class="pair">
+            <div>
+              <div class="src now">
+                Agents: unblock went to whatever chat was open
+              </div>
+              <img
+                src="shots/current-4-agents-unblock.webp"
+                alt="Agents screen"
+              />
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="step part">
-        <div class="node">
-          <div class="st">Partly built</div>
-          <h3>6 · Backlog grooming</h3>
-          <div class="who">
-            Backlog tab · compare with the tracker’s backlog
-          </div>
-        </div>
-        <div class="detail">
-          <p>
-            Azure DevOps: connect a project, pick team and level, see the live
-            backlog as list or board. Proven. Jira and Linear: the Stories tab
-            (PR #61) lists epics and stories after publishing, but only on
-            products and not yet checked in the app. There is no place to
-            reorder, split or estimate stories in Amun before they go to a tool.
-          </p>
-          <div class="src code">
-            Drawn from the code · Backlog tab (Azure DevOps)
-          </div>
-          <div class="app">
-            <div class="tabs">
-              <span>PRD</span><span class="on">Backlog</span
-              ><span>Pull requests</span>
+            <div>
+              <div class="src after">Built in #69</div>
+              <div class="app">
+                <div class="acard amber">
+                  Product Manager is blocked and waiting. Firstmate can look at
+                  it and unblock it.
+                  <div class="row" style="margin-top: 10px">
+                    <span class="btn">Ask Firstmate to unblock it</span
+                    ><span class="muted small"
+                      >Goes to Mira › Create a new Product…</span
+                    >
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="muted small" style="margin-bottom: 10px">
-              TahalufCollection › POCs › POCs Team · Backlog items · List |
-              Board
-            </div>
-            <table class="t">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>State</th>
-                <th>Sprint</th>
-              </tr>
-              <tr>
-                <td>1241</td>
-                <td>Login with company account</td>
-                <td>Active</td>
-                <td>Sprint 5</td>
-              </tr>
-              <tr>
-                <td>1242</td>
-                <td>Reset password</td>
-                <td>New</td>
-                <td>—</td>
-              </tr>
-            </table>
           </div>
         </div>
       </div>
 
       <div class="phase">
-        D · Sprints and publishing to Jira / Linear / Azure DevOps
+        B · Requirements (PRD for products, BRD for projects)
+      </div>
+
+      <div class="step built">
+        <div class="node">
+          <span class="st">Built today</span>
+          <h3>3 · PRD / BRD lands in Amun</h3>
+          <div class="where">Requirements tab, versions in the Library</div>
+        </div>
+        <div class="detail">
+          <div class="tags">
+            <span class="b">#69 · Projects switch to stories and sprints</span
+            ><span class="v">Approved · Requirements tab on both</span>
+          </div>
+          <p>
+            Products already file the crew’s PRD (PR #60). A project now
+            switches from its checklist (Firstmate asks once; its tasks become
+            stories), and then files a BRD the same way. Mira’s missing PRD
+            still needs the crew to report it with its request reference.
+          </p>
+          <div class="pair">
+            <div>
+              <div class="src now">Project header: checklist only</div>
+              <img
+                src="shots/current-3-checklist.webp"
+                alt="Gitex Demo checklist"
+              />
+            </div>
+            <div>
+              <div class="src after">
+                Approved: the same tabs on Products and Projects
+              </div>
+              <div class="app">
+                <div class="bar">
+                  <b>Invoiced</b
+                  ><span style="margin-left: auto" class="on">Requirements</span
+                  ><span>Stories</span><span>Sprints</span><span>Release</span
+                  ><span>What happened</span>
+                </div>
+                <div class="row">
+                  <strong class="grow">Invoiced BRD</strong
+                  ><span class="tag">Version 2</span
+                  ><span class="tag accent">Draft</span
+                  ><span class="btn p">Approve this version</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step live">
+        <div class="node d">
+          <span class="st">Proven</span>
+          <h3>4 · Approve this version?</h3>
+          <div class="where">You, on the Requirements tab</div>
+          <div class="loop">No → comments to Firstmate → new version</div>
+        </div>
+        <div class="detail">
+          <p>
+            Approval binds to the exact version (proven on Badge Desk). Projects
+            use the same approval after they switch. Delivered (step 15) now
+            only counts this approved version.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase">C · Epics, stories and grooming</div>
+
+      <div class="step design">
+        <div class="node">
+          <span class="st">Approved, to build</span>
+          <h3>5 · Stories: Drafted or Published</h3>
+          <div class="where">Stories tab · opened four ways</div>
+        </div>
+        <div class="detail">
+          <div class="tags">
+            <span>Drafting proven (11 stories, 34 tasks)</span
+            ><span class="b">#69 · projects can draft from a BRD</span
+            ><span class="v">Approved · Stories screen</span>
+          </div>
+          <p>
+            Each story shows <b>Where</b>: Drafted (Amun only) or Published (in
+            Jira, Linear or Azure DevOps, with its key), and its <b>Status</b>.
+            Epics show “n of m done”. Opened by asking (“show the stories”),
+            from a Sprint tile, the Portfolio card or an Activity row.
+          </p>
+          <div class="pair">
+            <div>
+              <div class="src now">
+                The 31 Invoiced stories exist only as text
+              </div>
+              <img src="shots/current-2-linear-plan.webp" alt="Invoiced chat" />
+            </div>
+            <div>
+              <div class="src after">Approved Stories screen</div>
+              <div class="app">
+                <div class="chips">
+                  <span class="on">All 31</span><span>Drafted 3</span
+                  ><span>Published 28</span><span>Done 4</span>
+                </div>
+                <table class="t">
+                  <tr>
+                    <th>Story</th>
+                    <th>Where</th>
+                    <th>Status</th>
+                    <th>Sprint</th>
+                  </tr>
+                  <tr class="ep">
+                    <td colspan="4">
+                      Customers &amp; contacts
+                      <span class="prog"><i style="width: 50%"></i></span
+                      ><span class="muted small">2 of 4</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Add a customer</td>
+                    <td>
+                      <span class="tag info"
+                        >Published · <span class="lnk">TRA-101</span></span
+                      >
+                    </td>
+                    <td><span class="tag good">Done</span></td>
+                    <td>Sprint 1</td>
+                  </tr>
+                  <tr>
+                    <td>Merge duplicates</td>
+                    <td><span class="tag accent">Drafted</span></td>
+                    <td class="muted">—</td>
+                    <td class="muted">—</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="step part">
         <div class="node">
-          <div class="st">Partly built</div>
+          <span class="st">Partly there</span>
+          <h3>6 · Groom the backlog</h3>
+          <div class="where">Planner · one Apply</div>
+        </div>
+        <div class="detail">
+          <p>
+            Azure DevOps grooming is proven (list/board, staging, one Apply).
+            For Jira, Linear and stories kept in Amun, grooming happens on the
+            approved Stories screen once it is built.
+          </p>
+        </div>
+      </div>
+
+      <div class="phase">D · Sprints and publishing</div>
+
+      <div class="step design">
+        <div class="node">
+          <span class="st">Approved, to build</span>
           <h3>7 · Plan the sprint</h3>
-          <div class="who">Sprints › Sprint plan · /sprint plan</div>
+          <div class="where">Sprints › planner</div>
         </div>
         <div class="detail">
-          <p>
-            A draft sprint can be staged in Amun (“Add 1 story to Sprint 5”,
-            Undo, nothing sent). But a sprint kept in Amun that actually holds
-            stories is not built (handoff item 4), so a draft sprint stays empty
-            unless the stories already live in a tool.
-          </p>
-          <div class="src real">
-            Real capture · draft sprint with no stories
+          <div class="tags">
+            <span class="b">#69 · “Open to count stories”, not 0 / 0</span
+            ><span class="v"
+              >Approved · tile links, “Where these came from”</span
+            ><span class="m">Sprint kept in Amun: to build</span>
           </div>
-          <img
-            src="shots/real-draft-sprint.jpg"
-            alt="Draft sprint, no stories"
-          />
+          <p>
+            The planner is proven for Azure DevOps. Next: a sprint kept in Amun
+            that holds stories, so projects with no tool can run sprints, and
+            the approved tile links (Stories · Receipt · Release · Roadmap ·
+            Sprint chat).
+          </p>
+          <div class="pair">
+            <div>
+              <div class="src now">Sprints overview</div>
+              <img src="shots/real-sprints-empty.jpg" alt="Sprints overview" />
+            </div>
+            <div>
+              <div class="src after">Approved tile</div>
+              <div class="app">
+                <div class="acard">
+                  <div class="row">
+                    <strong class="grow">Invoiced · Sprint 1</strong
+                    ><span class="tag">4 / 6 stories done</span>
+                  </div>
+                  <div class="ways-in">
+                    <span class="muted">Open:</span
+                    ><span class="lnk">Stories</span
+                    ><span class="lnk">Receipt</span
+                    ><span class="lnk">Release v1.0</span
+                    ><span class="lnk">Roadmap</span
+                    ><span class="lnk">Sprint chat</span>
+                  </div>
+                </div>
+                <div class="acard">
+                  <div class="row">
+                    <strong class="grow">Gitex Demo · Sprint 1</strong
+                    ><span class="tag">Open to count stories</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="step part">
-        <div class="node diamond">
-          <div class="st">Partly built</div>
+      <div class="step built">
+        <div class="node d">
+          <span class="st">Built today</span>
           <h3>8 · Approve the plan and publish</h3>
-          <div class="who">You approve on Home; Amun writes to the tool</div>
-          <div class="loop">No → Firstmate changes the plan</div>
+          <div class="where">Plan card → Jira / Linear / Azure DevOps</div>
         </div>
         <div class="detail">
-          <p>
-            <b>Jira, proven:</b> 4 epics, 12 tasks and “Badge Desk Sprint 1”
-            created in 41 s with read-back. <b>Linear, broken:</b> Firstmate
-            wrote the Invoiced plan (10 epics, 31 stories) but Amun dropped it
-            (PR #66), so no approval card appeared.
-            <b>Azure DevOps:</b> governed writes exist in the code. Sprint 5 is
-            read-only by your rule, so it is not tested in this flow. The plan
-            card lists summaries only, without each item’s parent, sprint or
-            destination.
-          </p>
-          <div class="src real">
-            Real capture · Linear plan described in chat, but no plan to approve
+          <div class="tags">
+            <span>Jira proven (16 items, 41 s)</span
+            ><span class="b"
+              >#68 · plans in unprompted replies are no longer lost</span
+            ><span class="v"
+              >Approved · plan card shows parent, sprint, destination</span
+            >
           </div>
-          <img
-            src="shots/current-2-linear-plan.webp"
-            alt="Linear plan with no stories shown"
-          />
+          <p>
+            The Invoiced Linear plan was dropped because it arrived in a reply
+            nobody asked for. Now it is raised once, in the chat of its request,
+            through the same checks. A corrected plan is raised again for
+            review.
+          </p>
+          <div class="pair one">
+            <div>
+              <div class="src now">The plan was described but never raised</div>
+              <img src="shots/current-2-linear-plan.webp" alt="Linear plan" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="step miss">
+      <div class="step built">
         <div class="node">
-          <div class="st">Missing</div>
-          <h3>9 · Receipt back in the chat</h3>
-          <div class="who">“Created SCRUM-13 … in sprint 6”</div>
+          <span class="st">Built today</span>
+          <h3>9 · Receipt in the chat</h3>
+          <div class="where">Under Firstmate’s reply · request turns Ready</div>
         </div>
         <div class="detail">
-          <p>
-            After publishing, nothing tells the chat or Firstmate what was
-            created, and the request stays “waiting”. The spec asks for a
-            receipt with each item’s ID in the chat that made the request.
-          </p>
-          <div class="gap">
-            No screen<small
-              >The request card stays “Waiting…” after a successful
-              publish.</small
+          <div class="tags">
+            <span class="b">#68 · receipt card</span
+            ><span class="v"
+              >Approved · also in sprint chat, Activity, Portfolio card,
+              Sprints, and on request</span
             >
+          </div>
+          <p>
+            One receipt per approved plan, in the chat that asked, updated in
+            place; partial results say so and only the failed items can be
+            retried. The request line reads “Ready · View receipt”.
+          </p>
+          <div class="pair">
+            <div>
+              <div class="src now">Request stays “Waiting…”</div>
+              <img src="shots/current-2-linear-plan.webp" alt="Waiting" />
+            </div>
+            <div>
+              <div class="src after">Built</div>
+              <div class="app">
+                <div class="row" style="justify-content: flex-end">
+                  <span class="tag good">Ready · View receipt</span>
+                </div>
+                <div class="acard">
+                  <div class="row">
+                    <strong class="grow">Created in Linear · 41 items</strong
+                    ><span class="tag good">Done</span>
+                  </div>
+                  <table class="t">
+                    <tr>
+                      <td>Customers &amp; contacts</td>
+                      <td class="lnk">P-TRA-3 ↗</td>
+                      <td class="muted">—</td>
+                    </tr>
+                    <tr>
+                      <td>Add a customer</td>
+                      <td class="lnk">TRA-101 ↗</td>
+                      <td class="muted">P-TRA-3</td>
+                    </tr>
+                  </table>
+                  <div class="muted small" style="margin-top: 6px">
+                    Show all 41
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="phase">E · The sprint runs</div>
 
-      <div class="step part">
+      <div class="step design">
         <div class="node">
-          <div class="st">Partly built</div>
+          <span class="st">Approved, to build</span>
           <h3>10 · Watch stories move</h3>
-          <div class="who">
-            Sprints › Overview / sprint detail (read from the tool)
-          </div>
+          <div class="where">Sprint detail · goal → blockers → stories</div>
         </div>
         <div class="detail">
           <p>
-            Azure DevOps, proven: overview, then Sprint 5 detail with goal →
-            blockers → stories by real status. Jira and Linear sprints come from
-            PR #61, not yet checked in the app. Bug: the overview counts only
-            the selected sprint (0/0 vs 0/2). With no tool connected the screen
-            is empty.
+            Proven for Azure DevOps. The approved “Where these came from” line
+            links the BRD version, the receipt that created the stories and the
+            release they ship in.
           </p>
-          <div class="src real">Real capture · Sprints overview</div>
-          <img src="shots/real-sprints-empty.jpg" alt="Sprints overview" />
         </div>
       </div>
 
-      <div class="step miss">
+      <div class="step built">
         <div class="node">
-          <div class="st">Missing</div>
+          <span class="st">Built today</span>
           <h3>11 · Mark stories Done</h3>
-          <div class="who">In the tool, or in Amun without a tool</div>
+          <div class="where">Status chip, one Apply</div>
         </div>
         <div class="detail">
+          <div class="tags">
+            <span class="b">#68 · status for stories kept in Amun</span
+            ><span class="v">Approved · status chip on the sprint page</span>
+          </div>
           <p>
-            Status is only read from the tool. Without one there is no way to
-            mark a story done: the Stories tab says “Link this product to Azure
-            DevOps” and readiness stays “0/0 stories done”. Firstmate confirmed
-            “you can’t yet” (test report B5).
+            Stories kept in Amun can be set To do · In progress · In review ·
+            Done · Removed. Stories in a tool change there, through an approved
+            plan, and are read back.
           </p>
-          <div class="gap">
-            No screen<small>No Done action for a story kept in Amun.</small>
+          <div class="app">
+            <div class="cols4">
+              <div class="col">
+                <h5>To do</h5>
+                <div class="item">Send invoice by email</div>
+              </div>
+              <div class="col">
+                <h5>In progress</h5>
+                <div class="item">Create an invoice</div>
+              </div>
+              <div class="col"><h5>In review</h5></div>
+              <div class="col">
+                <h5>Done</h5>
+                <div class="item">Add a customer</div>
+                <div class="item">Import from CSV</div>
+              </div>
+            </div>
+            <div class="row" style="margin-top: 8px">
+              <span class="muted small grow"
+                >Customers &amp; contacts
+                <span class="prog"><i style="width: 50%"></i></span>2 of 4
+                done</span
+              ><span class="btn p">Apply 1 change</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="step miss">
+      <div class="step built">
         <div class="node">
-          <div class="st">Missing</div>
+          <span class="st">Built today</span>
           <h3>12 · Epics close</h3>
-          <div class="who">All of an epic’s stories done → epic done</div>
+          <div class="where">All stories Done → epic Done</div>
         </div>
         <div class="detail">
-          <p>
-            No roll-up exists. Epics are read as titles with their stories.
-            Nothing counts “4 of 4 done” or marks an epic closed, in Amun or
-            back in the tool.
-          </p>
-          <div class="gap">
-            No screen<small>No epic progress anywhere.</small>
+          <div class="tags">
+            <span class="b">#68 · roll-up rules</span
+            ><span class="v">Approved · progress lines everywhere</span>
           </div>
+          <p>
+            Epic progress counts every story except Removed; the epic is Done
+            when all are Done. The same numbers feed the Portfolio card and the
+            Roadmap.
+          </p>
         </div>
       </div>
 
       <div class="phase">F · Production and done</div>
 
-      <div class="step part">
-        <div class="node diamond">
-          <div class="st">Partly built</div>
-          <h3>13 · Ready to release?</h3>
-          <div class="who">
-            Release card: Readiness → Scheduled → Deploying → Verified live
-          </div>
-          <div class="loop">Failed → Rolled back / hotfix</div>
-        </div>
-        <div class="detail">
-          <p>
-            The release card works by hand and binds the exact version and SHA
-            with an owner receipt. But it doesn’t check readiness: you can
-            schedule at 0/0 stories done. Steps stay clickable after Verified
-            live. There is no post-launch step, and each save made a new card
-            (the three “Release v1.0” cards).
-          </p>
-          <div class="src real">
-            Real capture · release cards in the Mira chat
-          </div>
-          <img src="shots/current-5-cards.png" alt="Release v1.0 cards" />
-        </div>
-      </div>
-
-      <div class="step miss">
-        <div class="node">
-          <div class="st">Missing</div>
-          <h3>14 · Close stories and epics after release</h3>
-          <div class="who">
-            Verified live → mark released stories Done in the tool
-          </div>
-        </div>
-        <div class="detail">
-          <p>
-            A release is not linked to the stories it ships, so “Verified live”
-            changes nothing in Jira, Linear or Azure DevOps.
-          </p>
-          <div class="gap">
-            No screen<small>Release and stories are separate records.</small>
-          </div>
-        </div>
-      </div>
-
-      <div class="step miss">
-        <div class="node">
-          <div class="st">Missing</div>
-          <h3>15 · PRD / feature Done</h3>
-          <div class="who">All epics closed + release live → PRD complete</div>
-        </div>
-        <div class="detail">
-          <p>
-            A PRD can be Draft or Approved, never Done or Delivered. Nothing
-            marks the feature complete.
-          </p>
-          <div class="gap">
-            No screen<small
-              >Your question “how do I make Draft into Done” is this gap.</small
-            >
-          </div>
-        </div>
-      </div>
-
       <div class="step built">
-        <div class="node">
-          <div class="st">Built, not linked</div>
-          <h3>16 · Roadmap shows it</h3>
-          <div class="who">Roadmap · Now / Next / Later · Timeline</div>
+        <div class="node d">
+          <span class="st">Built today</span>
+          <h3>13 · Ready to release?</h3>
+          <div class="where">Release card · readiness gate</div>
+          <div class="loop">
+            Not ready → move stories to the next release, or release anyway with
+            a reason
+          </div>
         </div>
         <div class="detail">
-          <p>
-            Roadmap tiles are placed by hand or by an approved plan and can be
-            committed. They are not tied to the PRD, epics or release, so a
-            shipped feature never moves or turns Done by itself.
-          </p>
-          <div class="src code">
-            Drawn from the code · <code>Roadmap</code> in screens.tsx
+          <div class="tags">
+            <span>Manual Scheduled → Verified live proven</span
+            ><span class="b">#68 · release ↔ stories links, readiness rule</span
+            ><span class="v">Approved · Schedule waits for its stories</span>
           </div>
-          <div class="app">
-            <div class="tabs">
-              <span class="on">Horizon</span><span>Timeline</span>
+          <div class="pair">
+            <div>
+              <div class="src now">
+                Three “Release v1.0” cards, no readiness check
+              </div>
+              <img src="shots/current-5-cards.png" alt="Release cards" />
             </div>
-            <div class="tiles">
-              <div class="col">
-                <h5>Now</h5>
-                <div class="tile">
-                  Badge check-in
-                  <div class="muted small">
-                    Badge Desk · <span class="tag good">Committed</span>
+            <div>
+              <div class="src after">Approved</div>
+              <div class="app">
+                <div class="acard">
+                  <div class="row">
+                    <strong class="grow">Release v1.0 · Invoiced</strong
+                    ><span class="tag accent">Readiness</span
+                    ><span class="muted small">version 3</span>
+                  </div>
+                  <div style="margin-top: 6px">
+                    16 stories · <b>13 done</b> ·
+                    <span style="color: var(--bad)">3 not done</span>
+                  </div>
+                  <div class="row" style="margin-top: 8px">
+                    <span class="btn" style="opacity: 0.45">Schedule</span
+                    ><span class="btn">Move 3 to the next release</span
+                    ><span class="btn">Release anyway…</span>
                   </div>
                 </div>
               </div>
-              <div class="col">
-                <h5>Next</h5>
-                <div class="tile">
-                  Invoicing MVP
-                  <div class="muted small">Invoiced · RICE 42 · Commit</div>
-                </div>
-              </div>
-              <div class="col">
-                <h5>Later</h5>
-                <div class="tile">
-                  Mira launch
-                  <div class="muted small">Mira</div>
-                </div>
-              </div>
             </div>
-            <div class="muted small" style="margin-top: 12px">
-              No progress bar, no epic count, no “Done” column
+          </div>
+        </div>
+      </div>
+
+      <div class="step miss">
+        <div class="node d">
+          <span class="st">Partly built</span>
+          <h3>14 · Close out?</h3>
+          <div class="where">After Verified live, one approval</div>
+        </div>
+        <div class="detail">
+          <div class="tags">
+            <span class="b">#69 · close-out for stories kept in Amun</span
+            ><span class="m">Closing in Jira / Linear: missing</span>
+          </div>
+          <p>
+            Close-out only runs for a release that is truly Verified live.
+            Stories kept in Amun turn Done. Stories in Jira or Linear are
+            listed. Closing them there needs the tracker connection to edit
+            existing items, which it can’t do yet; it only creates new ones.
+            This is the last real gap.
+          </p>
+          <div class="app">
+            <div class="acard amber">
+              <b>v1.0 is live.</b> Close out: mark 12 released stories Done and
+              close 3 epics in Linear.
+              <div class="row" style="margin-top: 8px">
+                <span class="btn p">Close out in Linear</span
+                ><span class="btn">Not now</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="step built">
+        <div class="node d">
+          <span class="st">Built today</span>
+          <h3>15 · Mark the PRD / BRD Delivered?</h3>
+          <div class="where">Amun proposes, you confirm</div>
+        </div>
+        <div class="detail">
+          <div class="tags">
+            <span class="b"
+              >#69 · bound to the approved version and a release that ships its
+              stories</span
+            ><span class="v">Approved · Delivered card</span>
+          </div>
+          <p>
+            Only when the current version is approved, its epics are Done (or
+            moved to a later version), and a release that ships those stories is
+            Verified live. This answers “how do I make Draft into Done”.
+          </p>
+          <div class="app">
+            <div class="acard amber">
+              Invoiced <b>BRD v2</b> is delivered: 9 epics done, 1 moved to v3,
+              release v1.0 live. Mark it Delivered?
+              <div class="row" style="margin-top: 8px">
+                <span class="btn p">Mark Delivered</span
+                ><span class="btn">Not yet</span>
+              </div>
+            </div>
+            <div class="acard">
+              <div class="row">
+                <strong class="grow">Invoiced BRD</strong
+                ><span class="tag good">Delivered · 18 Dec · v1.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step design">
+        <div class="node">
+          <span class="st">Approved, to build</span>
+          <h3>16 · Roadmap, Portfolio and Activity show it</h3>
+          <div class="where">Progress from the chain · links everywhere</div>
+        </div>
+        <div class="detail">
+          <div class="tags">
+            <span class="b">#68 · roadmap ↔ requirements/release links</span
+            ><span class="v"
+              >Approved · Done column, full Portfolio card links, Activity
+              links</span
+            >
+          </div>
+          <div class="pair">
+            <div>
+              <div class="src after">Portfolio full card</div>
+              <div class="app">
+                <div class="acard">
+                  <div class="row">
+                    <strong class="grow">Invoiced</strong
+                    ><span class="tag info">In delivery</span>
+                  </div>
+                  <div class="muted small" style="margin: 6px 0">
+                    <span class="prog" style="margin-left: 0"
+                      ><i style="width: 68%"></i></span
+                    >21 of 31 stories · Sprint 2 · Release v1.0 in readiness
+                  </div>
+                  <div class="ways-in">
+                    <span class="muted">Open:</span
+                    ><span class="lnk">BRD v2</span
+                    ><span class="lnk">Stories (31)</span
+                    ><span class="lnk">Sprint 2</span
+                    ><span class="lnk">Receipts (2)</span
+                    ><span class="lnk">Release v1.0</span
+                    ><span class="lnk">Roadmap</span
+                    ><span class="lnk">Activity</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="src after">Activity</div>
+              <div class="app">
+                <div class="act">
+                  <span class="muted">15:52</span
+                  ><span>Created 41 items in Linear</span
+                  ><span class="lnk">Open receipt</span>
+                </div>
+                <div class="act">
+                  <span class="muted">15:31</span
+                  ><span>Drafted 31 stories from BRD v2</span
+                  ><span class="lnk">Open stories</span>
+                </div>
+                <div class="act" style="border: 0">
+                  <span class="muted">15:02</span
+                  ><span>You approved BRD v2</span
+                  ><span class="lnk">Open BRD</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="app" style="margin-top: 12px">
+            <div class="cols4">
+              <div class="col">
+                <h5>Now</h5>
+                <div class="item">Invoicing MVP · 21 of 31</div>
+              </div>
+              <div class="col">
+                <h5>Next</h5>
+                <div class="item">Gitex Demo</div>
+              </div>
+              <div class="col">
+                <h5>Later</h5>
+                <div class="item">Mira launch</div>
+              </div>
+              <div class="col">
+                <h5>Done</h5>
+                <div class="item">Badge Desk · Delivered 18 Dec</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step built" style="padding-bottom: 0">
         <div class="node pill">
-          End: feature done, seen in Roadmap and Sprints
-          <div class="st" style="margin-top: 6px; background: var(--miss)">
-            Not reachable today
+          End: feature done, seen in Roadmap, Sprints and Portfolio
+          <div class="st" style="margin-top: 6px; background: var(--design)">
+            Reachable once the approved screens ship
           </div>
         </div>
         <div class="detail">
           <p>
-            The path to here breaks at steps 9, 11, 12, 14 and 15. Each of those
-            needs a link Amun doesn’t keep yet:
-            <b>PRD ↔ epics ↔ stories ↔ release ↔ roadmap item</b>.
+            Every link of the chain now exists in Amun’s store, and every screen
+            has an approved design. What remains is building those screens, plus
+            letting Jira and Linear close existing items (step 14).
           </p>
         </div>
       </div>
 
       <div class="summary">
-        <h2>What would close the loop, in order</h2>
+        <h2>Next, in order</h2>
         <ol>
           <li>
-            <b>One chain of IDs:</b> PRD version → epics → stories → sprint →
-            release → roadmap item, kept in Amun’s store. Everything below
-            depends on it.
+            Merge #68 and #69, rebuild the app, and re-run the Invoiced Linear
+            publish on your Mac: plan card → approve → receipt → Ready.
           </li>
           <li>
-            <b>Fix the dropped plan</b> (PR #66) and add the
-            <b>publish receipt</b> (step 9), so Linear works like Jira.
+            Build the approved screens: the same tabs on Products and Projects,
+            the Stories screen (Drafted / Published), sprint kept in Amun with
+            status chips, and the four ways in (chat, Sprints, Portfolio card,
+            Activity).
           </li>
           <li>
-            <b>Stories for projects</b> (BRD → stories), not products only.
+            Release readiness gate, close-out and Delivered cards, Roadmap
+            progress and Done column.
           </li>
           <li>
-            <b>Story status sync</b> from Jira, Linear and Azure DevOps, plus a
-            Done action for stories kept only in Amun (step 11).
+            Tracker edits for existing items (Jira and Linear transitions), so
+            close-out can finish in the tool.
           </li>
           <li>
-            <b>Roll-ups:</b> epic closes when its stories are done; the release
-            checks readiness and closes its stories; the PRD becomes Delivered;
-            the Roadmap tile shows progress and moves to Done (steps 12–16).
+            One full run on the Mac: Badge Desk (Jira) and Gitex Demo (Amun
+            only) from approved requirements to Delivered on the Roadmap.
           </li>
         </ol>
-        <p style="margin-top: 14px">
-          <a href="requirements-gap.html"
-            >Compare with the original requirements →</a
-          >
-        </p>
-        <p style="margin-top: 14px; color: var(--pmuted)">
-          This page shows what exists; it proposes no screens. Once you agree
-          the chain, I’ll draw the missing steps as a before/after for approval.
-        </p>
       </div>
     </main>
   </body>
