@@ -43,8 +43,15 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
-import { parseProjectChecklist } from "../../domain/src/work/release-launch.ts";
-import { storyStatusWords } from "../../domain/src/work/delivery-chain.ts";
+import {
+  parseProjectChecklist,
+  releaseBodyIsLive,
+} from "../../domain/src/work/release-launch.ts";
+import {
+  canProposeDelivered,
+  storyGroup,
+  storyStatusWords,
+} from "../../domain/src/work/delivery-chain.ts";
 import {
   readRequestBlocks,
   reportFingerprint,
@@ -3053,6 +3060,89 @@ export class WorkStore {
             command.toId,
           );
         return { ref: command.fromId };
+      }
+      case "close-out-release": {
+        const release = this.get(
+          "SELECT o.body,l.work_area_id FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE o.id=? AND o.type='release_tracker'",
+          command.releaseId,
+        );
+        if (!release) throw new WorkError("That release no longer exists.");
+        if (
+          !releaseBodyIsLive(String(release.body), String(release.work_area_id))
+        )
+          throw new WorkError(
+            "Close-out starts once the release is Verified live.",
+          );
+        const stories = this.all(
+          "SELECT w.id,w.title,w.status,w.remote_system,w.remote_id FROM delivery_links d JOIN work_items w ON w.id=d.to_id WHERE d.kind='release_story' AND d.from_id=?",
+          command.releaseId,
+        );
+        let closed = 0;
+        const inTool: { id: string; title: string; key: string | null }[] = [];
+        for (const story of stories) {
+          const group = storyGroup(story.status as string | null);
+          if (group === "done" || group === "removed") continue;
+          if (story.remote_system) {
+            inTool.push({
+              id: String(story.id),
+              title: String(story.title),
+              key: (story.remote_id as string | null) ?? null,
+            });
+            continue;
+          }
+          this.run(
+            "UPDATE work_items SET status=? WHERE id=?",
+            storyStatusWords.done,
+            story.id,
+          );
+          closed++;
+        }
+        return { ref: command.releaseId, step: { closed, inTool } };
+      }
+      case "mark-delivered": {
+        const area = this.get(
+          "SELECT product_id FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.workAreaId,
+        );
+        const productId = (area?.product_id as string | null) ?? null;
+        if (!productId)
+          throw new WorkError(
+            "Only a product, or a project with stories, can be delivered.",
+          );
+        const items = this.all(
+          "SELECT id,type,status,parent_id FROM work_items WHERE product_id=?",
+          productId,
+        );
+        const epics = items
+          .filter((item) => String(item.type).toLowerCase() === "epic")
+          .map((epic) => ({
+            id: String(epic.id),
+            deferred: storyGroup(epic.status as string) === "removed",
+            stories: items
+              .filter((item) => item.parent_id === epic.id)
+              .map((item) => ({
+                id: String(item.id),
+                status: item.status as string,
+              })),
+          }));
+        const live = this.all(
+          "SELECT o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND o.type='release_tracker' AND o.status<>'Archived'",
+          command.workAreaId,
+        ).some((row) =>
+          releaseBodyIsLive(String(row.body), command.workAreaId),
+        );
+        if (!canProposeDelivered(epics, live))
+          throw new WorkError(
+            live
+              ? "Not delivered yet: every epic must be Done or moved to a later version."
+              : "Not delivered yet: a release must be Verified live first.",
+          );
+        this.run(
+          "UPDATE prds SET delivered_at=?,delivered_version=version WHERE product_id=?",
+          now,
+          productId,
+        );
+        return { ref: productId };
       }
       case "apply-reply": {
         if (!this.live(command.workAreaId))

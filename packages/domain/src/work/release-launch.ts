@@ -522,3 +522,42 @@ export function appendProjectChecklistTask(
   const trimmed = body.trimEnd();
   return trimmed ? `${trimmed}\n${line}\n` : `# Project checklist\n\n${line}\n`;
 }
+
+/**
+ * Whether a saved release tracker (its JSON body) is Verified live under the
+ * same strict evidence rules the card uses. Anything unreadable is not live.
+ */
+export function releaseBodyIsLive(body: string, workAreaId: string): boolean {
+  let parsed: Partial<ReleaseRecord>;
+  try {
+    parsed = JSON.parse(body) as Partial<ReleaseRecord>;
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object") return false;
+  const record: ReleaseRecord = {
+    id: "",
+    workAreaId,
+    roadmapItemId: null,
+    originatingChatId: null,
+    requestRef: null,
+    environment: "",
+    releaseOwner: null,
+    artifact: "",
+    readinessEvidence: [],
+    approval: null,
+    deploymentId: null,
+    requestedState: "readiness",
+    observedLiveVersion: null,
+    smokeCheck: null,
+    manualReceipt: null,
+    rollbackTarget: null,
+    rolledBackTo: null,
+    rollbackReason: null,
+    cancelledAt: null,
+    postLaunchMetrics: [],
+    updatedAt: "",
+    ...parsed,
+  };
+  return evaluateRelease(record).effectiveState === "verified_live";
+}
