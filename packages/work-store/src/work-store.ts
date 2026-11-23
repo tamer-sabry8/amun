@@ -3109,39 +3109,73 @@ export class WorkStore {
           throw new WorkError(
             "Only a product, or a project with stories, can be delivered.",
           );
+        // Bound to each requirements document's current version, which must
+        // be the one the captain approved (review on #69).
+        const prds = this.all(
+          "SELECT p.id,p.objective_id,p.version,(SELECT count(*) FROM prd_versions v JOIN approvals a ON a.prd_version_id=v.id AND a.decision='approved' WHERE v.prd_id=p.id AND v.version=p.version) AS approved FROM prds p WHERE p.product_id=?",
+          productId,
+        );
+        if (!prds.length)
+          throw new WorkError("There are no requirements to deliver yet.");
+        const unapproved = prds.find((prd) => Number(prd.approved) === 0);
+        if (unapproved)
+          throw new WorkError(
+            `Not delivered yet: version ${String(unapproved.version)} of the requirements is not approved.`,
+          );
+        // The stories drafted from those approved versions, with their epics;
+        // with no drafting record, every story of this work counts.
         const items = this.all(
           "SELECT id,type,status,parent_id FROM work_items WHERE product_id=?",
           productId,
         );
+        const drafted = new Set(
+          this.all(
+            `SELECT d.item_id FROM story_drafts d JOIN prds p ON p.objective_id=d.objective_id AND p.version=d.prd_version WHERE p.product_id=?`,
+            productId,
+          ).map((row) => String(row.item_id)),
+        );
+        const inScope = (item: Record<string, unknown>) =>
+          !drafted.size || drafted.has(String(item.id));
         const epics = items
           .filter((item) => String(item.type).toLowerCase() === "epic")
           .map((epic) => ({
             id: String(epic.id),
             deferred: storyGroup(epic.status as string) === "removed",
             stories: items
-              .filter((item) => item.parent_id === epic.id)
+              .filter((item) => item.parent_id === epic.id && inScope(item))
               .map((item) => ({
                 id: String(item.id),
                 status: item.status as string,
               })),
-          }));
+          }))
+          .filter((epic) => epic.stories.length > 0 || epic.deferred);
+        const scoped = new Set(
+          epics.flatMap((epic) => epic.stories.map((story) => story.id)),
+        );
+        // A live release that ships at least one of those stories.
         const live = this.all(
-          "SELECT o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND o.type='release_tracker' AND o.status<>'Archived'",
-          command.workAreaId,
-        ).some((row) =>
-          releaseBodyIsLive(String(row.body), command.workAreaId),
+          "SELECT DISTINCT o.id,o.body FROM library_outputs o JOIN delivery_links d ON d.kind='release_story' AND d.from_id=o.id WHERE o.type='release_tracker' AND o.status<>'Archived'",
+        ).some(
+          (row) =>
+            this.all(
+              "SELECT to_id FROM delivery_links WHERE kind='release_story' AND from_id=?",
+              row.id,
+            ).some((link) => scoped.has(String(link.to_id))) &&
+            releaseBodyIsLive(String(row.body), command.workAreaId),
         );
         if (!canProposeDelivered(epics, live))
           throw new WorkError(
             live
               ? "Not delivered yet: every epic must be Done or moved to a later version."
-              : "Not delivered yet: a release must be Verified live first.",
+              : "Not delivered yet: a release that ships these stories must be Verified live first.",
           );
-        this.run(
-          "UPDATE prds SET delivered_at=?,delivered_version=version WHERE product_id=?",
-          now,
-          productId,
-        );
+        for (const prd of prds)
+          this.run(
+            "UPDATE prds SET delivered_at=?,delivered_version=? WHERE id=?",
+            now,
+            prd.version,
+            prd.id,
+          );
         return { ref: productId };
       }
       case "apply-reply": {

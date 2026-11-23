@@ -246,12 +246,24 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
     work.close();
   });
 
-  it("is Delivered only with every epic done and a live release", () => {
+  it("is Delivered only for the approved version, its epics done and a live release that ships them", () => {
     const { work, send, group, area } = delivery();
     expect(send("mark-delivered", { workAreaId: area })).toMatchObject({
       ok: false,
-      message: "Not delivered yet: a release must be Verified live first.",
+      message:
+        "Not delivered yet: version 2 of the requirements is not approved.",
     });
+    work.db
+      .prepare(
+        "INSERT INTO prd_versions(id,product_id,objective_id,prd_id,version,created_at) SELECT 'v2',product_id,objective_id,id,2,'2026-12-01' FROM prds WHERE id='p1'",
+      )
+      .run();
+    work.db
+      .prepare(
+        "INSERT INTO approvals(id,prd_version_id,decision,kind,payload_hash,approved_by,approved_at) VALUES ('a1','v2','approved','prd','h','pm','2026-12-02')",
+      )
+      .run();
+    // A live release that ships none of these stories is not evidence.
     send("save-output", {
       groupId: group,
       type: "release_tracker",
@@ -259,6 +271,23 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
       body: live,
       workAreaIds: [area],
     });
+    work.db.prepare("UPDATE work_items SET status='Done'").run();
+    expect(send("mark-delivered", { workAreaId: area })).toMatchObject({
+      ok: false,
+      message:
+        "Not delivered yet: a release that ships these stories must be Verified live first.",
+    });
+    const release = work.store
+      .snapshot()
+      .library.find((item) => item.type === "release_tracker")!.id;
+    send("link-delivery", {
+      kind: "release_story",
+      fromId: release,
+      toId: "s1",
+    });
+    work.db
+      .prepare("UPDATE work_items SET status='In review' WHERE id='s2'")
+      .run();
     expect(send("mark-delivered", { workAreaId: area })).toMatchObject({
       ok: false,
       message:
@@ -269,6 +298,23 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
     expect(
       work.db.prepare("SELECT delivered_version FROM prds WHERE id='p1'").get(),
     ).toEqual({ delivered_version: 2 });
+    work.close();
+  });
+
+  it("treats a malformed release record as not live", () => {
+    const { work, send, group, area } = delivery();
+    const bad = send("save-output", {
+      groupId: group,
+      type: "release_tracker",
+      title: "Release broken",
+      body: JSON.stringify({ artifact: null, approval: {} }),
+      workAreaIds: [area],
+    }).ref!;
+    send("link-delivery", { kind: "release_story", fromId: bad, toId: "s1" });
+    expect(send("close-out-release", { releaseId: bad })).toMatchObject({
+      ok: false,
+      message: "Close-out starts once the release is Verified live.",
+    });
     work.close();
   });
 });

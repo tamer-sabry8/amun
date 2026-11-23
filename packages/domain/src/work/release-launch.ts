@@ -559,5 +559,18 @@ export function releaseBodyIsLive(body: string, workAreaId: string): boolean {
     updatedAt: "",
     ...parsed,
   };
-  return evaluateRelease(record).effectiveState === "verified_live";
+  // Release bodies are free text; malformed evidence is never live.
+  const text = (value: unknown) => typeof value === "string";
+  if (!text(record.artifact)) return false;
+  if (
+    record.approval !== null &&
+    (typeof record.approval !== "object" ||
+      !text(record.approval.approvedArtifact))
+  )
+    return false;
+  try {
+    return evaluateRelease(record).effectiveState === "verified_live";
+  } catch {
+    return false;
+  }
 }
