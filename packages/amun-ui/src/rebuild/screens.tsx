@@ -63,7 +63,11 @@ import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
 import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
 import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
-import { deliveryLinks, type DeliveryLink } from "./delivery-views.ts";
+import {
+  deliveryLinks,
+  progressLine,
+  type DeliveryLink,
+} from "./delivery-views.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -1095,6 +1099,10 @@ export function Roadmap({
         snapshot.roadmap.find((item) => item.id === id)?.workAreaId ?? null,
       );
   };
+  /** When the work's requirements were marked Delivered, if they were. */
+  const deliveredOn = (workAreaId: string) =>
+    snapshot.delivery.find((entry) => entry.workAreaId === workAreaId)
+      ?.requirements?.deliveredAt ?? null;
   const tile = (item: (typeof items)[number]) => {
     const badge = riceBadge(item);
     return (
@@ -1108,6 +1116,11 @@ export function Roadmap({
       >
         <span className="name">{item.title}</span>
         <span className="meta">{areaOf(snapshot, item.workAreaId)?.name}</span>
+        {progressLine(snapshot, item.workAreaId) && (
+          <span className="meta">
+            {progressLine(snapshot, item.workAreaId)}
+          </span>
+        )}
         <span className="row wrap">
           {badge && (
             <span className="tag accent">
@@ -1235,7 +1248,9 @@ export function Roadmap({
       )}
       {view === "horizon" && items.length > 0 && (
         <div className="rb-board">
-          {horizonBoard(items).map((column) => (
+          {horizonBoard(
+            items.filter((item) => !deliveredOn(item.workAreaId)),
+          ).map((column) => (
             <section
               key={column.horizon}
               className={"rb-col" + (over === column.horizon ? " over" : "")}
@@ -1256,6 +1271,30 @@ export function Roadmap({
               {column.items.map(tile)}
             </section>
           ))}
+          {/* Delivered work moves here by itself (approved 23 Nov 2026). */}
+          {items.some((item) => deliveredOn(item.workAreaId)) && (
+            <section className="rb-col" aria-label="Done">
+              <header>
+                Done
+                <span className="count">
+                  {items.filter((item) => deliveredOn(item.workAreaId)).length}
+                </span>
+              </header>
+              {items
+                .filter((item) => deliveredOn(item.workAreaId))
+                .map((item) => (
+                  <div key={item.id} className="rb-tile">
+                    <span className="name">{item.title}</span>
+                    <span className="meta">
+                      {areaOf(snapshot, item.workAreaId)?.name}
+                    </span>
+                    <span className="tag good">
+                      Delivered {shortDate(deliveredOn(item.workAreaId)!)}
+                    </span>
+                  </div>
+                ))}
+            </section>
+          )}
         </div>
       )}
       {view === "release" && items.length > 0 && (

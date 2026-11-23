@@ -3097,7 +3097,7 @@ export class WorkStore {
         if (command.linked)
           this.run(
             "INSERT OR IGNORE INTO delivery_links(kind,from_id,to_id,created_at) VALUES (?,?,?,?)",
-            command.kind,
+            command.link,
             command.fromId,
             command.toId,
             now,
@@ -3105,7 +3105,7 @@ export class WorkStore {
         else
           this.run(
             "DELETE FROM delivery_links WHERE kind=? AND from_id=? AND to_id=?",
-            command.kind,
+            command.link,
             command.fromId,
             command.toId,
           );

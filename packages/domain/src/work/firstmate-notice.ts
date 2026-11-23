@@ -303,7 +303,7 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
   },
   "link-delivery": {
     tell: (c) => ({
-      what: `${c.linked ? "linked" : "unlinked"} ${c.kind === "release_story" ? "a story and a release" : c.kind === "roadmap_release" ? "a roadmap item and a release" : "a roadmap item and its requirements"}`,
+      what: `${c.linked ? "linked" : "unlinked"} ${c.link === "release_story" ? "a story and a release" : c.link === "roadmap_release" ? "a roadmap item and a release" : "a roadmap item and its requirements"}`,
       ids: [c.fromId, c.toId],
     }),
   },

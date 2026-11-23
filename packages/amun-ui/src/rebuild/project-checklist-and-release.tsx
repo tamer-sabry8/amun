@@ -12,6 +12,10 @@ import {
   type ReleaseState,
 } from "../../../../packages/domain/src/work/release-launch.ts";
 import { work, workAsync } from "./store.ts";
+import {
+  releaseReadiness,
+  storyGroup,
+} from "../../../../packages/domain/src/work/delivery-chain.ts";
 import type { Snapshot } from "./view-model.ts";
 
 export const projectChecklistDocType = "project_checklist";
@@ -349,6 +353,34 @@ export function ProductionReleaseCard({
 
   const record = parseReleaseRecord(doc?.body, workAreaId, releaseName);
   const evaluation = evaluateRelease(record);
+  // Readiness gate (Idea to Done §4.10, approved 23 November 2026): the
+  // release lists the stories it ships, and Schedule waits until they are
+  // Done, unless they move to the next release or the owner releases anyway
+  // with a written reason.
+  const shippedIds = doc
+    ? snapshot.deliveryLinks
+        .filter(
+          (link) => link.kind === "release_story" && link.fromId === doc.id,
+        )
+        .map((link) => link.toId)
+    : [];
+  const workStories = (
+    snapshot.delivery.find((item) => item.workAreaId === workAreaId)?.items ??
+    []
+  ).filter(
+    (item) =>
+      item.type.toLowerCase() !== "epic" &&
+      storyGroup(item.status) !== "removed",
+  );
+  const shipped = workStories.filter((item) => shippedIds.includes(item.id));
+  const readiness = releaseReadiness(shipped);
+  const anywayReason = record.readinessEvidence
+    .find((line) => line.startsWith("Released anyway: "))
+    ?.slice("Released anyway: ".length);
+  const gateOpen = readiness.ready || Boolean(anywayReason);
+  const live = evaluation.effectiveState === "verified_live";
+  const [anyway, setAnyway] = useState<string | null>(null);
+  const [closeOut, setCloseOut] = useState<string | null>(null);
 
   const [artifactInput, setArtifactInput] = useState(record.artifact);
   const [ownerInput, setOwnerInput] = useState(record.releaseOwner ?? "");
@@ -648,11 +680,180 @@ export function ProductionReleaseCard({
         </div>
       )}
 
+      {live && doc && (
+        <div className="rb-inline amber" role="group" aria-label="Close out">
+          <span>
+            <strong>{releaseName} is live.</strong>{" "}
+            {shipped.length
+              ? `Close out: mark its ${shipped.filter((item) => storyGroup(item.status) !== "done").length} unfinished stories Done.`
+              : "No stories are linked to this release, so there is nothing to close out."}
+          </span>
+          {closeOut && <span className="small">{closeOut}</span>}
+          <div className="row wrap">
+            {shipped.length > 0 && (
+              <button
+                className="btn primary"
+                type="button"
+                onClick={async () => {
+                  const result = await workAsync("close-out-release", {
+                    releaseId: doc.id,
+                  });
+                  const step = result.step as {
+                    closed?: number;
+                    inTool?: { title: string; key: string | null }[];
+                  } | null;
+                  const inTool = step?.inTool ?? [];
+                  setCloseOut(
+                    !result.ok
+                      ? result.message
+                      : `${step?.closed ?? 0} stories kept in Amun are Done.` +
+                          (inTool.length
+                            ? ` ${inTool.length} in a tool (${inTool
+                                .map((item) => item.key ?? item.title)
+                                .join(
+                                  ", ",
+                                )}) close there: ask Firstmate to raise the plan.`
+                            : ""),
+                  );
+                }}
+              >
+                Close out
+              </button>
+            )}
+            <button
+              className="btn"
+              type="button"
+              onClick={async () => {
+                const result = await workAsync("mark-delivered", {
+                  workAreaId,
+                });
+                setCloseOut(
+                  result.ok
+                    ? "Marked Delivered. The requirements show the date and this release."
+                    : result.message,
+                );
+              }}
+            >
+              Mark requirements Delivered
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!live && (
+        <div className="rb-inline" role="group" aria-label="Release readiness">
+          <span>
+            {shipped.length === 0 ? (
+              "No stories are in this release yet."
+            ) : (
+              <>
+                {shipped.length} {shipped.length === 1 ? "story" : "stories"} ·{" "}
+                <strong>
+                  {shipped.length - readiness.notDone.length} done
+                </strong>
+                {readiness.notDone.length > 0 && (
+                  <> · {readiness.notDone.length} not done</>
+                )}
+              </>
+            )}
+            {anywayReason && (
+              <span className="muted small">
+                {" "}
+                · Released anyway: {anywayReason}
+              </span>
+            )}
+          </span>
+          <div className="row wrap">
+            {doc && shipped.length === 0 && workStories.length > 0 && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  for (const story of workStories)
+                    work("link-delivery", {
+                      link: "release_story",
+                      fromId: doc.id,
+                      toId: story.id,
+                      linked: true,
+                    });
+                }}
+              >
+                Include all {workStories.length} stories of this work
+              </button>
+            )}
+            {doc && readiness.notDone.length > 0 && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  for (const id of readiness.notDone)
+                    work("link-delivery", {
+                      link: "release_story",
+                      fromId: doc.id,
+                      toId: id,
+                      linked: false,
+                    });
+                }}
+              >
+                Move {readiness.notDone.length} to the next release
+              </button>
+            )}
+            {!gateOpen && anyway === null && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setAnyway("")}
+              >
+                Release anyway…
+              </button>
+            )}
+          </div>
+          {anyway !== null && (
+            <div className="row wrap">
+              <input
+                aria-label="Why release anyway"
+                placeholder="Why release now? This is kept on the receipt."
+                value={anyway}
+                onChange={(event) => setAnyway(event.target.value)}
+              />
+              <button
+                className="btn primary"
+                type="button"
+                disabled={!anyway.trim()}
+                onClick={() => {
+                  void saveRecord({
+                    readinessEvidence: [
+                      ...record.readinessEvidence,
+                      `Released anyway: ${anyway.trim()}`,
+                    ],
+                  });
+                  setAnyway(null);
+                }}
+              >
+                Release anyway
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setAnyway(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="row wrap">
         <button
           className="btn"
           type="button"
-          disabled={!artifactInput.trim()}
+          disabled={!artifactInput.trim() || !gateOpen || live}
+          title={
+            gateOpen
+              ? undefined
+              : "Schedule waits until the release's stories are done"
+          }
           onClick={() => {
             const target = artifactInput.trim();
             void saveRecord({
@@ -674,7 +875,7 @@ export function ProductionReleaseCard({
         <button
           className="btn"
           type="button"
-          disabled={!artifactInput.trim()}
+          disabled={!artifactInput.trim() || live}
           onClick={() =>
             void saveRecord({
               artifact: artifactInput.trim(),
@@ -690,7 +891,7 @@ export function ProductionReleaseCard({
         <button
           className="btn primary"
           type="button"
-          disabled={!artifactInput.trim()}
+          disabled={!artifactInput.trim() || live}
           onClick={() => setShowReceiptForm(!showReceiptForm)}
         >
           3. Record release-owner receipt (Verify live)

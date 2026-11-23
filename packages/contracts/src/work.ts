@@ -1227,7 +1227,8 @@ export const workCommand = z.discriminatedUnion("action", [
   }),
   /** Link two records of the delivery chain, or unlink them. */
   act("link-delivery", {
-    kind: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
+    /** Named "link", since "kind" is the message envelope's own field. */
+    link: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
     fromId: id,
     toId: id,
     linked: z.boolean().default(true),
