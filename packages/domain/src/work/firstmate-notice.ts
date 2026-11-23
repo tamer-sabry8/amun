@@ -307,6 +307,18 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [c.fromId, c.toId],
     }),
   },
+  "close-out-release": {
+    tell: (c) => ({
+      what: "closed out a release that is Verified live: its stories kept in Amun are Done; stories in a tool still need an approved plan to close there",
+      ids: [c.releaseId],
+    }),
+  },
+  "mark-delivered": {
+    tell: (c, look) => ({
+      what: `marked the requirements of ${look.area(c.workAreaId)} Delivered`,
+      ids: [c.workAreaId],
+    }),
+  },
   "propose-plan": {
     tell: (c, look) => ({
       what: `drew up a ${c.planKind.replace("_", " ")} plan for ${c.destination}: ${said(c.summary)} (${c.items.length} items). It waits for the captain's own approval and nothing is published yet`,

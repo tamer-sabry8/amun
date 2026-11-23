@@ -1234,4 +1234,7 @@ CREATE TABLE delivery_links(kind TEXT NOT NULL CHECK (kind IN ('release_story','
   // goes there (Idea to Done §4.8, receipt card approved 23 November 2026).
   `ALTER TABLE work_plans ADD COLUMN chat_id TEXT;
 ALTER TABLE work_plans ADD COLUMN request_ref TEXT;`,
+  // Requirements Delivered (Idea to Done §4.12), confirmed by the captain.
+  `ALTER TABLE prds ADD COLUMN delivered_at TEXT;
+ALTER TABLE prds ADD COLUMN delivered_version INTEGER;`,
 ] as const;

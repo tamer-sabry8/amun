@@ -1022,6 +1022,14 @@ describe("grouping chats by Amun's own rules (owner, 20 November 2026)", () => {
     expect(sameWorkName("--", "")).toBe(false);
   });
 
+  it("treats a singular and its plural as the same folder", () => {
+    expect(sameWorkName("Sales Prospect", "Sales Prospects")).toBe(true);
+    expect(sameWorkName("Badge Box", "Badge Boxes")).toBe(true);
+    expect(sameWorkName("Business", "Busines")).toBe(false);
+    expect(sameWorkName("Mira", "Miras")).toBe(true);
+    expect(sameWorkName("Gitex", "Gitex Demo")).toBe(false);
+  });
+
   it("asks before making a twin of an existing folder", () => {
     expect(
       routeNewWork({

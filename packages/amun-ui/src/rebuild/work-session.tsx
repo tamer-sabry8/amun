@@ -1771,17 +1771,22 @@ export function WorkSession({
       const model = product?.allowedModels[0] ?? currentModel() ?? "firstmate";
       const say = (text: string) =>
         work("message", { workAreaId: areaId, role: "firstmate", text });
+      // A Project's requirements are its BRD (Idea to Done §1).
+      const isProject = context?.area.type === "project";
+      const doc = isProject ? "BRD" : "PRD";
       if (!productId)
         say(
-          "Stories are drafted from a product’s PRD, and this work is not a product. Nothing was changed.",
+          isProject
+            ? "This project runs on its checklist. To draft stories it needs to run with stories and sprints instead; say “use sprints for this project” and its checklist tasks become stories. Nothing was changed."
+            : "Stories are drafted from a product’s PRD or a project’s BRD, and this work is neither. Nothing was changed.",
         );
       else if (!product || !objective || !prd)
         say(
-          "There is no PRD for this product in Amun yet. Once one is saved here, I can draft its stories in this chat.",
+          `There is no ${doc} for this ${isProject ? "project" : "product"} in Amun yet. Once one is saved here, I can draft its stories in this chat.`,
         );
       else if (!prd.approved)
         say(
-          `PRD v${prd.version} is saved in Amun and waits for your approval. Open the PRD, approve v${prd.version}, then ask again and I’ll draft its stories here.`,
+          `${doc} v${prd.version} is saved in Amun and waits for your approval. Open the ${doc}, approve v${prd.version}, then ask again and I’ll draft its stories here.`,
         );
       else if (
         product.storyDrafts.some(
@@ -1803,6 +1808,20 @@ export function WorkSession({
           model,
           difficulty: "standard",
         });
+    } else if (proposed.do === "use-sprints") {
+      if (context?.area.type !== "project") return;
+      void (async () => {
+        const result = await workAsync("start-delivery", {
+          workAreaId: areaId,
+        });
+        work("message", {
+          workAreaId: areaId,
+          role: "firstmate",
+          text: result.ok
+            ? `Done. ${context.area.name} now runs with stories and sprints; its checklist tasks are stories.`
+            : `Nothing was changed. ${result.message}`,
+        });
+      })();
     } else if (proposed.do === "link-product")
       void (async () => {
         const snap = latest.current.snapshot;

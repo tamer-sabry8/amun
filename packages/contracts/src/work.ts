@@ -1182,6 +1182,13 @@ export const workCommand = z.discriminatedUnion("action", [
     toId: id,
     linked: z.boolean().default(true),
   }),
+  /**
+   * After Verified live: marks the release's stories kept in Amun Done and
+   * lists those in a tool, which close there through an approved plan.
+   */
+  act("close-out-release", { releaseId: id }),
+  /** The captain confirms the requirements are Delivered (§4.12). */
+  act("mark-delivered", { workAreaId: id }),
   act("apply-reply", {
     text: z.string().max(200000),
     workAreaId: id,

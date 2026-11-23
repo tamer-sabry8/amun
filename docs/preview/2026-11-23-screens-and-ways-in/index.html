@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun · every delivery screen and every way in · for approval</title>
+    <style>
+      :root {
+        --canvas: #0b0e14;
+        --nav: #12161f;
+        --card: #1a1f2b;
+        --ink: #f2f5f8;
+        --muted: #94a0ad;
+        --accent: #e8a33d;
+        --line: #2a3040;
+        --good: #4ade80;
+        --bad: #f87171;
+        --info: #7fb0ff;
+        --page: #f4f1ea;
+        --pink: #1d2330;
+        --pmuted: #555e6e;
+        --pline: #ddd6c8;
+        --pcard: #fbf9f4;
+        --now: #b4441b;
+        --new: #24794a;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      ::selection {
+        background: #e8a33d55;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--pink);
+        line-height: 1.5;
+      }
+      a {
+        color: inherit;
+        text-underline-offset: 3px;
+      }
+      header,
+      main,
+      footer {
+        max-width: 1680px;
+        margin: auto;
+        padding: 0 4vw;
+      }
+      header {
+        padding-top: 56px;
+      }
+      h1 {
+        font-size: 46px;
+        line-height: 1.08;
+        margin: 0 0 14px;
+        letter-spacing: -0.025em;
+        max-width: 22ch;
+      }
+      h2 {
+        font-size: 32px;
+        line-height: 1.15;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      h3 {
+        font-size: 20px;
+        margin: 26px 0 8px;
+      }
+      .lead {
+        font-size: 19px;
+        color: var(--pmuted);
+        max-width: 72ch;
+        margin: 0 0 12px;
+      }
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 22px 0 8px;
+      }
+      .toc a {
+        font-size: 15px;
+        padding: 7px 13px;
+        border: 1px solid var(--pline);
+        border-radius: 999px;
+        background: var(--pcard);
+        text-decoration: none;
+      }
+      .toc a:hover {
+        border-color: var(--pink);
+      }
+      section {
+        padding: 56px 0 24px;
+        border-top: 1px solid var(--pline);
+        margin-top: 40px;
+      }
+      .why {
+        font-size: 18px;
+        max-width: 78ch;
+        margin: 0 0 22px;
+      }
+      .frame {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 14px;
+        margin: 18px 0;
+      }
+      .lab {
+        font-size: 14px;
+        font-weight: 650;
+        margin: 2px 6px 12px;
+        color: var(--pmuted);
+      }
+      .lab b {
+        color: var(--now);
+      }
+      .new .lab b {
+        color: var(--new);
+      }
+      .frame img {
+        width: 100%;
+        display: block;
+        border-radius: 8px;
+      }
+      .missing {
+        border: 2px dashed var(--pline);
+        border-radius: 10px;
+        padding: 26px;
+        color: var(--pmuted);
+        font-size: 16px;
+        text-align: center;
+      }
+      /* the matrix */
+      table.ways {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: #fff;
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        overflow: hidden;
+        font-size: 15.5px;
+      }
+      .ways th,
+      .ways td {
+        padding: 13px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--pline);
+      }
+      .ways th {
+        background: #ece6d8;
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .ways td:first-child {
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .ways tr:last-child td {
+        border-bottom: 0;
+      }
+      .ways code {
+        font-size: 14px;
+        background: #f1ece1;
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+      /* app mock */
+      .app {
+        background: var(--canvas);
+        color: var(--ink);
+        border-radius: 10px;
+        font-size: 15.5px;
+        overflow: hidden;
+      }
+      .app .muted {
+        color: var(--muted);
+      }
+      .app .small {
+        font-size: 13px;
+      }
+      .bar {
+        display: flex;
+        gap: 22px;
+        align-items: center;
+        padding: 16px 26px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14.5px;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      .bar b {
+        color: var(--ink);
+        font-size: 15.5px;
+      }
+      .bar .on {
+        color: var(--ink);
+        box-shadow: inset 0 -2px 0 var(--accent);
+        padding-bottom: 6px;
+        margin-bottom: -8px;
+      }
+      .pill {
+        font-size: 12px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        padding: 2px 9px;
+        color: var(--muted);
+      }
+      .body {
+        padding: 22px 26px;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+      }
+      .split > div + div {
+        border-left: 1px solid var(--line);
+        background: #0e121a;
+      }
+      .tag {
+        font-size: 12.5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .tag.good {
+        color: var(--good);
+        border-color: #4ade8066;
+      }
+      .tag.accent {
+        color: var(--accent);
+        border-color: #e8a33d80;
+      }
+      .tag.info {
+        color: var(--info);
+        border-color: #7fb0ff66;
+      }
+      .acard {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin: 10px 0;
+      }
+      .amber {
+        border-color: #e8a33d99;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .grow {
+        flex: 1;
+      }
+      .btn {
+        font-size: 14px;
+        padding: 7px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      .btn.p {
+        background: #5b2bb5;
+        border-color: #5b2bb5;
+      }
+      .lnk {
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .ways-in {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 13.5px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .ways-in span:first-child {
+        color: var(--muted);
+      }
+      table.t {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+      table.t td,
+      table.t th {
+        padding: 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.t th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 12.5px;
+      }
+      tr.ep td {
+        background: #151a25;
+        font-weight: 650;
+      }
+      .prog {
+        display: inline-block;
+        width: 96px;
+        height: 6px;
+        background: var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        vertical-align: middle;
+        margin: 0 8px;
+      }
+      .prog i {
+        display: block;
+        height: 100%;
+        background: var(--good);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        margin: 4px 0 12px;
+      }
+      .chips span {
+        font-size: 13px;
+        padding: 4px 11px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .chips span.on {
+        color: var(--ink);
+        background: #e8a33d24;
+        border-color: #e8a33d66;
+      }
+      .bubble {
+        margin-left: auto;
+        width: fit-content;
+        max-width: 70%;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 15px;
+      }
+      .who {
+        color: var(--muted);
+        font-size: 13.5px;
+        margin: 18px 0 4px;
+      }
+      .who b {
+        color: var(--ink);
+      }
+      .line {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 13px;
+        font-size: 13.5px;
+        width: fit-content;
+        margin: 8px 0 0 auto;
+        color: var(--muted);
+      }
+      .line b {
+        color: var(--good);
+        font-weight: 500;
+      }
+      .cols4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .col {
+        background: #11151e;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .col h5 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .item {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 9px 12px;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      .act {
+        display: grid;
+        grid-template-columns: 70px 1fr auto;
+        gap: 14px;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 14.5px;
+        align-items: start;
+      }
+      .act:last-child {
+        border-bottom: 0;
+      }
+      .menu {
+        display: inline-block;
+        background: #20263a;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 5px;
+        font-size: 13.5px;
+        vertical-align: top;
+        box-shadow: 0 12px 30px #0009;
+      }
+      .menu div {
+        padding: 6px 12px;
+        border-radius: 6px;
+      }
+      .menu .on {
+        background: #e8a33d29;
+      }
+      .pf {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 16px;
+      }
+      .pc {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .pc .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .pc .st {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--good);
+        background: #4ade8026;
+        padding: 3px 10px;
+        border-radius: 99px;
+      }
+      .pc .kinds {
+        display: flex;
+        gap: 6px;
+      }
+      .pc .kinds span {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 99px;
+        background: #7fb0ff33;
+        color: #cfe0ff;
+      }
+      .pc .kinds span + span {
+        background: #ffffff1a;
+        color: var(--ink);
+      }
+      .pc .nm {
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+      }
+      .pc .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .pc .big {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 12px 0;
+      }
+      .pc .ring {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        border: 7px solid var(--line);
+        flex: none;
+      }
+      .pc .foot {
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .seg {
+        display: inline-flex;
+        padding: 3px;
+        gap: 2px;
+        border-radius: 10px;
+        background: #ffffff10;
+      }
+      .seg span {
+        padding: 5px 12px;
+        border-radius: 8px;
+        font-size: 13.5px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .seg span b {
+        font-weight: 500;
+        margin-left: 4px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .seg span.on {
+        background: var(--ink);
+        color: #11151e;
+        font-weight: 600;
+      }
+      .seg span.on b {
+        color: #555e6e;
+      }
+      .decide {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+      .decide button {
+        font: inherit;
+        font-size: 14.5px;
+        padding: 7px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        cursor: pointer;
+      }
+      .decide button:hover {
+        border-color: var(--pink);
+      }
+      .decide button:focus-visible,
+      .toc a:focus-visible,
+      footer button:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .decide button[aria-pressed="true"] {
+        background: var(--pink);
+        color: #fff;
+        border-color: var(--pink);
+      }
+      textarea {
+        width: 100%;
+        min-height: 64px;
+        font: inherit;
+        font-size: 15px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        margin-top: 8px;
+      }
+      footer {
+        padding-top: 36px;
+        padding-bottom: 100px;
+      }
+      footer button {
+        font: inherit;
+        font-size: 17px;
+        padding: 12px 22px;
+        border-radius: 10px;
+        border: 0;
+        background: var(--pink);
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Every delivery screen, and every way into it</h1>
+      <p class="lead">
+        <b
+          >Approved by the owner on 23 November 2026 (“approved”, all
+          sections).</b
+        >
+        Build order follows the Idea to Done requirements, §8.
+      </p>
+      <p class="lead">
+        The screens of the approved Idea to Done flow, each with your real
+        screen today and the proposal, for Products and Projects alike. Each
+        screen can be reached four ways: by asking in the chat, and from
+        Sprints, the Portfolio card and Activity. All of them open the same
+        panel beside the chat, so there is one screen per thing, never a copy.
+      </p>
+      <p class="lead">
+        Nothing is added to the prompt box. Asking in the chat goes to Firstmate
+        like any message; opening a screen from a link is recorded in Activity
+        and is never a write.
+      </p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#ways">The ways-in rule</a><a href="#header">Folder tabs</a
+        ><a href="#stories">Stories</a><a href="#receipts">Receipts</a
+        ><a href="#sprints">Sprints</a
+        ><a href="#portfolio-grid">Portfolio grid</a
+        ><a href="#portfolio">Portfolio card</a><a href="#activity">Activity</a
+        ><a href="#chat">Asking in the chat</a
+        ><a href="#rest">Release, close-out, Delivered, Roadmap</a
+        ><a href="#cards">Chat cards</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="ways">
+        <h2>The ways-in rule</h2>
+        <p class="why">
+          One table, all screens. “Opens” always means the panel beside the
+          folder’s chat, scrolled to that item. The same words are used
+          everywhere.
+        </p>
+        <table class="ways">
+          <tr>
+            <th>Screen</th>
+            <th>Ask in the chat</th>
+            <th>Sprints</th>
+            <th>Portfolio card</th>
+            <th>Activity</th>
+          </tr>
+          <tr>
+            <td>Stories (epics + stories)</td>
+            <td>
+              <code>show the stories</code> · <code>what's published?</code>
+            </td>
+            <td>Sprint tile → <b>Stories</b></td>
+            <td>Full card → <b>Stories</b> with “21 of 31 done”</td>
+            <td>“Drafted 31 stories” → <b>Open stories</b></td>
+          </tr>
+          <tr>
+            <td>Publish receipt</td>
+            <td>
+              <code>show the Linear receipt</code> ·
+              <code>what did we create in Jira?</code>
+            </td>
+            <td>Sprint detail → <b>Created from receipt ›</b></td>
+            <td>Full card → <b>Receipts (2)</b></td>
+            <td>“Created 41 items in Linear” → <b>Open receipt</b></td>
+          </tr>
+          <tr>
+            <td>Sprint</td>
+            <td>
+              <code>show sprint 1</code> · <code>how is the sprint going?</code>
+            </td>
+            <td>Its tile (as today)</td>
+            <td>Full card → <b>Sprint 2 · active</b></td>
+            <td>Sprint rows → <b>Open sprint</b></td>
+          </tr>
+          <tr>
+            <td>Requirements (PRD / BRD)</td>
+            <td><code>show the BRD</code></td>
+            <td>Sprint detail → goal line <b>from BRD v2</b></td>
+            <td>Full card → <b>BRD v2 · Approved</b></td>
+            <td>“BRD v2 approved” → <b>Open BRD</b></td>
+          </tr>
+          <tr>
+            <td>Release</td>
+            <td><code>show the release</code></td>
+            <td>Sprint detail → <b>Ships in v1.0</b></td>
+            <td>Full card → <b>Release v1.0 · Readiness</b></td>
+            <td>Release steps → <b>Open release</b></td>
+          </tr>
+          <tr>
+            <td>Roadmap item</td>
+            <td><code>where is Invoiced on the roadmap?</code></td>
+            <td>Sprint tile → <b>Roadmap: Invoicing MVP</b></td>
+            <td>Full card → <b>On the roadmap: Now</b></td>
+            <td>“Moved to Done on the roadmap” → <b>Open roadmap</b></td>
+          </tr>
+        </table>
+        <div class="decide" data-k="ways">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="ways-n"
+          aria-label="Notes on the ways-in rule"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="header">
+        <h2>Folder tabs, same for Products and Projects</h2>
+        <p class="why">
+          Today a Product shows <i>PRD · Backlog · Pull requests</i> and a
+          Project shows <i>Project checklist</i>. Proposed: both show
+          <b>Requirements · Stories · Sprints · Release</b>, then the existing
+          Pull requests (only with a repo), Browser and What happened. A Project
+          in checklist mode keeps <i>Project checklist</i> plus a quiet
+          <b>Use sprints for this project</b> in the checklist panel (Firstmate
+          asks you to confirm).
+        </p>
+        <div class="frame now">
+          <div class="lab"><b>Now</b> · Product header (Mira)</div>
+          <img
+            src="now/current-5-cards.png"
+            alt="Mira header with PRD, Backlog, Pull requests"
+          />
+        </div>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · Project header and checklist (Gitex Demo)
+          </div>
+          <img
+            src="now/current-3-checklist.webp"
+            alt="Gitex Demo header with Project checklist"
+          />
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed</b> · the same tabs on both</div>
+          <div class="app">
+            <div class="bar">
+              <span>Work ›</span><b>Invoiced</b><span class="pill">Project</span
+              ><span class="pill">Client: billr</span
+              ><span style="margin-left: auto" class="on">Requirements</span
+              ><span>Stories</span><span>Sprints</span><span>Release</span
+              ><span>Browser</span><span>What happened</span>
+            </div>
+            <div class="bar">
+              <span>Work ›</span><b>Gitex Demo</b
+              ><span class="pill">Project</span
+              ><span class="pill">0 of 1 done</span
+              ><span style="margin-left: auto">Project checklist</span
+              ><span>Browser</span><span>What happened</span>
+            </div>
+            <div class="body">
+              <div class="acard" style="max-width: 640px">
+                <div class="row">
+                  <strong class="grow">Gitex Demo checklist</strong
+                  ><span class="tag accent">0 of 1 done</span>
+                </div>
+                <div class="muted small" style="margin-top: 8px">
+                  Bigger than a checklist?
+                  <span class="lnk">Use sprints for this project</span> · your
+                  tasks become stories
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="header">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="header-n"
+          aria-label="Notes on folder tabs"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="stories">
+        <h2>Stories: Drafted or Published</h2>
+        <p class="why">
+          Every story has two facts, shown as two columns. <b>Where</b>:
+          <i>Drafted</i> (in Amun only, nothing sent) or <i>Published</i> (in
+          Jira, Linear or Azure DevOps, with its key). <b>Status</b>: To do · In
+          progress · In review · Done, read from the tool for published stories,
+          set in Amun for a sprint kept in Amun. Drafted stories have no status
+          yet. Filters at the top. Each published key links out, and its receipt
+          is one click away.
+        </p>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · the 31 Invoiced stories are only described in the chat;
+            there is no screen
+          </div>
+          <img
+            src="now/current-2-linear-plan.webp"
+            alt="Invoiced chat describing 31 stories"
+          />
+        </div>
+        <div class="frame new">
+          <div class="lab">
+            <b>Proposed</b> · Stories tab, opened from any of the four ways in
+          </div>
+          <div class="app">
+            <div class="bar">
+              <span>Work ›</span><b>Invoiced</b><span class="pill">Project</span
+              ><span style="margin-left: auto">Requirements</span
+              ><span class="on">Stories</span><span>Sprints</span
+              ><span>Release</span>
+            </div>
+            <div class="body">
+              <div class="row" style="margin-bottom: 6px">
+                <strong class="grow" style="font-size: 19px"
+                  >31 stories in 10 epics · from BRD v2</strong
+                ><span class="muted small">Published to Linear · team TRA</span>
+              </div>
+              <div class="chips">
+                <span class="on">All 31</span><span>Drafted 3</span
+                ><span>Published 28</span><span>Done 4</span>
+              </div>
+              <table class="t">
+                <tr>
+                  <th>Story</th>
+                  <th>Where</th>
+                  <th>Status</th>
+                  <th>Sprint</th>
+                  <th>Est.</th>
+                  <th>From</th>
+                </tr>
+                <tr class="ep">
+                  <td colspan="6">
+                    Customers &amp; contacts
+                    <span class="prog"><i style="width: 50%"></i></span
+                    ><span class="muted small"
+                      >2 of 4 done · <span class="lnk">P-TRA-3 ↗</span></span
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Add a customer with billing address</td>
+                  <td>
+                    <span class="tag info"
+                      >Published · <span class="lnk">TRA-101 ↗</span></span
+                    >
+                  </td>
+                  <td><span class="tag good">Done</span></td>
+                  <td>Sprint 1</td>
+                  <td>3</td>
+                  <td class="muted">R-4</td>
+                </tr>
+                <tr>
+                  <td>Import customers from CSV</td>
+                  <td>
+                    <span class="tag info"
+                      >Published · <span class="lnk">TRA-102 ↗</span></span
+                    >
+                  </td>
+                  <td><span class="tag">In progress</span></td>
+                  <td>Sprint 1</td>
+                  <td>5</td>
+                  <td class="muted">R-6</td>
+                </tr>
+                <tr>
+                  <td>Merge duplicate customers</td>
+                  <td><span class="tag accent">Drafted</span></td>
+                  <td class="muted">—</td>
+                  <td class="muted">—</td>
+                  <td>2</td>
+                  <td class="muted">R-7</td>
+                </tr>
+                <tr class="ep">
+                  <td colspan="6">
+                    Invoices <span class="prog"><i style="width: 0%"></i></span
+                    ><span class="muted small">0 of 6 done</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Create an invoice from line items</td>
+                  <td>
+                    <span class="tag info"
+                      >Published · <span class="lnk">TRA-104 ↗</span></span
+                    >
+                  </td>
+                  <td><span class="tag">To do</span></td>
+                  <td>Sprint 2</td>
+                  <td>8</td>
+                  <td class="muted">R-9</td>
+                </tr>
+              </table>
+              <div class="row" style="margin-top: 14px">
+                <span class="muted small grow"
+                  >3 drafted stories are in Amun only.
+                  <span class="lnk">Publish them…</span> raises a plan for your
+                  approval.</span
+                ><span class="lnk small">Receipt · 41 created 15:52 ›</span>
+              </div>
+              <div class="muted small" style="margin-top: 10px">
+                Example rows
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="stories">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="stories-n"
+          aria-label="Notes on Stories"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="receipts">
+        <h2>Receipts, wherever you look</h2>
+        <p class="why">
+          The approved receipt card stays where it is: under Firstmate’s reply,
+          in the chat that asked. Proposed: the same card is reachable from four
+          more places, and a sprint chat shows the receipts for its sprint in
+          its own history.
+        </p>
+        <div class="frame new">
+          <div class="lab">
+            <b>Proposed</b> · (1) sprint chat history · (2) asking for it in the
+            folder’s chat
+          </div>
+          <div class="app split">
+            <div class="body">
+              <div class="muted small">Invoiced › Sprint 1 · chat</div>
+              <div class="who"><b>Amun</b> · 10 Dec, 15:52</div>
+              <div class="acard">
+                <div class="row">
+                  <strong class="grow"
+                    >Created in Linear · 6 issues in Sprint 1</strong
+                  ><span class="tag good">Done</span>
+                </div>
+                <div class="muted small" style="margin-top: 4px">
+                  TRA-101 … TRA-106 · from “Plan Sprint 1” ·
+                  <span class="lnk">Show all 6</span>
+                </div>
+              </div>
+              <div class="muted small" style="margin-top: 6px">
+                A receipt that put stories into this sprint also shows here, in
+                time order.
+              </div>
+            </div>
+            <div class="body">
+              <div class="muted small">Invoiced · chat</div>
+              <div class="bubble" style="margin-top: 14px">
+                What did we create in Linear?
+              </div>
+              <div class="who"><b>Firstmate</b></div>
+              <div>
+                Two publishes, captain: the plan on 22 Nov (41 items) and Sprint
+                1 on 10 Dec (6 issues).
+              </div>
+              <div class="acard">
+                <div class="row">
+                  <strong class="grow"
+                    >Created in Linear · 10 projects, 31 issues</strong
+                  ><span class="tag good">Done</span>
+                </div>
+                <div class="muted small" style="margin-top: 4px">
+                  22 Nov, 15:52 · <span class="lnk">Open receipt ›</span>
+                </div>
+              </div>
+              <div class="acard">
+                <div class="row">
+                  <strong class="grow"
+                    >Created in Linear · 6 issues in Sprint 1</strong
+                  ><span class="tag good">Done</span>
+                </div>
+                <div class="muted small" style="margin-top: 4px">
+                  10 Dec · <span class="lnk">Open receipt ›</span>
+                </div>
+              </div>
+              <div class="muted small">
+                “Open receipt” jumps to the original card in its chat,
+                highlighted.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="receipts">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="receipts-n"
+          aria-label="Notes on receipts"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="sprints">
+        <h2>Sprints: tile and detail link to Stories and Receipts</h2>
+        <p class="why">
+          The Sprints screen keeps its layout. Each tile gets one quiet line of
+          links. The sprint detail gets a <b>Where these came from</b> line
+          under the goal: the BRD version, the receipt that created its stories,
+          and the release they ship in. Fix included: a sprint never opened says
+          “Open to count stories”, not 0 / 0.
+        </p>
+        <div class="frame now">
+          <div class="lab"><b>Now</b> · Sprints overview</div>
+          <img src="now/sprints-overview.jpg" alt="Sprints overview" />
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed</b> · tile links and sprint detail</div>
+          <div class="app">
+            <div class="body">
+              <div class="acard" style="max-width: 760px">
+                <div class="row">
+                  <strong class="grow">Invoiced · Sprint 1</strong
+                  ><span class="tag">4 / 6 stories done</span
+                  ><span class="muted small">5 days left</span>
+                </div>
+                <div class="ways-in">
+                  <span>Open:</span><span class="lnk">Stories</span
+                  ><span class="lnk">Receipt</span
+                  ><span class="lnk">Release v1.0</span
+                  ><span class="lnk">Roadmap: Invoicing MVP</span
+                  ><span class="lnk">Sprint chat</span>
+                </div>
+              </div>
+              <div class="acard" style="max-width: 760px">
+                <div class="row">
+                  <strong class="grow">Gitex Demo · Sprint 1</strong
+                  ><span class="tag">Open to count stories</span
+                  ><span class="muted small">Starts in 3 days</span>
+                </div>
+              </div>
+              <h3 style="margin-top: 24px">Sprint detail</h3>
+              <div class="muted small">
+                Goal · Customers can be added and invoiced
+              </div>
+              <div class="muted small" style="margin-top: 4px">
+                Where these came from: <span class="lnk">BRD v2</span> ·
+                <span class="lnk">Created from receipt (10 Dec) ›</span> ·
+                <span class="lnk">Ships in v1.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="sprints">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="sprints-n"
+          aria-label="Notes on Sprints"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="portfolio-grid">
+        <h2>Portfolio: every card the same size, and one-tap type filter</h2>
+        <p class="why">
+          <b>Built in this branch, as you asked.</b> Every card now fills the
+          same grid cell as Gitex Demo: same width, same height in a row, long
+          names stop at two lines. The Type dropdown becomes one segmented row
+          with counts, like your example:
+          <i>All · Projects · Products · Initiatives · RFPs</i> (a type with
+          nothing in it is hidden). Status stays a dropdown. Not yet seen in the
+          running app.
+        </p>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · from your screenshot: cards of different widths, Type
+            and Status as dropdowns
+          </div>
+          <div class="missing">
+            Your screenshot of 23 November: Gitex Demo and MoCA are narrow, Mira
+            is wide, Badge Desk, Invoiced and Office Move differ again; Type
+            “All types” and Status “Any status” are dropdowns.
+          </div>
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed (built)</b> · Portfolio</div>
+          <div class="app">
+            <div class="body">
+              <div style="font-size: 24px; font-weight: 600">Portfolio</div>
+              <div class="muted small" style="margin: 4px 0 14px">
+                Every product, project, Initiative and RFP. Open one to see
+                where it stands.
+              </div>
+              <div class="row" style="margin-bottom: 16px">
+                <div class="seg">
+                  <span class="on">All<b>25</b></span
+                  ><span>Projects<b>14</b></span
+                  ><span>Products<b>7</b></span
+                  ><span>Initiatives<b>4</b></span>
+                </div>
+                <span class="muted small">Status</span
+                ><span class="pill">Any status ▾</span
+                ><span class="muted small" style="margin-left: auto"
+                  >8 shown · at risk first, then by nearest date</span
+                >
+              </div>
+              <div class="pf">
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Project</span>
+                    </div>
+                  </div>
+                  <div class="nm">Gitex Demo</div>
+                  <div class="sub">DMT · High priority</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        17
+                      </div>
+                      <div class="small">days left</div>
+                      <div class="muted small">Due Thu 10 Dec</div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Project</span>
+                    </div>
+                  </div>
+                  <div class="nm">MoCA</div>
+                  <div class="sub">No client set</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        53
+                      </div>
+                      <div class="small">days left</div>
+                      <div class="muted small">Due Fri 15 Jan</div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Product</span>
+                    </div>
+                  </div>
+                  <div class="nm">
+                    Mira: a customer service chat product reverse-engineered
+                    from https://github
+                  </div>
+                  <div class="sub">No client set</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        —
+                      </div>
+                      <div class="small">No due date</div>
+                      <div class="muted small"></div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Product</span>
+                    </div>
+                  </div>
+                  <div class="nm">Badge Desk</div>
+                  <div class="sub">No client set</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        —
+                      </div>
+                      <div class="small">No due date</div>
+                      <div class="muted small"></div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Project</span>
+                    </div>
+                  </div>
+                  <div class="nm">Invoiced: a SaaS product</div>
+                  <div class="sub">s from it</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        —
+                      </div>
+                      <div class="small">No due date</div>
+                      <div class="muted small"></div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+                <div class="pc">
+                  <div class="top">
+                    <span class="st">● Active</span>
+                    <div class="kinds">
+                      <span>Work</span><span>Project</span>
+                    </div>
+                  </div>
+                  <div class="nm">Office Move Test</div>
+                  <div class="sub">No client set</div>
+                  <div class="big">
+                    <div class="ring"></div>
+                    <div>
+                      <div
+                        style="
+                          font-size: 28px;
+                          font-weight: 700;
+                          line-height: 1;
+                        "
+                      >
+                        —
+                      </div>
+                      <div class="small">No due date</div>
+                      <div class="muted small"></div>
+                    </div>
+                  </div>
+                  <div class="foot">Nothing running</div>
+                </div>
+              </div>
+              <div class="muted small" style="margin-top: 10px">
+                Counts are examples; the client line “s from it” is the parsing
+                bug already fixed for new work.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="pgrid">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="pgrid-n"
+          aria-label="Notes on Portfolio grid"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="portfolio">
+        <h2>Portfolio: the full card links to everything</h2>
+        <p class="why">
+          On the Portfolio, the full view of a product or project card ends with
+          the same <b>Open</b> line, plus its progress in one sentence. Each
+          link opens that folder with the panel already showing the item.
+        </p>
+        <div class="frame now">
+          <div class="lab"><b>Now</b> · Portfolio full card</div>
+          <div class="missing">
+            I have no capture of today’s Portfolio full card. Before this is
+            built I’ll add a real screenshot here. Today it shows the card’s
+            details with no links to stories, receipts or releases.
+          </div>
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed</b> · the full card</div>
+          <div class="app">
+            <div class="body">
+              <div class="acard" style="max-width: 820px">
+                <div class="row">
+                  <strong class="grow" style="font-size: 18px">Invoiced</strong
+                  ><span class="pill">Project</span
+                  ><span class="tag info">In delivery</span>
+                </div>
+                <div class="muted small" style="margin: 8px 0">
+                  <span class="prog" style="margin-left: 0"
+                    ><i style="width: 68%"></i></span
+                  >21 of 31 stories · 6 of 10 epics · Sprint 2 active · Release
+                  v1.0 in readiness
+                </div>
+                <div class="muted small">
+                  BRD v2 · Approved · Published to Linear (TRA)
+                </div>
+                <div class="ways-in">
+                  <span>Open:</span><span class="lnk">BRD v2</span
+                  ><span class="lnk">Stories (31)</span
+                  ><span class="lnk">Sprint 2</span
+                  ><span class="lnk">Receipts (2)</span
+                  ><span class="lnk">Release v1.0</span
+                  ><span class="lnk">On the roadmap: Now</span
+                  ><span class="lnk">Activity</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="portfolio">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="portfolio-n"
+          aria-label="Notes on Portfolio card"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="activity">
+        <h2>Activity: every delivery step links to its screen</h2>
+        <p class="why">
+          Activity (“What happened”, per folder and inside the Portfolio card)
+          already lists what Amun did. Proposed: each delivery row ends with one
+          link to the screen it is about. It stays read-only.
+        </p>
+        <div class="frame now">
+          <div class="lab"><b>Now</b> · Activity</div>
+          <div class="missing">
+            No capture of today’s Activity panel yet; I’ll add one before
+            building. Today, publishing writes one line per item (“Created
+            #TRA-101 Add a customer”) with no link.
+          </div>
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed</b> · Invoiced › What happened</div>
+          <div class="app">
+            <div class="body">
+              <div class="act">
+                <span class="muted">15:52</span
+                ><span>Created 41 items in Linear · team TRA</span
+                ><span class="lnk">Open receipt</span>
+              </div>
+              <div class="act">
+                <span class="muted">15:40</span
+                ><span>You approved the Linear plan (41 items)</span
+                ><span class="lnk">Open plan</span>
+              </div>
+              <div class="act">
+                <span class="muted">15:31</span
+                ><span>Drafted 31 stories from BRD v2</span
+                ><span class="lnk">Open stories</span>
+              </div>
+              <div class="act">
+                <span class="muted">15:02</span><span>You approved BRD v2</span
+                ><span class="lnk">Open BRD</span>
+              </div>
+              <div class="muted small" style="margin-top: 10px">
+                The 41 per-item lines fold under their receipt row instead of
+                filling the list.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="activity">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="activity-n"
+          aria-label="Notes on Activity"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="chat">
+        <h2>Asking in the chat</h2>
+        <p class="why">
+          You type naturally, in any folder. The message goes to Firstmate as
+          usual; Firstmate answers in one line and Amun opens the screen in the
+          panel beside the chat. The reply keeps a link, so you can reopen it
+          later from the history.
+        </p>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · asking describes the stories in text only
+          </div>
+          <img src="now/current-1-doc-card.webp" alt="Chat today" />
+        </div>
+        <div class="frame new">
+          <div class="lab">
+            <b>Proposed</b> · Invoiced chat, Stories opened beside it
+          </div>
+          <div class="app split">
+            <div class="body">
+              <div class="bubble">
+                Show me the stories that aren’t published yet
+              </div>
+              <div class="who"><b>Firstmate</b></div>
+              <div>
+                Three stories are still drafted in Amun, all in Customers &amp;
+                contacts. I’ve opened them beside the chat.
+              </div>
+              <div class="line" style="margin-left: 0">
+                Opened · <span class="lnk">Stories · Drafted (3) ›</span>
+              </div>
+            </div>
+            <div class="body">
+              <div class="row" style="margin-bottom: 8px">
+                <strong class="grow">Stories</strong
+                ><span class="muted small">Invoiced</span>
+              </div>
+              <div class="chips">
+                <span>All 31</span><span class="on">Drafted 3</span
+                ><span>Published 28</span>
+              </div>
+              <div class="item">
+                Merge duplicate customers <span class="muted small">· R-7</span>
+              </div>
+              <div class="item">
+                Archive a customer <span class="muted small">· R-8</span>
+              </div>
+              <div class="item">
+                Customer notes <span class="muted small">· R-12</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="chat">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="chat-n"
+          aria-label="Notes on asking in the chat"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="rest">
+        <h2>Release, close-out, Delivered, Roadmap</h2>
+        <p class="why">
+          These were drawn in the approved requirements (S8–S11) and are
+          unchanged. Each also gets the four ways in from the table above.
+        </p>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · release cards today (three “Release: v1.0”, no
+            readiness check)
+          </div>
+          <img src="now/current-5-cards.png" alt="Release cards today" />
+        </div>
+        <div class="frame new">
+          <div class="lab">
+            <b>Proposed</b> · release readiness, close-out and Delivered
+          </div>
+          <div class="app">
+            <div class="body">
+              <div class="acard" style="max-width: 820px">
+                <div class="row">
+                  <strong class="grow">Release v1.0 · Invoiced</strong
+                  ><span class="tag accent">Readiness</span
+                  ><span class="muted small">version 3</span>
+                </div>
+                <div style="margin-top: 8px">
+                  16 first-release stories · <b>13 done</b> ·
+                  <span style="color: var(--bad)">3 not done</span>
+                </div>
+                <div class="row" style="margin-top: 10px">
+                  <span class="btn" style="opacity: 0.45">Schedule</span
+                  ><span class="btn">Move 3 to the next release</span
+                  ><span class="btn">Release anyway…</span>
+                </div>
+              </div>
+              <div class="acard amber" style="max-width: 820px">
+                <div>
+                  <b>v1.0 is live.</b> Close out: mark 12 released stories Done
+                  and close 3 epics in Linear.
+                </div>
+                <div class="row" style="margin-top: 10px">
+                  <span class="btn p">Close out in Linear</span
+                  ><span class="btn">Not now</span>
+                </div>
+              </div>
+              <div class="acard amber" style="max-width: 820px">
+                <div>
+                  Invoiced <b>BRD v2</b> is delivered: 9 epics done, 1 moved to
+                  v3, release v1.0 live. Mark it Delivered?
+                </div>
+                <div class="row" style="margin-top: 10px">
+                  <span class="btn p">Mark Delivered</span
+                  ><span class="btn">Not yet</span>
+                </div>
+              </div>
+              <div class="cols4" style="margin-top: 16px">
+                <div class="col">
+                  <h5>Now</h5>
+                  <div class="item">
+                    Invoicing MVP
+                    <div class="muted small">
+                      <span class="prog" style="margin-left: 0"
+                        ><i style="width: 68%"></i></span
+                      >21 of 31
+                    </div>
+                  </div>
+                </div>
+                <div class="col">
+                  <h5>Next</h5>
+                  <div class="item">Gitex Demo</div>
+                </div>
+                <div class="col">
+                  <h5>Later</h5>
+                  <div class="item">Mira launch</div>
+                </div>
+                <div class="col">
+                  <h5>Done</h5>
+                  <div class="item">
+                    Badge Desk check-in
+                    <div class="muted small">
+                      <span class="tag good">Delivered 18 Dec</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="rest">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="rest-n"
+          aria-label="Notes on release and roadmap"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+
+      <section id="cards">
+        <h2>
+          Chat cards: status, one card per document, checklist opens its panel
+        </h2>
+        <p class="why">
+          From the earlier fixes (F1, F3, F5), unchanged: the card’s status is
+          the control (Draft · Approved · Done); one card per document with
+          versions; an empty Untitled shows no card; the checklist card opens
+          the checklist panel, not the text editor.
+        </p>
+        <div class="frame now">
+          <div class="lab">
+            <b>Now</b> · Untitled and three Release v1.0 cards
+          </div>
+          <img src="now/current-5-cards.png" alt="Cards today" />
+        </div>
+        <div class="frame new">
+          <div class="lab"><b>Proposed</b></div>
+          <div class="app">
+            <div class="body">
+              <div class="row" style="align-items: flex-start; gap: 24px">
+                <div class="acard" style="flex: 1; min-width: 420px">
+                  <div class="row">
+                    <strong class="grow"
+                      >Amun_Product_and_R1_Build_Brief.md</strong
+                    ><span class="tag accent">Draft ▾</span>
+                  </div>
+                  <div class="muted small" style="margin-top: 6px">
+                    Document · opens beside the conversation
+                  </div>
+                </div>
+                <div class="menu">
+                  <div class="on">Draft</div>
+                  <div>Approved</div>
+                  <div>Done</div>
+                </div>
+              </div>
+              <div class="acard">
+                <div class="row">
+                  <strong class="grow">Release v1.0</strong
+                  ><span class="tag good">Verified live</span>
+                </div>
+                <div class="muted small" style="margin-top: 6px">
+                  Release · version 3
+                </div>
+              </div>
+              <div class="muted" style="margin-top: 8px">▸ Done (3)</div>
+            </div>
+          </div>
+        </div>
+        <div class="decide" data-k="cards">
+          <button>Approve</button><button>Change</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="cards-n"
+          aria-label="Notes on chat cards"
+          placeholder="Notes…"
+        ></textarea>
+      </section>
+    </main>
+    <footer>
+      <button id="copy">Copy all my decisions and notes</button>
+      <span id="ok" style="color: var(--pmuted)"></span>
+    </footer>
+    <script>
+      const K = "amun-screens-ways-in-2026-11-23";
+      const s = JSON.parse(localStorage.getItem(K) || "{}");
+      const save = () => localStorage.setItem(K, JSON.stringify(s));
+      document.querySelectorAll(".decide").forEach((g) => {
+        g.querySelectorAll("button").forEach((b) => {
+          b.setAttribute("aria-pressed", s[g.dataset.k] === b.textContent);
+          b.onclick = () => {
+            s[g.dataset.k] = b.textContent;
+            save();
+            g.querySelectorAll("button").forEach((x) =>
+              x.setAttribute("aria-pressed", x === b),
+            );
+          };
+        });
+      });
+      document.querySelectorAll("textarea").forEach((t) => {
+        t.value = s[t.dataset.k] || "";
+        t.oninput = () => {
+          s[t.dataset.k] = t.value;
+          save();
+        };
+      });
+      document.getElementById("copy").onclick = async () => {
+        const parts = [...document.querySelectorAll("section")].map((sec) => {
+          const k = sec.querySelector(".decide")?.dataset.k;
+          const title = sec.querySelector("h2")?.textContent;
+          return `${title}: ${s[k] || "no decision"}${s[k + "-n"] ? " — " + s[k + "-n"] : ""}`;
+        });
+        await navigator.clipboard.writeText(parts.join("\n"));
+        document.getElementById("ok").textContent = "Copied.";
+      };
+    </script>
+  </body>
+</html>

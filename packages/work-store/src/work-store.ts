@@ -43,8 +43,15 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
-import { parseProjectChecklist } from "../../domain/src/work/release-launch.ts";
-import { storyStatusWords } from "../../domain/src/work/delivery-chain.ts";
+import {
+  parseProjectChecklist,
+  releaseBodyIsLive,
+} from "../../domain/src/work/release-launch.ts";
+import {
+  canProposeDelivered,
+  storyGroup,
+  storyStatusWords,
+} from "../../domain/src/work/delivery-chain.ts";
 import {
   readRequestBlocks,
   reportFingerprint,
@@ -3053,6 +3060,123 @@ export class WorkStore {
             command.toId,
           );
         return { ref: command.fromId };
+      }
+      case "close-out-release": {
+        const release = this.get(
+          "SELECT o.body,l.work_area_id FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE o.id=? AND o.type='release_tracker'",
+          command.releaseId,
+        );
+        if (!release) throw new WorkError("That release no longer exists.");
+        if (
+          !releaseBodyIsLive(String(release.body), String(release.work_area_id))
+        )
+          throw new WorkError(
+            "Close-out starts once the release is Verified live.",
+          );
+        const stories = this.all(
+          "SELECT w.id,w.title,w.status,w.remote_system,w.remote_id FROM delivery_links d JOIN work_items w ON w.id=d.to_id WHERE d.kind='release_story' AND d.from_id=?",
+          command.releaseId,
+        );
+        let closed = 0;
+        const inTool: { id: string; title: string; key: string | null }[] = [];
+        for (const story of stories) {
+          const group = storyGroup(story.status as string | null);
+          if (group === "done" || group === "removed") continue;
+          if (story.remote_system) {
+            inTool.push({
+              id: String(story.id),
+              title: String(story.title),
+              key: (story.remote_id as string | null) ?? null,
+            });
+            continue;
+          }
+          this.run(
+            "UPDATE work_items SET status=? WHERE id=?",
+            storyStatusWords.done,
+            story.id,
+          );
+          closed++;
+        }
+        return { ref: command.releaseId, step: { closed, inTool } };
+      }
+      case "mark-delivered": {
+        const area = this.get(
+          "SELECT product_id FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.workAreaId,
+        );
+        const productId = (area?.product_id as string | null) ?? null;
+        if (!productId)
+          throw new WorkError(
+            "Only a product, or a project with stories, can be delivered.",
+          );
+        // Bound to each requirements document's current version, which must
+        // be the one the captain approved (review on #69).
+        const prds = this.all(
+          "SELECT p.id,p.objective_id,p.version,(SELECT count(*) FROM prd_versions v JOIN approvals a ON a.prd_version_id=v.id AND a.decision='approved' WHERE v.prd_id=p.id AND v.version=p.version) AS approved FROM prds p WHERE p.product_id=?",
+          productId,
+        );
+        if (!prds.length)
+          throw new WorkError("There are no requirements to deliver yet.");
+        const unapproved = prds.find((prd) => Number(prd.approved) === 0);
+        if (unapproved)
+          throw new WorkError(
+            `Not delivered yet: version ${String(unapproved.version)} of the requirements is not approved.`,
+          );
+        // The stories drafted from those approved versions, with their epics;
+        // with no drafting record, every story of this work counts.
+        const items = this.all(
+          "SELECT id,type,status,parent_id FROM work_items WHERE product_id=?",
+          productId,
+        );
+        const drafted = new Set(
+          this.all(
+            `SELECT d.item_id FROM story_drafts d JOIN prds p ON p.objective_id=d.objective_id AND p.version=d.prd_version WHERE p.product_id=?`,
+            productId,
+          ).map((row) => String(row.item_id)),
+        );
+        const inScope = (item: Record<string, unknown>) =>
+          !drafted.size || drafted.has(String(item.id));
+        const epics = items
+          .filter((item) => String(item.type).toLowerCase() === "epic")
+          .map((epic) => ({
+            id: String(epic.id),
+            deferred: storyGroup(epic.status as string) === "removed",
+            stories: items
+              .filter((item) => item.parent_id === epic.id && inScope(item))
+              .map((item) => ({
+                id: String(item.id),
+                status: item.status as string,
+              })),
+          }))
+          .filter((epic) => epic.stories.length > 0 || epic.deferred);
+        const scoped = new Set(
+          epics.flatMap((epic) => epic.stories.map((story) => story.id)),
+        );
+        // A live release that ships at least one of those stories.
+        const live = this.all(
+          "SELECT DISTINCT o.id,o.body FROM library_outputs o JOIN delivery_links d ON d.kind='release_story' AND d.from_id=o.id WHERE o.type='release_tracker' AND o.status<>'Archived'",
+        ).some(
+          (row) =>
+            this.all(
+              "SELECT to_id FROM delivery_links WHERE kind='release_story' AND from_id=?",
+              row.id,
+            ).some((link) => scoped.has(String(link.to_id))) &&
+            releaseBodyIsLive(String(row.body), command.workAreaId),
+        );
+        if (!canProposeDelivered(epics, live))
+          throw new WorkError(
+            live
+              ? "Not delivered yet: every epic must be Done or moved to a later version."
+              : "Not delivered yet: a release that ships these stories must be Verified live first.",
+          );
+        for (const prd of prds)
+          this.run(
+            "UPDATE prds SET delivered_at=?,delivered_version=? WHERE id=?",
+            now,
+            prd.version,
+            prd.id,
+          );
+        return { ref: productId };
       }
       case "apply-reply": {
         if (!this.live(command.workAreaId))

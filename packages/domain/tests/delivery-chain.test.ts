@@ -5,6 +5,7 @@ import {
   releaseReadiness,
   storyGroup,
 } from "../src/work/delivery-chain.ts";
+import { sprintRow } from "../src/work/planning.ts";
 
 const story = (id: string, status: string) => ({ id, status });
 
@@ -52,5 +53,29 @@ describe("the delivery chain (Idea to Done, 23 November 2026)", () => {
         true,
       ),
     ).toBe(false);
+  });
+});
+
+describe("a sprint whose stories were never read", () => {
+  it("says so instead of 0 / 0", () => {
+    const sprint = {
+      id: "ado:1",
+      workAreaId: "a",
+      workAreaName: "Gitex",
+      name: "Sprint 6",
+      team: "POCs Team",
+      start: "",
+      end: "",
+      goal: "",
+      draft: false,
+      done: 0,
+      total: 0,
+      blocked: 0,
+      changedInAdo: false,
+    };
+    expect(sprintRow({ ...sprint, unread: true }, 0).progress).toBe(
+      "Open to count stories",
+    );
+    expect(sprintRow(sprint, 0).progress).toBe("0 / 0 stories done");
   });
 });

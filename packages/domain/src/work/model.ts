@@ -420,7 +420,18 @@ export function sameWorkName(a: string, b: string): boolean {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}]+/gu, "");
   const left = plain(a);
-  return left.length > 0 && left === plain(b);
+  const right = plain(b);
+  if (!left.length || !right.length) return false;
+  if (left === right) return true;
+  // A plural is the same work: “Sales Prospect” beside “Sales Prospects”
+  // (QA 22 November 2026, report B7).
+  const singular = (value: string) =>
+    value.length > 4 && value.endsWith("es") && /(s|x|z|ch|sh)es$/.test(value)
+      ? value.slice(0, -2)
+      : value.length > 3 && value.endsWith("s") && !value.endsWith("ss")
+        ? value.slice(0, -1)
+        : value;
+  return singular(left) === singular(right);
 }
 
 export interface NewWorkRequest {

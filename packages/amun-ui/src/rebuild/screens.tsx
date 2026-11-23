@@ -1409,6 +1409,9 @@ export function SprintTimeline({
   );
 }
 
+/** Story counts of Azure sprints read in this session, by area and sprint. */
+const readSprintCounts = new Map<string, { done: number; total: number }>();
+
 export function Sprints({
   snapshot,
   now,
@@ -1488,18 +1491,27 @@ export function Sprints({
     return reply
       ? adoSprints(reply.sprints, reply.team.name, area.id, area.name).map(
           (sprint) => {
-            const read =
+            const selected =
               selection?.workAreaId === area.id &&
               azure.items?.state === "ready" &&
-              sprint.id === `ado:${azure.items.sprint}`
-                ? azure.items.items
-                : [];
+              sprint.id === `ado:${azure.items.sprint}`;
+            const read = selected ? azure.items!.items : [];
+            // Counts of a sprint read earlier are kept, so other sprints
+            // never drop to 0/0 when another one is opened (QA 22 Nov).
+            const key = `${area.id}|${sprint.id}`;
+            if (selected)
+              readSprintCounts.set(key, {
+                done: read.filter((item) =>
+                  /^(done|closed|completed)$/i.test(item.state),
+                ).length,
+                total: read.length,
+              });
+            const counted = readSprintCounts.get(key);
             return {
               ...sprint,
-              done: read.filter((item) =>
-                /^(done|closed|completed)$/i.test(item.state),
-              ).length,
-              total: read.length,
+              done: counted?.done ?? 0,
+              total: counted?.total ?? 0,
+              unread: !counted,
               stories: read.map((item) => ({
                 id: String(item.id),
                 title: `#${item.id} ${item.title}`,
@@ -2549,20 +2561,40 @@ export function Portfolio({
               </select>
             </label>
           )}
-          <label className="row muted small">
-            Type
-            <select
-              value={type}
-              onChange={(event) => setType(event.target.value)}
-            >
-              <option value="">All types</option>
-              {Object.entries(typeLabels).map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
+          {/* Type as one segmented row with counts (owner, 23 November
+              2026): All · Projects · Products · Initiatives · RFPs. */}
+          <div className="rb-seg rb-type-seg" role="group" aria-label="Type">
+            {(
+              [
+                ["", "All"],
+                ["project", "Projects"],
+                ["product", "Products"],
+                ["task", "Initiatives"],
+                ["rfp", "RFPs"],
+              ] as const
+            )
+              .map(([id, label]) => ({
+                id,
+                label,
+                count: all.filter(
+                  (area) =>
+                    (!id || area.type === id) &&
+                    (!status || area.status === status) &&
+                    (!group || area.groupId === group),
+                ).length,
+              }))
+              .filter((item) => item.id === "" || item.count > 0)
+              .map((item) => (
+                <button
+                  key={item.id || "all"}
+                  type="button"
+                  aria-pressed={type === item.id}
+                  onClick={() => setType(item.id)}
+                >
+                  {item.label} <span className="count">{item.count}</span>
+                </button>
               ))}
-            </select>
-          </label>
+          </div>
           <label className="row muted small">
             Status
             <select
