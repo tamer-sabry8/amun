@@ -4889,3 +4889,40 @@
   color: var(--accent);
   text-decoration: none;
 }
+
+/* Stories (Idea to Done §4.5, approved 23 November 2026). */
+.rb-stories {
+  display: grid;
+  gap: 12px;
+}
+.rb-stories-title {
+  font-size: 17px;
+}
+.rb-stories .rb-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-stories .rb-seg .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.rb-epic-row td {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  font-weight: 600;
+}
+.rb-prog {
+  display: inline-block;
+  inline-size: 84px;
+  block-size: 6px;
+  margin: 0 8px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.rb-prog i {
+  display: block;
+  block-size: 100%;
+  background: var(--tone-good, #4ade80);
+}

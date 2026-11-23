@@ -25,6 +25,7 @@ import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
 import { PublishReceipt, receiptOf } from "./publish-receipt.tsx";
+import { StoriesView, type StoriesFilter } from "./stories-view.tsx";
 import { requestRefOf } from "./requests.ts";
 import {
   newRequestRef,
@@ -206,6 +207,8 @@ export type PaneTarget =
   | { kind: "happened"; stepId?: string }
   /** Small-project checklist & handover receipt (Item 6). */
   | { kind: "checklist" }
+  /** Epics and stories, Drafted or Published (Idea to Done §4.5). */
+  | { kind: "stories"; filter?: StoriesFilter }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -2619,6 +2622,27 @@ export function WorkSession({
             item.status !== "Archived",
         )
       : undefined;
+  // The newest release of this work, for the Release tab.
+  const latestRelease = snapshot.library
+    .filter(
+      (item) =>
+        item.section === "output" &&
+        item.type === "release_tracker" &&
+        item.workAreaIds.includes(areaId) &&
+        item.status !== "Archived",
+    )
+    .at(-1);
+  // The newest publish receipt in this work's chats, for "Open receipt".
+  const latestReceiptId =
+    [
+      ...snapshot.messages.filter((message) => message.workAreaId === areaId),
+      ...snapshot.chats
+        .filter((chat) => chat.workAreaId === areaId)
+        .flatMap((chat) => chat.messages),
+    ]
+      .filter((message) => receiptOf(message.card))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .at(-1)?.id ?? null;
   const checklistTasks = checklistDoc
     ? parseProjectChecklist(checklistDoc.body)
     : [];
@@ -2896,11 +2920,13 @@ export function WorkSession({
           <span className="grow" />
           {area.productId && !open && (
             <>
+              {/* The same tabs on Products and Projects (approved 23 November
+                  2026): Requirements · Stories · Sprints · Release. */}
               <button
                 className="btn quiet"
                 onClick={() => {
                   inspectView({
-                    view: "PRD",
+                    view: "Requirements",
                     areaId,
                     project: area.name,
                     source: "Project",
@@ -2908,13 +2934,27 @@ export function WorkSession({
                   onPane({ kind: "prd" });
                 }}
               >
-                PRD
+                Requirements
               </button>
               <button
                 className="btn quiet"
                 onClick={() => {
                   inspectView({
-                    view: "Backlog",
+                    view: "Stories",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  onPane({ kind: "stories" });
+                }}
+              >
+                Stories
+              </button>
+              <button
+                className="btn quiet"
+                onClick={() => {
+                  inspectView({
+                    view: "Sprints",
                     areaId,
                     project: area.name,
                     source: "Project",
@@ -2922,8 +2962,24 @@ export function WorkSession({
                   onPane({ kind: "backlog" });
                 }}
               >
-                Backlog
+                Sprints
               </button>
+              {latestRelease && (
+                <button
+                  className="btn quiet"
+                  onClick={() => {
+                    inspectView({
+                      view: "Release",
+                      areaId,
+                      project: area.name,
+                      source: "Project",
+                    });
+                    onPane({ kind: "output", id: latestRelease.id });
+                  }}
+                >
+                  Release
+                </button>
+              )}
               <button
                 className="btn quiet"
                 onClick={() => {
@@ -2940,7 +2996,7 @@ export function WorkSession({
               </button>
             </>
           )}
-          {area.type === "project" && !open && (
+          {area.type === "project" && !area.productId && !open && (
             <button
               className="btn quiet"
               onClick={() => {
@@ -4164,6 +4220,17 @@ export function WorkSession({
                       (message) => message.workAreaId === areaId,
                     ).length
                   }
+                />
+              )}
+              {pane.kind === "stories" && (
+                <StoriesView
+                  key={pane.filter ?? "all"}
+                  snapshot={snapshot}
+                  areaId={areaId}
+                  {...(pane.filter && { initialFilter: pane.filter })}
+                  {...(latestReceiptId && {
+                    onReceipt: () => reading.show(latestReceiptId),
+                  })}
                 />
               )}
               {pane.kind === "checklist" && (
