@@ -1,6 +1,6 @@
 # Idea to Done: one delivery flow for Products and Projects
 
-Status: **draft for the owner's approval** (23 November 2026). Nothing here is built yet.
+Status: **approved by the owner on 23 November 2026** ("Approve"). Nothing here is built yet. The approval covers the workflow; each visible screen still needs its own before/after approval.
 Visual companion: `docs/preview/2026-11-23-idea-to-done-requirements/index.html`, which shows the flow and one screen per step.
 
 This document adds the missing end of the delivery journey: release, stories Done, epics closed, requirements Delivered, Roadmap Done. It also folds in the fixes found on 23 November (`docs/preview/2026-11-23-end-to-end-workflow/requirements-gap.html` and `docs/preview/2026-11-23-ux-fixes/index.html`). It extends `releases/AMUN-STORIES-BACKLOG-SPRINTS-CLAUDE-PROMPT.md` and replaces nothing in it. Where they disagree, the existing approved rules in `AGENTS.md` and `Amun_rules.md` win.

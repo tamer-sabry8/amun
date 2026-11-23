@@ -124,6 +124,10 @@ Owner instruction, 15 November 2026. Amun's Council follows upstream Roast Room 
 
 - Do not change this flow or remove the Chair's confirmation step.
 
+## Idea to Done delivery flow
+
+Owner decision, 23 November 2026: the owner approved `docs/plans/2026-11-23-idea-to-done-requirements.md`. Products and Projects follow one flow (PRD for products, BRD for projects; both can have stories and sprints). The chain is requirements version → epics → stories → sprint → release → roadmap item, and progress rolls up through it. Closing stories or epics in a tool needs the captain's close-out approval, and Delivered is confirmed by the captain. Unblock from Agents goes to the chat of the request the agent is blocked on, or General's latest chat (option A). This approves the workflow, not the visual design: every screen change still needs its own before/after approval. Build in the order of section 8 of that document.
+
 ## Chat workflow (20 November 2026 chat UX handoff)
 
 The owner's chat UX handoff is `AMUN-CHAT-UX-CLAUDE-HANDOFF.md` in the owner's Amun releases folder. The owner approved its review page, `docs/preview/2026-11-20-chat-ux/index.html` ("approved all", 20 November 2026).
