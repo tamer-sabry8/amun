@@ -29,6 +29,12 @@ import {
   useTrackerDelivery,
 } from "./tracker-delivery.ts";
 import type { TrackerDeliveryResult } from "@amun/contracts";
+import {
+  deliveryLinks,
+  progressLine,
+  receiptsOf,
+  type DeliveryLink,
+} from "./delivery-views.ts";
 
 const shortDay = (stamp: string) =>
   new Date(stamp).toLocaleDateString("en-GB", {
@@ -180,6 +186,27 @@ export function ProgressCard({
 type Tab = "summary" | "stories" | "pulls" | "activity" | "history";
 
 /** One product or project, over the page. */
+/**
+ * The per-item lines a publish writes ("Created #TRA-101 …") fold under the
+ * first one of their plan, so 41 items read as one row (approved 23 Nov).
+ */
+function foldPublished<T extends { ref: string | null }>(items: T[]) {
+  const out: { item: T; folded: number }[] = [];
+  const seen = new Map<string, { item: T; folded: number }>();
+  for (const item of items) {
+    const plan = item.ref?.startsWith("plan:") ? item.ref : null;
+    const first = plan ? seen.get(plan) : undefined;
+    if (first) {
+      first.folded++;
+      continue;
+    }
+    const entry = { item, folded: 0 };
+    if (plan) seen.set(plan, entry);
+    out.push(entry);
+  }
+  return out;
+}
+
 export function WorkSheet({
   area,
   snapshot,
@@ -188,11 +215,14 @@ export function WorkSheet({
   onWork,
   onAsk,
   onAskAbout,
+  onOpenView,
 }: {
   area: Area;
   snapshot: Snapshot;
   now: number;
   onClose(): void;
+  /** Opens one delivery screen of this work (a way in, approved 23 Nov). */
+  onOpenView?(areaId: string, link: DeliveryLink): void;
   /** Opens the work's conversation. */
   onWork(areaId: string): void;
   /** A fresh chat in this folder with the card attached; sends nothing. */
@@ -289,6 +319,29 @@ export function WorkSheet({
           </button>
         </header>
         <h2 className="title">{area.name}</h2>
+        {onOpenView && (area.type === "product" || area.type === "project") && (
+          <div className="rb-open-row">
+            {progressLine(snapshot, area.id) && (
+              <p className="muted small">{progressLine(snapshot, area.id)}</p>
+            )}
+            <nav aria-label={`Open ${area.name}`}>
+              <span className="muted">Open:</span>
+              {deliveryLinks(snapshot, area.id).map((link) => (
+                <button
+                  key={link.view}
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    onClose();
+                    onOpenView(area.id, link);
+                  }}
+                >
+                  {link.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
 
         <div className="rb-sheet-top">
           <Ring
@@ -473,14 +526,45 @@ export function WorkSheet({
           {tab === "activity" &&
             (activity.length ? (
               <ol className="rb-notes">
-                {activity.map((item) => (
-                  <li key={item.id}>
-                    <span className="muted small">
-                      {label(item.state)} · {shortDay(item.createdAt)}
-                    </span>
-                    <p>{item.text}</p>
-                  </li>
-                ))}
+                {foldPublished(activity).map(({ item, folded }) => {
+                  const receipt = item.ref?.startsWith("plan:")
+                    ? receiptsOf(snapshot, area.id).find(
+                        (entry) => entry.planId === item.ref!.slice(5),
+                      )
+                    : undefined;
+                  return (
+                    <li key={item.id}>
+                      <span className="muted small">
+                        {label(item.state)} · {shortDay(item.createdAt)}
+                      </span>
+                      <p className="row">
+                        <span className="grow">
+                          {item.text}
+                          {folded > 0 && (
+                            <span className="muted"> · and {folded} more</span>
+                          )}
+                        </span>
+                        {receipt && onOpenView && (
+                          <button
+                            type="button"
+                            className="link small"
+                            onClick={() => {
+                              onClose();
+                              onOpenView(area.id, {
+                                view: "receipt",
+                                label: "Receipt",
+                                messageId: receipt.messageId,
+                                chatId: receipt.chatId,
+                              });
+                            }}
+                          >
+                            Open receipt
+                          </button>
+                        )}
+                      </p>
+                    </li>
+                  );
+                })}
               </ol>
             ) : (
               <p className="muted">Nothing has run for this yet.</p>

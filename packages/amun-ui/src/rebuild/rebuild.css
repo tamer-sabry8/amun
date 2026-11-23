@@ -4926,3 +4926,58 @@
   block-size: 100%;
   background: var(--tone-good, #4ade80);
 }
+/* "Opened · Stories": a chat line that opens a delivery screen again. */
+.rb-opened {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-opened span {
+  color: var(--accent);
+}
+button.rb-opened:hover {
+  border-color: var(--control);
+}
+/* The "Open:" row on the full Portfolio card (approved 23 November 2026). */
+.rb-open-row {
+  display: grid;
+  gap: 6px;
+  margin: -4px 0 14px;
+}
+.rb-open-row p {
+  margin: 0;
+}
+.rb-open-row nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  font-size: 13.5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.rb-open-row .link {
+  color: var(--accent);
+}
+/* Sprint tile links and "Where these came from" (approved 23 Nov 2026). */
+.rb-sprint-tile {
+  display: grid;
+}
+.rb-tile-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  align-items: center;
+  padding: 0 14px 10px;
+  font-size: 12.5px;
+}
+.rb-tile-ways .link,
+.rb-came-from .link {
+  color: var(--accent);
+}

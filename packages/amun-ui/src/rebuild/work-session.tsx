@@ -26,6 +26,38 @@ import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
 import { PublishReceipt, receiptOf } from "./publish-receipt.tsx";
 import { StoriesView, type StoriesFilter } from "./stories-view.tsx";
+
+/** The line a "show" leaves in the chat, opening that screen again. */
+function openedViewOf(card: unknown): {
+  view:
+    "stories" | "receipt" | "sprints" | "requirements" | "release" | "activity";
+  filter: StoriesFilter;
+  label: string | null;
+} | null {
+  if (!card || typeof card !== "object") return null;
+  const value = card as {
+    kind?: unknown;
+    view?: unknown;
+    filter?: unknown;
+    label?: unknown;
+  };
+  const views = [
+    "stories",
+    "receipt",
+    "sprints",
+    "requirements",
+    "release",
+    "activity",
+  ] as const;
+  const view = views.find((item) => item === value.view);
+  if (value.kind !== "opened-view" || !view) return null;
+  const filters = ["all", "drafted", "published", "done"] as const;
+  return {
+    view,
+    filter: filters.find((item) => item === value.filter) ?? "all",
+    label: typeof value.label === "string" ? value.label : null,
+  };
+}
 import { requestRefOf } from "./requests.ts";
 import {
   newRequestRef,
@@ -1487,6 +1519,62 @@ export function WorkSession({
       action as never,
       { ...payload, told: true } as never,
     )) as typeof workAsync;
+  /** Opens one delivery screen of this work; returns its name, or null. */
+  const openView = (
+    view:
+      | "stories"
+      | "receipt"
+      | "sprints"
+      | "requirements"
+      | "release"
+      | "activity",
+    filter: StoriesFilter = "all",
+  ): string | null => {
+    const snap = latest.current.snapshot;
+    if (view === "stories") {
+      onPane({ kind: "stories", filter });
+      return filter === "all"
+        ? "Stories"
+        : `Stories · ${filter[0]!.toUpperCase()}${filter.slice(1)}`;
+    }
+    if (view === "requirements") {
+      onPane({ kind: "prd" });
+      return context?.area.type === "project" ? "BRD" : "PRD";
+    }
+    if (view === "sprints") {
+      onPane({ kind: "backlog" });
+      return "Sprints";
+    }
+    if (view === "activity") {
+      onPane({ kind: "happened" });
+      return "What happened";
+    }
+    if (view === "release") {
+      const release = snap.library
+        .filter(
+          (item) =>
+            item.section === "output" &&
+            item.type === "release_tracker" &&
+            item.workAreaIds.includes(areaId),
+        )
+        .at(-1);
+      if (!release) return null;
+      onPane({ kind: "output", id: release.id });
+      return release.title;
+    }
+    const receipt = [
+      ...snap.messages.filter((message) => message.workAreaId === areaId),
+      ...snap.chats
+        .filter((chat) => chat.workAreaId === areaId)
+        .flatMap((chat) => chat.messages),
+    ]
+      .filter((message) => receiptOf(message.card))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .at(-1);
+    if (!receipt) return null;
+    reading.show(receipt.id);
+    return "Receipt";
+  };
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction, requestRef?: string) => {
     const work = toldWork;
@@ -1811,6 +1899,22 @@ export function WorkSession({
           model,
           difficulty: "standard",
         });
+    } else if (proposed.do === "show") {
+      // A way in from the chat (approved 23 November 2026): open the screen
+      // and leave a line that opens it again later. Nothing is written.
+      const opened = openView(proposed.view, proposed.filter);
+      work("message", {
+        workAreaId: areaId,
+        chatId: savedIn,
+        role: "card",
+        text: opened ? `Opened ${opened}` : "Nothing to open yet",
+        card: {
+          kind: "opened-view",
+          view: proposed.view,
+          filter: proposed.filter,
+          label: opened,
+        },
+      });
     } else if (proposed.do === "use-sprints") {
       if (context?.area.type !== "project") return;
       void (async () => {
@@ -3243,7 +3347,32 @@ export function WorkSession({
                 </div>
               )}
               {context.messages.map((message, position) =>
-                receiptOf(message.card) ? (
+                openedViewOf(message.card) ? (
+                  <div
+                    key={message.id}
+                    data-mid={message.id}
+                    className="rb-turn firstmate"
+                  >
+                    {openedViewOf(message.card)!.label ? (
+                      <button
+                        type="button"
+                        className="rb-opened"
+                        onClick={() => {
+                          const card = openedViewOf(message.card)!;
+                          openView(card.view, card.filter);
+                        }}
+                      >
+                        Opened ·{" "}
+                        <span>{openedViewOf(message.card)!.label}</span>
+                        <Icon name="chevron" width={12} height={12} />
+                      </button>
+                    ) : (
+                      <span className="rb-opened muted">
+                        Nothing to open yet
+                      </span>
+                    )}
+                  </div>
+                ) : receiptOf(message.card) ? (
                   <div
                     key={message.id}
                     data-mid={message.id}

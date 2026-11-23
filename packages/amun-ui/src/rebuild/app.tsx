@@ -69,6 +69,7 @@ import {
   Rail,
 } from "./rail.tsx";
 import { Agents, Council, Portfolio, Roadmap, Sprints } from "./screens.tsx";
+import type { DeliveryLink } from "./delivery-views.ts";
 import { Rfps } from "./rfps.tsx";
 import type { SettingsSection } from "./settings.tsx";
 import { Settings } from "./lazy.tsx";
@@ -735,6 +736,30 @@ export function App() {
     });
     openWork(targetId, offer.held, null, chat);
   };
+  /**
+   * The ways in (approved 23 November 2026): a link from the Portfolio card,
+   * a Sprints tile or Activity opens the same screen beside the work's chat.
+   * Navigation only; nothing is written.
+   */
+  const openDeliveryView = (areaId: string, link: DeliveryLink) => {
+    if (link.view === "roadmap") return go("roadmap");
+    if (link.view === "receipt" && link.messageId)
+      return openWork(areaId, undefined, null, link.chatId ?? null, {
+        messageId: link.messageId,
+        flash: true,
+      });
+    const pane: PaneTarget =
+      link.view === "requirements"
+        ? { kind: "prd" }
+        : link.view === "stories"
+          ? { kind: "stories" }
+          : link.view === "sprint"
+            ? { kind: "backlog" }
+            : link.view === "release" && link.outputId
+              ? { kind: "output", id: link.outputId }
+              : { kind: "happened" };
+    openWork(areaId, undefined, pane);
+  };
   const submit = async (text: string, files: string[], groupId?: string) => {
     setNote("");
     // "Create a new project for Gitex, high priority, ready on Dec 6": make
@@ -1293,6 +1318,7 @@ export function App() {
           />
         ) : layout.route === "sprints" ? (
           <Sprints
+            onOpenView={(id, link) => openDeliveryView(id, link)}
             key={resumePlanning?.id ?? "sprints"}
             resume={resumePlanning}
             snapshot={snapshot}
@@ -1324,6 +1350,7 @@ export function App() {
             onAsk={(text, files) => void submit(text, files)}
             onAskAbout={(id, text) => openWork(id, text)}
             onAskCard={(id) => void askAbout(id)}
+            onOpenView={(id, link) => openDeliveryView(id, link)}
           />
         ) : layout.route === "rfps" ? (
           <Rfps
