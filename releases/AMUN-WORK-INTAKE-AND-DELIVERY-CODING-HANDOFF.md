@@ -44,7 +44,7 @@ The beta DMG with all of this is built with `npm run dist:mac:beta`. Copies of e
 
 ### Still open (next agent)
 
-1. **Check PR #61 in the packaged app:** Badge Desk's Stories tab should list the 4 Jira epics with 12 tasks, and Sprints should show "Badge Desk Sprint 1" (7–18 Dec) with its 5 tasks. Then publish Invoiced to **Linear** (PRD has written the Linear plan content for team TRA; Firstmate has not raised the plan yet) and check Linear read-back.
+1. **Check PR #61 in the packaged app:** Badge Desk's Stories tab should list the 4 Jira epics with 12 tasks, and Sprints should show "Badge Desk Sprint 1" (7–18 Dec) with its 5 tasks. Then publish Invoiced to **Linear** and check Linear read-back. Firstmate did write the plan, but Amun dropped it (item 9); fix that first or ask Firstmate to raise it again.
 2. **Publication receipt:** after a Jira/Linear plan publishes, nothing tells the originating chat or Firstmate what was created; the request stays "waiting/working". The spec wants the receipt, with each item's ID, in the originating chat.
 3. **Plan review card** lists item summaries only. The spec wants each item's parent, sprint and destination before approval.
 4. **Local sprints holding stories ("Sprint kept in Amun", spec lines 146, 235, 280):** not built. Needs an owner-approved preview first (UI rule).
@@ -59,6 +59,15 @@ The beta DMG with all of this is built with `npm run dist:mac:beta`. Copies of e
 6. **PRD panel:** a crew objective still shows the interview's empty "Product understanding" section. Hiding it is a UI change that needs approval.
 7. **Memory** over budget (671 MiB after an hour). Navigation pings cost a Firstmate turn each (specified, but they queue behind captain messages).
 8. **Environment trap:** `~/Applications/Amun Firstmate Latency Test/…app` has the same bundle ID, so launching Amun by ID can start that old copy. Open `/Applications/Amun.app` by path.
+9. **Bug: a plan in a Firstmate reply Amun did not ask for is dropped (found 23 November).** Highest priority: it blocks the Invoiced Linear publish.
+   - **What happened.** On 22 November at 15:44 Firstmate sent an unprompted reply in Invoiced saying "I've asked Amun to raise the Invoiced plan for Linear for your approval". The reply (18,597 characters, `~/.amun/trace/2026-11-22.jsonl` line 786) ends with a complete ` ```amun ` block: `{"do":"plan","destination":"linear",…}` with 10 epics (Linear projects) and 31 stories for team `TRA`, site `transfrm`. Amun kept the text but raised no plan: `work_plans` in `~/.amun/work.db` holds only the Badge Desk Jira plan, and no `propose-plan` call follows in the trace. The chat status still reads "Waiting for Linear plan raised for approval (10 projects, 31 issues); nothing created yet", and the captain sees no review card. Nothing was written to Linear.
+   - **Cause.** Plans are raised only by the window, in `raise` (`packages/amun-ui/src/rebuild/work-session.tsx:1487`, `workAsync("propose-plan", …)`), when the reply answers a message the captain sent. Unprompted replies go through `showUnprompted` (`packages/server/src/server/amun/attach-amun.ts:456`) → `recordFirstMateReply` (`packages/work-store/src/first-mate-thread.ts:88-105`), which sends the text to `apply-reply`. `apply-reply` files reports, titles and documents but never runs `propose-plan`, so the `{"do":"plan"}` block is lost. Firstmate is told (`view-model.ts:872`) only to say it "asked Amun to raise" a plan, so it reports success either way.
+   - **How to reproduce.**
+     1. In a product or project chat, ask Firstmate for work whose plan arrives later, for example "Prepare the epics and stories for Linear and raise them as a plan for my approval" when a crew member must write them first. Firstmate answers "I've asked the PRD second mate…", and the plan comes in a later wake.
+     2. Wait for the later reply ("I've asked Amun to raise the … plan for your approval").
+     3. Check: no review card in the chat or on Home, and `sqlite3 -readonly ~/.amun/work.db "select count(*) from work_plans where destination='linear';"` returns 0. In `~/.amun/trace/<date>.jsonl` the reply has `"unprompted":true`, ends with the ` ```amun ` plan block, and no `propose-plan` call follows.
+     4. For a unit test: call `recordFirstMateReply` with a text ending in a ` ```amun {"do":"plan",…} ` block and assert that a plan in state `proposed` exists afterwards. It fails on `main` today.
+   - **Fix to build.** Raise plan blocks from unprompted replies too, in the chat of the request whose reference they carry (or the chat the reply lands in), through the same `propose-plan` checks and refusals as the window path, once per block across restarts. If raising is refused, show the reason in that chat so Firstmate can correct the plan. Then re-run the Invoiced Linear publish and check read-back. Linear team TRA has cycles switched off, so the 16 first-release stories are marked but not placed in a cycle.
 
 ---
 
