@@ -1167,6 +1167,11 @@ export const workCommand = z.discriminatedUnion("action", [
     chatId: id.nullable(),
     saveText: z.boolean().default(false),
     prdRelay: z.boolean().optional(),
+    /**
+     * Raise plan blocks for approval. Only for replies nobody asked for; the
+     * window raises the plans in replies to the owner's own messages.
+     */
+    raisePlans: z.boolean().optional(),
     model: z.string().max(200).nullable().default(null),
   }),
   act("record-firstmate-reply", {
