@@ -121,3 +121,28 @@ export function canProposeDelivered(
     kept.every((epic) => progressOf(epic.stories).state === "done")
   );
 }
+
+/**
+ * Where "Ask Firstmate to unblock it" goes (Idea to Done §4.9, option A,
+ * approved 23 November 2026): the request the crewmate is blocked on, by
+ * the Amun request reference in what it is doing now (else in its output).
+ * Only a reference Amun gave and that is still open counts; with none, the
+ * caller sends it to General's latest chat. Never a guess from wording.
+ */
+export function unblockRequest(
+  agent: { nowDoing: string | null; output: string },
+  requests: { ref: string; status: string }[],
+): string | null {
+  const open = new Set(
+    requests
+      .filter((request) => request.status !== "delivered")
+      .map((request) => request.ref),
+  );
+  for (const text of [agent.nowDoing ?? "", agent.output]) {
+    const found = [...text.matchAll(/\bamun-r-[0-9a-f]{12}\b/g)]
+      .map((match) => match[0])
+      .find((ref) => open.has(ref));
+    if (found) return found;
+  }
+  return null;
+}

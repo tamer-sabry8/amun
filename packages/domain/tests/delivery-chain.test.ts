@@ -4,6 +4,7 @@ import {
   progressOf,
   releaseReadiness,
   storyGroup,
+  unblockRequest,
 } from "../src/work/delivery-chain.ts";
 import { sprintRow } from "../src/work/planning.ts";
 
@@ -56,7 +57,6 @@ describe("the delivery chain (Idea to Done, 23 November 2026)", () => {
   });
 });
 
-
 describe("a sprint whose stories were never read", () => {
   it("says so instead of 0 / 0", () => {
     const sprint = {
@@ -78,5 +78,38 @@ describe("a sprint whose stories were never read", () => {
       "Open to count stories",
     );
     expect(sprintRow(sprint, 0).progress).toBe("0 / 0 stories done");
+  });
+});
+
+describe("where an unblock request goes", () => {
+  const requests = [
+    { ref: "amun-r-aaaaaaaaaaaa", status: "working" },
+    { ref: "amun-r-bbbbbbbbbbbb", status: "delivered" },
+    { ref: "amun-r-cccccccccccc", status: "waiting" },
+  ];
+  it("prefers the open request named in what the crewmate is doing now", () => {
+    expect(
+      unblockRequest(
+        {
+          nowDoing: "waiting on the captain for amun-r-cccccccccccc",
+          output: "amun-r-aaaaaaaaaaaa plan saved",
+        },
+        requests,
+      ),
+    ).toBe("amun-r-cccccccccccc");
+  });
+  it("falls back to its output, skips finished or unknown requests, else none", () => {
+    expect(
+      unblockRequest(
+        { nowDoing: null, output: "amun-r-bbbbbbbbbbbb amun-r-aaaaaaaaaaaa" },
+        requests,
+      ),
+    ).toBe("amun-r-aaaaaaaaaaaa");
+    expect(
+      unblockRequest(
+        { nowDoing: "captain hold", output: "amun-r-dddddddddddd" },
+        requests,
+      ),
+    ).toBeNull();
   });
 });
