@@ -3093,6 +3093,25 @@ export class WorkStore {
         );
         return { ref: command.itemId };
       }
+      case "sync-story-status": {
+        const area = this.get(
+          "SELECT product_id FROM work_areas WHERE id=?",
+          command.workAreaId,
+        );
+        const productId = (area?.product_id as string | null) ?? null;
+        if (!productId) return {};
+        let changed = 0;
+        for (const item of command.items)
+          changed += this.run(
+            "UPDATE work_items SET status=? WHERE product_id=? AND remote_system=? AND remote_id=? AND status<>?",
+            this.clean(item.status),
+            productId,
+            item.tool,
+            item.key,
+            this.clean(item.status),
+          ).changes;
+        return { step: { changed } };
+      }
       case "link-delivery": {
         if (command.linked)
           this.run(
@@ -4125,6 +4144,8 @@ export class WorkStore {
       key: string | null;
     }[],
   ) {
+    // Only tracker work items; a Notion page is not a story (review #70).
+    if (!["jira", "linear", "ado"].includes(tool)) return;
     const area = this.get(
       "SELECT product_id FROM work_areas WHERE id=?",
       areaId,

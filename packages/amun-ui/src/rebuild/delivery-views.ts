@@ -94,7 +94,8 @@ export function deliveryLinks(snapshot: Snap, areaId: string): DeliveryLink[] {
         item.workAreaIds.includes(areaId) &&
         item.status !== "Archived",
     )
-    .at(-1);
+    // The library is newest first (review #70).
+    .at(0);
   if (release)
     links.push({ view: "release", label: release.title, outputId: release.id });
   const onRoadmap = snapshot.roadmap.find((item) => item.workAreaId === areaId);

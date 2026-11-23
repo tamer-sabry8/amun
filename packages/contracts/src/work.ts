@@ -1225,6 +1225,23 @@ export const workCommand = z.discriminatedUnion("action", [
     itemId: id,
     status: z.enum(["todo", "in_progress", "in_review", "done", "removed"]),
   }),
+  /**
+   * The status a tracker reports for stories Amun published there (read
+   * back by the tracker delivery read), so Stories, readiness and Delivered
+   * follow the tool. Only stories with that tool and key change.
+   */
+  act("sync-story-status", {
+    workAreaId: id,
+    items: z
+      .array(
+        z.strictObject({
+          tool: z.enum(["jira", "linear", "ado"]),
+          key: z.string().min(1).max(128),
+          status: z.string().min(1).max(128),
+        }),
+      )
+      .max(500),
+  }),
   /** Link two records of the delivery chain, or unlink them. */
   act("link-delivery", {
     /** Named "link", since "kind" is the message envelope's own field. */

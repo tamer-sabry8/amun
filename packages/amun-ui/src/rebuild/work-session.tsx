@@ -218,6 +218,7 @@ import {
 } from "./view-model.ts";
 import {
   ProjectChecklistPane,
+  ProductionReleaseCard,
   projectChecklistDocType,
 } from "./project-checklist-and-release.tsx";
 import { parseProjectChecklist } from "../../../../packages/domain/src/work/release-launch.ts";
@@ -242,6 +243,8 @@ export type PaneTarget =
   | { kind: "checklist" }
   /** Epics and stories, Drafted or Published (Idea to Done §4.5). */
   | { kind: "stories"; filter?: StoriesFilter }
+  /** The release card with its readiness, steps and close-out. */
+  | { kind: "release"; outputId: string }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -1354,6 +1357,8 @@ export function WorkSession({
   first,
   onChat,
   onWork,
+  onOpenAt,
+  onSprints,
   onPane,
   onResize,
   onExpand,
@@ -1378,6 +1383,10 @@ export function WorkSession({
   onChat(chatId: string | null): void;
   /** Opens a chat in another folder, optionally sending it a first message. */
   onWork(areaId: string, chatId: string | null, first?: string): void;
+  /** Opens a message in a chat of a folder, e.g. a publish receipt. */
+  onOpenAt?(areaId: string, chatId: string | null, messageId: string): void;
+  /** Opens the Sprints screen filtered to this work. */
+  onSprints?(areaId: string): void;
   onPane(target: PaneTarget): void;
   onResize(ratio: number): void;
   onExpand(): void;
@@ -1543,7 +1552,7 @@ export function WorkSession({
       return context?.area.type === "project" ? "BRD" : "PRD";
     }
     if (view === "sprints") {
-      onPane({ kind: "backlog" });
+      onSprints?.(areaId);
       return "Sprints";
     }
     if (view === "activity") {
@@ -1558,9 +1567,9 @@ export function WorkSession({
             item.type === "release_tracker" &&
             item.workAreaIds.includes(areaId),
         )
-        .at(-1);
+        .at(0);
       if (!release) return null;
-      onPane({ kind: "output", id: release.id });
+      onPane({ kind: "release", outputId: release.id });
       return release.title;
     }
     const receipt = [
@@ -1573,7 +1582,13 @@ export function WorkSession({
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .at(-1);
     if (!receipt) return null;
-    reading.show(receipt.id);
+    // It may sit in another chat of this folder (review #70).
+    const inChat =
+      snap.chats.find((chat) =>
+        chat.messages.some((message) => message.id === receipt.id),
+      )?.id ?? null;
+    if (onOpenAt) onOpenAt(areaId, inChat, receipt.id);
+    else reading.show(receipt.id);
     return "Receipt";
   };
   /** Files what Firstmate proposed under this work area. Proposals only. */
@@ -2736,7 +2751,7 @@ export function WorkSession({
         item.workAreaIds.includes(areaId) &&
         item.status !== "Archived",
     )
-    .at(-1);
+    .at(0);
   // The newest publish receipt in this work's chats, for "Open receipt".
   const latestReceiptId =
     [
@@ -3064,7 +3079,8 @@ export function WorkSession({
                     project: area.name,
                     source: "Project",
                   });
-                  onPane({ kind: "backlog" });
+                  if (onSprints) onSprints(areaId);
+                  else onPane({ kind: "backlog" });
                 }}
               >
                 Sprints
@@ -3079,7 +3095,7 @@ export function WorkSession({
                       project: area.name,
                       source: "Project",
                     });
-                    onPane({ kind: "output", id: latestRelease.id });
+                    onPane({ kind: "release", outputId: latestRelease.id });
                   }}
                 >
                   Release
@@ -4373,10 +4389,29 @@ export function WorkSession({
                   areaId={areaId}
                   {...(pane.filter && { initialFilter: pane.filter })}
                   {...(latestReceiptId && {
-                    onReceipt: () => reading.show(latestReceiptId),
+                    onReceipt: () => openView("receipt"),
                   })}
                 />
               )}
+              {pane.kind === "release" &&
+                (() => {
+                  const doc = snapshot.library.find(
+                    (item) => item.id === pane.outputId,
+                  );
+                  return doc ? (
+                    <ProductionReleaseCard
+                      snapshot={snapshot}
+                      workAreaId={areaId}
+                      releaseName={doc.title.replace(/^Release:\s*/, "")}
+                      doneStories={0}
+                      totalStories={0}
+                    />
+                  ) : (
+                    <p className="muted" role="status">
+                      That release is no longer here.
+                    </p>
+                  );
+                })()}
               {pane.kind === "checklist" && (
                 <ProjectChecklistPane
                   snapshot={snapshot}

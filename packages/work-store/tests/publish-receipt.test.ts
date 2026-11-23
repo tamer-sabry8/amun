@@ -185,6 +185,52 @@ describe("published items in the delivery summary", () => {
       tool: null,
       key: null,
     });
+
+    // The tracker's read-back moves the published story, and only it.
+    send("sync-story-status", {
+      workAreaId: area,
+      items: [
+        { tool: "linear", key: "TRA-101", status: "Done" },
+        { tool: "jira", key: "TRA-101", status: "Closed" },
+      ],
+    });
+    const after = work.store
+      .snapshot()
+      .delivery.find((d) => d.workAreaId === area)!;
+    expect(after.items.find((i) => i.key === "TRA-101")!.status).toBe("Done");
+    expect(after.items.find((i) => i.id === "d2")!.status).toBe("draft");
+
+    // A Notion page is never a story.
+    const notion = send("propose-plan", {
+      groupId: null,
+      workAreaId: area,
+      planKind: "edit",
+      destination: "notion",
+      summary: "PRD page",
+      items: [
+        {
+          id: "n1",
+          summary: "Merge duplicates",
+          fields: { title: "Merge duplicates" },
+        },
+      ],
+    }).ref!;
+    const print = work.store
+      .snapshot()
+      .plans.find((p) => p.id === notion)!.fingerprint;
+    send("approve-plan", { planId: notion, fingerprint: print });
+    send("record-results", {
+      planId: notion,
+      results: [{ id: "n1", state: "created", externalId: "page-1" }],
+    });
+    const last = work.store
+      .snapshot()
+      .delivery.find((d) => d.workAreaId === area)!;
+    expect(last.items.find((i) => i.id === "d2")).toMatchObject({
+      tool: null,
+      key: null,
+    });
+    expect(last.items.some((i) => i.key === "page-1")).toBe(false);
     work.close();
   });
 });

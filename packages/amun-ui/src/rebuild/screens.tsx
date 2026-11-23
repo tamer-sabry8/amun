@@ -1457,6 +1457,7 @@ export function Sprints({
   now,
   model,
   onWork,
+  initialAreaId = "",
   onOpenView,
   onReview,
   resume,
@@ -1474,9 +1475,11 @@ export function Sprints({
   onReview(planId: string, workAreaId: string | null): void;
   /** Opens one delivery screen of a work (a way in, approved 23 Nov). */
   onOpenView?(areaId: string, link: DeliveryLink): void;
+  /** Open filtered to this work (from a folder's Sprints link). */
+  initialAreaId?: string;
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
-  const [areaId, setAreaId] = useState(resume?.areaId ?? "");
+  const [areaId, setAreaId] = useState(resume?.areaId ?? initialAreaId);
   const [savedLink, setSavedLink] = useState(resume);
   const [selection, selectSprint] = useState<Pick<
     Sprint,

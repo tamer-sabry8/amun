@@ -307,6 +307,9 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [c.fromId, c.toId],
     }),
   },
+  "sync-story-status": {
+    own: "The tracker's own status, read back; nothing the captain did.",
+  },
   "close-out-release": {
     tell: (c) => ({
       what: "closed out a release that is Verified live: its stories kept in Amun are Done; stories in a tool still need an approved plan to close there",
