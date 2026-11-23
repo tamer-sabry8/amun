@@ -1,313 +1,1143 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Amun · five fixes from your screenshots · for approval</title>
-<style>
-  :root {
-    --canvas: #0b0e14; --nav: #12161f; --card: #1a1f2b; --ink: #f2f5f8; --muted: #94a0ad;
-    --accent: #e8a33d; --line: #2a3040; --good: #4ade80; --bad: #f87171; --info: #7fb0ff;
-    --page: #f4f1ea; --pink: #1d2330; --pmuted: #5b6474; --pline: #ddd6c8; --pcard: #fbf9f4;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--page); color: var(--pink); line-height: 1.5; }
-  header.top { padding: 56px 6vw 24px; max-width: 1500px; margin: auto; }
-  header.top h1 { font-size: 44px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
-  header.top p { font-size: 19px; color: var(--pmuted); max-width: 68ch; margin: 0 0 8px; }
-  nav.toc { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-  nav.toc a { font-size: 15px; padding: 8px 14px; border: 1px solid var(--pline); border-radius: 999px; color: var(--pink); text-decoration: none; background: var(--pcard); }
-  section.fix { padding: 48px 4vw 64px; border-top: 1px solid var(--pline); }
-  .wrap { max-width: 1700px; margin: auto; }
-  .fix h2 { font-size: 34px; margin: 0 0 6px; letter-spacing: -0.01em; }
-  .fix .q { font-size: 18px; color: #b4441b; margin: 0 0 18px; font-style: italic; }
-  .why { font-size: 18px; max-width: 80ch; margin: 0 0 28px; }
-  .why b { font-weight: 650; }
-  .pair { display: grid; grid-template-columns: 1fr; gap: 28px; }
-  .frame { background: var(--pcard); border: 1px solid var(--pline); border-radius: 14px; padding: 14px; }
-  .frame > .lab { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 2px 4px 12px; color: var(--pmuted); }
-  .frame.now > .lab::before { content: "●  "; color: var(--bad); }
-  .frame.new > .lab::before { content: "●  "; color: #2f9e5b; }
-  .frame img { width: 100%; display: block; border-radius: 8px; }
-  /* app mock */
-  .app { background: var(--canvas); color: var(--ink); border-radius: 10px; padding: 28px 36px; font-size: 17px; min-height: 420px; }
-  .app .muted { color: var(--muted); }
-  .app .small { font-size: 14px; }
-  .acard { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin: 12px 0; max-width: 820px; }
-  .acard .row { display: flex; align-items: center; gap: 12px; }
-  .acard strong { font-size: 17px; flex: 1; }
-  .tag { font-size: 13px; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-  .tag.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
-  .tag.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
-  .tag.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
-  .btn { display: inline-block; font-size: 15px; padding: 8px 16px; border-radius: 9px; border: 1px solid var(--line); color: var(--ink); background: transparent; }
-  .btn.primary { background: #5b2bb5; border-color: #5b2bb5; }
-  .menu { background: #20263a; border: 1px solid var(--line); border-radius: 10px; padding: 6px; width: 290px; box-shadow: 0 14px 40px #0008; }
-  .menu div { padding: 9px 12px; border-radius: 7px; font-size: 15px; }
-  .menu div.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
-  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
-  .amber { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
-  .msg { max-width: 820px; margin: 10px 0 4px; }
-  .who { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
-  .who b { color: var(--ink); }
-  .split { display: grid; grid-template-columns: 1fr 1.05fr; gap: 0; border-radius: 10px; overflow: hidden; }
-  .split > div { padding: 26px 30px; }
-  .split > div + div { border-left: 1px solid var(--line); background: #0e121a; }
-  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0 18px; }
-  .bar i { display: block; height: 100%; background: var(--good); }
-  .task { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 14px; align-items: center; padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; background: var(--card); }
-  .box { width: 20px; height: 20px; border: 2px solid var(--muted); border-radius: 5px; }
-  .box.done { background: var(--good); border-color: var(--good); }
-  .struck { text-decoration: line-through; color: var(--muted); }
-  table.st { width: 100%; border-collapse: collapse; font-size: 15px; }
-  table.st td, table.st th { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-  table.st th { color: var(--muted); font-weight: 500; font-size: 13px; }
-  .epic { font-weight: 650; background: #151a25; }
-  .tabs { display: flex; gap: 26px; font-size: 15px; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 22px; }
-  .tabs .on { color: var(--ink); border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: -13px; }
-  .new-badge { background: #2f9e5b; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: 2px; }
-  /* rule boxes */
-  .rule { background: #fff; border: 2px solid var(--pink); border-radius: 14px; padding: 22px 28px; font-size: 18px; max-width: 1100px; margin-top: 28px; }
-  .rule h3 { margin: 0 0 10px; font-size: 21px; }
-  .rule ol { margin: 0; padding-left: 22px; }
-  .rule li { margin: 6px 0; }
-  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
-  .choice { border: 1px solid var(--pline); border-radius: 12px; padding: 16px 18px; background: var(--pcard); font-size: 16px; }
-  .choice.rec { border: 2px solid #2f9e5b; }
-  .choice b { display: block; font-size: 17px; margin-bottom: 4px; }
-  /* lifecycle diagram */
-  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 10px; }
-  .step { background: #fff; border: 1px solid var(--pline); border-radius: 12px; padding: 16px; font-size: 15.5px; position: relative; }
-  .step h4 { margin: 0 0 6px; font-size: 16px; }
-  .step + .step::before { content: "→"; position: absolute; left: -14px; top: 40%; color: var(--pmuted); font-size: 18px; }
-  table.logic { border-collapse: collapse; width: 100%; font-size: 16px; background: #fff; border-radius: 12px; overflow: hidden; margin-top: 20px; }
-  table.logic th, table.logic td { border: 1px solid var(--pline); padding: 11px 14px; text-align: left; vertical-align: top; }
-  table.logic th { background: #ece6d8; font-size: 14px; }
-  /* notes */
-  .notes { margin-top: 26px; max-width: 1100px; }
-  .notes label { font-size: 15px; font-weight: 650; display: block; margin-bottom: 6px; }
-  .notes textarea { width: 100%; min-height: 90px; font: inherit; font-size: 16px; padding: 12px; border-radius: 10px; border: 1px solid var(--pline); background: #fff; }
-  .decide { display: flex; gap: 10px; margin-top: 10px; }
-  .decide button { font: inherit; font-size: 15px; padding: 8px 16px; border-radius: 9px; border: 1px solid var(--pline); background: #fff; cursor: pointer; }
-  .decide button[aria-pressed="true"] { background: var(--pink); color: #fff; }
-  footer { padding: 40px 6vw 80px; max-width: 1500px; margin: auto; }
-  footer button { font: inherit; font-size: 17px; padding: 12px 22px; border-radius: 10px; border: 0; background: var(--pink); color: #fff; cursor: pointer; }
-  @media (min-width: 1400px) { .pair.side { grid-template-columns: 1fr 1fr; } }
-</style>
-</head>
-<body>
-<header class="top">
-  <h1>Five fixes from your screenshots</h1>
-  <p>Each section shows your real screen on top and the proposed change below, full width. Nothing here is built yet. Approve, change or decline each one in its box; your notes stay in this browser and the button at the bottom copies them all.</p>
-  <p>Every change reuses something already on that screen. Nothing is added to the prompt box.</p>
-  <nav class="toc">
-    <a href="#f1">1 · Mark a document Done</a>
-    <a href="#f2">2 · Where are the 31 stories?</a>
-    <a href="#f3">3 · The real checklist</a>
-    <a href="#f4">4 · Unblock: where does the chat go?</a>
-    <a href="#f5">5 · What the document cards are</a>
-  </nav>
-</header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun · five fixes from your screenshots · for approval</title>
+    <style>
+      :root {
+        --canvas: #0b0e14;
+        --nav: #12161f;
+        --card: #1a1f2b;
+        --ink: #f2f5f8;
+        --muted: #94a0ad;
+        --accent: #e8a33d;
+        --line: #2a3040;
+        --good: #4ade80;
+        --bad: #f87171;
+        --info: #7fb0ff;
+        --page: #f4f1ea;
+        --pink: #1d2330;
+        --pmuted: #5b6474;
+        --pline: #ddd6c8;
+        --pcard: #fbf9f4;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--pink);
+        line-height: 1.5;
+      }
+      header.top {
+        padding: 56px 6vw 24px;
+        max-width: 1500px;
+        margin: auto;
+      }
+      header.top h1 {
+        font-size: 44px;
+        line-height: 1.1;
+        margin: 0 0 12px;
+        letter-spacing: -0.02em;
+      }
+      header.top p {
+        font-size: 19px;
+        color: var(--pmuted);
+        max-width: 68ch;
+        margin: 0 0 8px;
+      }
+      nav.toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      nav.toc a {
+        font-size: 15px;
+        padding: 8px 14px;
+        border: 1px solid var(--pline);
+        border-radius: 999px;
+        color: var(--pink);
+        text-decoration: none;
+        background: var(--pcard);
+      }
+      section.fix {
+        padding: 48px 4vw 64px;
+        border-top: 1px solid var(--pline);
+      }
+      .wrap {
+        max-width: 1700px;
+        margin: auto;
+      }
+      .fix h2 {
+        font-size: 34px;
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .fix .q {
+        font-size: 18px;
+        color: #b4441b;
+        margin: 0 0 18px;
+        font-style: italic;
+      }
+      .why {
+        font-size: 18px;
+        max-width: 80ch;
+        margin: 0 0 28px;
+      }
+      .why b {
+        font-weight: 650;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+      .frame {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .frame > .lab {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin: 2px 4px 12px;
+        color: var(--pmuted);
+      }
+      .frame.now > .lab::before {
+        content: "●  ";
+        color: var(--bad);
+      }
+      .frame.new > .lab::before {
+        content: "●  ";
+        color: #2f9e5b;
+      }
+      .frame img {
+        width: 100%;
+        display: block;
+        border-radius: 8px;
+      }
+      /* app mock */
+      .app {
+        background: var(--canvas);
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 28px 36px;
+        font-size: 17px;
+        min-height: 420px;
+      }
+      .app .muted {
+        color: var(--muted);
+      }
+      .app .small {
+        font-size: 14px;
+      }
+      .acard {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 12px 0;
+        max-width: 820px;
+      }
+      .acard .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .acard strong {
+        font-size: 17px;
+        flex: 1;
+      }
+      .tag {
+        font-size: 13px;
+        padding: 3px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .tag.good {
+        color: var(--good);
+        border-color: color-mix(in srgb, var(--good) 45%, transparent);
+      }
+      .tag.accent {
+        color: var(--accent);
+        border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+      }
+      .tag.info {
+        color: var(--info);
+        border-color: color-mix(in srgb, var(--info) 45%, transparent);
+      }
+      .btn {
+        display: inline-block;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: transparent;
+      }
+      .btn.primary {
+        background: #5b2bb5;
+        border-color: #5b2bb5;
+      }
+      .menu {
+        background: #20263a;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 6px;
+        width: 290px;
+        box-shadow: 0 14px 40px #0008;
+      }
+      .menu div {
+        padding: 9px 12px;
+        border-radius: 7px;
+        font-size: 15px;
+      }
+      .menu div.on {
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 5px 0;
+      }
+      .amber {
+        border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+      }
+      .msg {
+        max-width: 820px;
+        margin: 10px 0 4px;
+      }
+      .who {
+        color: var(--muted);
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .who b {
+        color: var(--ink);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1.05fr;
+        gap: 0;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .split > div {
+        padding: 26px 30px;
+      }
+      .split > div + div {
+        border-left: 1px solid var(--line);
+        background: #0e121a;
+      }
+      .bar {
+        height: 8px;
+        background: var(--line);
+        border-radius: 99px;
+        overflow: hidden;
+        margin: 10px 0 18px;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--good);
+      }
+      .task {
+        display: grid;
+        grid-template-columns: 26px 1fr auto auto;
+        gap: 14px;
+        align-items: center;
+        padding: 13px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin: 8px 0;
+        background: var(--card);
+      }
+      .box {
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--muted);
+        border-radius: 5px;
+      }
+      .box.done {
+        background: var(--good);
+        border-color: var(--good);
+      }
+      .struck {
+        text-decoration: line-through;
+        color: var(--muted);
+      }
+      table.st {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 15px;
+      }
+      table.st td,
+      table.st th {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      table.st th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 13px;
+      }
+      .epic {
+        font-weight: 650;
+        background: #151a25;
+      }
+      .tabs {
+        display: flex;
+        gap: 26px;
+        font-size: 15px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 12px;
+        margin-bottom: 22px;
+      }
+      .tabs .on {
+        color: var(--ink);
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 10px;
+        margin-bottom: -13px;
+      }
+      .new-badge {
+        background: #2f9e5b;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 6px;
+        margin-left: 6px;
+        vertical-align: 2px;
+      }
+      /* rule boxes */
+      .rule {
+        background: #fff;
+        border: 2px solid var(--pink);
+        border-radius: 14px;
+        padding: 22px 28px;
+        font-size: 18px;
+        max-width: 1100px;
+        margin-top: 28px;
+      }
+      .rule h3 {
+        margin: 0 0 10px;
+        font-size: 21px;
+      }
+      .rule ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+      .rule li {
+        margin: 6px 0;
+      }
+      .choices {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 18px;
+      }
+      .choice {
+        border: 1px solid var(--pline);
+        border-radius: 12px;
+        padding: 16px 18px;
+        background: var(--pcard);
+        font-size: 16px;
+      }
+      .choice.rec {
+        border: 2px solid #2f9e5b;
+      }
+      .choice b {
+        display: block;
+        font-size: 17px;
+        margin-bottom: 4px;
+      }
+      /* lifecycle diagram */
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
+        margin-top: 10px;
+      }
+      .step {
+        background: #fff;
+        border: 1px solid var(--pline);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 15.5px;
+        position: relative;
+      }
+      .step h4 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+      .step + .step::before {
+        content: "→";
+        position: absolute;
+        left: -14px;
+        top: 40%;
+        color: var(--pmuted);
+        font-size: 18px;
+      }
+      table.logic {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 16px;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 20px;
+      }
+      table.logic th,
+      table.logic td {
+        border: 1px solid var(--pline);
+        padding: 11px 14px;
+        text-align: left;
+        vertical-align: top;
+      }
+      table.logic th {
+        background: #ece6d8;
+        font-size: 14px;
+      }
+      /* notes */
+      .notes {
+        margin-top: 26px;
+        max-width: 1100px;
+      }
+      .notes label {
+        font-size: 15px;
+        font-weight: 650;
+        display: block;
+        margin-bottom: 6px;
+      }
+      .notes textarea {
+        width: 100%;
+        min-height: 90px;
+        font: inherit;
+        font-size: 16px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--pline);
+        background: #fff;
+      }
+      .decide {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .decide button {
+        font: inherit;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 9px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        cursor: pointer;
+      }
+      .decide button[aria-pressed="true"] {
+        background: var(--pink);
+        color: #fff;
+      }
+      footer {
+        padding: 40px 6vw 80px;
+        max-width: 1500px;
+        margin: auto;
+      }
+      footer button {
+        font: inherit;
+        font-size: 17px;
+        padding: 12px 22px;
+        border-radius: 10px;
+        border: 0;
+        background: var(--pink);
+        color: #fff;
+        cursor: pointer;
+      }
+      @media (min-width: 1400px) {
+        .pair.side {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <h1>Five fixes from your screenshots</h1>
+      <p>
+        Each section shows your real screen on top and the proposed change
+        below, full width. Nothing here is built yet. Approve, change or decline
+        each one in its box; your notes stay in this browser and the button at
+        the bottom copies them all.
+      </p>
+      <p>
+        Every change reuses something already on that screen. Nothing is added
+        to the prompt box.
+      </p>
+      <nav class="toc">
+        <a href="#f1">1 · Mark a document Done</a>
+        <a href="#f2">2 · Where are the 31 stories?</a>
+        <a href="#f3">3 · The real checklist</a>
+        <a href="#f4">4 · Unblock: where does the chat go?</a>
+        <a href="#f5">5 · What the document cards are</a>
+      </nav>
+    </header>
 
-<!-- 1 -->
-<section class="fix" id="f1"><div class="wrap">
-  <h2>1 · Mark a document Done</h2>
-  <p class="q">“How do I make the .md card that says Draft to make it Done and completed?”</p>
-  <p class="why"><b>Today there is no way.</b> “Draft” is the document’s saved status and no button changes it. Approval exists only inside the PRD review. <b>Proposal:</b> the status chip on the card becomes the control. Click it and pick <i>Draft</i>, <i>Approved</i> or <i>Done</i>. The same three words, and only these, appear everywhere. Done cards fold away under “Done (n)” so the chat stays clear.</p>
-  <div class="pair">
-    <div class="frame now"><div class="lab">Now</div><img src="current-1-doc-card.webp" alt="Current chat with a Draft document card" /></div>
-    <div class="frame new"><div class="lab">Proposed</div>
-      <div class="app">
-        <div class="msg"><div class="who"><b>Firstmate</b> · GitHub Copilot · Claude Sonnet 5.5</div>Captain, the PRD second mate confirmed the fix. Only the personal-assistant question is closed. Nothing else needs you.</div>
-        <div style="display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap">
-          <div class="acard" style="flex:1; min-width:520px">
-            <div class="row"><span>📄</span><strong>Amun_Product_and_R1_Build_Brief.md</strong><span class="tag accent">Draft ▾</span></div>
-            <div class="muted small" style="margin-top:6px">Document · opens beside the conversation</div>
+    <!-- 1 -->
+    <section class="fix" id="f1">
+      <div class="wrap">
+        <h2>1 · Mark a document Done</h2>
+        <p class="q">
+          “How do I make the .md card that says Draft to make it Done and
+          completed?”
+        </p>
+        <p class="why">
+          <b>Today there is no way.</b> “Draft” is the document’s saved status
+          and no button changes it. Approval exists only inside the PRD review.
+          <b>Proposal:</b> the status chip on the card becomes the control.
+          Click it and pick <i>Draft</i>, <i>Approved</i> or <i>Done</i>. The
+          same three words, and only these, appear everywhere. Done cards fold
+          away under “Done (n)” so the chat stays clear.
+        </p>
+        <div class="pair">
+          <div class="frame now">
+            <div class="lab">Now</div>
+            <img
+              src="current-1-doc-card.webp"
+              alt="Current chat with a Draft document card"
+            />
           </div>
-          <div class="menu">
-            <div class="muted small" style="padding:6px 12px">Set this document to</div>
-            <div class="on">● Draft <span class="muted small">— still being written</span></div>
-            <div>✓ Approved <span class="muted small">— this version is right</span></div>
-            <div>✔ Done <span class="muted small">— finished, fold it away</span></div>
-            <hr /><div class="muted small">Firstmate is told when you change it.</div>
-          </div>
-        </div>
-        <div class="acard"><div class="row"><span>📄</span><strong>Mira launch checklist</strong><span class="tag good">Done</span></div><div class="muted small" style="margin-top:6px">Checklist · opens beside the conversation</div></div>
-        <div class="muted" style="margin-top:14px">▸ Done (3)</div>
-      </div>
-    </div>
-  </div>
-  <div class="notes"><label>Your decision on fix 1</label><div class="decide" data-k="f1"><button>Approve</button><button>Change</button><button>Decline</button></div><textarea data-k="f1n" placeholder="Notes…"></textarea></div>
-</div></section>
-
-<!-- 2 -->
-<section class="fix" id="f2"><div class="wrap">
-  <h2>2 · Where are the 31 stories?</h2>
-  <p class="q">“Where are the 31 stories? I think the wired story code to see the UI is not done. See PR 44 to 61.”</p>
-  <p class="why"><b>You are right, for two reasons.</b> (a) The Stories tab from PR #61 is only on <i>products</i>; Invoiced is a <i>project</i>, so its header has no Stories tab. (b) The plan Firstmate described was never filed, the bug recorded in PR #66, so there was no “Review changes” card either. The 31 stories exist only in the crew’s Markdown file. <b>Proposal:</b> the plan card lists each epic with its story count and opens a <i>Stories</i> view beside the chat. Projects get the same <i>Stories</i> tab as products once they have a plan or a tracker. Fixing the dropped-plan bug is part of this.</p>
-  <div class="pair">
-    <div class="frame now"><div class="lab">Now</div><img src="current-2-linear-plan.webp" alt="Current Invoiced chat with no stories visible" /></div>
-    <div class="frame new"><div class="lab">Proposed</div>
-      <div class="app split" style="padding:0">
-        <div>
-          <div class="msg"><div class="who"><b>Firstmate</b></div>Captain, the Invoiced plan for Linear is ready for your approval. Nothing is created until you approve it.</div>
-          <div class="acard amber">
-            <div class="row"><strong>Linear plan · team TRA · 10 epics, 31 stories</strong><span class="tag accent">Waiting for you</span></div>
-            <div class="small" style="margin:10px 0 4px; line-height:1.9">
-              Customers &amp; contacts · 4 stories<br />Invoices · 6 stories<br />Payments · 3 stories <span class="muted">(acceptance deferred)</span><br /><span class="muted">+ 7 more epics</span>
+          <div class="frame new">
+            <div class="lab">Proposed</div>
+            <div class="app">
+              <div class="msg">
+                <div class="who">
+                  <b>Firstmate</b> · GitHub Copilot · Claude Sonnet 5.5
+                </div>
+                Captain, the PRD second mate confirmed the fix. Only the
+                personal-assistant question is closed. Nothing else needs you.
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 28px;
+                  align-items: flex-start;
+                  flex-wrap: wrap;
+                "
+              >
+                <div class="acard" style="flex: 1; min-width: 520px">
+                  <div class="row">
+                    <span>📄</span
+                    ><strong>Amun_Product_and_R1_Build_Brief.md</strong
+                    ><span class="tag accent">Draft ▾</span>
+                  </div>
+                  <div class="muted small" style="margin-top: 6px">
+                    Document · opens beside the conversation
+                  </div>
+                </div>
+                <div class="menu">
+                  <div class="muted small" style="padding: 6px 12px">
+                    Set this document to
+                  </div>
+                  <div class="on">
+                    ● Draft
+                    <span class="muted small">— still being written</span>
+                  </div>
+                  <div>
+                    ✓ Approved
+                    <span class="muted small">— this version is right</span>
+                  </div>
+                  <div>
+                    ✔ Done
+                    <span class="muted small">— finished, fold it away</span>
+                  </div>
+                  <hr />
+                  <div class="muted small">
+                    Firstmate is told when you change it.
+                  </div>
+                </div>
+              </div>
+              <div class="acard">
+                <div class="row">
+                  <span>📄</span><strong>Mira launch checklist</strong
+                  ><span class="tag good">Done</span>
+                </div>
+                <div class="muted small" style="margin-top: 6px">
+                  Checklist · opens beside the conversation
+                </div>
+              </div>
+              <div class="muted" style="margin-top: 14px">▸ Done (3)</div>
             </div>
-            <div class="row" style="margin-top:10px"><span class="btn primary">Review 31 stories</span><span class="muted small">16 marked first release · no cycle (cycles are off)</span></div>
           </div>
         </div>
-        <div>
-          <div class="tabs"><span>Project checklist</span><span class="on">Stories<span class="new-badge">NEW</span></span><span>Browser</span><span>What happened</span></div>
-          <div class="muted small" style="margin-bottom:8px">Example rows; the real view reads the plan file.</div><table class="st">
-            <tr><th>ID</th><th>Story</th><th>Acceptance</th><th>First release</th></tr>
-            <tr class="epic"><td colspan="4">Epic 1 · Customers &amp; contacts <span class="muted small">· 4</span></td></tr>
-            <tr><td>IV-1</td><td>Add a customer with billing address</td><td class="muted">3 criteria ▸</td><td><span class="tag good">Yes</span></td></tr>
-            <tr><td>IV-2</td><td>Edit and archive a customer</td><td class="muted">2 criteria ▸</td><td><span class="tag good">Yes</span></td></tr>
-            <tr><td>IV-3</td><td>Import customers from CSV</td><td class="muted">4 criteria ▸</td><td><span class="tag good">Yes</span></td></tr>
-            <tr><td>IV-9</td><td>Merge duplicate customers</td><td class="muted">2 criteria ▸</td><td><span class="tag">Later</span></td></tr>
-            <tr class="epic"><td colspan="4">Epic 2 · Invoices <span class="muted small">· 6</span></td></tr>
-            <tr><td>IV-4</td><td>Create an invoice from line items</td><td class="muted">5 criteria ▸</td><td><span class="tag good">Yes</span></td></tr>
-            <tr><td colspan="4" class="muted">… 26 more</td></tr>
-          </table>
-          <div class="row" style="display:flex; gap:12px; margin-top:18px"><span class="btn primary">Approve and send to Linear</span><span class="btn">Ask Firstmate to change it</span></div>
+        <div class="notes">
+          <label>Your decision on fix 1</label>
+          <div class="decide" data-k="f1">
+            <button>Approve</button><button>Change</button
+            ><button>Decline</button>
+          </div>
+          <textarea data-k="f1n" placeholder="Notes…"></textarea>
         </div>
       </div>
-    </div>
-  </div>
-  <div class="notes"><label>Your decision on fix 2</label><div class="decide" data-k="f2"><button>Approve</button><button>Change</button><button>Decline</button></div><textarea data-k="f2n" placeholder="Notes…"></textarea></div>
-</div></section>
+    </section>
 
-<!-- 3 -->
-<section class="fix" id="f3"><div class="wrap">
-  <h2>3 · The real checklist</h2>
-  <p class="q">“The checklist is not the right UI. Look through old PRs between 41 and 60.”</p>
-  <p class="why"><b>Found it:</b> PR #56 built the checklist pane (tick boxes, owner, due date, progress, “Mark handed over”). The header’s <i>Project checklist</i> button opens it, but the <i>card</i> in the chat opens the plain text editor instead, which shows raw <code>- [ ]</code> Markdown. <b>Proposal:</b> no new design, just open the existing pane from the card too. This is a wiring fix.</p>
-  <div class="pair">
-    <div class="frame now"><div class="lab">Now · card opens the text editor</div><img src="current-3-checklist.webp" alt="Checklist shown as raw markdown" /></div>
-    <div class="frame new"><div class="lab">Proposed · card opens the PR #56 checklist pane</div>
-      <div class="app split" style="padding:0">
-        <div>
-          <div class="msg" style="margin-left:auto; max-width:560px; background:var(--card); padding:12px 16px; border-radius:10px">Create a new Project called Gitex Demo for client DMT, high priority, due 10 December.</div>
-          <div class="acard" style="margin-top:30px"><div class="row"><span>☑</span><strong>Gitex Demo checklist</strong><span class="tag accent">0 of 1 done</span></div><div class="muted small" style="margin-top:6px">Checklist · opens beside the conversation</div></div>
+    <!-- 2 -->
+    <section class="fix" id="f2">
+      <div class="wrap">
+        <h2>2 · Where are the 31 stories?</h2>
+        <p class="q">
+          “Where are the 31 stories? I think the wired story code to see the UI
+          is not done. See PR 44 to 61.”
+        </p>
+        <p class="why">
+          <b>You are right, for two reasons.</b> (a) The Stories tab from PR #61
+          is only on <i>products</i>; Invoiced is a <i>project</i>, so its
+          header has no Stories tab. (b) The plan Firstmate described was never
+          filed, the bug recorded in PR #66, so there was no “Review changes”
+          card either. The 31 stories exist only in the crew’s Markdown file.
+          <b>Proposal:</b> the plan card lists each epic with its story count
+          and opens a <i>Stories</i> view beside the chat. Projects get the same
+          <i>Stories</i> tab as products once they have a plan or a tracker.
+          Fixing the dropped-plan bug is part of this.
+        </p>
+        <div class="pair">
+          <div class="frame now">
+            <div class="lab">Now</div>
+            <img
+              src="current-2-linear-plan.webp"
+              alt="Current Invoiced chat with no stories visible"
+            />
+          </div>
+          <div class="frame new">
+            <div class="lab">Proposed</div>
+            <div class="app split" style="padding: 0">
+              <div>
+                <div class="msg">
+                  <div class="who"><b>Firstmate</b></div>
+                  Captain, the Invoiced plan for Linear is ready for your
+                  approval. Nothing is created until you approve it.
+                </div>
+                <div class="acard amber">
+                  <div class="row">
+                    <strong
+                      >Linear plan · team TRA · 10 epics, 31 stories</strong
+                    ><span class="tag accent">Waiting for you</span>
+                  </div>
+                  <div
+                    class="small"
+                    style="margin: 10px 0 4px; line-height: 1.9"
+                  >
+                    Customers &amp; contacts · 4 stories<br />Invoices · 6
+                    stories<br />Payments · 3 stories
+                    <span class="muted">(acceptance deferred)</span><br /><span
+                      class="muted"
+                      >+ 7 more epics</span
+                    >
+                  </div>
+                  <div class="row" style="margin-top: 10px">
+                    <span class="btn primary">Review 31 stories</span
+                    ><span class="muted small"
+                      >16 marked first release · no cycle (cycles are off)</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="tabs">
+                  <span>Project checklist</span
+                  ><span class="on"
+                    >Stories<span class="new-badge">NEW</span></span
+                  ><span>Browser</span><span>What happened</span>
+                </div>
+                <div class="muted small" style="margin-bottom: 8px">
+                  Example rows; the real view reads the plan file.
+                </div>
+                <table class="st">
+                  <tr>
+                    <th>ID</th>
+                    <th>Story</th>
+                    <th>Acceptance</th>
+                    <th>First release</th>
+                  </tr>
+                  <tr class="epic">
+                    <td colspan="4">
+                      Epic 1 · Customers &amp; contacts
+                      <span class="muted small">· 4</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>IV-1</td>
+                    <td>Add a customer with billing address</td>
+                    <td class="muted">3 criteria ▸</td>
+                    <td><span class="tag good">Yes</span></td>
+                  </tr>
+                  <tr>
+                    <td>IV-2</td>
+                    <td>Edit and archive a customer</td>
+                    <td class="muted">2 criteria ▸</td>
+                    <td><span class="tag good">Yes</span></td>
+                  </tr>
+                  <tr>
+                    <td>IV-3</td>
+                    <td>Import customers from CSV</td>
+                    <td class="muted">4 criteria ▸</td>
+                    <td><span class="tag good">Yes</span></td>
+                  </tr>
+                  <tr>
+                    <td>IV-9</td>
+                    <td>Merge duplicate customers</td>
+                    <td class="muted">2 criteria ▸</td>
+                    <td><span class="tag">Later</span></td>
+                  </tr>
+                  <tr class="epic">
+                    <td colspan="4">
+                      Epic 2 · Invoices <span class="muted small">· 6</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>IV-4</td>
+                    <td>Create an invoice from line items</td>
+                    <td class="muted">5 criteria ▸</td>
+                    <td><span class="tag good">Yes</span></td>
+                  </tr>
+                  <tr>
+                    <td colspan="4" class="muted">… 26 more</td>
+                  </tr>
+                </table>
+                <div
+                  class="row"
+                  style="display: flex; gap: 12px; margin-top: 18px"
+                >
+                  <span class="btn primary">Approve and send to Linear</span
+                  ><span class="btn">Ask Firstmate to change it</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <div class="row" style="display:flex; justify-content:space-between; align-items:center"><div><strong style="font-size:20px">Gitex Demo checklist</strong><div class="muted small">Client DMT · due 10 Dec · high priority</div></div><span class="tag accent">0%</span></div>
-          <div class="bar"><i style="width:0%"></i></div>
-          <div class="task"><span class="box"></span><span>Demo script</span><span class="muted small">Tamer</span><span class="tag">5 Dec</span></div>
-          <div class="task"><span class="box done"></span><span class="struck">Book stand power and network</span><span class="muted small">Tamer</span><span class="tag good">Done</span></div>
-          <div class="muted small" style="margin:14px 0">+ Add a task — or ask Firstmate in the chat</div>
-          <div class="acard" style="margin-top:20px"><strong>Handover</strong><div class="muted small" style="margin:6px 0 12px">When every task is done, record who received the work.</div><span class="btn">Mark handed over</span></div>
+        <div class="notes">
+          <label>Your decision on fix 2</label>
+          <div class="decide" data-k="f2">
+            <button>Approve</button><button>Change</button
+            ><button>Decline</button>
+          </div>
+          <textarea data-k="f2n" placeholder="Notes…"></textarea>
         </div>
       </div>
-    </div>
-  </div>
-  <div class="notes"><label>Your decision on fix 3</label><div class="decide" data-k="f3"><button>Approve</button><button>Change</button><button>Decline</button></div><textarea data-k="f3n" placeholder="Notes…"></textarea></div>
-</div></section>
+    </section>
 
-<!-- 4 -->
-<section class="fix" id="f4"><div class="wrap">
-  <h2>4 · Unblock: where does the chat go?</h2>
-  <p class="q">“When I click to unblock where does the chat go? How can I get to the thread? We need a clear rule.”</p>
-  <p class="why"><b>Today:</b> the message goes to whichever chat you last had open (your first screenshot shows it landed in “Chat with Firstmate”), and you stay on the Agents screen with no link to it. <b>Proposed rule below</b>; pick one or write your own.</p>
-  <div class="pair">
-    <div class="frame now"><div class="lab">Now</div><img src="current-4-agents-unblock.webp" alt="Agents screen with Ask Firstmate to unblock it" /></div>
-    <div class="frame new"><div class="lab">Proposed · same amber card, two changes</div>
-      <div class="app" style="min-height:0">
-        <div class="muted" style="margin-bottom:6px">Now doing · waiting on your answer about the personal-assistant product</div>
-        <div class="muted small" style="margin-bottom:18px">Working for: <span style="color:var(--accent)">Mira › “Create a new Product called Mira…” ›</span><span class="new-badge">NEW</span></div>
-        <div class="acard amber">
-          <div>Product Manager is blocked and waiting. Firstmate can look at it and unblock it, or tell you what it needs from you.</div>
-          <div class="row" style="margin-top:14px"><span class="btn">Ask Firstmate to unblock it</span><span class="muted small">Reply goes to <b style="color:var(--ink)">Mira › Create a new Product…</b></span></div>
+    <!-- 3 -->
+    <section class="fix" id="f3">
+      <div class="wrap">
+        <h2>3 · The real checklist</h2>
+        <p class="q">
+          “The checklist is not the right UI. Look through old PRs between 41
+          and 60.”
+        </p>
+        <p class="why">
+          <b>Found it:</b> PR #56 built the checklist pane (tick boxes, owner,
+          due date, progress, “Mark handed over”). The header’s
+          <i>Project checklist</i> button opens it, but the <i>card</i> in the
+          chat opens the plain text editor instead, which shows raw
+          <code>- [ ]</code> Markdown. <b>Proposal:</b> no new design, just open
+          the existing pane from the card too. This is a wiring fix.
+        </p>
+        <div class="pair">
+          <div class="frame now">
+            <div class="lab">Now · card opens the text editor</div>
+            <img
+              src="current-3-checklist.webp"
+              alt="Checklist shown as raw markdown"
+            />
+          </div>
+          <div class="frame new">
+            <div class="lab">
+              Proposed · card opens the PR #56 checklist pane
+            </div>
+            <div class="app split" style="padding: 0">
+              <div>
+                <div
+                  class="msg"
+                  style="
+                    margin-left: auto;
+                    max-width: 560px;
+                    background: var(--card);
+                    padding: 12px 16px;
+                    border-radius: 10px;
+                  "
+                >
+                  Create a new Project called Gitex Demo for client DMT, high
+                  priority, due 10 December.
+                </div>
+                <div class="acard" style="margin-top: 30px">
+                  <div class="row">
+                    <span>☑</span><strong>Gitex Demo checklist</strong
+                    ><span class="tag accent">0 of 1 done</span>
+                  </div>
+                  <div class="muted small" style="margin-top: 6px">
+                    Checklist · opens beside the conversation
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div
+                  class="row"
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <div>
+                    <strong style="font-size: 20px"
+                      >Gitex Demo checklist</strong
+                    >
+                    <div class="muted small">
+                      Client DMT · due 10 Dec · high priority
+                    </div>
+                  </div>
+                  <span class="tag accent">0%</span>
+                </div>
+                <div class="bar"><i style="width: 0%"></i></div>
+                <div class="task">
+                  <span class="box"></span><span>Demo script</span
+                  ><span class="muted small">Tamer</span
+                  ><span class="tag">5 Dec</span>
+                </div>
+                <div class="task">
+                  <span class="box done"></span
+                  ><span class="struck">Book stand power and network</span
+                  ><span class="muted small">Tamer</span
+                  ><span class="tag good">Done</span>
+                </div>
+                <div class="muted small" style="margin: 14px 0">
+                  + Add a task — or ask Firstmate in the chat
+                </div>
+                <div class="acard" style="margin-top: 20px">
+                  <strong>Handover</strong>
+                  <div class="muted small" style="margin: 6px 0 12px">
+                    When every task is done, record who received the work.
+                  </div>
+                  <span class="btn">Mark handed over</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="muted" style="margin:22px 0 8px">After you click:</div>
-        <div class="acard amber">
-          <div>✓ Sent to Firstmate in <b>Mira › Create a new Product…</b>. Its answer, and any question for you, will appear there and in the Island.</div>
-          <div class="row" style="margin-top:14px"><span class="btn primary">Open that chat</span><span class="btn">Stay here</span></div>
+        <div class="notes">
+          <label>Your decision on fix 3</label>
+          <div class="decide" data-k="f3">
+            <button>Approve</button><button>Change</button
+            ><button>Decline</button>
+          </div>
+          <textarea data-k="f3n" placeholder="Notes…"></textarea>
         </div>
       </div>
-    </div>
-  </div>
-  <div class="rule">
-    <h3>Proposed rule: “unblock goes to the chat the agent is working for”</h3>
-    <ol>
-      <li>If the blocked agent’s work carries a request reference, the unblock message goes to <b>the chat that made that request</b>, with the same reference.</li>
-      <li>If the agent is working on several requests, it goes to the chat of the <b>one it is blocked on</b> (the one in “Now doing”).</li>
-      <li>If no request is known, it goes to <b>General’s most recent chat</b>, never to whatever chat happened to be open.</li>
-      <li>The button says where it will go before you click, and offers <b>Open that chat</b> after. Firstmate’s answer and any question also show in the Island.</li>
-      <li>Watch stays as it is. You still never talk to the agent directly.</li>
-    </ol>
-    <div class="choices">
-      <div class="choice rec"><b>A · The agent’s request chat (recommended)</b>The answer sits next to the work it is about, with its reference.</div>
-      <div class="choice"><b>B · Always General</b>Simple and predictable, but the answer is separated from the work.</div>
-      <div class="choice"><b>C · Ask me each time</b>A small chooser of chats when you click. The most control, but an extra step each time.</div>
-    </div>
-  </div>
-  <div class="notes"><label>Your decision on fix 4 (A, B, C or your own)</label><div class="decide" data-k="f4"><button>A</button><button>B</button><button>C</button><button>Other</button></div><textarea data-k="f4n" placeholder="Notes…"></textarea></div>
-</div></section>
+    </section>
 
-<!-- 5 -->
-<section class="fix" id="f5"><div class="wrap">
-  <h2>5 · What the document cards are, and when they go</h2>
-  <p class="q">“What are all these cards that say Untitled and Release v1.0, Draft and Verified? Tell me the logic and draw it.”</p>
-  <p class="why"><b>The logic today:</b> under the latest reply, Amun lists the <b>four newest documents</b> filed in this folder, whatever made them. They never leave on their own; they go only when archived or pushed out by a newer one. The chip shows the document’s saved status. So you see:</p>
-  <table class="logic">
-    <tr><th>Card</th><th>Where it came from</th><th>Chip means</th><th>Leaves when</th></tr>
-    <tr><td><b>Untitled</b> · Draft</td><td>Someone pressed <i>New document</i> in the header. An empty document was made at once.</td><td>Saved status, never changed</td><td>Only if archived</td></tr>
-    <tr><td><b>Release: v1.0</b> · Verified live</td><td>The launch simulation (fix 16 of PR #56) wrote a release tracker.</td><td>The release stage</td><td>Only if archived</td></tr>
-    <tr><td><b>Release: v1.0</b> · Readiness (×2)</td><td>Earlier saves of the same release were filed as <i>separate</i> documents instead of new versions.</td><td>An old stage</td><td>Only if archived</td></tr>
-  </table>
-  <div class="pair" style="margin-top:28px">
-    <div class="frame now"><div class="lab">Now</div><img src="current-5-cards.png" alt="Untitled and three Release v1.0 cards" /></div>
-    <div class="frame new"><div class="lab">Proposed</div>
-      <div class="app">
-        <div class="msg"><div class="who"><b>Firstmate</b></div>Noted, captain. In the simulation you approved v1.0 and set the Mira release to “Verified live”.</div>
-        <div class="acard"><div class="row"><span>🚀</span><strong>Release v1.0</strong><span class="tag good">Verified live</span></div><div class="muted small" style="margin-top:6px">Release · version 3 · opens beside the conversation</div></div>
-        <div class="msg" style="margin-top:26px"><div class="who"><b>Firstmate</b></div>There is no PRD for this product in Amun yet. Once one is saved here, I can draft its stories in this chat.</div>
-        <div class="muted small" style="margin-top:20px">No card here: the reply made no document. The empty “Untitled” is hidden until something is written in it.</div>
+    <!-- 4 -->
+    <section class="fix" id="f4">
+      <div class="wrap">
+        <h2>4 · Unblock: where does the chat go?</h2>
+        <p class="q">
+          “When I click to unblock where does the chat go? How can I get to the
+          thread? We need a clear rule.”
+        </p>
+        <p class="why">
+          <b>Today:</b> the message goes to whichever chat you last had open
+          (your first screenshot shows it landed in “Chat with Firstmate”), and
+          you stay on the Agents screen with no link to it.
+          <b>Proposed rule below</b>; pick one or write your own.
+        </p>
+        <div class="pair">
+          <div class="frame now">
+            <div class="lab">Now</div>
+            <img
+              src="current-4-agents-unblock.webp"
+              alt="Agents screen with Ask Firstmate to unblock it"
+            />
+          </div>
+          <div class="frame new">
+            <div class="lab">Proposed · same amber card, two changes</div>
+            <div class="app" style="min-height: 0">
+              <div class="muted" style="margin-bottom: 6px">
+                Now doing · waiting on your answer about the personal-assistant
+                product
+              </div>
+              <div class="muted small" style="margin-bottom: 18px">
+                Working for:
+                <span style="color: var(--accent)"
+                  >Mira › “Create a new Product called Mira…” ›</span
+                ><span class="new-badge">NEW</span>
+              </div>
+              <div class="acard amber">
+                <div>
+                  Product Manager is blocked and waiting. Firstmate can look at
+                  it and unblock it, or tell you what it needs from you.
+                </div>
+                <div class="row" style="margin-top: 14px">
+                  <span class="btn">Ask Firstmate to unblock it</span
+                  ><span class="muted small"
+                    >Reply goes to
+                    <b style="color: var(--ink)"
+                      >Mira › Create a new Product…</b
+                    ></span
+                  >
+                </div>
+              </div>
+              <div class="muted" style="margin: 22px 0 8px">
+                After you click:
+              </div>
+              <div class="acard amber">
+                <div>
+                  ✓ Sent to Firstmate in <b>Mira › Create a new Product…</b>.
+                  Its answer, and any question for you, will appear there and in
+                  the Island.
+                </div>
+                <div class="row" style="margin-top: 14px">
+                  <span class="btn primary">Open that chat</span
+                  ><span class="btn">Stay here</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="rule">
+          <h3>
+            Proposed rule: “unblock goes to the chat the agent is working for”
+          </h3>
+          <ol>
+            <li>
+              If the blocked agent’s work carries a request reference, the
+              unblock message goes to <b>the chat that made that request</b>,
+              with the same reference.
+            </li>
+            <li>
+              If the agent is working on several requests, it goes to the chat
+              of the <b>one it is blocked on</b> (the one in “Now doing”).
+            </li>
+            <li>
+              If no request is known, it goes to
+              <b>General’s most recent chat</b>, never to whatever chat happened
+              to be open.
+            </li>
+            <li>
+              The button says where it will go before you click, and offers
+              <b>Open that chat</b> after. Firstmate’s answer and any question
+              also show in the Island.
+            </li>
+            <li>
+              Watch stays as it is. You still never talk to the agent directly.
+            </li>
+          </ol>
+          <div class="choices">
+            <div class="choice rec">
+              <b>A · The agent’s request chat (recommended)</b>The answer sits
+              next to the work it is about, with its reference.
+            </div>
+            <div class="choice">
+              <b>B · Always General</b>Simple and predictable, but the answer is
+              separated from the work.
+            </div>
+            <div class="choice">
+              <b>C · Ask me each time</b>A small chooser of chats when you
+              click. The most control, but an extra step each time.
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <label>Your decision on fix 4 (A, B, C or your own)</label>
+          <div class="decide" data-k="f4">
+            <button>A</button><button>B</button><button>C</button
+            ><button>Other</button>
+          </div>
+          <textarea data-k="f4n" placeholder="Notes…"></textarea>
+        </div>
       </div>
-    </div>
-  </div>
-  <h3 style="font-size:22px; margin:40px 0 4px">Proposed life of a card</h3>
-  <div class="flow">
-    <div class="step"><h4>1 · Appears</h4>Under the <b>reply that made or changed it</b>, not pinned to the bottom of the chat.</div>
-    <div class="step"><h4>2 · One per document</h4>A new save becomes a new <b>version</b> of the same card (“version 3”), never a duplicate card.</div>
-    <div class="step"><h4>3 · Chip</h4>Documents: <b>Draft · Approved · Done</b> (fix 1). Releases keep their stage. Checklists show “2 of 5 done”.</div>
-    <div class="step"><h4>4 · Folds away</h4>When set to <b>Done</b>, or a release reaches <b>Verified live</b>, it folds into “Done (n)” after a day.</div>
-    <div class="step"><h4>5 · Always findable</h4>Every document stays in the Library. Older replies still open the exact version they made.</div>
-  </div>
-  <p class="why" style="margin-top:20px">Empty documents made by <i>New document</i> show no card until they have content. Existing duplicate “Release v1.0” documents are shown as one card with their versions; nothing is deleted.</p>
-  <div class="notes"><label>Your decision on fix 5</label><div class="decide" data-k="f5"><button>Approve</button><button>Change</button><button>Decline</button></div><textarea data-k="f5n" placeholder="Notes…"></textarea></div>
-</div></section>
+    </section>
 
-<footer>
-  <button id="copy">Copy all my decisions and notes</button>
-  <span id="copied" style="margin-left:12px; color:var(--pmuted)"></span>
-</footer>
-<script>
-  const KEY = "amun-ux-fixes-2026-11-23";
-  const state = JSON.parse(localStorage.getItem(KEY) || "{}");
-  const save = () => localStorage.setItem(KEY, JSON.stringify(state));
-  document.querySelectorAll(".decide").forEach((g) => {
-    const k = g.dataset.k;
-    g.querySelectorAll("button").forEach((b) => {
-      b.setAttribute("aria-pressed", state[k] === b.textContent);
-      b.onclick = () => { state[k] = b.textContent; save();
-        g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); };
-    });
-  });
-  document.querySelectorAll("textarea").forEach((t) => {
-    t.value = state[t.dataset.k] || "";
-    t.oninput = () => { state[t.dataset.k] = t.value; save(); };
-  });
-  document.getElementById("copy").onclick = async () => {
-    const out = [1,2,3,4,5].map((n) => `Fix ${n}: ${state["f"+n] || "no decision"}${state["f"+n+"n"] ? " — " + state["f"+n+"n"] : ""}`).join("\n");
-    await navigator.clipboard.writeText(out);
-    document.getElementById("copied").textContent = "Copied.";
-  };
-</script>
-</body>
+    <!-- 5 -->
+    <section class="fix" id="f5">
+      <div class="wrap">
+        <h2>5 · What the document cards are, and when they go</h2>
+        <p class="q">
+          “What are all these cards that say Untitled and Release v1.0, Draft
+          and Verified? Tell me the logic and draw it.”
+        </p>
+        <p class="why">
+          <b>The logic today:</b> under the latest reply, Amun lists the
+          <b>four newest documents</b> filed in this folder, whatever made them.
+          They never leave on their own; they go only when archived or pushed
+          out by a newer one. The chip shows the document’s saved status. So you
+          see:
+        </p>
+        <table class="logic">
+          <tr>
+            <th>Card</th>
+            <th>Where it came from</th>
+            <th>Chip means</th>
+            <th>Leaves when</th>
+          </tr>
+          <tr>
+            <td><b>Untitled</b> · Draft</td>
+            <td>
+              Someone pressed <i>New document</i> in the header. An empty
+              document was made at once.
+            </td>
+            <td>Saved status, never changed</td>
+            <td>Only if archived</td>
+          </tr>
+          <tr>
+            <td><b>Release: v1.0</b> · Verified live</td>
+            <td>
+              The launch simulation (fix 16 of PR #56) wrote a release tracker.
+            </td>
+            <td>The release stage</td>
+            <td>Only if archived</td>
+          </tr>
+          <tr>
+            <td><b>Release: v1.0</b> · Readiness (×2)</td>
+            <td>
+              Earlier saves of the same release were filed as
+              <i>separate</i> documents instead of new versions.
+            </td>
+            <td>An old stage</td>
+            <td>Only if archived</td>
+          </tr>
+        </table>
+        <div class="pair" style="margin-top: 28px">
+          <div class="frame now">
+            <div class="lab">Now</div>
+            <img
+              src="current-5-cards.png"
+              alt="Untitled and three Release v1.0 cards"
+            />
+          </div>
+          <div class="frame new">
+            <div class="lab">Proposed</div>
+            <div class="app">
+              <div class="msg">
+                <div class="who"><b>Firstmate</b></div>
+                Noted, captain. In the simulation you approved v1.0 and set the
+                Mira release to “Verified live”.
+              </div>
+              <div class="acard">
+                <div class="row">
+                  <span>🚀</span><strong>Release v1.0</strong
+                  ><span class="tag good">Verified live</span>
+                </div>
+                <div class="muted small" style="margin-top: 6px">
+                  Release · version 3 · opens beside the conversation
+                </div>
+              </div>
+              <div class="msg" style="margin-top: 26px">
+                <div class="who"><b>Firstmate</b></div>
+                There is no PRD for this product in Amun yet. Once one is saved
+                here, I can draft its stories in this chat.
+              </div>
+              <div class="muted small" style="margin-top: 20px">
+                No card here: the reply made no document. The empty “Untitled”
+                is hidden until something is written in it.
+              </div>
+            </div>
+          </div>
+        </div>
+        <h3 style="font-size: 22px; margin: 40px 0 4px">
+          Proposed life of a card
+        </h3>
+        <div class="flow">
+          <div class="step">
+            <h4>1 · Appears</h4>
+            Under the <b>reply that made or changed it</b>, not pinned to the
+            bottom of the chat.
+          </div>
+          <div class="step">
+            <h4>2 · One per document</h4>
+            A new save becomes a new <b>version</b> of the same card (“version
+            3”), never a duplicate card.
+          </div>
+          <div class="step">
+            <h4>3 · Chip</h4>
+            Documents: <b>Draft · Approved · Done</b> (fix 1). Releases keep
+            their stage. Checklists show “2 of 5 done”.
+          </div>
+          <div class="step">
+            <h4>4 · Folds away</h4>
+            When set to <b>Done</b>, or a release reaches <b>Verified live</b>,
+            it folds into “Done (n)” after a day.
+          </div>
+          <div class="step">
+            <h4>5 · Always findable</h4>
+            Every document stays in the Library. Older replies still open the
+            exact version they made.
+          </div>
+        </div>
+        <p class="why" style="margin-top: 20px">
+          Empty documents made by <i>New document</i> show no card until they
+          have content. Existing duplicate “Release v1.0” documents are shown as
+          one card with their versions; nothing is deleted.
+        </p>
+        <div class="notes">
+          <label>Your decision on fix 5</label>
+          <div class="decide" data-k="f5">
+            <button>Approve</button><button>Change</button
+            ><button>Decline</button>
+          </div>
+          <textarea data-k="f5n" placeholder="Notes…"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <button id="copy">Copy all my decisions and notes</button>
+      <span id="copied" style="margin-left: 12px; color: var(--pmuted)"></span>
+    </footer>
+    <script>
+      const KEY = "amun-ux-fixes-2026-11-23";
+      const state = JSON.parse(localStorage.getItem(KEY) || "{}");
+      const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+      document.querySelectorAll(".decide").forEach((g) => {
+        const k = g.dataset.k;
+        g.querySelectorAll("button").forEach((b) => {
+          b.setAttribute("aria-pressed", state[k] === b.textContent);
+          b.onclick = () => {
+            state[k] = b.textContent;
+            save();
+            g.querySelectorAll("button").forEach((x) =>
+              x.setAttribute("aria-pressed", x === b),
+            );
+          };
+        });
+      });
+      document.querySelectorAll("textarea").forEach((t) => {
+        t.value = state[t.dataset.k] || "";
+        t.oninput = () => {
+          state[t.dataset.k] = t.value;
+          save();
+        };
+      });
+      document.getElementById("copy").onclick = async () => {
+        const out = [1, 2, 3, 4, 5]
+          .map(
+            (n) =>
+              `Fix ${n}: ${state["f" + n] || "no decision"}${state["f" + n + "n"] ? " — " + state["f" + n + "n"] : ""}`,
+          )
+          .join("\n");
+        await navigator.clipboard.writeText(out);
+        document.getElementById("copied").textContent = "Copied.";
+      };
+    </script>
+  </body>
 </html>
