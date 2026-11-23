@@ -1,5 +1,7 @@
 # Amun · handoff for the next agent
 
+> **Latest (23 November 2026):** read the "Update — 23 November 2026" section at the top of `releases/AMUN-WORK-INTAKE-AND-DELIVERY-CODING-HANDOFF.md` first. It covers PRs #67–#70 (Idea to Done: delivery chain, receipt card, Stories screen, the four ways in, release gate, close-out, Delivered), every before/after page under `docs/preview/2026-11-23-*`, the Notion pages, and what is still open.
+
 > **Out of date.** This file describes the app before it was rebuilt on the Paseo daemon (the `apps/` folders it names no longer exist). The current handoff is `docs/rebuild/HANDOFF.md`; read that instead. Kept for history.
 
 13 November 2026, updated after pull request 24. Written for an agent that knows nothing about this project. Read this file, then `AGENTS.md` at the repository root, before changing anything. This is the only current handoff; the other `docs/*HANDOFF*.md` files are history, except the two memory documents named below.
