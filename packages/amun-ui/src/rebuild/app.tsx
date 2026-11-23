@@ -69,7 +69,6 @@ import {
   Rail,
 } from "./rail.tsx";
 import { Agents, Council, Portfolio, Roadmap, Sprints } from "./screens.tsx";
-import { unblockPlace } from "./unblock-place.ts";
 import { Rfps } from "./rfps.tsx";
 import type { SettingsSection } from "./settings.tsx";
 import { Settings } from "./lazy.tsx";
@@ -1254,14 +1253,7 @@ export function App() {
             snapshot={snapshot}
             initialAgent={focusAgent}
             model={model}
-            onAsk={(text, agentId) => {
-              // Option A: the chat of the request it is blocked on, else
-              // General, as before (Idea to Done §4.9).
-              const place = agentId ? unblockPlace(snapshot, agentId) : null;
-              if (place)
-                return openWork(place.areaId, text, null, place.chatId);
-              void submit(text, []);
-            }}
+            onAsk={(text) => void submit(text, [])}
             {...(recentArea && {
               onLink: (url: string) =>
                 openWork(recentArea, undefined, { kind: "browser", url }),

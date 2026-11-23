@@ -63,7 +63,6 @@ import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
 import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
 import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
-import { unblockPlace } from "./unblock-place.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -241,16 +240,13 @@ function SpecialistPanel({
   onLink,
   onAdded,
   onAsk,
-  askPlace,
 }: {
   agent: AgentRow;
   position: number;
   total: number;
   onLink?(url: string): void;
   onAdded?(id: string): void;
-  onAsk?(text: string, agentId?: string): void;
-  /** Where an unblock request for this agent goes, named for the button. */
-  askPlace?: string;
+  onAsk?(text: string): void;
 }) {
   const [watch, setWatch] = useState(false);
   const profile = agentProfile(agent.role);
@@ -319,7 +315,6 @@ function SpecialistPanel({
         onLink={onLink}
         onAdded={onAdded}
         onAsk={onAsk}
-        askPlace={askPlace}
       />
     </section>
   );
@@ -523,7 +518,6 @@ function AgentControls({
   onLink,
   onAdded,
   onAsk,
-  askPlace,
 }: {
   agent: AgentRow;
   watch: boolean;
@@ -531,8 +525,7 @@ function AgentControls({
   onLink?: ((url: string) => void) | undefined;
   onAdded?: ((id: string) => void) | undefined;
   /** Sends Firstmate a message about this agent. */
-  onAsk?: ((text: string, agentId?: string) => void) | undefined;
-  askPlace?: string | undefined;
+  onAsk?: ((text: string) => void) | undefined;
 }) {
   const member = agent.kind !== "lead";
   const notCreated = absent(agent);
@@ -590,13 +583,11 @@ function AgentControls({
               onClick={() =>
                 onAsk(
                   `${agent.role} is blocked. Look at its window, tell me in one line what it is waiting for, and unblock it if you can. If it needs my choice, ask me with the options.`,
-                  agent.id,
                 )
               }
             >
               Ask Firstmate to unblock it
             </button>
-            <span className="muted small">Goes to {askPlace ?? "General"}</span>
           </div>
         </div>
       )}
@@ -640,7 +631,7 @@ export function Agents({
   snapshot: Snapshot;
   model: string | null;
   /** Sends Firstmate a message, opening the conversation it lands in. */
-  onAsk?(text: string, agentId?: string): void;
+  onAsk?(text: string): void;
   /** The agent to open first, e.g. from its avatar in the right rail. */
   initialAgent?: string | null;
   /** Opens a link from an agent's output; without it links stay plain text. */
@@ -808,10 +799,6 @@ export function Agents({
                 onAdded={setSelected}
                 {...(onLink && { onLink })}
                 {...(onAsk && { onAsk })}
-                {...(chosen.state === "waiting" && {
-                  askPlace:
-                    unblockPlace(snapshot, chosen.id)?.label ?? "General",
-                })}
               />
             ))
           )}
