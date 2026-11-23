@@ -153,6 +153,8 @@ export interface Sprint {
   total: number;
   blocked: number;
   changedInAdo: boolean;
+  /** Its stories were never read, so done/total are not known (not 0/0). */
+  unread?: boolean;
 }
 const dayMs = 86_400_000;
 const days = (count: number) => `${count} ${count === 1 ? "day" : "days"}`;
@@ -162,7 +164,9 @@ export function sprintRow(sprint: Sprint, now: number) {
   const started = now >= start;
   return {
     title: `${sprint.workAreaName} · ${sprint.name}`,
-    progress: `${sprint.done} / ${sprint.total} stories done`,
+    progress: sprint.unread
+      ? "Open to count stories"
+      : `${sprint.done} / ${sprint.total} stories done`,
     timing:
       !Number.isFinite(start) || !Number.isFinite(end)
         ? "Dates not set"

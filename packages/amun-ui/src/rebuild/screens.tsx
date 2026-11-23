@@ -1409,6 +1409,9 @@ export function SprintTimeline({
   );
 }
 
+/** Story counts of Azure sprints read in this session, by area and sprint. */
+const readSprintCounts = new Map<string, { done: number; total: number }>();
+
 export function Sprints({
   snapshot,
   now,
@@ -1488,18 +1491,27 @@ export function Sprints({
     return reply
       ? adoSprints(reply.sprints, reply.team.name, area.id, area.name).map(
           (sprint) => {
-            const read =
+            const selected =
               selection?.workAreaId === area.id &&
               azure.items?.state === "ready" &&
-              sprint.id === `ado:${azure.items.sprint}`
-                ? azure.items.items
-                : [];
+              sprint.id === `ado:${azure.items.sprint}`;
+            const read = selected ? azure.items!.items : [];
+            // Counts of a sprint read earlier are kept, so other sprints
+            // never drop to 0/0 when another one is opened (QA 22 Nov).
+            const key = `${area.id}|${sprint.id}`;
+            if (selected)
+              readSprintCounts.set(key, {
+                done: read.filter((item) =>
+                  /^(done|closed|completed)$/i.test(item.state),
+                ).length,
+                total: read.length,
+              });
+            const counted = readSprintCounts.get(key);
             return {
               ...sprint,
-              done: read.filter((item) =>
-                /^(done|closed|completed)$/i.test(item.state),
-              ).length,
-              total: read.length,
+              done: counted?.done ?? 0,
+              total: counted?.total ?? 0,
+              unread: !counted,
               stories: read.map((item) => ({
                 id: String(item.id),
                 title: `#${item.id} ${item.title}`,
