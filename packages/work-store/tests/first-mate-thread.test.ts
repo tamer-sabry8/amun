@@ -171,6 +171,24 @@ describe("a plan in a First Mate reply nobody asked for (handoff item 9)", () =>
     work.close();
   });
 
+  it("raises a revised plan again when only its fields changed", () => {
+    const work = opened();
+    recordFirstMateReply(work.store, plan("Invoiced plan for Linear"));
+    recordFirstMateReply(
+      work.store,
+      plan("Invoiced plan for Linear").replaceAll(
+        '"team":"TRA"',
+        '"team":"TRB"',
+      ),
+    );
+    expect(
+      work.store
+        .snapshot()
+        .plans.filter((item) => item.destination === "linear"),
+    ).toHaveLength(2);
+    work.close();
+  });
+
   it("goes to the chat of the request it names", () => {
     const work = opened();
     const act = (action: string, extra: object) =>

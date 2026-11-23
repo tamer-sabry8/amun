@@ -3229,22 +3229,38 @@ export class WorkStore {
         for (const plan of raising) {
           const known = request(plan.request);
           const at = known ?? reportedAt ?? here;
-          const summaries = JSON.stringify(
-            plan.items.map((item) => item.summary),
-          );
+          // The whole plan, without the ids Amun gives its items: a replay is
+          // the same plan, but a revision (other fields, kind) is reviewed
+          // again.
+          const payload = (
+            kind: unknown,
+            items: { summary: string; fields: Record<string, unknown> }[],
+          ) =>
+            JSON.stringify([
+              kind,
+              items.map((item) => [
+                item.summary,
+                Object.entries(item.fields ?? {}).sort(([a], [b]) =>
+                  a.localeCompare(b),
+                ),
+              ]),
+            ]);
+          const wanted = payload(plan.planKind, plan.items);
           const raised = this.all(
-            "SELECT items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=?",
+            "SELECT kind,items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=?",
             at.areaId,
             plan.destination,
             this.clean(plan.summary),
           ).some((row) => {
             try {
               return (
-                JSON.stringify(
-                  (
-                    JSON.parse(String(row.items_json)) as { summary: string }[]
-                  ).map((item) => item.summary),
-                ) === summaries
+                payload(
+                  row.kind,
+                  JSON.parse(String(row.items_json)) as {
+                    summary: string;
+                    fields: Record<string, unknown>;
+                  }[],
+                ) === wanted
               );
             } catch {
               return false;
