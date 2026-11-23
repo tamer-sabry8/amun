@@ -4889,3 +4889,140 @@
   color: var(--accent);
   text-decoration: none;
 }
+
+/* Stories (Idea to Done §4.5, approved 23 November 2026). */
+.rb-stories {
+  display: grid;
+  gap: 12px;
+}
+.rb-stories-title {
+  font-size: 17px;
+}
+.rb-stories .rb-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-stories .rb-seg .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.rb-epic-row td {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  font-weight: 600;
+}
+.rb-prog {
+  display: inline-block;
+  inline-size: 84px;
+  block-size: 6px;
+  margin: 0 8px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.rb-prog i {
+  display: block;
+  block-size: 100%;
+  background: var(--tone-good, #4ade80);
+}
+/* "Opened · Stories": a chat line that opens a delivery screen again. */
+.rb-opened {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.rb-opened span {
+  color: var(--accent);
+}
+button.rb-opened:hover {
+  border-color: var(--control);
+}
+/* The "Open:" row on the full Portfolio card (approved 23 November 2026). */
+.rb-open-row {
+  display: grid;
+  gap: 6px;
+  margin: -4px 0 14px;
+}
+.rb-open-row p {
+  margin: 0;
+}
+.rb-open-row nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  font-size: 13.5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.rb-open-row .link {
+  color: var(--accent);
+}
+/* Sprint tile links and "Where these came from" (approved 23 Nov 2026). */
+.rb-sprint-tile {
+  display: grid;
+}
+.rb-tile-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  align-items: center;
+  padding: 0 14px 10px;
+  font-size: 12.5px;
+}
+.rb-tile-ways .link,
+.rb-came-from .link {
+  color: var(--accent);
+}
+/* Document cards: status is the control (F1), approved 23 November 2026. */
+.rb-outcard-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  min-width: 0;
+}
+.rb-outcard-open strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rb-status-wrap {
+  position: relative;
+}
+.rb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rb-status-menu {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 6px);
+  z-index: 5;
+  display: grid;
+  min-inline-size: 240px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 35%);
+}
+.rb-status-menu button {
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  text-align: left;
+}
+.rb-status-menu button:hover {
+  background: var(--hover);
+}

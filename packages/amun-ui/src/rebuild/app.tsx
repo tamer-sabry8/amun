@@ -69,6 +69,7 @@ import {
   Rail,
 } from "./rail.tsx";
 import { Agents, Council, Portfolio, Roadmap, Sprints } from "./screens.tsx";
+import type { DeliveryLink } from "./delivery-views.ts";
 import { Rfps } from "./rfps.tsx";
 import type { SettingsSection } from "./settings.tsx";
 import { Settings } from "./lazy.tsx";
@@ -81,6 +82,7 @@ import {
   workStore,
 } from "./store.ts";
 import { acceptOffer } from "./accept-offer.ts";
+import { trackerAreas, useTrackerDelivery } from "./tracker-delivery.ts";
 import { areaOf, homeModel, typeLabels, type Snapshot } from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
@@ -194,6 +196,38 @@ export function App() {
   const [resumePlanning, setResumePlanning] =
     useState<SavedPlanningLink | null>(null);
   const [pane, setPane] = useState<PaneTarget>(null);
+  const [sprintsArea, setSprintsArea] = useState("");
+  // Published stories follow their tracker (review #70): the read-back Amun
+  // already does each minute updates their status in the story list.
+  const trackerReads = useTrackerDelivery(
+    snapshot ? trackerAreas(snapshot) : [],
+  );
+  useEffect(() => {
+    if (!snapshot) return;
+    for (const [workAreaId, read] of Object.entries(trackerReads)) {
+      const known = snapshot.delivery.find(
+        (entry) => entry.workAreaId === workAreaId,
+      );
+      if (!known) continue;
+      const items = read.items.flatMap((item) =>
+        item.key &&
+        item.status &&
+        item.outcome === "created" &&
+        item.kind !== "sprint" &&
+        known.items.some(
+          (story) =>
+            story.tool === item.provider &&
+            story.key === item.key &&
+            story.status !== item.status,
+        )
+          ? [{ tool: item.provider, key: item.key, status: item.status }]
+          : [],
+      );
+      if (items.length)
+        work("sync-story-status", { workAreaId, items, told: true });
+    }
+    // Only a new read is news; the snapshot it changes must not loop.
+  }, [trackerReads]);
   /** The fork on screen inside the open work; null is its main chat. */
   const [chatId, setChatId] = useState<string | null>(null);
   /** Where the open chat should open: a passage, or where reading stopped. */
@@ -735,6 +769,34 @@ export function App() {
     });
     openWork(targetId, offer.held, null, chat);
   };
+  /**
+   * The ways in (approved 23 November 2026): a link from the Portfolio card,
+   * a Sprints tile or Activity opens the same screen beside the work's chat.
+   * Navigation only; nothing is written.
+   */
+  /** The Sprints screen, filtered to one work (review #70). */
+  const openSprints = (areaId: string) => {
+    setSprintsArea(areaId);
+    go("sprints");
+  };
+  const openDeliveryView = (areaId: string, link: DeliveryLink) => {
+    if (link.view === "roadmap") return go("roadmap");
+    if (link.view === "receipt" && link.messageId)
+      return openWork(areaId, undefined, null, link.chatId ?? null, {
+        messageId: link.messageId,
+        flash: true,
+      });
+    if (link.view === "sprint") return openSprints(areaId);
+    const pane: PaneTarget =
+      link.view === "requirements"
+        ? { kind: "prd" }
+        : link.view === "stories"
+          ? { kind: "stories" }
+          : link.view === "release" && link.outputId
+            ? { kind: "release", outputId: link.outputId }
+            : { kind: "happened" };
+    openWork(areaId, undefined, pane);
+  };
   const submit = async (text: string, files: string[], groupId?: string) => {
     setNote("");
     // "Create a new project for Gitex, high priority, ready on Dec 6": make
@@ -1225,6 +1287,13 @@ export function App() {
             onWork={(areaId, chat, message) =>
               openWork(areaId, message, null, chat)
             }
+            onOpenAt={(areaId, chat, messageId) =>
+              openWork(areaId, undefined, null, chat, {
+                messageId,
+                flash: true,
+              })
+            }
+            onSprints={(areaId) => openSprints(areaId)}
             now={now}
             model={model}
             pane={pane}
@@ -1293,8 +1362,10 @@ export function App() {
           />
         ) : layout.route === "sprints" ? (
           <Sprints
-            key={resumePlanning?.id ?? "sprints"}
+            onOpenView={(id, link) => openDeliveryView(id, link)}
+            key={resumePlanning?.id ?? `sprints:${sprintsArea}`}
             resume={resumePlanning}
+            initialAreaId={sprintsArea}
             snapshot={snapshot}
             now={now}
             model={model}
@@ -1324,6 +1395,7 @@ export function App() {
             onAsk={(text, files) => void submit(text, files)}
             onAskAbout={(id, text) => openWork(id, text)}
             onAskCard={(id) => void askAbout(id)}
+            onOpenView={(id, link) => openDeliveryView(id, link)}
           />
         ) : layout.route === "rfps" ? (
           <Rfps

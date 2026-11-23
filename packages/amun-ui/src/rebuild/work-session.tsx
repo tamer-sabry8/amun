@@ -25,6 +25,40 @@ import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
 import { PublishReceipt, receiptOf } from "./publish-receipt.tsx";
+import { StoriesView, type StoriesFilter } from "./stories-view.tsx";
+import { OutputCards } from "./output-cards.tsx";
+
+/** The line a "show" leaves in the chat, opening that screen again. */
+function openedViewOf(card: unknown): {
+  view:
+    "stories" | "receipt" | "sprints" | "requirements" | "release" | "activity";
+  filter: StoriesFilter;
+  label: string | null;
+} | null {
+  if (!card || typeof card !== "object") return null;
+  const value = card as {
+    kind?: unknown;
+    view?: unknown;
+    filter?: unknown;
+    label?: unknown;
+  };
+  const views = [
+    "stories",
+    "receipt",
+    "sprints",
+    "requirements",
+    "release",
+    "activity",
+  ] as const;
+  const view = views.find((item) => item === value.view);
+  if (value.kind !== "opened-view" || !view) return null;
+  const filters = ["all", "drafted", "published", "done"] as const;
+  return {
+    view,
+    filter: filters.find((item) => item === value.filter) ?? "all",
+    label: typeof value.label === "string" ? value.label : null,
+  };
+}
 import { requestRefOf } from "./requests.ts";
 import {
   newRequestRef,
@@ -184,6 +218,7 @@ import {
 } from "./view-model.ts";
 import {
   ProjectChecklistPane,
+  ProductionReleaseCard,
   projectChecklistDocType,
 } from "./project-checklist-and-release.tsx";
 import { parseProjectChecklist } from "../../../../packages/domain/src/work/release-launch.ts";
@@ -206,6 +241,10 @@ export type PaneTarget =
   | { kind: "happened"; stepId?: string }
   /** Small-project checklist & handover receipt (Item 6). */
   | { kind: "checklist" }
+  /** Epics and stories, Drafted or Published (Idea to Done §4.5). */
+  | { kind: "stories"; filter?: StoriesFilter }
+  /** The release card with its readiness, steps and close-out. */
+  | { kind: "release"; outputId: string }
   | null;
 
 const browserCommand = (value: unknown) =>
@@ -1318,6 +1357,8 @@ export function WorkSession({
   first,
   onChat,
   onWork,
+  onOpenAt,
+  onSprints,
   onPane,
   onResize,
   onExpand,
@@ -1342,6 +1383,10 @@ export function WorkSession({
   onChat(chatId: string | null): void;
   /** Opens a chat in another folder, optionally sending it a first message. */
   onWork(areaId: string, chatId: string | null, first?: string): void;
+  /** Opens a message in a chat of a folder, e.g. a publish receipt. */
+  onOpenAt?(areaId: string, chatId: string | null, messageId: string): void;
+  /** Opens the Sprints screen filtered to this work. */
+  onSprints?(areaId: string): void;
   onPane(target: PaneTarget): void;
   onResize(ratio: number): void;
   onExpand(): void;
@@ -1484,6 +1529,68 @@ export function WorkSession({
       action as never,
       { ...payload, told: true } as never,
     )) as typeof workAsync;
+  /** Opens one delivery screen of this work; returns its name, or null. */
+  const openView = (
+    view:
+      | "stories"
+      | "receipt"
+      | "sprints"
+      | "requirements"
+      | "release"
+      | "activity",
+    filter: StoriesFilter = "all",
+  ): string | null => {
+    const snap = latest.current.snapshot;
+    if (view === "stories") {
+      onPane({ kind: "stories", filter });
+      return filter === "all"
+        ? "Stories"
+        : `Stories · ${filter[0]!.toUpperCase()}${filter.slice(1)}`;
+    }
+    if (view === "requirements") {
+      onPane({ kind: "prd" });
+      return context?.area.type === "project" ? "BRD" : "PRD";
+    }
+    if (view === "sprints") {
+      onSprints?.(areaId);
+      return "Sprints";
+    }
+    if (view === "activity") {
+      onPane({ kind: "happened" });
+      return "What happened";
+    }
+    if (view === "release") {
+      const release = snap.library
+        .filter(
+          (item) =>
+            item.section === "output" &&
+            item.type === "release_tracker" &&
+            item.workAreaIds.includes(areaId),
+        )
+        .at(0);
+      if (!release) return null;
+      onPane({ kind: "release", outputId: release.id });
+      return release.title;
+    }
+    const receipt = [
+      ...snap.messages.filter((message) => message.workAreaId === areaId),
+      ...snap.chats
+        .filter((chat) => chat.workAreaId === areaId)
+        .flatMap((chat) => chat.messages),
+    ]
+      .filter((message) => receiptOf(message.card))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .at(-1);
+    if (!receipt) return null;
+    // It may sit in another chat of this folder (review #70).
+    const inChat =
+      snap.chats.find((chat) =>
+        chat.messages.some((message) => message.id === receipt.id),
+      )?.id ?? null;
+    if (onOpenAt) onOpenAt(areaId, inChat, receipt.id);
+    else reading.show(receipt.id);
+    return "Receipt";
+  };
   /** Files what Firstmate proposed under this work area. Proposals only. */
   const raise = (proposed: AmunAction, requestRef?: string) => {
     const work = toldWork;
@@ -1808,6 +1915,22 @@ export function WorkSession({
           model,
           difficulty: "standard",
         });
+    } else if (proposed.do === "show") {
+      // A way in from the chat (approved 23 November 2026): open the screen
+      // and leave a line that opens it again later. Nothing is written.
+      const opened = openView(proposed.view, proposed.filter);
+      work("message", {
+        workAreaId: areaId,
+        chatId: savedIn,
+        role: "card",
+        text: opened ? `Opened ${opened}` : "Nothing to open yet",
+        card: {
+          kind: "opened-view",
+          view: proposed.view,
+          filter: proposed.filter,
+          label: opened,
+        },
+      });
     } else if (proposed.do === "use-sprints") {
       if (context?.area.type !== "project") return;
       void (async () => {
@@ -2619,6 +2742,27 @@ export function WorkSession({
             item.status !== "Archived",
         )
       : undefined;
+  // The newest release of this work, for the Release tab.
+  const latestRelease = snapshot.library
+    .filter(
+      (item) =>
+        item.section === "output" &&
+        item.type === "release_tracker" &&
+        item.workAreaIds.includes(areaId) &&
+        item.status !== "Archived",
+    )
+    .at(0);
+  // The newest publish receipt in this work's chats, for "Open receipt".
+  const latestReceiptId =
+    [
+      ...snapshot.messages.filter((message) => message.workAreaId === areaId),
+      ...snapshot.chats
+        .filter((chat) => chat.workAreaId === areaId)
+        .flatMap((chat) => chat.messages),
+    ]
+      .filter((message) => receiptOf(message.card))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .at(-1)?.id ?? null;
   const checklistTasks = checklistDoc
     ? parseProjectChecklist(checklistDoc.body)
     : [];
@@ -2896,11 +3040,13 @@ export function WorkSession({
           <span className="grow" />
           {area.productId && !open && (
             <>
+              {/* The same tabs on Products and Projects (approved 23 November
+                  2026): Requirements · Stories · Sprints · Release. */}
               <button
                 className="btn quiet"
                 onClick={() => {
                   inspectView({
-                    view: "PRD",
+                    view: "Requirements",
                     areaId,
                     project: area.name,
                     source: "Project",
@@ -2908,22 +3054,53 @@ export function WorkSession({
                   onPane({ kind: "prd" });
                 }}
               >
-                PRD
+                Requirements
               </button>
               <button
                 className="btn quiet"
                 onClick={() => {
                   inspectView({
-                    view: "Backlog",
+                    view: "Stories",
                     areaId,
                     project: area.name,
                     source: "Project",
                   });
-                  onPane({ kind: "backlog" });
+                  onPane({ kind: "stories" });
                 }}
               >
-                Backlog
+                Stories
               </button>
+              <button
+                className="btn quiet"
+                onClick={() => {
+                  inspectView({
+                    view: "Sprints",
+                    areaId,
+                    project: area.name,
+                    source: "Project",
+                  });
+                  if (onSprints) onSprints(areaId);
+                  else onPane({ kind: "backlog" });
+                }}
+              >
+                Sprints
+              </button>
+              {latestRelease && (
+                <button
+                  className="btn quiet"
+                  onClick={() => {
+                    inspectView({
+                      view: "Release",
+                      areaId,
+                      project: area.name,
+                      source: "Project",
+                    });
+                    onPane({ kind: "release", outputId: latestRelease.id });
+                  }}
+                >
+                  Release
+                </button>
+              )}
               <button
                 className="btn quiet"
                 onClick={() => {
@@ -2940,7 +3117,7 @@ export function WorkSession({
               </button>
             </>
           )}
-          {area.type === "project" && !open && (
+          {area.type === "project" && !area.productId && !open && (
             <button
               className="btn quiet"
               onClick={() => {
@@ -3187,7 +3364,32 @@ export function WorkSession({
                 </div>
               )}
               {context.messages.map((message, position) =>
-                receiptOf(message.card) ? (
+                openedViewOf(message.card) ? (
+                  <div
+                    key={message.id}
+                    data-mid={message.id}
+                    className="rb-turn firstmate"
+                  >
+                    {openedViewOf(message.card)!.label ? (
+                      <button
+                        type="button"
+                        className="rb-opened"
+                        onClick={() => {
+                          const card = openedViewOf(message.card)!;
+                          openView(card.view, card.filter);
+                        }}
+                      >
+                        Opened ·{" "}
+                        <span>{openedViewOf(message.card)!.label}</span>
+                        <Icon name="chevron" width={12} height={12} />
+                      </button>
+                    ) : (
+                      <span className="rb-opened muted">
+                        Nothing to open yet
+                      </span>
+                    )}
+                  </div>
+                ) : receiptOf(message.card) ? (
                   <div
                     key={message.id}
                     data-mid={message.id}
@@ -3513,31 +3715,45 @@ export function WorkSession({
                   </button>
                 </div>
               ))}
-              {context.outputs
-                .filter((item) => item.section === "output")
-                .slice(0, 4)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    className="rb-inline"
-                    style={{ textAlign: "left", justifyContent: "stretch" }}
-                    aria-pressed={
-                      pane?.kind === "output" && pane.id === item.id
-                    }
-                    onClick={() => onPane({ kind: "output", id: item.id })}
-                  >
-                    <span className="row">
-                      <Icon name="prd" width={18} height={18} />
-                      <strong className="grow">{item.title}</strong>
-                      <span className="tag">
-                        {approvalLabel(approvalOf(item)) || item.status}
-                      </span>
-                    </span>
-                    <span className="note">
-                      {typeName(item.type)} · opens beside the conversation
-                    </span>
-                  </button>
-                ))}
+              <OutputCards
+                items={context.outputs.filter(
+                  (item) => item.section === "output",
+                )}
+                pane={pane}
+                onOpen={(item) =>
+                  onPane(
+                    item.type === projectChecklistDocType
+                      ? { kind: "checklist" }
+                      : { kind: "output", id: item.id },
+                  )
+                }
+                onStatus={async (item, next) => {
+                  // The card's status is the control (approved F1): Approved
+                  // binds to this exact version; Done keeps the text.
+                  if (next === "Approved")
+                    await workAsync("approve-output", {
+                      outputId: item.id,
+                      approved: true,
+                      versionNumber: item.version,
+                    });
+                  else {
+                    if (approvalOf(item).state !== "none")
+                      await workAsync("approve-output", {
+                        outputId: item.id,
+                        approved: false,
+                      });
+                    await workAsync("save-output", {
+                      outputId: item.id,
+                      groupId: item.groupId,
+                      type: item.type,
+                      title: item.title,
+                      body: item.body,
+                      status: next,
+                      workAreaIds: item.workAreaIds,
+                    });
+                  }
+                }}
+              />
               {questions.map((question) => {
                 const parsed =
                   question.options.length > 0
@@ -4166,6 +4382,36 @@ export function WorkSession({
                   }
                 />
               )}
+              {pane.kind === "stories" && (
+                <StoriesView
+                  key={pane.filter ?? "all"}
+                  snapshot={snapshot}
+                  areaId={areaId}
+                  {...(pane.filter && { initialFilter: pane.filter })}
+                  {...(latestReceiptId && {
+                    onReceipt: () => openView("receipt"),
+                  })}
+                />
+              )}
+              {pane.kind === "release" &&
+                (() => {
+                  const doc = snapshot.library.find(
+                    (item) => item.id === pane.outputId,
+                  );
+                  return doc ? (
+                    <ProductionReleaseCard
+                      snapshot={snapshot}
+                      workAreaId={areaId}
+                      releaseName={doc.title.replace(/^Release:\s*/, "")}
+                      doneStories={0}
+                      totalStories={0}
+                    />
+                  ) : (
+                    <p className="muted" role="status">
+                      That release is no longer here.
+                    </p>
+                  );
+                })()}
               {pane.kind === "checklist" && (
                 <ProjectChecklistPane
                   snapshot={snapshot}

@@ -111,7 +111,7 @@ describe("a project in delivery mode (Idea to Done §3.2)", () => {
 
   it("links a release to its stories, once, and unlinks", () => {
     const { work, send } = opened();
-    const link = { kind: "release_story", fromId: "release-1", toId: "s1" };
+    const link = { link: "release_story", fromId: "release-1", toId: "s1" };
     send("link-delivery", link);
     send("link-delivery", link);
     const count = () =>
@@ -211,7 +211,7 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
     }).ref!;
     for (const id of ["s1", "s2", "s3"])
       send("link-delivery", {
-        kind: "release_story",
+        link: "release_story",
         fromId: release,
         toId: id,
       });
@@ -281,7 +281,7 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
       .snapshot()
       .library.find((item) => item.type === "release_tracker")!.id;
     send("link-delivery", {
-      kind: "release_story",
+      link: "release_story",
       fromId: release,
       toId: "s1",
     });
@@ -310,7 +310,7 @@ describe("release close-out and Delivered (Idea to Done §4.11–4.12)", () => {
       body: JSON.stringify({ artifact: null, approval: {} }),
       workAreaIds: [area],
     }).ref!;
-    send("link-delivery", { kind: "release_story", fromId: bad, toId: "s1" });
+    send("link-delivery", { link: "release_story", fromId: bad, toId: "s1" });
     expect(send("close-out-release", { releaseId: bad })).toMatchObject({
       ok: false,
       message: "Close-out starts once the release is Verified live.",

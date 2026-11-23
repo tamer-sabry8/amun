@@ -662,6 +662,56 @@ export const workSnapshot = z.strictObject({
       }),
     )
     .default([]),
+  /**
+   * The delivery chain of every product and delivery-mode project (Idea to
+   * Done): epics and stories, Drafted (Amun only) or Published (with the
+   * tool and key), their requirements and the links to releases and
+   * roadmap items.
+   */
+  delivery: z
+    .array(
+      z.strictObject({
+        workAreaId: id,
+        productId: id,
+        /** Running with stories and sprints (always true for a Product). */
+        delivery: z.boolean(),
+        items: z.array(
+          z.strictObject({
+            id,
+            type: z.string(),
+            title: z.string(),
+            parentId: id.nullable(),
+            status: z.string(),
+            /** Null while Drafted in Amun only. */
+            tool: z.string().nullable(),
+            key: z.string().nullable(),
+          }),
+        ),
+        requirements: z
+          .strictObject({
+            /** PRD for a Product, BRD for a Project. */
+            label: z.enum(["PRD", "BRD"]),
+            version: z.int().nullable(),
+            approved: z.boolean(),
+            deliveredAt: z.string().nullable(),
+          })
+          .nullable(),
+      }),
+    )
+    .default([]),
+  deliveryLinks: z
+    .array(
+      z.strictObject({
+        kind: z.enum([
+          "release_story",
+          "roadmap_requirements",
+          "roadmap_release",
+        ]),
+        fromId: id,
+        toId: id,
+      }),
+    )
+    .default([]),
 });
 export type WorkSnapshot = z.infer<typeof workSnapshot>;
 
@@ -1175,9 +1225,27 @@ export const workCommand = z.discriminatedUnion("action", [
     itemId: id,
     status: z.enum(["todo", "in_progress", "in_review", "done", "removed"]),
   }),
+  /**
+   * The status a tracker reports for stories Amun published there (read
+   * back by the tracker delivery read), so Stories, readiness and Delivered
+   * follow the tool. Only stories with that tool and key change.
+   */
+  act("sync-story-status", {
+    workAreaId: id,
+    items: z
+      .array(
+        z.strictObject({
+          tool: z.enum(["jira", "linear", "ado"]),
+          key: z.string().min(1).max(128),
+          status: z.string().min(1).max(128),
+        }),
+      )
+      .max(500),
+  }),
   /** Link two records of the delivery chain, or unlink them. */
   act("link-delivery", {
-    kind: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
+    /** Named "link", since "kind" is the message envelope's own field. */
+    link: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
     fromId: id,
     toId: id,
     linked: z.boolean().default(true),

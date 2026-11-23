@@ -670,8 +670,58 @@ export class WorkStore {
             row.change_state,
           ) as WorkSnapshot["requests"][number]["changeState"],
         })),
+        delivery: this.deliverySummary(),
+        deliveryLinks: this.all(
+          "SELECT kind,from_id,to_id FROM delivery_links ORDER BY created_at",
+        ).map((row) => ({
+          kind: String(
+            row.kind,
+          ) as WorkSnapshot["deliveryLinks"][number]["kind"],
+          fromId: String(row.from_id),
+          toId: String(row.to_id),
+        })),
       }),
     );
+  }
+  /** Epics, stories and requirements per product or delivery project. */
+  private deliverySummary(): WorkSnapshot["delivery"] {
+    return this.all(
+      "SELECT id,type,product_id,delivery FROM work_areas WHERE product_id IS NOT NULL AND status<>'deleted' AND type IN ('product','project')",
+    ).map((area) => {
+      const productId = String(area.product_id);
+      const prd = this.get(
+        "SELECT p.version,p.delivered_at,(SELECT count(*) FROM prd_versions v JOIN approvals a ON a.prd_version_id=v.id AND a.decision='approved' WHERE v.prd_id=p.id AND v.version=p.version) AS approved FROM prds p WHERE p.product_id=? ORDER BY p.rowid DESC LIMIT 1",
+        productId,
+      );
+      return {
+        workAreaId: String(area.id),
+        productId,
+        delivery: area.type === "product" || Number(area.delivery) === 1,
+        items: this.all(
+          "SELECT id,type,title,parent_id,status,remote_system,remote_id FROM work_items WHERE product_id=? ORDER BY rowid",
+          productId,
+        ).map((item) => ({
+          id: String(item.id),
+          type: String(item.type),
+          title: String(item.title),
+          parentId: (item.parent_id as string | null) ?? null,
+          status: String(item.status),
+          tool: (item.remote_system as string | null) ?? null,
+          key:
+            item.remote_id === null || item.remote_id === undefined
+              ? null
+              : String(item.remote_id),
+        })),
+        requirements: prd
+          ? {
+              label: area.type === "project" ? "BRD" : "PRD",
+              version: prd.version === null ? null : Number(prd.version),
+              approved: Number(prd.approved) > 0,
+              deliveredAt: (prd.delivered_at as string | null) ?? null,
+            }
+          : null,
+      };
+    });
   }
   /** Each finding keeps a separate decision per work area (UC03, UC05). */
   private findings(): WorkSnapshot["findings"] {
@@ -3043,11 +3093,30 @@ export class WorkStore {
         );
         return { ref: command.itemId };
       }
+      case "sync-story-status": {
+        const area = this.get(
+          "SELECT product_id FROM work_areas WHERE id=?",
+          command.workAreaId,
+        );
+        const productId = (area?.product_id as string | null) ?? null;
+        if (!productId) return {};
+        let changed = 0;
+        for (const item of command.items)
+          changed += this.run(
+            "UPDATE work_items SET status=? WHERE product_id=? AND remote_system=? AND remote_id=? AND status<>?",
+            this.clean(item.status),
+            productId,
+            item.tool,
+            item.key,
+            this.clean(item.status),
+          ).changes;
+        return { step: { changed } };
+      }
       case "link-delivery": {
         if (command.linked)
           this.run(
             "INSERT OR IGNORE INTO delivery_links(kind,from_id,to_id,created_at) VALUES (?,?,?,?)",
-            command.kind,
+            command.link,
             command.fromId,
             command.toId,
             now,
@@ -3055,7 +3124,7 @@ export class WorkStore {
         else
           this.run(
             "DELETE FROM delivery_links WHERE kind=? AND from_id=? AND to_id=?",
-            command.kind,
+            command.link,
             command.fromId,
             command.toId,
           );
@@ -4060,6 +4129,70 @@ export class WorkStore {
   }
 
   /**
+   * A published epic or story becomes Published in this work's story list:
+   * the draft with the same title gets the tool and key; anything else is
+   * added. Sprints and other kinds are left out.
+   */
+  private recordPublished(
+    areaId: string,
+    tool: string,
+    rows: {
+      summary: string;
+      type: string | null;
+      parent: string | null;
+      state: string;
+      key: string | null;
+    }[],
+  ) {
+    // Only tracker work items; a Notion page is not a story (review #70).
+    if (!["jira", "linear", "ado"].includes(tool)) return;
+    const area = this.get(
+      "SELECT product_id FROM work_areas WHERE id=?",
+      areaId,
+    );
+    const productId = (area?.product_id as string | null) ?? null;
+    if (!productId) return;
+    const ids = new Map<string, string>();
+    for (const row of rows) {
+      if (row.state !== "created" || !row.key) continue;
+      const kind = (row.type ?? "story").toLowerCase();
+      if (!["epic", "story", "task", "bug"].includes(kind)) continue;
+      const existing = this.get(
+        "SELECT id FROM work_items WHERE product_id=? AND (remote_id=? OR (remote_id IS NULL AND lower(title)=lower(?))) ORDER BY remote_id IS NULL LIMIT 1",
+        productId,
+        row.key,
+        row.summary,
+      );
+      const parent = row.parent
+        ? (ids.get(row.parent.toLowerCase()) ?? null)
+        : null;
+      if (existing) {
+        this.run(
+          "UPDATE work_items SET remote_system=?,remote_id=?,parent_id=coalesce(parent_id,?),status=CASE WHEN lower(status) IN ('draft','') THEN 'To do' ELSE status END WHERE id=?",
+          tool,
+          row.key,
+          parent,
+          existing.id,
+        );
+        ids.set(row.summary.toLowerCase(), String(existing.id));
+      } else {
+        const id = randomUUID();
+        this.run(
+          "INSERT INTO work_items(id,product_id,type,title,parent_id,status,remote_system,remote_id) VALUES (?,?,?,?,?,'To do',?,?)",
+          id,
+          productId,
+          kind,
+          row.summary,
+          parent,
+          tool,
+          row.key,
+        );
+        ids.set(row.summary.toLowerCase(), id);
+      }
+    }
+  }
+
+  /**
    * One receipt per approved plan, in the chat of the request that asked
    * (else the chat the plan was raised in), updated in place as results
    * arrive (Idea to Done §4.8, approved 23 November 2026). The request turns
@@ -4111,6 +4244,7 @@ export class WorkStore {
       };
     });
     const created = rows.filter((row) => row.state === "created").length;
+    this.recordPublished(areaId, String(plan.destination), rows);
     const card = {
       kind: "publish-receipt",
       planId,

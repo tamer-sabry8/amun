@@ -63,6 +63,11 @@ import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
 import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
 import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
+import {
+  deliveryLinks,
+  progressLine,
+  type DeliveryLink,
+} from "./delivery-views.ts";
 import { FirstmateMark } from "./firstmate-mark.tsx";
 import { Icon } from "../icons.tsx";
 import { AgentWatch } from "./agent-watch.tsx";
@@ -1094,6 +1099,10 @@ export function Roadmap({
         snapshot.roadmap.find((item) => item.id === id)?.workAreaId ?? null,
       );
   };
+  /** When the work's requirements were marked Delivered, if they were. */
+  const deliveredOn = (workAreaId: string) =>
+    snapshot.delivery.find((entry) => entry.workAreaId === workAreaId)
+      ?.requirements?.deliveredAt ?? null;
   const tile = (item: (typeof items)[number]) => {
     const badge = riceBadge(item);
     return (
@@ -1107,6 +1116,11 @@ export function Roadmap({
       >
         <span className="name">{item.title}</span>
         <span className="meta">{areaOf(snapshot, item.workAreaId)?.name}</span>
+        {progressLine(snapshot, item.workAreaId) && (
+          <span className="meta">
+            {progressLine(snapshot, item.workAreaId)}
+          </span>
+        )}
         <span className="row wrap">
           {badge && (
             <span className="tag accent">
@@ -1234,7 +1248,9 @@ export function Roadmap({
       )}
       {view === "horizon" && items.length > 0 && (
         <div className="rb-board">
-          {horizonBoard(items).map((column) => (
+          {horizonBoard(
+            items.filter((item) => !deliveredOn(item.workAreaId)),
+          ).map((column) => (
             <section
               key={column.horizon}
               className={"rb-col" + (over === column.horizon ? " over" : "")}
@@ -1255,6 +1271,30 @@ export function Roadmap({
               {column.items.map(tile)}
             </section>
           ))}
+          {/* Delivered work moves here by itself (approved 23 Nov 2026). */}
+          {items.some((item) => deliveredOn(item.workAreaId)) && (
+            <section className="rb-col" aria-label="Done">
+              <header>
+                Done
+                <span className="count">
+                  {items.filter((item) => deliveredOn(item.workAreaId)).length}
+                </span>
+              </header>
+              {items
+                .filter((item) => deliveredOn(item.workAreaId))
+                .map((item) => (
+                  <div key={item.id} className="rb-tile">
+                    <span className="name">{item.title}</span>
+                    <span className="meta">
+                      {areaOf(snapshot, item.workAreaId)?.name}
+                    </span>
+                    <span className="tag good">
+                      Delivered {shortDate(deliveredOn(item.workAreaId)!)}
+                    </span>
+                  </div>
+                ))}
+            </section>
+          )}
         </div>
       )}
       {view === "release" && items.length > 0 && (
@@ -1417,6 +1457,8 @@ export function Sprints({
   now,
   model,
   onWork,
+  initialAreaId = "",
+  onOpenView,
   onReview,
   resume,
 }: {
@@ -1431,9 +1473,13 @@ export function Sprints({
     messageId?: string,
   ): void;
   onReview(planId: string, workAreaId: string | null): void;
+  /** Opens one delivery screen of a work (a way in, approved 23 Nov). */
+  onOpenView?(areaId: string, link: DeliveryLink): void;
+  /** Open filtered to this work (from a folder's Sprints link). */
+  initialAreaId?: string;
 }) {
   const [view, setView] = useState<(typeof sprintViews)[number][0]>("overview");
-  const [areaId, setAreaId] = useState(resume?.areaId ?? "");
+  const [areaId, setAreaId] = useState(resume?.areaId ?? initialAreaId);
   const [savedLink, setSavedLink] = useState(resume);
   const [selection, selectSprint] = useState<Pick<
     Sprint,
@@ -1916,6 +1962,36 @@ export function Sprints({
         {tab === "Summary" && (
           <div style={{ display: "grid", gap: 12, maxWidth: "68ch" }}>
             <p>{current.goal || "No sprint goal yet."}</p>
+            {onOpenView &&
+              (() => {
+                const from = deliveryLinks(snapshot, current.workAreaId).filter(
+                  (link) =>
+                    link.view === "requirements" ||
+                    link.view === "receipt" ||
+                    link.view === "release",
+                );
+                return from.length ? (
+                  <p className="muted small rb-came-from">
+                    Where these came from:{" "}
+                    {from.map((link, index) => (
+                      <span key={link.view}>
+                        {index > 0 && " · "}
+                        <button
+                          type="button"
+                          className="link small"
+                          onClick={() => onOpenView(current.workAreaId, link)}
+                        >
+                          {link.view === "receipt"
+                            ? "Created from receipt"
+                            : link.view === "release"
+                              ? `Ships in ${link.label}`
+                              : link.label}
+                        </button>
+                      </span>
+                    ))}
+                  </p>
+                ) : null;
+              })()}
             <p className="row wrap">
               <span className="tag">{row.progress}</span>
               <span className="tag">{row.timing}</span>
@@ -2129,66 +2205,100 @@ export function Sprints({
                 <div className="rb-rows">
                   {members.map((sprint) => {
                     const row = sprintRow(sprint, now);
+                    const ways = onOpenView
+                      ? deliveryLinks(snapshot, sprint.workAreaId).filter(
+                          (link) =>
+                            link.view !== "sprint" &&
+                            link.view !== "requirements" &&
+                            link.view !== "activity",
+                        )
+                      : [];
                     return (
-                      <button
+                      <div
                         key={JSON.stringify([sprint.workAreaId, sprint.id])}
-                        className="rb-rowitem"
-                        onClick={() => {
-                          inspectView({
-                            view: sprint.name,
-                            project: sprint.workAreaName,
-                            areaId: sprint.workAreaId,
-                            record: sprint.id,
-                            source: "Sprints",
-                          });
-                          selectSprint(sprint);
-                          setTab("Summary");
-                        }}
+                        className="rb-sprint-tile"
                       >
-                        <span>
-                          <span className="name">{row.title}</span>
-                          <span
-                            className="muted small"
-                            style={{ display: "block" }}
-                          >
-                            {[
-                              sprint.team,
-                              sprint.start && sprint.end
-                                ? `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`
-                                : "Dates not set",
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </span>
-                          <span
-                            className="muted small"
-                            style={{ display: "block" }}
-                          >
-                            {sprint.goal}
-                          </span>
-                        </span>
-                        <span className="muted">{row.progress}</span>
-                        <span>
-                          <span
-                            className="muted small"
-                            style={{ display: "block" }}
-                          >
-                            {row.timing}
-                          </span>
-                          {row.flags.map((flag) => (
+                        <button
+                          className="rb-rowitem"
+                          onClick={() => {
+                            inspectView({
+                              view: sprint.name,
+                              project: sprint.workAreaName,
+                              areaId: sprint.workAreaId,
+                              record: sprint.id,
+                              source: "Sprints",
+                            });
+                            selectSprint(sprint);
+                            setTab("Summary");
+                          }}
+                        >
+                          <span>
+                            <span className="name">{row.title}</span>
                             <span
-                              key={flag}
-                              className="small"
-                              style={{
-                                display: "block",
-                                color: "var(--amun-status-signed-out)",
-                              }}
+                              className="muted small"
+                              style={{ display: "block" }}
                             >
-                              {flag}
+                              {[
+                                sprint.team,
+                                sprint.start && sprint.end
+                                  ? `${shortDate(sprint.start)} – ${shortDate(sprint.end)}`
+                                  : "Dates not set",
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </span>
-                          ))}
-                        </span>
-                      </button>
+                            <span
+                              className="muted small"
+                              style={{ display: "block" }}
+                            >
+                              {sprint.goal}
+                            </span>
+                          </span>
+                          <span className="muted">{row.progress}</span>
+                          <span>
+                            <span
+                              className="muted small"
+                              style={{ display: "block" }}
+                            >
+                              {row.timing}
+                            </span>
+                            {row.flags.map((flag) => (
+                              <span
+                                key={flag}
+                                className="small"
+                                style={{
+                                  display: "block",
+                                  color: "var(--amun-status-signed-out)",
+                                }}
+                              >
+                                {flag}
+                              </span>
+                            ))}
+                          </span>
+                        </button>
+                        {ways.length > 0 && (
+                          <nav
+                            className="rb-tile-ways"
+                            aria-label={`Open ${sprint.workAreaName}`}
+                          >
+                            <span className="muted">Open:</span>
+                            {ways.map((link) => (
+                              <button
+                                key={link.view}
+                                type="button"
+                                className="link"
+                                onClick={() =>
+                                  onOpenView?.(sprint.workAreaId, link)
+                                }
+                              >
+                                {link.view === "receipt"
+                                  ? "Receipt"
+                                  : link.label}
+                              </button>
+                            ))}
+                          </nav>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -2469,6 +2579,7 @@ export function Portfolio({
   onAsk,
   onAskAbout,
   onAskCard,
+  onOpenView,
 }: {
   onResume?(link: SavedPlanningLink): void;
   snapshot: Snapshot;
@@ -2481,6 +2592,8 @@ export function Portfolio({
   onAskAbout?(areaId: string, text: string): void;
   /** "Ask about …": a fresh chat with the card attached. */
   onAskCard?(areaId: string): void;
+  /** Opens one delivery screen of a work (a way in, approved 23 Nov). */
+  onOpenView?(areaId: string, link: DeliveryLink): void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [type, setTypeState] = useState(portfolioFilters.type);
@@ -2667,6 +2780,7 @@ export function Portfolio({
             onAskAbout ? onAskAbout(areaId, text) : onWork(areaId)
           }
           {...(onAskCard && { onAskAbout: onAskCard })}
+          {...(onOpenView && { onOpenView })}
         />
       )}
       {areas.length ? (
