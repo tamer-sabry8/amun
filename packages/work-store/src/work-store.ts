@@ -1392,7 +1392,7 @@ export class WorkStore {
           : command.groupId;
         const id = randomUUID();
         this.run(
-          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at) VALUES (?,?,?,?,?,?,?,'proposed',?)",
+          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at,chat_id,request_ref) VALUES (?,?,?,?,?,?,?,'proposed',?,?,?)",
           id,
           groupId,
           command.workAreaId,
@@ -1401,6 +1401,8 @@ export class WorkStore {
           this.clean(command.summary),
           JSON.stringify(command.items),
           now,
+          command.chatId ?? null,
+          command.requestRef ?? null,
         );
         this.attend({
           kind: "approval",
@@ -3277,6 +3279,10 @@ export class WorkStore {
             destination: plan.destination,
             summary: plan.summary,
             items: plan.items.map((item) => ({ id: randomUUID(), ...item })),
+            chatId: at.chatId,
+            requestRef:
+              known?.ref ??
+              (reportedAt && reports.length === 1 ? reports[0]!.request : null),
           });
           let refused = proposal.success
             ? ""
@@ -3903,6 +3909,7 @@ export class WorkStore {
       });
     }
     this.closeAttention("failure:" + planId);
+    this.publishReceipt(planId, approved.items, all, state);
     const named = (state: "failed" | "unknown") =>
       all
         .filter((result) => result.state === state)
@@ -3926,6 +3933,114 @@ export class WorkStore {
         options: summary.button ? [summary.button] : [],
       });
     return { ref: planId, step: { ...summary, state } };
+  }
+
+  /**
+   * One receipt per approved plan, in the chat of the request that asked
+   * (else the chat the plan was raised in), updated in place as results
+   * arrive (Idea to Done §4.8, approved 23 November 2026). The request turns
+   * Ready only when everything was created.
+   */
+  private publishReceipt(
+    planId: string,
+    items: { id: string; summary: string; fields: Record<string, unknown> }[],
+    results: {
+      id: string;
+      state: "created" | "failed" | "unknown";
+      externalId?: string | undefined;
+      url?: string | undefined;
+    }[],
+    state: "published" | "partial" | "failed",
+  ) {
+    const plan = this.get(
+      "SELECT work_area_id,chat_id,request_ref,destination FROM work_plans WHERE id=?",
+      planId,
+    );
+    if (!plan) return;
+    const ref = (plan.request_ref as string | null) ?? null;
+    const asked = ref
+      ? this.get(
+          "SELECT m.work_area_id,m.chat_id FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
+          ref,
+        )
+      : undefined;
+    const areaId =
+      (asked?.work_area_id as string | undefined) ??
+      (plan.work_area_id as string | null);
+    if (!areaId || !this.live(areaId)) return;
+    const chatId = asked
+      ? ((asked.chat_id as string | null) ?? null)
+      : ((plan.chat_id as string | null) ?? null);
+    const byId = new Map(results.map((result) => [result.id, result]));
+    const rows = items.map((item) => {
+      const result = byId.get(item.id);
+      const parent = item.fields.parent;
+      return {
+        summary: item.summary,
+        type: typeof item.fields.type === "string" ? item.fields.type : null,
+        parent: typeof parent === "string" && parent ? parent : null,
+        state: result?.state ?? "unknown",
+        key: result?.externalId ?? null,
+        url: result?.url ?? null,
+        note:
+          result?.state === "failed" ? this.writeNote(planId, item.id) : null,
+      };
+    });
+    const created = rows.filter((row) => row.state === "created").length;
+    const card = {
+      kind: "publish-receipt",
+      planId,
+      destination: String(plan.destination),
+      request: ref,
+      state,
+      created,
+      total: rows.length,
+      items: rows.slice(0, 200),
+    };
+    const text = `Created in ${String(plan.destination)}: ${created} of ${rows.length}`;
+    const existing = this.get(
+      "SELECT id FROM work_messages WHERE role='card' AND instr(card_json,'\"publish-receipt\"')>0 AND instr(card_json,?)>0",
+      JSON.stringify(planId),
+    );
+    if (existing)
+      this.run(
+        "UPDATE work_messages SET card_json=?,text=? WHERE id=?",
+        JSON.stringify(card),
+        text,
+        existing.id,
+      );
+    else
+      this.apply({
+        version: 1,
+        kind: "work",
+        action: "message",
+        workAreaId: areaId,
+        chatId,
+        role: "card",
+        text,
+        card: card as never,
+        model: null,
+      } as never);
+    if (ref && this.get("SELECT 1 FROM work_requests WHERE ref=?", ref))
+      this.apply({
+        version: 1,
+        kind: "work",
+        action: "request-report",
+        ref,
+        status:
+          state === "published"
+            ? "delivered"
+            : state === "partial"
+              ? "needs-decision"
+              : "failed",
+        role: "Amun",
+        detail:
+          state === "published"
+            ? `Created ${created} items in ${String(plan.destination)}`
+            : `${created} of ${rows.length} created in ${String(plan.destination)}`,
+        parts: 0,
+        fingerprint: `receipt:${planId}:${state}:${created}`,
+      } as never);
   }
 
   /** Why the destination refused an item, as the publisher recorded it. */

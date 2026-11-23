@@ -4838,3 +4838,27 @@
   display: block;
   color: var(--muted);
 }
+
+/* Publish receipt (Idea to Done §4.8, approved 23 November 2026). */
+.rb-receipt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.rb-receipt th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.rb-receipt td {
+  padding: 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.rb-receipt a {
+  color: var(--accent);
+  text-decoration: none;
+}

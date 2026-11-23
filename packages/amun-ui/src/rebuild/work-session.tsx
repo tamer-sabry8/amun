@@ -24,6 +24,7 @@ import {
 import { useReading, type ReadingFocus } from "./reading.ts";
 import { AskAttachment, askCardOf } from "./ask-card.tsx";
 import { DeliveredReply, RequestLine, deliveredOf } from "./delivery.tsx";
+import { PublishReceipt, receiptOf } from "./publish-receipt.tsx";
 import { requestRefOf } from "./requests.ts";
 import {
   newRequestRef,
@@ -1484,7 +1485,7 @@ export function WorkSession({
       { ...payload, told: true } as never,
     )) as typeof workAsync;
   /** Files what Firstmate proposed under this work area. Proposals only. */
-  const raise = (proposed: AmunAction) => {
+  const raise = (proposed: AmunAction, requestRef?: string) => {
     const work = toldWork;
     const workAsync = toldWorkAsync;
     const groupId = context?.area.groupId ?? null;
@@ -1503,6 +1504,9 @@ export function WorkSession({
             id: crypto.randomUUID(),
             ...item,
           })),
+          // Its receipt goes back to the chat and request that asked.
+          chatId: savedIn,
+          requestRef: requestRef ?? null,
         });
         // A refused plan never exists, so say so here; Firstmate is told with
         // the owner's next message (see agentNews).
@@ -1999,7 +2003,7 @@ export function WorkSession({
           text: followup,
           model: turn.model,
         });
-      for (const proposed of parsed.actions) raise(proposed);
+      for (const proposed of parsed.actions) raise(proposed, ref);
     } else if (turn.needsProvider) {
       // Kept, not failed: it goes out once a provider is connected.
       const message = {
@@ -2452,6 +2456,9 @@ export function WorkSession({
         request={request}
         deliveries={deliveries}
         replyId={
+          context?.messages.findLast(
+            (message) => receiptOf(message.card)?.request === ref,
+          )?.id ??
           context?.messages.findLast((message) => {
             const card = message.card as {
               kind?: string;
@@ -2463,13 +2470,21 @@ export function WorkSession({
               Array.isArray(card.refs) &&
               card.refs.includes(ref)
             );
-          })?.id ?? null
+          })?.id ??
+          null
         }
-        line={requestStatusLine(
-          request,
-          new Set(deliveries.map((item) => item.title)).size,
-          request.parts,
-        )}
+        line={
+          request.status === "delivered" &&
+          context?.messages.some(
+            (message) => receiptOf(message.card)?.request === ref,
+          )
+            ? "Ready · View receipt"
+            : requestStatusLine(
+                request,
+                new Set(deliveries.map((item) => item.title)).size,
+                request.parts,
+              )
+        }
         project={name(request.projectAreaId)}
         changeTo={name(request.changeToAreaId)}
         onShow={(id) => reading.show(id)}
@@ -3153,7 +3168,18 @@ export function WorkSession({
                 </div>
               )}
               {context.messages.map((message, position) =>
-                deliveredOf(message.card) ? (
+                receiptOf(message.card) ? (
+                  <div
+                    key={message.id}
+                    data-mid={message.id}
+                    className={reading.flash === message.id ? "flash" : ""}
+                  >
+                    <PublishReceipt
+                      card={receiptOf(message.card)!}
+                      onFix={(text) => setSeed({ text, nonce: Date.now() })}
+                    />
+                  </div>
+                ) : deliveredOf(message.card) ? (
                   <div
                     key={message.id}
                     data-mid={message.id}

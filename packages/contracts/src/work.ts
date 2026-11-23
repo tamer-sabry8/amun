@@ -811,6 +811,9 @@ export const workCommand = z.discriminatedUnion("action", [
     destination: z.string().min(1).max(64),
     summary: text,
     items: z.array(planItem).min(1).max(500),
+    /** The chat and request that asked, where the receipt goes. */
+    chatId: id.nullable().optional(),
+    requestRef: z.string().min(8).max(64).nullable().optional(),
   }),
   act("update-plan", { planId: id, items: z.array(planItem).min(1).max(500) }),
   act("approve-plan", {
