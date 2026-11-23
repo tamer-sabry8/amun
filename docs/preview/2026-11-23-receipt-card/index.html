@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun · publish receipt card · for approval</title>
+    <style>
+      :root {
+        --canvas: #0b0e14;
+        --card: #1a1f2b;
+        --ink: #f2f5f8;
+        --muted: #94a0ad;
+        --accent: #e8a33d;
+        --line: #2a3040;
+        --good: #4ade80;
+        --bad: #f87171;
+        --page: #f4f1ea;
+        --pink: #1d2330;
+        --pmuted: #5b6474;
+        --pline: #ddd6c8;
+        --pcard: #fbf9f4;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--pink);
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 1600px;
+        margin: auto;
+        padding: 52px 5vw 90px;
+      }
+      h1 {
+        font-size: 42px;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+      }
+      .lead {
+        font-size: 19px;
+        color: var(--pmuted);
+        max-width: 80ch;
+      }
+      .frame {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 14px;
+        margin: 24px 0;
+      }
+      .lab {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin: 2px 4px 12px;
+        color: var(--pmuted);
+      }
+      .now .lab::before {
+        content: "●  ";
+        color: #c8432b;
+      }
+      .new .lab::before {
+        content: "●  ";
+        color: #2f9e5b;
+      }
+      img {
+        width: 100%;
+        display: block;
+        border-radius: 8px;
+      }
+      .app {
+        background: var(--canvas);
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 30px 40px;
+        font-size: 17px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .small {
+        font-size: 14px;
+      }
+      .bubble {
+        margin-left: auto;
+        max-width: 760px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 18px;
+      }
+      .status {
+        margin: 14px 0 0 auto;
+        width: fit-content;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        padding: 6px 14px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .status b {
+        color: var(--good);
+        font-weight: 500;
+      }
+      .who {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 24px 0 4px;
+      }
+      .who b {
+        color: var(--ink);
+      }
+      .acard {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 14px 0;
+        max-width: 820px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .grow {
+        flex: 1;
+      }
+      .tag {
+        font-size: 13px;
+        padding: 3px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .tag.good {
+        color: var(--good);
+        border-color: #4ade8066;
+      }
+      .tag.accent {
+        color: var(--accent);
+        border-color: #e8a33d80;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 15px;
+        margin-top: 10px;
+      }
+      td,
+      th {
+        padding: 8px 6px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 13px;
+      }
+      a.k {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .rules {
+        background: #fff;
+        border: 2px solid var(--pink);
+        border-radius: 14px;
+        padding: 20px 26px;
+        font-size: 17px;
+      }
+      .rules li {
+        margin: 6px 0;
+      }
+      .decide {
+        display: flex;
+        gap: 10px;
+        margin: 18px 0 8px;
+      }
+      .decide button {
+        font: inherit;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 9px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        cursor: pointer;
+      }
+      .decide button[aria-pressed="true"] {
+        background: var(--pink);
+        color: #fff;
+      }
+      textarea {
+        width: 100%;
+        min-height: 80px;
+        font: inherit;
+        font-size: 16px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--pline);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Receipt after publishing to Jira, Linear or Azure DevOps</h1>
+      <p class="lead">
+        Workflow: <b>Idea to Done §4.8</b> (approved). After you approve a plan
+        and Amun creates the items, the chat that asked shows what was created.
+        Today nothing comes back and the request keeps saying “Waiting”. The
+        card reuses the existing document-card pattern; nothing is added to the
+        prompt box.
+      </p>
+
+      <div class="frame now">
+        <div class="lab">
+          Now · the request still says “Waiting…” and nothing lists what was
+          created
+        </div>
+        <img
+          src="current-linear-plan.webp"
+          alt="Invoiced chat: request status Waiting, no receipt"
+        />
+      </div>
+
+      <div class="frame new">
+        <div class="lab">
+          Proposed · the request turns Ready and one receipt card appears under
+          Firstmate’s reply
+        </div>
+        <div class="app">
+          <div class="bubble">
+            Publish the Invoiced epics and stories from the BRD to my Linear
+            (workspace transfrmai)… Raise it as a plan for my approval.
+          </div>
+          <div class="status">● <b>Ready</b> · View receipt ›</div>
+          <div class="who">
+            <b>Firstmate</b> · GitHub Copilot · Claude Sonnet 5.5
+          </div>
+          <div style="max-width: 820px">
+            Captain, the Invoiced plan is in Linear: 10 projects and 31 issues
+            in team TRA. The 16 first-release issues are marked; cycles are off,
+            so none is in a cycle.
+          </div>
+          <div class="acard">
+            <div class="row">
+              <strong class="grow"
+                >Created in Linear · 10 projects, 31 issues</strong
+              ><span class="tag good">Done</span>
+            </div>
+            <div class="muted small" style="margin-top: 4px">
+              Team TRA · from your approval at 15:52 · nothing was duplicated
+            </div>
+            <table>
+              <tr>
+                <th>Item</th>
+                <th>Created as</th>
+                <th>Under</th>
+              </tr>
+              <tr>
+                <td>Customers &amp; contacts</td>
+                <td><a class="k">P-TRA-3 ↗</a></td>
+                <td class="muted">—</td>
+              </tr>
+              <tr>
+                <td>Add a customer with billing address</td>
+                <td><a class="k">TRA-101 ↗</a></td>
+                <td class="muted">P-TRA-3</td>
+              </tr>
+              <tr>
+                <td>Import customers from CSV</td>
+                <td><a class="k">TRA-102 ↗</a></td>
+                <td class="muted">P-TRA-3</td>
+              </tr>
+            </table>
+            <div class="muted small" style="margin-top: 10px">
+              Show all 41 ›
+            </div>
+          </div>
+          <div class="who" style="margin-top: 34px">If some items failed</div>
+          <div class="acard">
+            <div class="row">
+              <strong class="grow">Created in Linear · 38 of 41</strong
+              ><span class="tag accent">3 not created</span>
+            </div>
+            <div class="muted small" style="margin: 6px 0 10px">
+              3 issues need a team that exists: “TRB” was not found. Nothing
+              else is retried.
+            </div>
+            <div class="row">
+              <span class="tag">Ask Firstmate to fix and retry the 3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules">
+        <b>How it behaves</b>
+        <ul>
+          <li>
+            One receipt per approved plan, in the chat of the request that asked
+            (by its reference), never in whatever chat is open.
+          </li>
+          <li>
+            It lists every created item with its key and link, and what it sits
+            under. Long lists fold after 3 rows.
+          </li>
+          <li>
+            Partial results say so (“38 of 41”) and name what failed; only the
+            failed items can be retried, through Firstmate.
+          </li>
+          <li>
+            The request line under your message turns
+            <b>Ready · View receipt</b>. Each story on the Stories tab links
+            back to this receipt.
+          </li>
+          <li>
+            Firstmate is told what was created, so it stops saying it is
+            waiting.
+          </li>
+        </ul>
+      </div>
+
+      <div class="decide" data-k="d">
+        <button>Approve</button><button>Change</button><button>Decline</button>
+      </div>
+      <textarea placeholder="Notes…"></textarea>
+    </div>
+    <script>
+      const K = "amun-receipt-card-2026-11-23";
+      const s = JSON.parse(localStorage.getItem(K) || "{}");
+      document.querySelectorAll(".decide button").forEach((b) => {
+        b.setAttribute("aria-pressed", s.d === b.textContent);
+        b.onclick = () => {
+          s.d = b.textContent;
+          localStorage.setItem(K, JSON.stringify(s));
+          document
+            .querySelectorAll(".decide button")
+            .forEach((x) => x.setAttribute("aria-pressed", x === b));
+        };
+      });
+      const t = document.querySelector("textarea");
+      t.value = s.n || "";
+      t.oninput = () => {
+        s.n = t.value;
+        localStorage.setItem(K, JSON.stringify(s));
+      };
+    </script>
+  </body>
+</html>
