@@ -132,6 +132,8 @@ function snapshot(extra: Partial<WorkSnapshot> = {}): WorkSnapshot {
     messages: [],
     chats: [],
     requests: [],
+    delivery: [],
+    deliveryLinks: [],
     ...extra,
   };
 }

@@ -114,3 +114,77 @@ describe("the publish receipt", () => {
     work.close();
   });
 });
+
+describe("published items in the delivery summary", () => {
+  it("turn a same-titled draft Published and add the rest, with their epic", () => {
+    const work = openWorkStore(":memory:");
+    const send = (action: string, extra: object = {}) =>
+      work.store
+        .handle({ version: 1, kind: "work", action, ...extra })
+        .find(
+          (event) => (event as { kind?: string }).kind === "work-result",
+        ) as { ok: boolean; ref: string | null };
+    send("add-group", { name: "Work" });
+    const group = work.store.snapshot().groups[0]!.id;
+    const area = send("create-area", {
+      groupId: group,
+      type: "project",
+      name: "Invoiced",
+    }).ref!;
+    const product = send("start-delivery", { workAreaId: area }).ref!;
+    work.db
+      .prepare(
+        "INSERT INTO work_items(id,product_id,type,title,status) VALUES ('d1',?,'story','Add a customer','draft'),('d2',?,'story','Merge duplicates','draft')",
+      )
+      .run(product, product);
+    const planId = send("propose-plan", {
+      groupId: null,
+      workAreaId: area,
+      planKind: "stories",
+      destination: "linear",
+      summary: "Invoiced plan",
+      items: [
+        { id: "e1", summary: "Customers", fields: { type: "Epic" } },
+        {
+          id: "s1",
+          summary: "Add a customer",
+          fields: { type: "Story", parent: "Customers" },
+        },
+      ],
+    }).ref!;
+    const fingerprint = work.store
+      .snapshot()
+      .plans.find((p) => p.id === planId)!.fingerprint;
+    send("approve-plan", { planId, fingerprint });
+    send("record-results", {
+      planId,
+      results: [
+        { id: "e1", state: "created", externalId: "P-TRA-3" },
+        { id: "s1", state: "created", externalId: "TRA-101" },
+      ],
+    });
+    const summary = work.store
+      .snapshot()
+      .delivery.find((d) => d.workAreaId === area)!;
+    expect(summary.delivery).toBe(true);
+    const byTitle = new Map(summary.items.map((i) => [i.title, i]));
+    const epic = byTitle.get("Customers")!;
+    expect(epic).toMatchObject({
+      type: "epic",
+      tool: "linear",
+      key: "P-TRA-3",
+    });
+    expect(byTitle.get("Add a customer")).toMatchObject({
+      id: "d1",
+      tool: "linear",
+      key: "TRA-101",
+      status: "To do",
+      parentId: epic.id,
+    });
+    expect(byTitle.get("Merge duplicates")).toMatchObject({
+      tool: null,
+      key: null,
+    });
+    work.close();
+  });
+});
