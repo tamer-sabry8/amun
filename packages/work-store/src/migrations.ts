@@ -1224,4 +1224,10 @@ CREATE TABLE blocker_comment_reviews(blocker_id TEXT NOT NULL REFERENCES work_bl
      UPDATE work_attention SET state='done',resolved_at=NEW.resolved_at,snoozed_until=NULL
      WHERE id='blocker-review:' || NEW.id AND work_area_id=NEW.work_area_id AND state<>'done';
    END;`,
+  // Idea to Done (owner approval, 23 November 2026): a Project can run the
+  // same delivery flow as a Product, and the chain requirements → epics →
+  // stories → release → roadmap item is kept here.
+  `ALTER TABLE work_areas ADD COLUMN delivery INTEGER NOT NULL DEFAULT 0;
+UPDATE work_areas SET delivery=1 WHERE type='product';
+CREATE TABLE delivery_links(kind TEXT NOT NULL CHECK (kind IN ('release_story','roadmap_requirements','roadmap_release')), from_id TEXT NOT NULL, to_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (kind,from_id,to_id));`,
 ] as const;

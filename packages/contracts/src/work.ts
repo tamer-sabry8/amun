@@ -1161,6 +1161,24 @@ export const workCommand = z.discriminatedUnion("action", [
    * `saveText`, the reply's own words are kept too: in the chat of the
    * request it is about, when every reference points to the same chat.
    */
+  /**
+   * Run a Project with stories and sprints instead of its checklist (Idea to
+   * Done §3.2). Gives it the same delivery record a Product has; checklist
+   * tasks become stories. One-way.
+   */
+  act("start-delivery", { workAreaId: id }),
+  /** Status of a story worked in Amun only; a tool's stories change there. */
+  act("set-story-status", {
+    itemId: id,
+    status: z.enum(["todo", "in_progress", "in_review", "done", "removed"]),
+  }),
+  /** Link two records of the delivery chain, or unlink them. */
+  act("link-delivery", {
+    kind: z.enum(["release_story", "roadmap_requirements", "roadmap_release"]),
+    fromId: id,
+    toId: id,
+    linked: z.boolean().default(true),
+  }),
   act("apply-reply", {
     text: z.string().max(200000),
     workAreaId: id,

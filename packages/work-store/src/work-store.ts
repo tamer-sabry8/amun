@@ -43,6 +43,8 @@ import {
   rfpHandoff,
 } from "../../domain/src/work/flows.ts";
 import { moveStory, resequence } from "../../domain/src/work/planning.ts";
+import { parseProjectChecklist } from "../../domain/src/work/release-launch.ts";
+import { storyStatusWords } from "../../domain/src/work/delivery-chain.ts";
 import {
   readRequestBlocks,
   reportFingerprint,
@@ -2966,6 +2968,89 @@ export class WorkStore {
         if (!ref)
           throw new WorkError("There is no chat for this Firstmate reply.");
         return { ref };
+      }
+      case "start-delivery": {
+        const area = this.get(
+          "SELECT type,name,product_id,delivery FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.workAreaId,
+        );
+        if (!area) throw new WorkError("That work area no longer exists.");
+        if (area.type !== "project" && area.type !== "product")
+          throw new WorkError(
+            "Only a product or a project can run with stories and sprints.",
+          );
+        let productId = (area.product_id as string | null) ?? null;
+        if (area.delivery === 1 && productId) return { ref: productId };
+        if (!productId) {
+          productId = randomUUID();
+          this.run(
+            "INSERT INTO products(id,name,allowed_models_json,created_at) VALUES (?,?,'[]',?)",
+            productId,
+            String(area.name),
+            now,
+          );
+        }
+        this.run(
+          "UPDATE work_areas SET product_id=?,delivery=1 WHERE id=?",
+          productId,
+          command.workAreaId,
+        );
+        // The checklist's tasks become stories, Done kept (§3.2). The
+        // checklist itself stays in the Library as it was.
+        const checklist = this.get(
+          "SELECT o.body FROM library_outputs o JOIN library_output_links l ON l.output_id=o.id WHERE l.work_area_id=? AND o.type='project_checklist' AND o.status<>'Archived' ORDER BY o.updated_at DESC LIMIT 1",
+          command.workAreaId,
+        );
+        for (const task of parseProjectChecklist(String(checklist?.body ?? "")))
+          this.run(
+            "INSERT INTO work_items(id,product_id,type,title,body,status) VALUES (?,?,'story',?,?,?)",
+            randomUUID(),
+            productId,
+            this.clean(task.title),
+            [
+              task.owner && `Owner: ${task.owner}`,
+              task.due && `Due: ${task.due}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            task.done ? storyStatusWords.done : storyStatusWords.todo,
+          );
+        return { ref: productId };
+      }
+      case "set-story-status": {
+        const item = this.get(
+          "SELECT type,remote_system FROM work_items WHERE id=?",
+          command.itemId,
+        );
+        if (!item) throw new WorkError("That story no longer exists.");
+        if (item.remote_system)
+          throw new WorkError(
+            "This story is worked in a connected tool, so its status changes there, through an approved plan.",
+          );
+        this.run(
+          "UPDATE work_items SET status=? WHERE id=?",
+          storyStatusWords[command.status],
+          command.itemId,
+        );
+        return { ref: command.itemId };
+      }
+      case "link-delivery": {
+        if (command.linked)
+          this.run(
+            "INSERT OR IGNORE INTO delivery_links(kind,from_id,to_id,created_at) VALUES (?,?,?,?)",
+            command.kind,
+            command.fromId,
+            command.toId,
+            now,
+          );
+        else
+          this.run(
+            "DELETE FROM delivery_links WHERE kind=? AND from_id=? AND to_id=?",
+            command.kind,
+            command.fromId,
+            command.toId,
+          );
+        return { ref: command.fromId };
       }
       case "apply-reply": {
         if (!this.live(command.workAreaId))
