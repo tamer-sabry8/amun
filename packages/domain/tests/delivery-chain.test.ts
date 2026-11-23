@@ -56,7 +56,6 @@ describe("the delivery chain (Idea to Done, 23 November 2026)", () => {
   });
 });
 
-
 describe("a sprint whose stories were never read", () => {
   it("says so instead of 0 / 0", () => {
     const sprint = {
