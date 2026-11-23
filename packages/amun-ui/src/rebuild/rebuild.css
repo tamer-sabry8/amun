@@ -3858,9 +3858,36 @@
 }
 .rb-pgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 16px;
   margin-bottom: 20px;
+}
+/* Every card the same size (owner, 23 November 2026): each cell and its
+   card fill the grid track, and long names stop at two lines. */
+.rb-pgrid > * {
+  display: flex;
+  min-width: 0;
+}
+.rb-pgrid > * > .rb-pcard {
+  flex: 1;
+  width: 100%;
+}
+.rb-pcard .name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.rb-type-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-type-seg .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 500;
 }
 .rb-pcard {
   display: flex !important;
