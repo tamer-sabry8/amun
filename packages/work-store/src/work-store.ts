@@ -180,6 +180,134 @@ export class WorkStore {
       now,
     );
   }
+  private libraryOrigins(
+    outputs: readonly { id: string; groupId: string | null }[],
+  ): Map<
+    string,
+    {
+      workAreaId: string;
+      chatId: string | null;
+      messageId: string;
+      requestRef: string | null;
+      version: number;
+    }
+  > {
+    const result = new Map<
+      string,
+      {
+        workAreaId: string;
+        chatId: string | null;
+        messageId: string;
+        requestRef: string | null;
+        version: number;
+      }
+    >();
+    if (!outputs.length) return result;
+    const outputGroups = new Map<string, string | null>();
+    for (const output of outputs) outputGroups.set(output.id, output.groupId);
+    const best = new Map<
+      string,
+      {
+        workAreaId: string;
+        chatId: string | null;
+        messageId: string;
+        requestRef: string | null;
+        version: number;
+        createdAt: string;
+        isFork: boolean;
+        seq: number;
+      }
+    >();
+    const rows = this.all(
+      `SELECT m.rowid AS seq,
+              m.id AS message_id,
+              m.work_area_id,
+              m.chat_id,
+              m.card_json,
+              m.created_at,
+              a.group_id AS area_group_id,
+              c.forked_from AS chat_forked_from
+       FROM work_messages m
+       JOIN work_areas a ON a.id = m.work_area_id AND a.status <> 'deleted'
+       LEFT JOIN work_chats c ON c.id = m.chat_id
+       WHERE m.role = 'card' AND m.card_json IS NOT NULL
+         AND (m.chat_id IS NULL OR c.id IS NOT NULL)
+       ORDER BY m.created_at ASC,
+                (CASE WHEN c.forked_from IS NULL OR c.forked_from = '' THEN 0 ELSE 1 END) ASC,
+                m.rowid ASC`,
+    );
+    for (const row of rows) {
+      let card: {
+        kind?: unknown;
+        outputId?: unknown;
+        version?: unknown;
+        request?: unknown;
+      };
+      try {
+        card = JSON.parse(String(row.card_json));
+      } catch {
+        continue;
+      }
+      if (
+        !card ||
+        typeof card !== "object" ||
+        card.kind !== "delivered" ||
+        typeof card.outputId !== "string" ||
+        !outputGroups.has(card.outputId)
+      )
+        continue;
+      const outputGroup = outputGroups.get(card.outputId) ?? null;
+      const areaGroup = (row.area_group_id as string | null) ?? null;
+      if (outputGroup !== null && areaGroup !== outputGroup) continue;
+      const version =
+        typeof card.version === "number" &&
+        Number.isInteger(card.version) &&
+        card.version >= 1
+          ? card.version
+          : 1;
+      const candidate = {
+        workAreaId: String(row.work_area_id),
+        chatId:
+          row.chat_id === null || row.chat_id === undefined
+            ? null
+            : String(row.chat_id),
+        messageId: String(row.message_id),
+        requestRef:
+          typeof card.request === "string" && card.request.trim()
+            ? card.request
+            : null,
+        version,
+        createdAt: String(row.created_at),
+        isFork:
+          typeof row.chat_forked_from === "string" &&
+          row.chat_forked_from.length > 0,
+        seq: Number(row.seq),
+      };
+      const prev = best.get(card.outputId);
+      if (
+        !prev ||
+        candidate.version < prev.version ||
+        (candidate.version === prev.version &&
+          (candidate.createdAt < prev.createdAt ||
+            (candidate.createdAt === prev.createdAt &&
+              ((!candidate.isFork && prev.isFork) ||
+                (candidate.isFork === prev.isFork &&
+                  candidate.seq < prev.seq)))))
+      ) {
+        best.set(card.outputId, candidate);
+      }
+    }
+    for (const [outputId, origin] of best) {
+      result.set(outputId, {
+        workAreaId: origin.workAreaId,
+        chatId: origin.chatId,
+        messageId: origin.messageId,
+        requestRef: origin.requestRef,
+        version: origin.version,
+      });
+    }
+    return result;
+  }
 
   setup(): SetupState {
     const row = this.get(
@@ -306,6 +434,15 @@ export class WorkStore {
     const recordLinks = links("work_record_links", "record_id");
     const objectiveLinks = links("work_objective_links", "objective_id");
     const outputLinks = links("library_output_links", "output_id");
+    const outputRows = this.all(
+      "SELECT * FROM library_outputs ORDER BY updated_at DESC,id",
+    );
+    const outputOrigins = this.libraryOrigins(
+      outputRows.map((row) => ({
+        id: String(row.id),
+        groupId: (row.group_id as string | null) ?? null,
+      })),
+    );
     const records = this.all(
       "SELECT * FROM work_records ORDER BY created_at,id",
     ).map((row) => ({
@@ -541,9 +678,7 @@ export class WorkStore {
           "SELECT date,label FROM calendar_exceptions ORDER BY date",
         ),
         library: [
-          ...this.all(
-            "SELECT * FROM library_outputs ORDER BY updated_at DESC,id",
-          ).map((row) => ({
+          ...outputRows.map((row) => ({
             id: String(row.id),
             section: "output" as const,
             type: String(row.type),
@@ -565,6 +700,7 @@ export class WorkStore {
                     reason: String(row.acceptance_reason ?? ""),
                     decidedAt: String(row.acceptance_at),
                   },
+            origin: outputOrigins.get(String(row.id)) ?? null,
           })),
           ...records.map((record) => ({
             id: record.id,
@@ -587,6 +723,7 @@ export class WorkStore {
             version: 1,
             approvedVersion: null,
             acceptance: null,
+            origin: null,
             versions: [],
           })),
         ],
@@ -3548,6 +3685,134 @@ export class WorkStore {
           // unmatched document stays in the chat, linked to no card.
           const owner = known ? known.project : null;
           const group = this.groupOf(owner ?? at.areaId);
+          const body = this.clean(document.body);
+          if (document.body.length > 100_000 || body.length > 100_000) {
+            say(
+              at,
+              "firstmate",
+              `Amun could not save "${document.title || "Untitled document"}" because it is longer than the 100,000-character limit. Ask Firstmate to shorten it or split it into smaller documents.`,
+              {
+                kind: "document-refused",
+                title: document.title,
+                request: known ? known.ref : null,
+              },
+            );
+            continue;
+          }
+          if (document.outputId !== null) {
+            // Cross-request versioned revision: requires a confirmed in-scope
+            // request (or prompted same-group turn without an explicit request).
+            const authorized =
+              known !== null ||
+              (document.request === null && !command.saveText);
+            if (!authorized) {
+              say(
+                at,
+                "firstmate",
+                `Amun could not update "${document.title || "Untitled document"}" because it could not match that update to a known request.`,
+                {
+                  kind: "document-refused",
+                  title: document.title,
+                  outputId: document.outputId,
+                  request: null,
+                  reason: "unknown_request",
+                },
+              );
+              continue;
+            }
+            const target = this.get(
+              "SELECT o.id,o.group_id,o.type,o.title,o.body,o.status,COALESCE((SELECT MAX(version) FROM library_output_versions WHERE output_id=o.id),1) AS version FROM library_outputs o WHERE o.id=?",
+              document.outputId,
+            );
+            const targetGroup =
+              target &&
+              target.group_id !== null &&
+              target.group_id !== undefined
+                ? String(target.group_id)
+                : null;
+            if (!target || targetGroup !== group) {
+              say(
+                at,
+                "firstmate",
+                `Amun could not update "${document.title || "Untitled document"}" because that document is not available in this group.`,
+                {
+                  kind: "document-refused",
+                  title: document.title,
+                  outputId: document.outputId,
+                  request: known ? known.ref : null,
+                  reason: !target ? "missing_output" : "cross_group",
+                },
+              );
+              continue;
+            }
+            // Identical replay is a harmless no-op.
+            if (String(target.body) === body) continue;
+            const currentVersion = Number(target.version);
+            if (
+              document.expectedVersion !== null &&
+              document.expectedVersion !== currentVersion
+            ) {
+              say(
+                at,
+                "firstmate",
+                `Amun could not update "${document.title || String(target.title)}" because it has changed since version ${document.expectedVersion} (now version ${currentVersion}). Open the latest version and try again.`,
+                {
+                  kind: "document-refused",
+                  title: document.title || String(target.title),
+                  outputId: String(target.id),
+                  request: known ? known.ref : null,
+                  reason: "stale_version",
+                  expectedVersion: document.expectedVersion,
+                  currentVersion,
+                },
+              );
+              continue;
+            }
+            const existingLinks = this.all(
+              "SELECT work_area_id FROM library_output_links WHERE output_id=? ORDER BY work_area_id",
+              String(target.id),
+            )
+              .map((row) => String(row.work_area_id))
+              .filter((areaId) => this.groupOf(areaId) === targetGroup);
+            const workAreaIds =
+              owner &&
+              this.live(owner) &&
+              !existingLinks.includes(owner) &&
+              this.groupOf(owner) === targetGroup
+                ? [...existingLinks, owner]
+                : existingLinks;
+            const nextTitle = document.title || String(target.title);
+            const nextType =
+              document.type !== "doc" ? document.type : String(target.type);
+            const saved = this.apply({
+              version: 1,
+              kind: "work",
+              action: "save-output",
+              outputId: String(target.id),
+              groupId: targetGroup,
+              type: nextType,
+              title: nextTitle,
+              body,
+              status: String(target.status),
+              workAreaIds,
+              author: "firstmate",
+            } as never);
+            const outputId = String(saved.ref);
+            const version = Number(
+              this.get(
+                "SELECT max(version) AS v FROM library_output_versions WHERE output_id=?",
+                outputId,
+              )?.v ?? currentVersion + 1,
+            );
+            say(at, "card", nextTitle, {
+              kind: "delivered",
+              outputId,
+              title: nextTitle,
+              version,
+              request: known ? known.ref : null,
+            });
+            continue;
+          }
           // A revision of this same delivery: the same request (or, without
           // one, the same chat) and title. Other requests are never touched.
           const earlier = this.all(
@@ -3581,20 +3846,6 @@ export class WorkStore {
                 earlier.outputId,
               )
             : undefined;
-          const body = this.clean(document.body);
-          if (document.body.length > 100_000 || body.length > 100_000) {
-            say(
-              at,
-              "firstmate",
-              `Amun could not save "${document.title || "Untitled document"}" because it is longer than the 100,000-character limit. Ask Firstmate to shorten it or split it into smaller documents.`,
-              {
-                kind: "document-refused",
-                title: document.title,
-                request: known ? known.ref : null,
-              },
-            );
-            continue;
-          }
           // The same version delivered again is not a second reply.
           if (same && String(same.body) === body) continue;
           const saved = this.apply({

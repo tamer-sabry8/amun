@@ -631,4 +631,75 @@ describe("request references", () => {
     expect(saved!.text.length).toBe(16_384);
     expect(saved!.text.endsWith("…")).toBe(true);
   });
+
+  it("parses optional outputId and expectedVersion on document blocks while preserving defaults when omitted", () => {
+    const reply =
+      block({
+        do: "document",
+        request: prd,
+        title: "Gitex PRD",
+        type: "prd",
+        body: "# v2",
+        outputId: "  out-123  ",
+        expectedVersion: 2,
+      }) +
+      "\n" +
+      block({
+        do: "document",
+        title: "Plain Doc",
+        body: "Hello",
+      }) +
+      "\n" +
+      block({
+        do: "document",
+        title: "Bad Fields",
+        body: "Body",
+        outputId: "   ",
+        expectedVersion: 0,
+      }) +
+      "\n" +
+      block({
+        do: "document",
+        title: "Invalid Version",
+        body: "Body 2",
+        outputId: "out-456",
+        expectedVersion: 1.5,
+      });
+
+    const parsed = readRequestBlocks(reply);
+    expect(parsed.documents).toEqual([
+      {
+        request: prd,
+        title: "Gitex PRD",
+        type: "prd",
+        body: "# v2",
+        outputId: "out-123",
+        expectedVersion: 2,
+      },
+      {
+        request: null,
+        title: "Plain Doc",
+        type: "doc",
+        body: "Hello",
+        outputId: null,
+        expectedVersion: null,
+      },
+      {
+        request: null,
+        title: "Bad Fields",
+        type: "doc",
+        body: "Body",
+        outputId: null,
+        expectedVersion: null,
+      },
+      {
+        request: null,
+        title: "Invalid Version",
+        type: "doc",
+        body: "Body 2",
+        outputId: "out-456",
+        expectedVersion: null,
+      },
+    ]);
+  });
 });

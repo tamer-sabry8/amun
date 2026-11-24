@@ -31,9 +31,17 @@ import { OutputCards } from "./output-cards.tsx";
 /** The line a "show" leaves in the chat, opening that screen again. */
 function openedViewOf(card: unknown): {
   view:
-    "stories" | "receipt" | "sprints" | "requirements" | "release" | "activity";
+    | "stories"
+    | "receipt"
+    | "sprints"
+    | "requirements"
+    | "release"
+    | "activity"
+    | "backlog"
+    | "document";
   filter: StoriesFilter;
   label: string | null;
+  outputId: string | null;
 } | null {
   if (!card || typeof card !== "object") return null;
   const value = card as {
@@ -41,6 +49,7 @@ function openedViewOf(card: unknown): {
     view?: unknown;
     filter?: unknown;
     label?: unknown;
+    outputId?: unknown;
   };
   const views = [
     "stories",
@@ -49,6 +58,8 @@ function openedViewOf(card: unknown): {
     "requirements",
     "release",
     "activity",
+    "backlog",
+    "document",
   ] as const;
   const view = views.find((item) => item === value.view);
   if (value.kind !== "opened-view" || !view) return null;
@@ -57,6 +68,7 @@ function openedViewOf(card: unknown): {
     view,
     filter: filters.find((item) => item === value.filter) ?? "all",
     label: typeof value.label === "string" ? value.label : null,
+    outputId: typeof value.outputId === "string" ? value.outputId : null,
   };
 }
 import { requestRefOf } from "./requests.ts";
@@ -159,7 +171,11 @@ import {
   trackerTypesResult,
 } from "../../../../packages/contracts/src/work.ts";
 import { typeName } from "./rail.tsx";
-import { work as storeWork, workAsync as storeWorkAsync } from "./store.ts";
+import {
+  work as storeWork,
+  workAsync as storeWorkAsync,
+  workStore,
+} from "./store.ts";
 import { chatNote, chatRecap, forkNote, forkPoint } from "./fork.ts";
 import {
   generalConversationName,
@@ -210,6 +226,7 @@ import {
   standingPermissionLines,
   areaOf,
   parseAmunActions,
+  resolveShowDocument,
   typeLabels,
   workContext,
   type AmunAction,
@@ -1528,6 +1545,13 @@ export function WorkSession({
       action as never,
       { ...payload, told: true } as never,
     )) as typeof workAsync;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   /** Opens one delivery screen of this work; returns its name, or null. */
   const openView = (
     view:
@@ -1536,26 +1560,31 @@ export function WorkSession({
       | "sprints"
       | "requirements"
       | "release"
-      | "activity",
+      | "activity"
+      | "backlog",
     filter: StoriesFilter = "all",
   ): string | null => {
-    const snap = latest.current.snapshot;
+    const snap = workStore.getSnapshot().snapshot ?? latest.current.snapshot;
     if (view === "stories") {
-      onPane({ kind: "stories", filter });
+      if (mounted.current) onPane({ kind: "stories", filter });
       return filter === "all"
         ? "Stories"
         : `Stories · ${filter[0]!.toUpperCase()}${filter.slice(1)}`;
     }
     if (view === "requirements") {
-      onPane({ kind: "prd" });
+      if (mounted.current) onPane({ kind: "prd" });
       return context?.area.type === "project" ? "BRD" : "PRD";
     }
+    if (view === "backlog") {
+      if (mounted.current) onPane({ kind: "backlog" });
+      return "Backlog";
+    }
     if (view === "sprints") {
-      onSprints?.(areaId);
+      if (mounted.current) onSprints?.(areaId);
       return "Sprints";
     }
     if (view === "activity") {
-      onPane({ kind: "happened" });
+      if (mounted.current) onPane({ kind: "happened" });
       return "What happened";
     }
     if (view === "release") {
@@ -1568,7 +1597,7 @@ export function WorkSession({
         )
         .at(0);
       if (!release) return null;
-      onPane({ kind: "release", outputId: release.id });
+      if (mounted.current) onPane({ kind: "release", outputId: release.id });
       return release.title;
     }
     const receipt = [
@@ -1586,8 +1615,10 @@ export function WorkSession({
       snap.chats.find((chat) =>
         chat.messages.some((message) => message.id === receipt.id),
       )?.id ?? null;
-    if (onOpenAt) onOpenAt(areaId, inChat, receipt.id);
-    else reading.show(receipt.id);
+    if (mounted.current) {
+      if (onOpenAt) onOpenAt(areaId, inChat, receipt.id);
+      else reading.show(receipt.id);
+    }
     return "Receipt";
   };
   /** Files what Firstmate proposed under this work area. Proposals only. */
@@ -1963,6 +1994,57 @@ export function WorkSession({
     else if (proposed.do === "show") {
       // A way in from the chat (approved 23 November 2026): open the screen
       // and leave a line that opens it again later. Nothing is written.
+      if (proposed.view === "document") {
+        const snap =
+          workStore.getSnapshot().snapshot ?? latest.current.snapshot;
+        const resolved = resolveShowDocument(snap, {
+          areaId,
+          groupId,
+          outputId: proposed.outputId,
+          title: proposed.title,
+        });
+        if (resolved.kind === "found") {
+          if (mounted.current) onPane({ kind: "output", id: resolved.item.id });
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "card",
+            text: `Opened ${resolved.item.title}`,
+            card: {
+              kind: "opened-view",
+              view: "document",
+              filter: "all",
+              outputId: resolved.item.id,
+              label: resolved.item.title,
+            },
+          });
+        } else if (resolved.kind === "ambiguous") {
+          const choices = resolved.items
+            .map((item) => {
+              const where = item.workAreaIds
+                .map((id) => areaOf(snap, id)?.name)
+                .filter(Boolean)
+                .join(", ");
+              const kind = typeName(item.type);
+              return `“${item.title}” (${kind}${where ? ` · ${where}` : ""})`;
+            })
+            .join(", ");
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "firstmate",
+            text: `More than one saved document matches that name: ${choices}. Tell me which one to open.`,
+          });
+        } else {
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "firstmate",
+            text: "I could not find that saved document in this workspace.",
+          });
+        }
+        return;
+      }
       const opened = openView(proposed.view, proposed.filter);
       work("message", {
         workAreaId: areaId,
@@ -3407,6 +3489,20 @@ export function WorkSession({
                         className="rb-opened"
                         onClick={() => {
                           const card = openedViewOf(message.card)!;
+                          if (card.view === "document") {
+                            const snap =
+                              workStore.getSnapshot().snapshot ??
+                              latest.current.snapshot;
+                            const resolved = resolveShowDocument(snap, {
+                              areaId,
+                              groupId: context?.area.groupId ?? null,
+                              outputId: card.outputId,
+                              title: null,
+                            });
+                            if (resolved.kind === "found")
+                              onPane({ kind: "output", id: resolved.item.id });
+                            return;
+                          }
                           openView(card.view, card.filter);
                         }}
                       >

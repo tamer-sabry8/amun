@@ -1,56 +1,73 @@
 # Amun PM playbook
 
-> **Status: reference only, not installed.** Amun never writes this (or any rule) into your Firstmate home.
-> It was drafted when each Product Space had its own home; Amun now uses your single existing home.
-> If you want the First Mate to adopt parts of it, tell the First Mate in chat and it decides where the rules go
+> **Status: reference only, never auto-installed.** Amun never writes this (or any rule) into your Firstmate home.
+> Amun uses your single existing Firstmate home and never creates per-space homes.
+> If you want the First Mate to adopt parts of this playbook, tell the First Mate in chat and it decides where the rules go
 > (`data/captain.md`, `data/captain-shared.md`, a mate's home, or ai-memory).
 
-Amun overlay for this vendored Firstmate. It adds product-management work shapes; it changes no Firstmate rule.
-`AGENTS.md` wins on any conflict: you still never write to `projects/`, never merge or publish without the captain's word, never tear down unlanded work, crewmates still report only to you, and you report outcomes faithfully with evidence.
+Amun reference guidance for product-management work on top of this vendored Firstmate. It adds PM shapes and Amun handoff conventions; it changes no Firstmate rule.
+`AGENTS.md` wins on any conflict: you still never write to `projects/`, never merge or publish without the captain's word, never tear down unlanded work, crewmates still report only to you on the existing parent channel, and you report outcomes faithfully with verified evidence.
 
-The captain works in Amun. Each Amun Product Space is one Firstmate home (`FM_HOME=~/.amun/homes/<space>`).
-Amun reads your fleet through `bin/fm-fleet-snapshot.sh --json` and your backlog through `data/backlog.md`, so the board moves when your normal lifecycle moves it.
-Nothing below needs a new script: use `bin/fm-brief.sh`, `bin/fm-spawn.sh`, `bin/fm-tasks-axi.sh`, `bin/fm-captain-hold.sh` and `bin/fm-teardown.sh` as `AGENTS.md` describes.
+## 1. Single home, role routing, and reminders
 
-## Backlog kinds Amun's board understands
+- **Single Firstmate home:** Amun connects to the captain's single operational Firstmate home. Amun reads your fleet through `bin/fm-fleet-snapshot.sh --json` and your backlog through `data/backlog.md`, so the board moves when your normal lifecycle moves it. Use `bin/fm-brief.sh`, `bin/fm-spawn.sh`, `bin/fm-tasks-axi.sh`, `bin/fm-captain-hold.sh`, and `bin/fm-teardown.sh` as `AGENTS.md` describes.
+- **Route by actual registered role and remit:** Check `data/secondmates.md` (and the current registry and charter) before delegating. A catalogue title alone grants no authority. Give one matching, available role only the evidence it needs. If no matching role is registered, available, or authorized for the request's scope (for example, personal-only for a WORK request), retain the request and explain the limitation—do not invent roles or open new chats.
+- **Where guidance lives:** Keep short routing and decision guidance in the primary Firstmate home; keep detailed discovery, PRD drafting, and story decomposition guidance with the PRD mate.
+- **Reminders (Trackr route):** Record reminders in `data/reminders/reminders.md` via the Trackr route. Always distinguish clearly between `recorded` (logged in `data/reminders/reminders.md`) and `scheduled` (actually wired to a firing timer or trigger)—never call a recorded-only note scheduled.
+
+## 2. Request correlation and parent-channel handoffs
+
+Every captain message from Amun starts with `[Amun request amun-r-…]`. Carry that exact provenance through the entire lifecycle:
+
+- **Exact Amun request reference (`amun-r-…`):** Repeat it in backlog links (`amun-request:<ref>`), in every brief handed to a crewmate or second mate, and in every status report or delivery reply back to Amun.
+- **Authorized scope and source provenance:** Carry the authorized product, project, or initiative (and WORK or PERSONAL scope) plus the exact approved source ID and revision through native correlated parent-channel handoffs.
+- **No guessing:** Never guess which request a result belongs to from wording or timing, and never reuse a reference for different work. If a result's request reference is uncertain, leave the reference out so Amun keeps it visible without mislinking it.
+
+## 3. Backlog kinds Amun's board understands
 
 File every PM item through `bin/fm-tasks-axi.sh add <id> "<title>" --kind <kind>` before dispatch.
 
-| Kind                   | Board column while queued | Use for                                                |
-| ---------------------- | ------------------------- | ------------------------------------------------------ |
-| `scout`                | Discovery                 | research, evidence, assumption checks                  |
-| `prd`, `spec`, `story` | Spec / Prototype          | PRDs, user stories, initiative evaluations             |
-| `prototype`            | Spec / Prototype          | clickable prototypes and wireframes                    |
-| `sync`                 | Backlog                   | delivery-system work routed to the delivery secondmate |
+| Kind                   | Board column while queued | Use for                                                     |
+| ---------------------- | ------------------------- | ----------------------------------------------------------- |
+| `scout`                | Discovery                 | research, evidence, assumption checks                       |
+| `prd`, `spec`, `story` | Spec / Prototype          | PRDs, BRDs, proposals, user stories, initiative evaluations |
+| `prototype`            | Spec / Prototype          | Markdown wireframes and interactive-flow specifications     |
+| `sync`                 | Backlog                   | governed delivery-system work routed to a delivery role     |
 
 In flight shows as In Progress, In flight with a PR link or a captain hold shows as Review, and Done shows as Done.
 A decision for the captain is a task held with `bin/fm-captain-hold.sh hold <id> --reason "<question>"`; Amun shows it in its decision bar and relays the captain's answer to you as a message.
 
-## 1. Discovery and Market Scout
+## 4. Markdown-first PM shapes and the `amun` catalogue
 
-- Brief: `bin/fm-brief.sh <id> <repo> --scout`; spawn: `bin/fm-spawn.sh <id> projects/<repo> --scout`.
-- Firstmate spec: research the captain's question; for every product assumption in the ask, state the evidence for and against, with sources and dates; mark anything unverified as unverified.
-- Deliverable: the scout report at `data/<id>/report.md`. Put structured findings in a fenced `json` block at the end with keys `assumptions[]` (`claim`, `verdict` = `supported|weak|refuted|unverified`, `evidence[]`), `competitors[]` and `open_questions[]`. Amun's Roast Room evidence desk reads that block.
+Amun renders PM deliverables directly in its workspace as Markdown-first documents—including wireframes (`prototype` is a Markdown wireframe, not a local HTML bundle or dev-server browser preview).
 
-## 2. Wireframe and Prototype crewmate
+### Supported PM document shapes
 
-- Brief: `bin/fm-brief.sh <id> <repo> --mode local-only` (or the delivery mode the captain chose); spawn with the matching `--mode` and `--yolo`.
-- Firstmate spec: build a self-contained clickable prototype (HTML with Tailwind or React, no external services) inside the leased treehouse worktree, under `prototypes/<id>/`.
-- Handback: the `done:` status line names the entry file, for example `done: prototype prototypes/<id>/index.html`. If a dev server is needed, name its local URL instead. Amun's browser preview opens what the handback names; the captain never has to touch code.
+`proposal`, `brd`, `prd`, `idea`, `rice`, `moscow`, `roadmap`, `gantt`, `brief`, and `prototype` (Markdown wireframe).
 
-## 3. PRD and 4-Question Roadmap crewmate
+### Delivering through fenced `amun` blocks
 
-- Brief and spawn as a ship task in the captain's chosen mode.
-- Firstmate spec: draft the PRD and user stories, and evaluate every initiative against the 4-Question Framework, each answered in one short paragraph with its evidence:
-  1. What is it?
-  2. Why does it matter?
-  3. When will it be delivered?
-  4. How much does it cost?
-- A question with no evidence is answered "unknown" with what would settle it, never guessed.
-- Deliverable: `docs/prd/<id>.md` with a closing fenced `json` block `{"what":..., "why":..., "when":..., "cost":...}`, which Amun stores on the initiative.
+Put each action in its own fenced ` ```amun ` block containing **exactly one JSON object**:
 
-## 4. Linear and Jira Delivery secondmate
+- **`document`** (`{"do":"document", ...}`): Deliver a Markdown PM document with `"request": "amun-r-…"`, `"title"`, `"type"` (one of the PM shapes above), and `"body"` (Markdown). Include optional `"outputId"` and `"expectedVersion"` when publishing an explicit revision of an existing Amun document.
+- **`show`** (`{"do":"show", ...}`): Open a supported Amun pane or document beside the chat (for example `stories`, `receipt`, `sprints`, `requirements`, `release`, `activity`, or a specific document). `show` is read-only and never performs a write.
+- **`story-drafts`** (`{"do":"story-drafts", ...}`): Deliver editable story drafts derived from an approved PRD, carrying `"request": "amun-r-…"`, optional `"objectiveId"` and `"expectedVersion"`, and `"stories"` (each with short title, exact substantive requirement quote from the approved PRD, observable acceptance criteria, and child tasks).
+- **`report`** (`{"do":"report", ...}`): Report progress or completion (`queued`, `waiting`, `working`, `needs-decision`, `failed`, `delivered`) for `"request": "amun-r-…"`.
 
-- Persistent home: `bin/fm-brief.sh <id> --secondmate --no-projects`, then `bin/fm-spawn.sh <id> --secondmate`. Its charter scope: syncing approved stories and sprints with Linear and Jira Cloud.
-- Amun's server owns the API adapters and the credentials. The secondmate asks Amun to sync through its normal report-back; it never stores tokens in its home.
-- Any write to Linear or Jira is an external, outward-facing change: it needs the captain's explicit word for that exact payload and destination (hard rule 2), recorded through `bin/fm-captain-hold.sh`.
+### Conservative size budgets and JSON safety
+
+- Keep `document.body` **≤ 80,000 characters**.
+- Keep visible chat prose **≤ 12,000 characters**.
+- Escape literal backticks inside JSON string values as `\u0060` so embedded Markdown code fences never close the outer ` ```amun ` block early.
+
+## 5. Discovery, PRD, and Wireframe workflows
+
+- **Discovery and Market Scout:** Research the captain's question; state evidence for and against each assumption with sources and dates; mark anything unverified as unverified. Deliver the report to `data/<id>/report.md` (with a closing fenced `json` block containing `assumptions[]`, `competitors[]`, and `open_questions[]` for Roast Room) and return the correlated summary or `document` block on the parent channel.
+- **PRD and 4-Question Roadmap (PRD mate):** Draft the PRD/BRD and evaluate each initiative against the 4-Question Framework (What is it? Why does it matter? When will it be delivered? How much does it cost?), answering "unknown" with what would settle it whenever evidence is missing. Deliver via `document` (`type: "prd"` or `"brd"`) with the exact request reference; after approval, decompose stories via `story-drafts` quoting exact passages from the approved source ID and revision.
+- **Markdown Wireframe (`prototype`):** Produce a structured Markdown wireframe (screens, states, navigation flows, copy, and edge cases) delivered via `document` with `"type": "prototype"`. Do not spin up local dev servers or claim a browser preview opened.
+
+## 6. Governed provider flows (ADO, Jira, Linear, Notion)
+
+- **Amun owns adapters and credentials:** Amun's server owns all provider connections, OAuth tokens, and governed write operations for Azure DevOps, Jira, Linear, and Notion. Firstmate and secondmates never store credentials or write directly to external trackers or wikis.
+- **Captain approval is mandatory and scoped:** Every external write requires the captain's explicit approval covering the exact listed records, fields, and destination. A role handoff delegates analysis only and grants no separate delivery write.
+- **Never claim completion before Amun confirms:** Never say an item was filed, shown, synced, or published until Amun confirms the operation. Report verified receipts faithfully (destination, external IDs, confirmed outcome, or exact error/refusal).
