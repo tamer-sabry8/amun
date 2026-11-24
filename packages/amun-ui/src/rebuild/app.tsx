@@ -83,7 +83,13 @@ import {
 } from "./store.ts";
 import { acceptOffer } from "./accept-offer.ts";
 import { trackerAreas, useTrackerDelivery } from "./tracker-delivery.ts";
-import { areaOf, homeModel, typeLabels, type Snapshot } from "./view-model.ts";
+import {
+  areaOf,
+  homeModel,
+  resolveLibraryOpen,
+  typeLabels,
+  type Snapshot,
+} from "./view-model.ts";
 import { Wizard } from "./wizard.tsx";
 import { WorkSession, type PaneTarget } from "./work-session.tsx";
 
@@ -1025,16 +1031,26 @@ export function App() {
     updatedAt: "",
   }));
   const openLibraryItem = (item: LibraryItem) => {
-    if (item.type === "download") return;
-    const areaId = layout.workAreaId ?? item.workAreaIds[0];
-    if (!areaId) {
+    const target = resolveLibraryOpen(
+      snapshot,
+      item,
+      layout.workAreaId,
+      chatId,
+    );
+    if (!target) return;
+    if (target.kind === "unlinked") {
       setNote(
         "Link this to a piece of work to open it beside its conversation.",
       );
       return;
     }
-    const origin = areaId === layout.workAreaId ? chatId : null;
-    openWork(areaId, undefined, { kind: "output", id: item.id }, origin);
+    openWork(
+      target.areaId,
+      undefined,
+      target.pane,
+      target.chatId,
+      target.focus,
+    );
     dispatch({ type: "rail", item: null });
   };
   /** Documents delivered or referenced in one chat, for Library's This chat. */

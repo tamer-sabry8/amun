@@ -69,6 +69,8 @@ export interface RequestDocument {
   title: string;
   type: string;
   body: string;
+  outputId: string | null;
+  expectedVersion: number | null;
 }
 export interface RequestPlan {
   /** The request the plan is for, when Firstmate names one. */
@@ -291,13 +293,26 @@ export function readRequestBlocks(reply: string): {
       } else if (value.do === "story-drafts") {
         const draft = readStoryDraftsBlock(value);
         if (draft) storyDrafts.push(draft);
-      } else if (value.do === "document" && typeof value.title === "string")
+      } else if (value.do === "document" && typeof value.title === "string") {
+        const rawOutputId =
+          typeof value.outputId === "string"
+            ? value.outputId.trim().slice(0, 256)
+            : "";
+        const expectedVersion =
+          typeof value.expectedVersion === "number" &&
+          Number.isInteger(value.expectedVersion) &&
+          value.expectedVersion >= 1
+            ? value.expectedVersion
+            : null;
         documents.push({
           request: isRequestRef(value.request) ? value.request : null,
           title: clip(value.title, 200),
           type: clip(value.type, 64) || "doc",
           body: typeof value.body === "string" ? value.body : "",
+          outputId: rawOutputId || null,
+          expectedVersion,
         });
+      }
     } catch {
       // Dropped.
     }

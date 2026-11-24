@@ -653,6 +653,7 @@ describe("rail panels", () => {
       version: 1,
       approvedVersion: null,
       acceptance: null,
+      origin: null,
       versions: [],
     },
     {
@@ -669,6 +670,7 @@ describe("rail panels", () => {
       version: 1,
       approvedVersion: null,
       acceptance: null,
+      origin: null,
       versions: [],
     },
     {
@@ -685,6 +687,7 @@ describe("rail panels", () => {
       version: 1,
       approvedVersion: null,
       acceptance: null,
+      origin: null,
       versions: [],
     },
   ];

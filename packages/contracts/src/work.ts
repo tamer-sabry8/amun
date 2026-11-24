@@ -486,6 +486,17 @@ export const workSnapshot = z.strictObject({
         })
         .nullable()
         .default(null),
+      /** Canonical originating conversation and message for this Library output, if verified in scope. */
+      origin: z
+        .strictObject({
+          workAreaId: id,
+          chatId: id.nullable(),
+          messageId: id,
+          requestRef: z.string().nullable(),
+          version: z.number().int().min(1),
+        })
+        .nullable()
+        .default(null),
       /** The newest versions first, each with the text as it was then. */
       versions: z
         .array(
