@@ -18,6 +18,7 @@ import type {
   WorkStoreLike,
 } from "@amun/work-store";
 import { extractDocument } from "@amun/work-store";
+import type { OutputPreviewHost, PreviewSnapshotLike } from "./output-preview.js";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -85,6 +86,8 @@ export interface AmunRpcDeps {
   onOnceReply?: (reply: string) => void;
   /** Asks Pi whether a provider is signed in. */
   checkAccount?: (provider: string) => Promise<AccountCheck>;
+  /** Isolated loopback preview host for verified HTML wireframe outputs. */
+  previews?: OutputPreviewHost;
 }
 
 /** Methods polled every few seconds; traced only when they fail. */
@@ -613,6 +616,19 @@ export class AmunRpcHandler {
         )
           this.publishTracked(planId, false);
         return events;
+      }
+      case "work.preview": {
+        if (!this.deps.previews) {
+          return { ok: false, message: "Interactive wireframe preview is not available." };
+        }
+        const snapshot = this.deps.work.snapshot() as PreviewSnapshotLike;
+        return this.deps.previews.open(snapshot, request.outputId, request.areaId);
+      }
+      case "work.previewClose": {
+        if (this.deps.previews && request.url) {
+          await this.deps.previews.closeUrl(request.url);
+        }
+        return { ok: true };
       }
       case "work.search": {
         const snapshot = this.deps.work.snapshot() as { setup?: { activeGroupId?: string | null }; areas?: { id: string; groupId: string | null }[] };

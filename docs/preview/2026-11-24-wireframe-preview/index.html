@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun Phase 5 — Interactive Wireframe Preview Design Review</title>
+    <style>
+      :root {
+        --paper: #f6f4ef;
+        --sheet: #ffffff;
+        --ink: #18181b;
+        --muted: #63615b;
+        --rule: #e4e0d6;
+        --rule-strong: #d0cabd;
+        --accent: #b45309;
+        --accent-soft: #fef3c7;
+        --ok: #166534;
+        --ok-soft: #dcfce7;
+        --warn: #9a3412;
+        --warn-soft: #ffedd5;
+        --bad: #991b1b;
+        --bad-soft: #fee2e2;
+
+        --amun-bg: #0b0e14;
+        --amun-surface: #12161f;
+        --amun-elevated: #181e2a;
+        --amun-border: #252d3d;
+        --amun-ink: #f1f5f9;
+        --amun-muted: #94a3b8;
+        --amun-amber: #f59e0b;
+        --amun-amber-dim: rgba(245, 158, 11, 0.14);
+        --amun-green: #22c55e;
+        --amun-red: #f87171;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui,
+          sans-serif;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 40px 28px 96px;
+      }
+
+      header.masthead {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--rule-strong);
+        margin-bottom: 36px;
+      }
+
+      .masthead h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.18;
+        letter-spacing: -0.02em;
+        font-weight: 650;
+      }
+
+      .masthead p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 68ch;
+        font-size: 14.5px;
+      }
+
+      .meta-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--rule-strong);
+        background: var(--sheet);
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      .pill.ok {
+        background: var(--ok-soft);
+        border-color: #bbf7d0;
+        color: var(--ok);
+      }
+
+      .summary-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 36px;
+      }
+
+      .summary-cell {
+        background: var(--sheet);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .summary-cell strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .summary-cell span {
+        display: block;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+
+      section.item {
+        background: var(--sheet);
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        padding: 26px;
+        margin-bottom: 28px;
+      }
+
+      .item-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .item-head h2 {
+        margin: 0 0 6px;
+        font-size: 19px;
+        letter-spacing: -0.015em;
+        font-weight: 650;
+      }
+
+      .item-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        max-width: 72ch;
+      }
+
+      .workflow-note {
+        font-size: 12.5px;
+        color: var(--muted);
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 18px;
+      }
+
+      .workflow-note strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-bottom: 20px;
+      }
+
+      @media (max-width: 920px) {
+        .compare {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .panel-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--rule);
+        background: var(--paper);
+        color: var(--muted);
+      }
+
+      .badge.before {
+        background: var(--bad-soft);
+        border-color: #fecaca;
+        color: var(--bad);
+      }
+
+      .badge.after {
+        background: var(--ok-soft);
+        border-color: #bbf7d0;
+        color: var(--ok);
+      }
+
+      /* Authentic Amun dark workspace frames */
+      .amun-frame {
+        background: var(--amun-bg);
+        color: var(--amun-ink);
+        border: 1px solid var(--amun-border);
+        border-radius: 12px;
+        overflow: hidden;
+        font-size: 13px;
+        min-height: 360px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .amun-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        background: var(--amun-surface);
+        border-bottom: 1px solid var(--amun-border);
+      }
+
+      .amun-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--amun-ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .amun-btn {
+        appearance: none;
+        background: var(--amun-elevated);
+        color: var(--amun-ink);
+        border: 1px solid var(--amun-border);
+        border-radius: 7px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+
+      .amun-btn:hover {
+        background: #222a3a;
+        border-color: #364154;
+      }
+
+      .amun-btn.quiet {
+        background: transparent;
+      }
+
+      .amun-btn.primary {
+        background: var(--amun-amber);
+        border-color: var(--amun-amber);
+        color: #111827;
+        font-weight: 600;
+      }
+
+      .amun-btn.primary:hover {
+        background: #fbbf24;
+      }
+
+      .amun-btn:disabled {
+        opacity: 0.48;
+        cursor: default;
+      }
+
+      .amun-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--amun-elevated);
+        border: 1px solid var(--amun-border);
+        font-size: 11px;
+        color: var(--amun-muted);
+      }
+
+      .amun-tag.amber {
+        background: var(--amun-amber-dim);
+        border-color: rgba(245, 158, 11, 0.35);
+        color: #fcd34d;
+      }
+
+      .amun-tag.ok {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: #86efac;
+      }
+
+      .amun-body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+      }
+
+      .amun-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .amun-muted {
+        color: var(--amun-muted);
+        font-size: 12px;
+      }
+
+      .amun-status-stuck {
+        color: var(--amun-red);
+        font-size: 12px;
+      }
+
+      .amun-address-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: var(--amun-surface);
+        border-bottom: 1px solid var(--amun-border);
+      }
+
+      .amun-address-input {
+        flex: 1;
+        background: var(--amun-bg);
+        border: 1px solid var(--amun-border);
+        border-radius: 6px;
+        padding: 5px 8px;
+        color: var(--amun-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .amun-preview-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--amun-surface);
+        border-bottom: 1px solid var(--amun-border);
+      }
+
+      .amun-code-block {
+        background: var(--amun-surface);
+        border: 1px solid var(--amun-border);
+        border-radius: 8px;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        color: #cbd5e1;
+        line-height: 1.5;
+        overflow: hidden;
+      }
+
+      .amun-inline-card {
+        background: var(--amun-surface);
+        border: 1px solid var(--amun-border);
+        border-radius: 10px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .amun-inline-card h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--amun-ink);
+      }
+
+      /* Interactive synthetic wireframe canvas inside P5-1 After */
+      .wireframe-stage {
+        flex: 1;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .wf-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 10px;
+      }
+
+      .wf-brand {
+        font-weight: 700;
+        font-size: 13px;
+        color: #0f172a;
+      }
+
+      .wf-tabs {
+        display: flex;
+        gap: 6px;
+      }
+
+      .wf-tab {
+        appearance: none;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        color: #334155;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11.5px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .wf-tab.active {
+        background: #0f172a;
+        border-color: #0f172a;
+        color: #ffffff;
+      }
+
+      .wf-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8fafc;
+      }
+
+      .wf-card h4 {
+        margin: 0 0 6px;
+        font-size: 13px;
+        color: #0f172a;
+      }
+
+      .wf-card p {
+        margin: 0 0 10px;
+        font-size: 12px;
+        color: #475569;
+      }
+
+      .wf-action {
+        appearance: none;
+        border: 1px solid #0f172a;
+        background: #0f172a;
+        color: #ffffff;
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 11.5px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .wf-feedback {
+        margin-top: 8px;
+        font-size: 11.5px;
+        color: #166534;
+        font-weight: 500;
+      }
+
+      /* Security & scope table */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-bottom: 18px;
+      }
+
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: top;
+      }
+
+      table.spec th {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        background: var(--paper);
+      }
+
+      /* Decision controls */
+      .decision-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        padding-top: 16px;
+        border-top: 1px solid var(--rule);
+      }
+
+      .choice {
+        appearance: none;
+        border: 1px solid var(--rule-strong);
+        background: var(--sheet);
+        color: var(--ink);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12.5px;
+        font-weight: 550;
+        cursor: pointer;
+      }
+
+      .choice[aria-pressed="true"].approve {
+        background: var(--ok-soft);
+        border-color: #86efac;
+        color: var(--ok);
+      }
+
+      .choice[aria-pressed="true"].changes {
+        background: var(--warn-soft);
+        border-color: #fdba74;
+        color: var(--warn);
+      }
+
+      .choice[aria-pressed="true"].defer {
+        background: var(--bad-soft);
+        border-color: #fca5a5;
+        color: var(--bad);
+      }
+
+      .note-input {
+        flex: 1;
+        min-width: 240px;
+        border: 1px solid var(--rule-strong);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12.5px;
+        background: var(--paper);
+        color: var(--ink);
+      }
+
+      .sticky-footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid var(--rule-strong);
+        padding: 12px 28px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .footer-summary {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .footer-summary strong {
+        color: var(--ink);
+      }
+
+      .copy-btn {
+        appearance: none;
+        background: var(--ink);
+        color: #ffffff;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 550;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <div>
+          <h1>Phase 5 Design Review — Interactive Wireframe Preview</h1>
+          <p>
+            Before-and-after review for clickable HTML wireframes in the Library
+            and the broken Prototype card in the PRD pane. Nothing in the app UI
+            changes until you approve the items below.
+          </p>
+        </div>
+        <div class="meta-bar">
+          <span class="pill">Branch: feat/firstmate-canvas-phase-5</span>
+          <span class="pill">Base: main @ ac84d1e</span>
+          <span class="pill ok">0 code edits yet</span>
+        </div>
+      </header>
+
+      <div class="summary-strip">
+        <div class="summary-cell">
+          <strong>3 decisions to review</strong>
+          <span
+            >P5-1 Library wireframe preview, P5-2 PRD Prototype card, P5-3
+            Isolation &amp; deferred visual scope</span
+          >
+        </div>
+        <div class="summary-cell">
+          <strong>Reuses existing browser pane</strong>
+          <span
+            >Isolated Electron WebContentsView + loopback token server, no new
+            window or composer controls</span
+          >
+        </div>
+        <div class="summary-cell">
+          <strong>Firstmate stays in charge</strong>
+          <span
+            >No revived crew-direct dispatch; wireframe requests go through
+            Firstmate like every other artifact</span
+          >
+        </div>
+        <div class="summary-cell">
+          <strong>Zero external reach</strong>
+          <span
+            >Offline CSP, memory-only session, lineage checked on open,
+            auto-closed on pane or app exit</span
+          >
+        </div>
+      </div>
+
+      <!-- P5-1 -->
+      <section class="item" data-item="P5-1">
+        <div class="item-head">
+          <div>
+            <h2>P5-1. Clickable wireframe preview from the Library pane</h2>
+            <p>
+              When Firstmate or a crewmate files a self-contained HTML wireframe
+              (<code>type: "prototype"</code>), clicking
+              <strong>Open preview</strong> opens it beside the chat in Amun’s
+              isolated preview pane—with a clean single-row preview bar instead
+              of a raw localhost address bar.
+            </p>
+          </div>
+          <span class="pill">Journey 7 · Interactive wireframe</span>
+        </div>
+
+        <div class="workflow-note">
+          <strong>Workflow enabled:</strong> Review a saved HTML wireframe
+          interactively (1 click from the open artifact, 2 clicks from Library)
+          and jump straight back to the saved version or keep discussing changes
+          with Firstmate beside it.
+        </div>
+
+        <div class="compare">
+          <div class="panel">
+            <div class="panel-label">
+              <span>Current screen</span>
+              <span class="badge before">Broken today</span>
+            </div>
+            <div class="amun-frame">
+              <div class="amun-topbar">
+                <span class="amun-title">Checkout Flow Wireframe</span>
+                <div class="amun-row">
+                  <span class="amun-tag">Prototype</span>
+                  <span class="amun-tag">v2</span>
+                </div>
+              </div>
+              <div class="amun-body">
+                <div class="amun-row">
+                  <span class="amun-tag">Prototype</span>
+                  <span class="amun-tag">Draft</span>
+                  <span class="amun-tag amber">From: PRD v2 · Checkout</span>
+                </div>
+                <div class="amun-row">
+                  <button class="amun-btn quiet" disabled>Open preview</button>
+                  <span class="amun-status-stuck">
+                    Opening the preview… (hangs forever — server has no
+                    output-preview handler)
+                  </span>
+                </div>
+                <div
+                  class="amun-address-bar"
+                  style="
+                    border-radius: 8px;
+                    border: 1px solid var(--amun-border);
+                  "
+                >
+                  <button class="amun-btn quiet" disabled>Back</button>
+                  <button class="amun-btn quiet" disabled>Reload</button>
+                  <div class="amun-address-input">
+                    http://127.0.0.1:54321/9f8a7c6b5d4e3f2a1b0c9d8e7f6a5b4c…
+                  </div>
+                </div>
+                <div class="amun-code-block">
+                  &lt;!doctype html&gt;<br />
+                  &lt;html lang="en"&gt;<br />
+                  &nbsp;&nbsp;&lt;!-- Raw HTML stays visible; even if opened,
+                  BrowserPane exposes an editable raw loopback URL bar with no
+                  return to the document. --&gt;
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-label">
+              <span>Proposed screen (try clicking the wireframe below)</span>
+              <span class="badge after">Proposed</span>
+            </div>
+            <div class="amun-frame">
+              <div class="amun-topbar">
+                <span class="amun-title">Checkout Flow Wireframe</span>
+                <div class="amun-row">
+                  <button
+                    class="amun-btn quiet"
+                    type="button"
+                    id="wf-toggle-mode"
+                  >
+                    Back to document
+                  </button>
+                  <button class="amun-btn quiet" type="button" id="wf-reload">
+                    Reload
+                  </button>
+                </div>
+              </div>
+              <div class="amun-preview-bar">
+                <span class="amun-muted">
+                  Saved copy · v2 · Synthetic data only
+                </span>
+                <span class="amun-tag ok">Offline preview</span>
+              </div>
+              <div class="wireframe-stage" id="wf-stage">
+                <div class="wf-nav">
+                  <span class="wf-brand">Synthetic Checkout</span>
+                  <div class="wf-tabs" role="tablist">
+                    <button
+                      type="button"
+                      class="wf-tab active"
+                      data-step="cart"
+                      aria-selected="true"
+                    >
+                      1. Cart
+                    </button>
+                    <button
+                      type="button"
+                      class="wf-tab"
+                      data-step="shipping"
+                      aria-selected="false"
+                    >
+                      2. Shipping
+                    </button>
+                    <button
+                      type="button"
+                      class="wf-tab"
+                      data-step="confirm"
+                      aria-selected="false"
+                    >
+                      3. Confirm
+                    </button>
+                  </div>
+                </div>
+                <div class="wf-card" id="wf-card">
+                  <h4>Step 1: Review items (2)</h4>
+                  <p>
+                    Annual Plan ($240) + Priority Onboarding ($60). Synthetic
+                    wireframe state updates locally with zero network calls.
+                  </p>
+                  <button type="button" class="wf-action" id="wf-cta">
+                    Continue to Shipping
+                  </button>
+                  <div class="wf-feedback" id="wf-feedback"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="decision-bar">
+          <button
+            type="button"
+            class="choice approve"
+            data-choice="Approved"
+            aria-pressed="false"
+          >
+            Approve P5-1
+          </button>
+          <button
+            type="button"
+            class="choice changes"
+            data-choice="Changes requested"
+            aria-pressed="false"
+          >
+            Request changes
+          </button>
+          <button
+            type="button"
+            class="choice defer"
+            data-choice="Defer"
+            aria-pressed="false"
+          >
+            Defer clickable preview
+          </button>
+          <input
+            type="text"
+            class="note-input"
+            placeholder="Optional note for P5-1…"
+            aria-label="Note for P5-1"
+          />
+        </div>
+      </section>
+
+      <!-- P5-2 -->
+      <section class="item" data-item="P5-2">
+        <div class="item-head">
+          <div>
+            <h2>P5-2. Replace broken Prototype card in the PRD pane</h2>
+            <p>
+              After a PRD is approved, the PRD pane currently shows a
+              <strong>Prototype</strong> card with three dead buttons that emit
+              an unhandled legacy <code>prototype</code> event. Replace it with
+              plain Firstmate-routed actions using the same card layout.
+            </p>
+          </div>
+          <span class="pill">Journey 7 · PRD → Wireframe</span>
+        </div>
+
+        <div class="workflow-note">
+          <strong>Workflow enabled:</strong> Ask Firstmate to have a crewmate
+          produce a wireframe from the approved PRD vN (preserving captain →
+          Firstmate → crew), or open the latest saved wireframe in one click
+          when one already exists for this work area.
+        </div>
+
+        <div class="compare">
+          <div class="panel">
+            <div class="panel-label">
+              <span>Current PRD Prototype card</span>
+              <span class="badge before">3 dead buttons</span>
+            </div>
+            <div class="amun-frame" style="min-height: 240px">
+              <div class="amun-topbar">
+                <span class="amun-title">PRD — Checkout Simplification</span>
+                <span class="amun-tag ok">Approved · v2</span>
+              </div>
+              <div class="amun-body">
+                <div class="amun-inline-card">
+                  <h3>Prototype</h3>
+                  <div class="amun-row">
+                    <button class="amun-btn" disabled>
+                      Explore a prototype
+                    </button>
+                    <button class="amun-btn" disabled>Open the preview</button>
+                    <button class="amun-btn" disabled>Read the feedback</button>
+                  </div>
+                  <span class="amun-status-stuck">
+                    Checking on the prototype… (all 3 buttons emit legacy kind:
+                    "prototype" with no handler)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-label">
+              <span>Proposed PRD Wireframe card</span>
+              <span class="badge after">Firstmate-routed</span>
+            </div>
+            <div class="amun-frame" style="min-height: 240px">
+              <div class="amun-topbar">
+                <span class="amun-title">PRD — Checkout Simplification</span>
+                <span class="amun-tag ok">Approved · v2</span>
+              </div>
+              <div class="amun-body">
+                <div class="amun-inline-card">
+                  <h3>Wireframe</h3>
+                  <div class="amun-row">
+                    <button class="amun-btn primary" type="button">
+                      Ask Firstmate for a wireframe
+                    </button>
+                    <button class="amun-btn quiet" type="button">
+                      Open latest wireframe (v2)
+                    </button>
+                  </div>
+                  <span class="amun-muted">
+                    Firstmate asks a specialist to build a clickable wireframe
+                    from PRD v2 and saves it in your Library.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="decision-bar">
+          <button
+            type="button"
+            class="choice approve"
+            data-choice="Approved"
+            aria-pressed="false"
+          >
+            Approve P5-2
+          </button>
+          <button
+            type="button"
+            class="choice changes"
+            data-choice="Changes requested"
+            aria-pressed="false"
+          >
+            Request changes
+          </button>
+          <button
+            type="button"
+            class="choice defer"
+            data-choice="Hide card instead"
+            aria-pressed="false"
+          >
+            Hide card instead
+          </button>
+          <input
+            type="text"
+            class="note-input"
+            placeholder="Optional note for P5-2…"
+            aria-label="Note for P5-2"
+          />
+        </div>
+      </section>
+
+      <!-- P5-3 -->
+      <section class="item" data-item="P5-3">
+        <div class="item-head">
+          <div>
+            <h2>P5-3. Isolation guarantees and deferred visual scope</h2>
+            <p>
+              Confirm the security boundary for loopback previews and confirm
+              that interactive RICE sorting and Gantt timeline bars remain
+              deferred to a later decision (Markdown tables + existing Roadmap
+              view stay in place for Phase 6).
+            </p>
+          </div>
+          <span class="pill">Security &amp; Scope Gate</span>
+        </div>
+
+        <table class="spec">
+          <thead>
+            <tr>
+              <th style="width: 24%">Control</th>
+              <th style="width: 46%">Phase 5 behavior</th>
+              <th style="width: 30%">Verification test</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Lineage check on open</strong></td>
+              <td>
+                Server verifies output exists, belongs to the authorized work
+                area/group, has <code>type === "prototype"</code>, and contains
+                a valid self-contained HTML page (&le; 500 KB) before issuing a
+                preview URL.
+              </td>
+              <td>Cross-group / deleted / non-prototype requests rejected.</td>
+            </tr>
+            <tr>
+              <td><strong>Loopback token &amp; TTL</strong></td>
+              <td>
+                Bound to <code>127.0.0.1</code> only, 256-bit random path token,
+                <code>Host</code> header check, 15-minute TTL, cap of 8 active
+                previews (evicting oldest), closed on pane/window/daemon exit.
+              </td>
+              <td>
+                Wrong host, wrong path, expired token, and post-close all return
+                404.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Strict offline CSP &amp; session</strong></td>
+              <td>
+                <code
+                  >default-src 'none'; script-src 'unsafe-inline'; style-src
+                  'unsafe-inline'; img-src data: blob:; font-src data:;
+                  form-action 'none'; frame-ancestors 'none'; base-uri
+                  'none'</code
+                >. Ephemeral memory-only Electron partition with zero preload,
+                zero cookies, zero external navigation.
+              </td>
+              <td>
+                Synthetic clicks work; external fetch/navigation and desktop IPC
+                fail.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Deferred visual panes</strong></td>
+              <td>
+                Interactive RICE column sorting and interactive Gantt bars stay
+                deferred. Firstmate produces sorted RICE tables and phase/Gantt
+                tables in Markdown; quarterly roadmaps use the existing Roadmap
+                pane.
+              </td>
+              <td>
+                No new top-level views, no composer changes, ~0 MB app growth.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="decision-bar">
+          <button
+            type="button"
+            class="choice approve"
+            data-choice="Approved"
+            aria-pressed="false"
+          >
+            Approve P5-3
+          </button>
+          <button
+            type="button"
+            class="choice changes"
+            data-choice="Changes requested"
+            aria-pressed="false"
+          >
+            Request changes
+          </button>
+          <input
+            type="text"
+            class="note-input"
+            placeholder="Optional note for P5-3…"
+            aria-label="Note for P5-3"
+          />
+        </div>
+      </section>
+    </main>
+
+    <footer class="sticky-footer">
+      <div class="footer-summary" id="footer-summary">
+        <strong>0 of 3</strong> items decided
+      </div>
+      <button type="button" class="copy-btn" id="copy-decisions">
+        Copy decision summary
+      </button>
+    </footer>
+
+    <script>
+      // Interactive synthetic wireframe demo inside P5-1 After
+      (function () {
+        const steps = {
+          cart: {
+            title: "Step 1: Review items (2)",
+            body: "Annual Plan ($240) + Priority Onboarding ($60). Synthetic wireframe state updates locally with zero network calls.",
+            cta: "Continue to Shipping",
+            next: "shipping",
+          },
+          shipping: {
+            title: "Step 2: Billing & Workspace",
+            body: "Workspace: Acme Demo (synthetic). Tax calculated locally: $0.00.",
+            cta: "Continue to Confirm",
+            next: "confirm",
+          },
+          confirm: {
+            title: "Step 3: Confirm order ($300)",
+            body: "Ready to test final click state. Clicking below triggers a local synthetic confirmation only.",
+            cta: "Simulate checkout",
+            next: null,
+          },
+        };
+
+        let current = "cart";
+        const tabs = document.querySelectorAll(".wf-tab");
+        const card = document.getElementById("wf-card");
+        const toggleBtn = document.getElementById("wf-toggle-mode");
+        const reloadBtn = document.getElementById("wf-reload");
+        const stage = document.getElementById("wf-stage");
+        let showingDoc = false;
+
+        function renderStep(key, message) {
+          current = key;
+          const s = steps[key];
+          tabs.forEach((t) => {
+            const active = t.dataset.step === key;
+            t.classList.toggle("active", active);
+            t.setAttribute("aria-selected", String(active));
+          });
+          card.innerHTML =
+            "<h4>" +
+            s.title +
+            "</h4><p>" +
+            s.body +
+            '</p><button type="button" class="wf-action" id="wf-cta">' +
+            s.cta +
+            '</button><div class="wf-feedback" id="wf-feedback">' +
+            (message || "") +
+            "</div>";
+          const cta = document.getElementById("wf-cta");
+          cta.addEventListener("click", function () {
+            if (s.next) {
+              renderStep(s.next, "Moved to " + s.next + " (offline state).");
+            } else {
+              renderStep(
+                "confirm",
+                "Synthetic confirmation #DEMO-402 recorded in memory only.",
+              );
+            }
+          });
+        }
+
+        tabs.forEach((tab) => {
+          tab.addEventListener("click", () => renderStep(tab.dataset.step, ""));
+        });
+
+        reloadBtn.addEventListener("click", () => {
+          if (showingDoc) return;
+          renderStep("cart", "Preview reloaded cleanly.");
+        });
+
+        toggleBtn.addEventListener("click", () => {
+          showingDoc = !showingDoc;
+          toggleBtn.textContent = showingDoc
+            ? "Open preview"
+            : "Back to document";
+          stage.style.opacity = showingDoc ? "0.45" : "1";
+        });
+
+        renderStep("cart", "");
+      })();
+
+      // Review decision tracker
+      (function () {
+        const items = [...document.querySelectorAll("section.item")];
+        const summary = document.getElementById("footer-summary");
+        const copyBtn = document.getElementById("copy-decisions");
+
+        function updateSummary() {
+          let decided = 0;
+          items.forEach((el) => {
+            if (el.querySelector('.choice[aria-pressed="true"]')) decided++;
+          });
+          summary.innerHTML =
+            "<strong>" +
+            decided +
+            " of " +
+            items.length +
+            "</strong> items decided";
+        }
+
+        items.forEach((section) => {
+          const buttons = section.querySelectorAll(".choice");
+          buttons.forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const wasPressed = btn.getAttribute("aria-pressed") === "true";
+              buttons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+              btn.setAttribute("aria-pressed", String(!wasPressed));
+              updateSummary();
+            });
+          });
+        });
+
+        copyBtn.addEventListener("click", async () => {
+          const lines = items.map((section) => {
+            const id = section.dataset.item;
+            const active = section.querySelector(
+              '.choice[aria-pressed="true"]',
+            );
+            const note = section.querySelector(".note-input").value.trim();
+            const verdict = active ? active.dataset.choice : "Pending";
+            return "- " + id + ": " + verdict + (note ? " (" + note + ")" : "");
+          });
+          const text = lines.join("\n");
+          try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = "Copied!";
+            setTimeout(
+              () => (copyBtn.textContent = "Copy decision summary"),
+              1600,
+            );
+          } catch {
+            window.prompt("Copy your decision summary:", text);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

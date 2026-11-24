@@ -10,7 +10,7 @@ import type { WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 import { currentModel } from "./firstmate.ts";
 import { parsePrd, prdExtensions, writePrd } from "../prd-markdown.ts";
-import { PrototypeCard } from "./prototype-card.tsx";
+import { PrototypeCard, type WireframeSummary } from "./prototype-card.tsx";
 import { code, list, Problem, stack } from "./view-parts.tsx";
 
 type Context = NonNullable<WorkspaceSnapshot["productContext"]>;
@@ -402,9 +402,18 @@ export function PrdView({
   initialObjective,
   context,
   openPreview,
+  onAskWireframe,
+  latestWireframe,
 }: {
   context: Context;
-  openPreview?: ((url: string) => void) | undefined;
+  openPreview?:
+    | ((
+        url: string,
+        meta?: { outputId: string; title: string; version: number },
+      ) => void)
+    | undefined;
+  onAskWireframe?: ((prompt: string) => void) | undefined;
+  latestWireframe?: WireframeSummary | null | undefined;
   initialObjective?: string | undefined;
 }) {
   const origin = useReviewOrigin();
@@ -510,11 +519,11 @@ export function PrdView({
       {prd?.approved && (
         <PrototypeCard
           key={objective.id + prd.version}
-          product={context.productId}
-          objective={objective.id}
           revision={prd.version}
+          areaId={origin?.areaId}
+          latestWireframe={latestWireframe}
+          onAsk={onAskWireframe}
           open={openPreview ?? nothing}
-          review={nothing}
         />
       )}
       <Understanding

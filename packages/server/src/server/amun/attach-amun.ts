@@ -53,6 +53,7 @@ const laterReplies: { current: ((reply: { agentId: string; text: string }) => vo
 };
 import { serveNotionForFirstMate } from "./notion-for-first-mate.js";
 import { serveTrackersForFirstMate } from "./trackers-for-first-mate.js";
+import { OutputPreviewHost } from "./output-preview.js";
 
 
 /** The work contract's limit on an `apply-reply` text. */
@@ -320,6 +321,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     secret: async (connection) =>
       (await connections.token({ kind: "ado", baseUrl: connection.baseUrl })) ?? null,
   });
+  const previews = new OutputPreviewHost();
   const handler = new AmunRpcHandler({
     spaces,
     primary,
@@ -330,6 +332,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
     council,
     notion,
     trackers,
+    previews,
     workChanged: () => {
       for (const ws of wss.clients) send(ws, { event: "work.updated" });
     },
@@ -705,6 +708,7 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
       notion.stop();
       trackersForFirstMate?.close();
       trackers.stop();
+      void previews.closeAll();
       work.close();
       input.httpServer.off("upgrade", onUpgrade);
       for (const ws of wss.clients) ws.close();

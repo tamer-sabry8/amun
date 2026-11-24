@@ -42,10 +42,18 @@ export const previewCommand = z.strictObject({
   kind: z.literal("output-preview"),
   id: z.uuid(),
   outputId: z.string().min(1).max(200),
+  areaId: z.string().min(1).max(200).optional(),
+});
+export const previewCloseCommand = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("output-preview-close"),
+  url: z.url().max(512).optional(),
 });
 export const previewResult = z.object({
   kind: z.literal("output-preview-result"),
   id: z.uuid(),
   url: z.url().optional(),
+  title: z.string().optional(),
+  version: z.number().int().positive().optional(),
   message: z.string(),
 });
