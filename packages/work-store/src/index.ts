@@ -17,8 +17,21 @@ export { extractDocument } from "./document-import.ts";
 export { WorkStore, WorkError } from "./work-store.ts";
 export { openDatabase, type Database } from "./sqlite.ts";
 export { WorkspaceService } from "./workspace-service.ts";
+export {
+  deliverPublicationReceipt,
+  receiptFingerprint,
+  receiptSettingId,
+  readPublicationReceiptRecord,
+  type PublicationReceiptDelivery,
+  type PublicationReceiptInput,
+  type PublicationReceiptItem,
+  type PublicationReceiptRecord,
+  type PublicationReceiptState,
+} from "./publication-receipt.ts";
+export { persistStoryDrafts } from "./product-authoring.ts";
 export { ToolsService } from "./tools-service.ts";
 export { recordFirstMateReply } from "./first-mate-thread.ts";
+export { readRequestBlocks } from "../../domain/src/work/requests.ts";
 export {
   AdoService,
   NO_AZURE_PROJECT,

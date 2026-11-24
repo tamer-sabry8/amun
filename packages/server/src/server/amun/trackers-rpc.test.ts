@@ -111,4 +111,132 @@ describe("Linear and Jira over Amun RPC", () => {
       await handler.handleRaw({ id: "9", method: "trackers.request", message: { action: "connect", provider: "asana" } }),
     ).toMatchObject({ ok: false, error: { code: "InvalidRequest" } });
   });
+
+  it("delivers verified publication receipts to primary Firstmate after tracker publish", async () => {
+    const sent: string[] = [];
+    const delivered: unknown[] = [];
+    let changed = 0;
+    const deps = {
+      work: {
+        snapshot: () => ({ plans: [{ id: "p1", requestRef: "amun-r-112233445566" }] }),
+        handle: () => [{ kind: "work-result", ok: true }],
+      },
+      workspace: {
+        deliverPublicationReceipt: async (input: unknown, send: (p: string) => Promise<string>) => {
+          delivered.push(input);
+          await send("verified receipt payload");
+          return { state: "accepted", deduplicated: false, fingerprint: "abc123" };
+        },
+      },
+      spaces: { list: async () => [{ slug: "default", fmHome: "/tmp/fm" }] },
+      primary: {
+        send: async (_space: unknown, text: string) => {
+          sent.push(text);
+          return { reply: "Noted." };
+        },
+      },
+      trackers: {
+        owns: (id: string) => id === "p1",
+        publish: async () => [{ kind: "work-snapshot" }],
+        writes: () => [
+          {
+            id: "i1",
+            destination: "linear",
+            state: "created",
+            externalId: "TRA-42",
+            url: "https://linear.app/issue/TRA-42",
+            note: null,
+          },
+        ],
+        recover: async () => [],
+        targets: async () => "",
+        handle: async () => ({}),
+        stop: () => undefined,
+      },
+      workChanged: () => {
+        changed += 1;
+      },
+      redactor: { text: (v: string) => v },
+      trace: { record: () => undefined },
+    } as unknown as AmunRpcDeps;
+
+    const handler = new AmunRpcHandler(deps);
+    await handler.handleRaw({ id: "10", method: "work.command", command: { action: "approve-plan", planId: "p1" } });
+    await settle();
+    expect(changed).toBe(1);
+    expect(delivered).toHaveLength(1);
+    expect(sent).toEqual(["verified receipt payload"]);
+  });
+
+  it("keeps async story review pending and files late story-drafts blocks from primary.send", async () => {
+    const finished: unknown[] = [];
+    const registered: unknown[] = [];
+    let changed = 0;
+    const deps = {
+      work: { snapshot: () => ({}), handle: () => [] },
+      workspace: {
+        bindStoryReview: (_m: unknown, ref: string, _o: unknown, prompt: string) => ({
+          parent: ref,
+          messageId: "msg-1",
+          prompt,
+        }),
+        finishStoryReview: (...args: unknown[]) => finished.push(args),
+        hasStoryDrafts: () => false,
+        registerCrewStoryDrafts: (ref: string, stories: unknown, objectiveId: unknown, version: unknown) => {
+          registered.push({ ref, stories, objectiveId, version });
+          return { productId: "p1", objectiveId: "o1", version: 1, inserted: 2, alreadyPresent: false };
+        },
+        author: async (_m: unknown, fn: (m: string, i: string, c: string) => Promise<string>) => {
+          await fn("firstmate", "draft", "{}");
+          return { kind: "workspace-snapshot" };
+        },
+      },
+      spaces: { get: async () => ({ slug: "default", fmHome: "/tmp/fm" }) },
+      primary: {
+        send: async (_space: unknown, text: string) => {
+          if (text.includes("late-stories")) {
+            return {
+              reply:
+                'Here are the drafts.\n```amun\n{"do":"story-drafts","request":"amun-r-aabbccddeeff","objectiveId":"o1","expectedVersion":1,"stories":[{"title":"S1","requirement":"REQ-1","acceptance":["AC1"],"tasks":["T1"]}]}\n```',
+            };
+          }
+          return { reply: "Dispatched to PRD mate." };
+        },
+      },
+      workChanged: () => {
+        changed += 1;
+      },
+      redactor: { text: (v: string) => v },
+      trace: { record: () => undefined },
+    } as unknown as AmunRpcDeps;
+
+    const handler = new AmunRpcHandler(deps);
+    await handler.handleRaw({
+      id: "11",
+      method: "workspace.author",
+      space: "default",
+      ref: "amun-r-aabbccddeeff",
+      origin: { areaId: "a1", chatId: null },
+      message: {
+        version: 1,
+        kind: "product-authoring",
+        productId: "p1",
+        objectiveId: "o1",
+        expectedVersion: 1,
+        action: "stories",
+        model: "firstmate",
+        difficulty: "standard",
+      },
+    });
+    expect(finished).toHaveLength(0);
+
+    await handler.handleRaw({
+      id: "12",
+      method: "primary.send",
+      space: "default",
+      text: "late-stories",
+    });
+    expect(registered).toHaveLength(1);
+    expect(changed).toBe(1);
+  });
 });

@@ -2,6 +2,7 @@
 // chat, the one the Home chat already uses.
 import { generalConversationName } from "../../domain/src/work/model.ts";
 import { latestOpenChat } from "../../domain/src/work/chats.ts";
+import { readRequestBlocks } from "../../domain/src/work/requests.ts";
 import type { WorkSnapshot } from "../../contracts/src/work.ts";
 
 /** The part of the work store this needs. */
@@ -85,12 +86,11 @@ export function recordFirstMateReply(
     if (started?.ok !== true || typeof started.ref !== "string") return null;
     chatId = started.ref;
   }
-  const trimmed =
-    text.length > MESSAGE_LIMIT ? `${text.slice(0, MESSAGE_LIMIT - 1)}…` : text;
   // A reply that carries a request reference Amun gave goes to the chat of
   // that request; anything else stays here, in General (owner, 20 November
   // 2026: never guess from wording or timing).
-  if (/```amun/.test(text)) {
+  const hasAmunBlock = /```amun/.test(text);
+  if (hasAmunBlock) {
     const applied = resultOf(
       store.handle({
         version: 1,
@@ -107,6 +107,12 @@ export function recordFirstMateReply(
     );
     if (applied?.ok === true) return areaId;
   }
+  const fallback = hasAmunBlock ? readRequestBlocks(text).visible : text;
+  if (hasAmunBlock && !fallback) return null;
+  const trimmed =
+    fallback.length > MESSAGE_LIMIT
+      ? `${fallback.slice(0, MESSAGE_LIMIT - 1)}…`
+      : fallback;
   const saved = resultOf(
     store.handle({
       version: 1,

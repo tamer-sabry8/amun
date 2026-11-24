@@ -1619,11 +1619,11 @@ describe("converting a task from the chat", () => {
 });
 
 describe("what Firstmate is told about where it runs and what an RFP is", () => {
-  it("states the Copilot route without turning it into proof of work done", () => {
-    expect(amunProtocol).toContain("GitHub Copilot");
-    expect(amunProtocol).toContain("do not claim you cannot confirm it");
+  it("does not claim Copilot-only routing while still requiring real results before calling work done", () => {
+    expect(amunProtocol).not.toContain("GitHub Copilot");
+    expect(amunProtocol).not.toContain("provider github-copilot");
     expect(amunProtocol).toContain(
-      "never call work done until an agent's result",
+      "Never call work done until an agent's result has actually arrived.",
     );
   });
   it("describes the RFP record only where one is provided", () => {

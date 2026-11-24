@@ -194,7 +194,6 @@ import {
   findFact,
 } from "../../../../packages/domain/src/work/facts.ts";
 import { findNamed } from "../../../../packages/domain/src/work/flows.ts";
-import { reminderIntent } from "../../../../packages/domain/src/work/reminders.ts";
 import {
   retryIntent,
   retryTarget,
@@ -1862,60 +1861,106 @@ export function WorkSession({
               : `I could not convert “${name}”. ${result.message}`,
         });
       })();
-    else if (proposed.do === "draft-stories") {
-      // The same draft as the PRD review's "Generate stories", started from
-      // this chat: the stories appear here, under the review of that version
-      // (stories, backlogs and sprints brief: "Draft editable stories from
-      // {source version}; mark backlog comparison pending").
-      const productId = context?.area.productId ?? null;
-      const product =
-        productId && workspace?.productContext?.productId === productId
-          ? workspace.productContext
-          : null;
-      const objective = product?.objectives.find((o) => o.prd) ?? null;
-      const prd = objective?.prd ?? null;
-      // A product with no allowed models is unrestricted: use Firstmate's.
-      const model = product?.allowedModels[0] ?? currentModel() ?? "firstmate";
-      const say = (text: string) =>
-        work("message", { workAreaId: areaId, role: "firstmate", text });
-      // A Project's requirements are its BRD (Idea to Done §1).
-      const isProject = context?.area.type === "project";
-      const doc = isProject ? "BRD" : "PRD";
-      if (!productId)
-        say(
-          isProject
-            ? "This project runs on its checklist. To draft stories it needs to run with stories and sprints instead; say “use sprints for this project” and its checklist tasks become stories. Nothing was changed."
-            : "Stories are drafted from a product’s PRD or a project’s BRD, and this work is neither. Nothing was changed.",
-        );
-      else if (!product || !objective || !prd)
-        say(
-          `There is no ${doc} for this ${isProject ? "project" : "product"} in Amun yet. Once one is saved here, I can draft its stories in this chat.`,
-        );
-      else if (!prd.approved)
-        say(
-          `${doc} v${prd.version} is saved in Amun and waits for your approval. Open the ${doc}, approve v${prd.version}, then ask again and I’ll draft its stories here.`,
-        );
-      else if (
-        product.storyDrafts.some(
-          (d) => d.objectiveId === objective.id && d.version === prd.version,
+    else if (proposed.do === "draft-stories")
+      void (async () => {
+        // The same draft as the PRD review's "Generate stories", started from
+        // this chat: the stories appear here, under the review of that version
+        // (stories, backlogs and sprints brief: "Draft editable stories from
+        // {source version}; mark backlog comparison pending").
+        const productId = context?.area.productId ?? null;
+        const say = (text: string) =>
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "firstmate",
+            text,
+          });
+        // A Project's requirements are its BRD (Idea to Done §1).
+        const isProject = context?.area.type === "project";
+        const doc = isProject ? "BRD" : "PRD";
+        if (!productId) {
+          say(
+            isProject
+              ? "This project runs on its checklist. To draft stories it needs to run with stories and sprints instead; say “use sprints for this project” and its checklist tasks become stories. Nothing was changed."
+              : "Stories are drafted from a product’s PRD or a project’s BRD, and this work is neither. Nothing was changed.",
+          );
+          return;
+        }
+        const readContext = () => {
+          const current = bridge.getSnapshot().workspace ?? workspace;
+          return current?.productContext?.productId === productId
+            ? current.productContext
+            : null;
+        };
+        let product = readContext();
+        if (!product) {
+          const current = bridge.getSnapshot().workspace ?? workspace;
+          if (current) {
+            if (current.preferences.productId !== productId)
+              bridge.send({
+                version: 1,
+                kind: "workspace",
+                action: "preferences",
+                preferences: { ...current.preferences, productId },
+              });
+            product = await new Promise((resolve) => {
+              const finish = (
+                ctx: NonNullable<WorkspaceSnapshot["productContext"]> | null,
+              ) => {
+                clearTimeout(timer);
+                stop();
+                resolve(ctx);
+              };
+              const timer = setTimeout(() => finish(readContext()), 3000);
+              const stop = bridge.subscribe(() => {
+                const ctx = readContext();
+                if (ctx) finish(ctx);
+              });
+              const ready = readContext();
+              if (ready) finish(ready);
+            });
+          }
+        }
+        if (!product) {
+          say(
+            `I could not load the ${doc} for this ${isProject ? "project" : "product"} yet. Open the ${doc} and try again.`,
+          );
+          return;
+        }
+        const objective = product.objectives.find((o) => o.prd) ?? null;
+        const prd = objective?.prd ?? null;
+        // A product with no allowed models is unrestricted: use Firstmate's.
+        const model = product.allowedModels[0] ?? currentModel() ?? "firstmate";
+        if (!objective || !prd)
+          say(
+            `There is no ${doc} for this ${isProject ? "project" : "product"} in Amun yet. Once one is saved here, I can draft its stories in this chat.`,
+          );
+        else if (!prd.approved)
+          say(
+            `${doc} v${prd.version} is saved in Amun and waits for your approval. Open the ${doc}, approve v${prd.version}, then ask again and I’ll draft its stories here.`,
+          );
+        else if (
+          product.storyDrafts.some(
+            (d) => d.objectiveId === objective.id && d.version === prd.version,
+          )
         )
-      )
-        say(
-          `The stories for PRD v${prd.version} are already drafted. Open the PRD to review them.`,
-        );
-      else
-        bridge.send({
-          version: 1,
-          kind: "product-authoring",
-          productId: product.productId,
-          objectiveId: objective.id,
-          expectedVersion: prd.version,
-          action: "stories",
-          origin: { areaId, chatId: savedIn },
-          model,
-          difficulty: "standard",
-        });
-    } else if (proposed.do === "show") {
+          say(
+            `The stories for ${doc} v${prd.version} are already drafted. Open the ${doc} to review them.`,
+          );
+        else
+          bridge.send({
+            version: 1,
+            kind: "product-authoring",
+            productId: product.productId,
+            objectiveId: objective.id,
+            expectedVersion: prd.version,
+            action: "stories",
+            origin: { areaId, chatId: savedIn },
+            model,
+            difficulty: "standard",
+          });
+      })();
+    else if (proposed.do === "show") {
       // A way in from the chat (approved 23 November 2026): open the screen
       // and leave a line that opens it again later. Nothing is written.
       const opened = openView(proposed.view, proposed.filter);
@@ -2262,20 +2307,6 @@ export function WorkSession({
           return;
         // The question could not be saved: the message goes where it was typed.
       }
-    }
-    // A reminder is kept by Amun and answered here; it is not sent on to
-    // Firstmate's model and creates no work.
-    if (!attachments.files.length && reminderIntent(typed)) {
-      const text = typed.trim();
-      await workAsync("message", { workAreaId: areaId, role: "you", text });
-      decided?.();
-      const result = await workAsync("reminder", { text, workAreaId: areaId });
-      await workAsync("message", {
-        workAreaId: areaId,
-        role: "firstmate",
-        text: result.message,
-      });
-      return;
     }
     // Asking in words to retry a failed item runs the same governed retry as
     // the Retry button, under the same approval; Firstmate then reports it.

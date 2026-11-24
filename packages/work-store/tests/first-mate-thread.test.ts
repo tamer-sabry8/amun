@@ -254,4 +254,132 @@ describe("a plan in a First Mate reply nobody asked for (handoff item 9)", () =>
     expect(work.store.snapshot().plans).toHaveLength(0);
     work.close();
   });
+
+  it("deduplicates plans per request_ref so two requests with identical payloads produce two proposals and replaying one produces no third", () => {
+    const work = opened();
+    const act = (action: string, extra: object) =>
+      (
+        work.store
+          .handle({ version: 1, kind: "work", action, ...extra })
+          .find(
+            (event) => (event as { kind?: string }).kind === "work-result",
+          ) as { ref: string | null }
+      ).ref;
+    const group = work.store.snapshot().groups[0]!.id;
+    const invoiced = act("create-area", {
+      groupId: group,
+      type: "project",
+      name: "Invoiced",
+    })!;
+    const req1 = "amun-r-111111111111";
+    const req2 = "amun-r-222222222222";
+    const m1 = act("message", {
+      workAreaId: invoiced,
+      role: "you",
+      text: "First request for Linear plan.",
+      card: { kind: "request", ref: req1 },
+    })!;
+    act("register-request", {
+      ref: req1,
+      messageId: m1,
+      projectAreaId: invoiced,
+    });
+    const m2 = act("message", {
+      workAreaId: invoiced,
+      role: "you",
+      text: "Second request for Linear plan.",
+      card: { kind: "request", ref: req2 },
+    })!;
+    act("register-request", {
+      ref: req2,
+      messageId: m2,
+      projectAreaId: invoiced,
+    });
+
+    const planFor = (ref: string) =>
+      plan("Invoiced plan").replace(
+        '"do":"plan",',
+        `"do":"plan","request":"${ref}",`,
+      );
+
+    recordFirstMateReply(work.store, planFor(req1));
+    recordFirstMateReply(work.store, planFor(req2));
+    expect(
+      work.store
+        .snapshot()
+        .plans.filter((item) => item.summary === "Invoiced plan"),
+    ).toHaveLength(2);
+
+    // Replaying req1's exact payload produces no third proposal.
+    recordFirstMateReply(work.store, planFor(req1));
+    expect(
+      work.store
+        .snapshot()
+        .plans.filter((item) => item.summary === "Invoiced plan"),
+    ).toHaveLength(2);
+
+    // A legitimate revision of req1 remains reviewable.
+    recordFirstMateReply(
+      work.store,
+      planFor(req1).replaceAll('"team":"TRA"', '"team":"TRB"'),
+    );
+    expect(
+      work.store
+        .snapshot()
+        .plans.filter((item) => item.summary === "Invoiced plan"),
+    ).toHaveLength(3);
+    work.close();
+  });
+
+  it("refuses a plan with an explicit unknown request reference without creating a proposal", () => {
+    const work = opened();
+    const withUnknownRef = plan("Unknown request plan").replace(
+      '"do":"plan",',
+      '"do":"plan","request":"amun-r-cccccccccccc",',
+    );
+    recordFirstMateReply(work.store, withUnknownRef);
+    expect(work.store.snapshot().plans).toHaveLength(0);
+
+    const withMalformedRef = plan("Malformed request plan").replace(
+      '"do":"plan",',
+      '"do":"plan","request":"not-a-valid-ref",',
+    );
+    recordFirstMateReply(work.store, withMalformedRef);
+    expect(work.store.snapshot().plans).toHaveLength(0);
+
+    const general = work.store
+      .snapshot()
+      .areas.find((area) => area.name === standing)!;
+    const refused = threadOf(work, general.id).filter(
+      (message) =>
+        (message.card as { kind?: string } | null)?.kind === "plan-refused",
+    );
+    expect(refused).toHaveLength(2);
+    work.close();
+  });
+
+  it("strips raw amun blocks before fallback-saving when apply-reply fails", () => {
+    const work = opened();
+    // Exceeds apply-reply's 200,000-char command limit so apply-reply fails
+    // validation and recordFirstMateReply falls back to saving the visible prose.
+    const hugeDoc =
+      "Here is the summary.\n\n```amun\n" +
+      JSON.stringify({
+        do: "document",
+        title: "Huge",
+        type: "doc",
+        body: "a".repeat(205_000),
+      }) +
+      "\n```";
+    const savedId = recordFirstMateReply(work.store, hugeDoc);
+    expect(savedId).toEqual(expect.any(String));
+    const general = work.store
+      .snapshot()
+      .areas.find((area) => area.name === standing)!;
+    const saved = threadOf(work, general.id).find((m) => m.id === savedId);
+    expect(saved?.text).toBe("Here is the summary.");
+    expect(saved?.text).not.toContain("```amun");
+    expect(saved?.text).not.toContain('"do":"document"');
+    work.close();
+  });
 });

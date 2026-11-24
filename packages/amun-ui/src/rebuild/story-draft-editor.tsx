@@ -2,6 +2,7 @@ import { useReviewOrigin } from "./review-origin.tsx";
 import { useEffect, useState } from "react";
 import type { WorkspaceSnapshot } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
+import { currentModel } from "./firstmate.ts";
 
 type Context = NonNullable<WorkspaceSnapshot["productContext"]>;
 export function StoryDraftEditor({
@@ -48,7 +49,8 @@ export function StoryDraftEditor({
       stop();
     };
   }, [story.title, story.acceptance, submitted]);
-  const model = context.allowedModels[0];
+  // A product with no allowed models is unrestricted: use Firstmate's.
+  const model = context.allowedModels[0] ?? currentModel() ?? "firstmate";
   if (story.status !== "draft") return null;
   if (!editing)
     return (

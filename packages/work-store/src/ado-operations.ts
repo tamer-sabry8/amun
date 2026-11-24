@@ -219,6 +219,12 @@ export async function runAdoOperation(
           ref,
           result.messageId,
         );
+        db.prepare(
+          "INSERT INTO workspace_settings(id,value_json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+        ).run(
+          "ado_batch_space:" + p.id,
+          JSON.stringify({ space: request.space }),
+        );
         return result;
       })
       .immediate();
@@ -265,6 +271,42 @@ export async function runAdoOperation(
       detail,
       receipts.every((r) => r.state === "succeeded"),
     );
+    if (publication.dispatch && receipts.length) {
+      let space = "space" in request ? request.space : null;
+      if (!space) {
+        const savedSpace = db
+          .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+          .get("ado_batch_space:" + p.id) as { value_json: string } | undefined;
+        if (savedSpace) {
+          try {
+            space =
+              (JSON.parse(savedSpace.value_json) as { space?: string }).space ??
+              null;
+          } catch {
+            space = null;
+          }
+        }
+      }
+      if (space) {
+        await publication.workspace.deliverPublicationReceipt(
+          {
+            kind: "ado",
+            targetId: p.id,
+            destination: `ado:${target.collection}|${target.project}|${target.team}`,
+            requestRef: bound.ref,
+            items: receipts.map((r) => ({
+              id: r.itemId,
+              state: r.state,
+              remoteId: r.remoteId ?? null,
+              remoteRev: r.remoteRev ?? null,
+              url: null,
+              note: null,
+            })),
+          },
+          (prompt) => publication.dispatch!(space!, prompt),
+        );
+      }
+    }
   }
   return {
     ...meta,

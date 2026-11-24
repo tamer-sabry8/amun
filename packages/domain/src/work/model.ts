@@ -246,8 +246,6 @@ export function intake(input: {
 }): IntakeStep {
   const kind = classifyMaterial(input);
   if (kind.kind === "unreadable") return { step: "unreadable" };
-  const reminder = input.fileNames?.length ? null : reminderIntent(input.text);
-  if (reminder) return { step: "reminder", intent: reminder };
   if (input.groupId === null && input.groups.length !== 1)
     return { step: "ask_group" };
   const groupId = input.groupId ?? input.groups[0]!.id;

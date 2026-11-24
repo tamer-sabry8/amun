@@ -6,6 +6,7 @@ import {
 } from "@getpaseo/protocol/amun-rpc";
 import { boardColumnFor, holdAnswerPrompt, holdsFromSnapshot } from "./firstmate-cli.js";
 import { PmStore } from "./pm-store.js";
+import { readRequestBlocks } from "@amun/work-store";
 import type {
   AdoServiceLike,
   CouncilLike,
@@ -189,12 +190,64 @@ export class AmunRpcHandler {
     return trackers.handle(message);
   }
 
-  /** Publishes in the background; the updated work snapshot is pushed after. */
+  /** Applies any correlated story-drafts blocks returned by Firstmate or crew. */
+  private applyLateStoryDrafts(text: string): boolean {
+    if (!this.deps.workspace.registerCrewStoryDrafts || !text.includes("```amun")) return false;
+    let changed = false;
+    for (const draft of readRequestBlocks(text).storyDrafts) {
+      const filed = this.deps.workspace.registerCrewStoryDrafts(
+        draft.request,
+        draft.stories,
+        draft.objectiveId,
+        draft.expectedVersion,
+      );
+      if (filed) changed = true;
+    }
+    if (changed) this.deps.workChanged?.();
+    return changed;
+  }
+
+  /** Publishes in the background; the updated work snapshot and verified receipt are pushed after. */
   private publishTracked(planId: string, retry: boolean) {
     void this.deps.trackers
       ?.publish(planId, retry)
-      .then((events) => {
+      .then(async (events) => {
         if (events.length) this.deps.workChanged?.();
+        const writes = this.deps.trackers?.writes?.(planId) ?? [];
+        if (!writes.length || !this.deps.workspace.deliverPublicationReceipt) return;
+        const snapshot = this.deps.work.snapshot() as {
+          plans?: { id: string; requestRef?: string | null }[];
+        };
+        const plan = snapshot.plans?.find((p) => p.id === planId);
+        const requestRef = plan?.requestRef ?? null;
+        if (!requestRef) return;
+        const space = (await this.deps.spaces.list())[0];
+        if (!space) return;
+        const delivery = await this.deps.workspace.deliverPublicationReceipt(
+          {
+            kind: "tracker",
+            targetId: planId,
+            destination: writes[0]!.destination,
+            requestRef,
+            items: writes.map((w) => ({
+              id: w.id,
+              state: w.state,
+              remoteId: w.externalId,
+              remoteRev: null,
+              url: w.url,
+              note: w.note,
+            })),
+          },
+          async (prompt) => (await this.deps.primary.send(space, prompt)).reply,
+        );
+        this.deps.trace.record({
+          source: "amun",
+          kind: "publication-receipt",
+          planId,
+          requestRef,
+          state: delivery.state,
+          deduplicated: delivery.deduplicated,
+        });
       })
       .catch((error: unknown) => {
         this.deps.trace.record({
@@ -424,7 +477,9 @@ export class AmunRpcHandler {
       }
       case "primary.send": {
         const space = await this.deps.spaces.get(request.space);
-        return this.deps.primary.send(space, request.text, request.collectFollowups);
+        const result = await this.deps.primary.send(space, request.text, request.collectFollowups);
+        this.applyLateStoryDrafts(result.reply);
+        return result;
       }
       case "primary.once": {
         const space = await this.deps.spaces.get(request.space);
@@ -598,8 +653,16 @@ export class AmunRpcHandler {
         });
         if(receipt){
           const saved=typeof result==="object" && result!==null && "kind" in result && result.kind==="workspace-snapshot";
-          const detail=saved?(request.message.action==="stories"?"Story drafts are ready in the PRD review.":"Updated the reviewed draft wording."):"The revision needs review. Check the current PRD and try again.";
-          this.deps.workspace.finishStoryReview?.(request.ref,receipt.messageId,detail,saved);
+          const pendingAsyncStories =
+            saved &&
+            request.message.action === "stories" &&
+            typeof request.message.objectiveId === "string" &&
+            typeof request.message.expectedVersion === "number" &&
+            this.deps.workspace.hasStoryDrafts?.(request.message.objectiveId, request.message.expectedVersion) === false;
+          if (!pendingAsyncStories) {
+            const detail=saved?(request.message.action==="stories"?"Story drafts are ready in the PRD review.":"Updated the reviewed draft wording."):"The revision needs review. Check the current PRD and try again.";
+            this.deps.workspace.finishStoryReview?.(request.ref,receipt.messageId,detail,saved);
+          }
         }
         return result;
       }
