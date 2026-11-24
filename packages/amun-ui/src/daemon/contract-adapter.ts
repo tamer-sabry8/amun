@@ -1011,6 +1011,54 @@ export class ContractAdapter {
         .catch(() => null);
       return report ? [report] : [];
     }
+    if (
+      message.kind === "output-preview" &&
+      typeof message.id === "string" &&
+      typeof message.outputId === "string"
+    ) {
+      const areaId =
+        typeof message.areaId === "string" ? message.areaId : undefined;
+      try {
+        const opened = await this.daemon.request<{
+          ok: boolean;
+          url?: string;
+          title?: string;
+          version?: number;
+          message: string;
+        }>("work.preview", {
+          outputId: message.outputId,
+          ...(areaId ? { areaId } : {}),
+        });
+        return [
+          {
+            kind: "output-preview-result",
+            id: message.id,
+            ...(opened.ok && opened.url ? { url: opened.url } : {}),
+            ...(opened.ok && opened.title ? { title: opened.title } : {}),
+            ...(opened.ok && opened.version ? { version: opened.version } : {}),
+            message: opened.message ?? "",
+          },
+        ];
+      } catch (error) {
+        return [
+          {
+            kind: "output-preview-result",
+            id: message.id,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Preview could not be opened.",
+          },
+        ];
+      }
+    }
+    if (message.kind === "output-preview-close") {
+      const url = typeof message.url === "string" ? message.url : undefined;
+      void this.daemon
+        .request("work.previewClose", { ...(url ? { url } : {}) })
+        .catch(() => undefined);
+      return [];
+    }
     if (message.kind === "work-attachment") {
       const file = workAttachment.parse(message);
       const header = {

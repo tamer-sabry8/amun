@@ -252,7 +252,11 @@ export type PaneTarget =
   | { kind: "prd"; objectiveId?: string }
   | { kind: "backlog" }
   | { kind: "pulls" }
-  | { kind: "browser"; url: string }
+  | {
+      kind: "browser";
+      url: string;
+      preview?: { outputId: string; title: string; version: number };
+    }
   /** "What happened": Firstmate's steps in this conversation, read only. */
   | { kind: "happened"; stepId?: string }
   /** Small-project checklist & handover receipt (Item 6). */
@@ -273,6 +277,8 @@ export function BrowserPane({
   url,
   hidden,
   fit,
+  preview,
+  onBackToDoc,
 }: {
   url: string;
   hidden: boolean;
@@ -280,6 +286,9 @@ export function BrowserPane({
       shrunk until that much of it fits the panel, and the address bar is left
       out, since there is nowhere else to go. */
   fit?: { width: number; height: number };
+  /** When set, shows the quiet offline wireframe preview bar instead of a raw URL bar. */
+  preview?: { outputId: string; title: string; version: number };
+  onBackToDoc?(outputId: string): void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [address, setAddress] = useState(url);
@@ -294,9 +303,19 @@ export function BrowserPane({
         setStatus(event.data.message);
     };
     window.addEventListener("message", listener);
-    browserCommand({ action: "navigate", url });
-    return () => window.removeEventListener("message", listener);
-  }, [url]);
+    browserCommand({
+      action: "navigate",
+      url,
+      ...(preview ? { mode: "preview" } : {}),
+    });
+    return () => {
+      window.removeEventListener("message", listener);
+      if (preview) {
+        browserCommand({ action: "close" });
+        bridge.send({ version: 1, kind: "output-preview-close", url });
+      }
+    };
+  }, [url, preview?.outputId]);
   useEffect(() => {
     const update = () => {
       const panel = viewport.current;
@@ -374,35 +393,67 @@ export function BrowserPane({
         maxWidth: "none",
       }}
     >
-      <form
-        className="row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          browserCommand({ action: "navigate", url: address });
-        }}
-      >
-        <button
-          type="button"
-          className="btn quiet"
-          onClick={() => browserCommand({ action: "back" })}
+      {preview ? (
+        <div
+          className="row wrap"
+          style={{ justifyContent: "space-between", alignItems: "center" }}
         >
-          Back
-        </button>
-        <button
-          type="button"
-          className="btn quiet"
-          onClick={() => browserCommand({ action: "reload" })}
+          <div className="row">
+            {onBackToDoc && (
+              <button
+                type="button"
+                className="btn quiet"
+                onClick={() => onBackToDoc(preview.outputId)}
+              >
+                Back to document
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn quiet"
+              onClick={() => browserCommand({ action: "reload" })}
+            >
+              Reload
+            </button>
+          </div>
+          <div className="row">
+            <span className="muted small">
+              Saved copy · v{preview.version} · Synthetic data only
+            </span>
+            <span className="tag">Offline preview</span>
+          </div>
+        </div>
+      ) : (
+        <form
+          className="row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            browserCommand({ action: "navigate", url: address });
+          }}
         >
-          Reload
-        </button>
-        <input
-          type="text"
-          className="grow"
-          aria-label="Address"
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-        />
-      </form>
+          <button
+            type="button"
+            className="btn quiet"
+            onClick={() => browserCommand({ action: "back" })}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="btn quiet"
+            onClick={() => browserCommand({ action: "reload" })}
+          >
+            Reload
+          </button>
+          <input
+            type="text"
+            className="grow"
+            aria-label="Address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+          />
+        </form>
+      )}
       {status && (
         <p className="muted small" role="status">
           {status}
@@ -1043,27 +1094,42 @@ export function OutputDoc({
   outputId: string;
   editing: boolean;
   onAsk(text: string): void;
-  onPreview?(url: string): void;
+  onPreview?(
+    url: string,
+    meta?: { outputId: string; title: string; version: number },
+  ): void;
   citations?: Citations;
 }) {
   const item = snapshot.library.find((entry) => entry.id === outputId);
   const [previewing, setPreviewing] = useState(false);
   const [previewNotice, setPreviewNotice] = useState("");
-  const waiting = useRef("");
+  const waiting = useRef<{
+    id: string;
+    outputId: string;
+    title: string;
+    version: number;
+  } | null>(null);
   useEffect(
     () =>
       bridge.onEvent((raw) => {
         const result = previewResult.safeParse(raw);
-        if (!result.success || result.data.id !== waiting.current) return;
-        waiting.current = "";
+        if (!result.success || result.data.id !== waiting.current?.id) return;
+        const pending = waiting.current;
+        waiting.current = null;
         setPreviewing(false);
         setPreviewNotice(result.data.url ? "" : result.data.message);
-        if (result.data.url) onPreview?.(result.data.url);
+        if (result.data.url && pending) {
+          onPreview?.(result.data.url, {
+            outputId: pending.outputId,
+            title: result.data.title ?? pending.title,
+            version: result.data.version ?? pending.version,
+          });
+        }
       }),
     [onPreview],
   );
   useEffect(() => {
-    waiting.current = "";
+    waiting.current = null;
     setPreviewing(false);
     setPreviewNotice("");
   }, [outputId]);
@@ -1081,7 +1147,9 @@ export function OutputDoc({
   const approval = approvalOf(item);
   const unknownItems = checklistSummary(body).unknown;
   const openable =
-    !editing && !!onPreview && previewSource(item.type, item.body) !== null;
+    !editing &&
+    !!onPreview &&
+    previewSource(item.type, item.body)?.kind === "html";
   const save = (next: string) => {
     if (record || next === item.body) return;
     work("save-output", {
@@ -1152,14 +1220,21 @@ export function OutputDoc({
               className="btn quiet"
               disabled={previewing}
               onClick={() => {
-                waiting.current = crypto.randomUUID();
+                const id = crypto.randomUUID();
+                waiting.current = {
+                  id,
+                  outputId: item.id,
+                  title: item.title,
+                  version: item.version,
+                };
                 setPreviewing(true);
                 setPreviewNotice("");
                 bridge.send({
                   version: 1,
                   kind: "output-preview",
-                  id: waiting.current,
+                  id,
                   outputId: item.id,
+                  areaId,
                 });
               }}
             >
@@ -4430,6 +4505,13 @@ export function WorkSession({
                 <BrowserPane
                   url={pane.url}
                   hidden={menu !== null || dragging}
+                  {...(pane.preview
+                    ? {
+                        preview: pane.preview,
+                        onBackToDoc: (id: string) =>
+                          onPane({ kind: "output", id }),
+                      }
+                    : {})}
                 />
               )}
               {pane.kind === "output" && output && history !== null && (
@@ -4493,7 +4575,13 @@ export function WorkSession({
                   outputId={pane.id}
                   editing={editing}
                   onAsk={(text) => setSeed({ text, nonce: Date.now() })}
-                  onPreview={(url) => onPane({ kind: "browser", url })}
+                  onPreview={(url, meta) =>
+                    onPane({
+                      kind: "browser",
+                      url,
+                      ...(meta ? { preview: meta } : {}),
+                    })
+                  }
                   citations={citations}
                 />
               )}
@@ -4570,7 +4658,35 @@ export function WorkSession({
                           pane.objectiveId,
                         ])}
                         context={workspace.productContext}
-                        openPreview={(url) => onPane({ kind: "browser", url })}
+                        latestWireframe={
+                          snapshot.library
+                            .filter(
+                              (entry) =>
+                                (entry.workAreaIds.includes(areaId) ||
+                                  (area.groupId !== null &&
+                                    entry.groupId === area.groupId)) &&
+                                previewSource(entry.type, entry.body)?.kind ===
+                                  "html",
+                            )
+                            .sort((a, b) =>
+                              b.updatedAt.localeCompare(a.updatedAt),
+                            )
+                            .map((entry) => ({
+                              id: entry.id,
+                              title: entry.title,
+                              version: entry.version,
+                            }))[0] ?? null
+                        }
+                        onAskWireframe={(text) =>
+                          setSeed({ text, nonce: Date.now() })
+                        }
+                        openPreview={(url, meta) =>
+                          onPane({
+                            kind: "browser",
+                            url,
+                            ...(meta ? { preview: meta } : {}),
+                          })
+                        }
                       />
                     </ReviewOrigin.Provider>
                   ) : (

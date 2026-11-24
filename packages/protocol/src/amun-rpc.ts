@@ -257,6 +257,17 @@ export const amunRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ id: z.string(), method: z.literal("work.snapshot") }),
   z.object({ id: z.string(), method: z.literal("work.command"), command: z.record(z.string(), z.unknown()) }),
+  z.object({
+    id: z.string(),
+    method: z.literal("work.preview"),
+    outputId: z.string().min(1).max(200),
+    areaId: z.string().min(1).max(200).optional(),
+  }),
+  z.object({
+    id: z.string(),
+    method: z.literal("work.previewClose"),
+    url: z.string().min(1).max(512).optional(),
+  }),
   // Read-only: words inside conversations, documents and the First Mate's own
   // saved steps; and the turns and steps behind one conversation ("What
   // happened"). Neither starts the First Mate or sends it anything.

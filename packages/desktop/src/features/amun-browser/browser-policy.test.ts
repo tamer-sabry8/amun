@@ -111,3 +111,25 @@ it("accepts only bounded explicit scope changes, rejecting renderer session name
   ])
     expect(browserCommand(value)).toBeNull();
 });
+it("accepts isolated preview navigation only for 64-hex loopback token URLs", () => {
+  const token = "a".repeat(64);
+  const valid = `http://127.0.0.1:41234/${token}`;
+  expect(
+    browserCommand({ action: "navigate", url: valid, mode: "preview" }),
+  ).toEqual({
+    action: "navigate",
+    url: valid,
+    mode: "preview",
+  });
+  for (const bad of [
+    `https://example.com/${token}`,
+    `http://localhost:41234/${token}`,
+    `http://127.0.0.1:41234/short`,
+    `http://127.0.0.1:41234/${token}?x=1`,
+    `http://127.0.0.1:41234/${token}#top`,
+    `file:///etc/passwd`,
+  ])
+    expect(
+      browserCommand({ action: "navigate", url: bad, mode: "preview" }),
+    ).toBeNull();
+});

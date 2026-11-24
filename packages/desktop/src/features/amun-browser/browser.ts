@@ -28,6 +28,7 @@ export function installBrowser(window: BrowserWindow, product: string): void {
   const handoff = new HandoffSlot(Date.now, randomUUID);
   let handoffEpoch = 0;
   let entryURL: string | undefined;
+  let isolatedPreview = false;
   const clearHandoff = () => {
     handoffEpoch++;
     handoff.clear();
@@ -35,7 +36,8 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       window.webContents.send("amun-browser-handoff", null);
   };
   let view: WebContentsView | undefined;
-  let partition = browserPartition(product);
+  let productPartition = browserPartition(product);
+  let partition = productPartition;
   let browserSession = session.fromPartition(partition);
   const denyDownload = (event: Electron.Event) => event.preventDefault();
   const secureSession = () => {
@@ -45,6 +47,14 @@ export function installBrowser(window: BrowserWindow, product: string): void {
     browserSession.setPermissionCheckHandler(() => false);
     browserSession.setDevicePermissionHandler(() => false);
     browserSession.on("will-download", denyDownload);
+  };
+  const switchPartition = (next: string) => {
+    if (next === partition) return;
+    close();
+    browserSession.removeListener("will-download", denyDownload);
+    partition = next;
+    browserSession = session.fromPartition(partition);
+    secureSession();
   };
   secureSession();
   let viewport: ReturnType<typeof browserLayout> = null;
@@ -77,6 +87,7 @@ export function installBrowser(window: BrowserWindow, product: string): void {
   const close = () => {
     clearHandoff();
     entryURL = undefined;
+    isolatedPreview = false;
     if (!view) return;
     window.contentView.removeChildView(view);
     view.webContents.close();
@@ -87,6 +98,11 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       window.webContents.send("amun-browser-status", message);
   };
   const guard = (url: string, main: boolean): boolean => {
+    if (isolatedPreview) {
+      if (main && entryURL && url === entryURL) return true;
+      notify("Offline wireframe preview blocks external navigation.");
+      return false;
+    }
     const decision = previewDecision(url, main);
     if (decision === "allow") return true;
     if (decision === "handoff") {
@@ -226,25 +242,32 @@ export function installBrowser(window: BrowserWindow, product: string): void {
       const next = browserPartition(
         createHash("sha256").update(command.product!).digest("hex"),
       );
+      productPartition = next;
       if (next !== partition) {
-        close();
-        browserSession.removeListener("will-download", denyDownload);
-        partition = next;
-        browserSession = session.fromPartition(partition);
-        secureSession();
+        switchPartition(next);
         notify("Preview closed for selected product");
       }
       return;
     }
     if (command.action === "close") {
       close();
+      switchPartition(productPartition);
       notify("Browser closed");
       return;
     }
     if (command.action === "navigate" && command.url) {
       clearHandoff();
-      if (!guard(command.url, true)) return;
-      entryURL = command.url;
+      if (command.mode === "preview") {
+        // Ephemeral memory-only partition (no persist: prefix), zero shared cookies/storage.
+        switchPartition(`amun-preview-${randomUUID()}`);
+        isolatedPreview = true;
+        entryURL = command.url;
+      } else {
+        if (isolatedPreview) switchPartition(productPartition);
+        isolatedPreview = false;
+        if (!guard(command.url, true)) return;
+        entryURL = command.url;
+      }
       void ensure()
         .webContents.loadURL(command.url)
         .catch(() => notify("Page could not be loaded"));

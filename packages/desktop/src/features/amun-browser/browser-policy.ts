@@ -21,6 +21,24 @@ export function browserURL(value: unknown): string | null {
     return null;
   }
 }
+export function isIsolatedPreviewURL(value: unknown): string | null {
+  const safe = browserURL(value);
+  if (!safe) return null;
+  try {
+    const url = new URL(safe);
+    if (
+      url.protocol !== "http:" ||
+      url.hostname !== "127.0.0.1" ||
+      !/^\/[0-9a-f]{64}$/.test(url.pathname) ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
 export function browserPartition(value: string): string {
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(value))
     throw new Error("Invalid browser product scope");
@@ -30,6 +48,7 @@ export type BrowserCommand = {
   action: "navigate" | "back" | "forward" | "reload" | "close" | "scope";
   url?: string;
   product?: string;
+  mode?: "preview";
 };
 export function browserCommand(value: unknown): BrowserCommand | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -46,6 +65,14 @@ export function browserCommand(value: unknown): BrowserCommand | null {
   if (record.action === "navigate" && Object.keys(record).length === 2) {
     const url = browserURL(record.url);
     return url ? { action: "navigate", url } : null;
+  }
+  if (
+    record.action === "navigate" &&
+    Object.keys(record).length === 3 &&
+    record.mode === "preview"
+  ) {
+    const url = isIsolatedPreviewURL(record.url);
+    return url ? { action: "navigate", url, mode: "preview" } : null;
   }
   if (
     Object.keys(record).length === 1 &&
