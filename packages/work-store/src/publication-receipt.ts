@@ -103,8 +103,9 @@ function formatReceiptPrompt(
   fingerprint: string,
   redactor: Redactor,
 ): string {
-  const safeItems = canonicalItems(input.items).map((item, idx) => {
-    const rawNote = input.items[idx]?.note;
+  const notesById = new Map(input.items.map((item) => [item.id, item.note]));
+  const safeItems = canonicalItems(input.items).map((item) => {
+    const rawNote = notesById.get(item.id);
     return {
       ...item,
       url: item.url ? redactor.text(item.url) : null,
