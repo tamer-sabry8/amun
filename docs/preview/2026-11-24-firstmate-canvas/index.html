@@ -1,0 +1,1451 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Amun · Phase 3 canvas changes · before &amp; after for approval
+    </title>
+    <style>
+      :root {
+        --canvas: #0b0e14;
+        --nav: #12161f;
+        --card: #1a1f2b;
+        --ink: #f2f5f8;
+        --muted: #94a0ad;
+        --accent: #e8a33d;
+        --line: #2a3040;
+        --good: #4ade80;
+        --bad: #f87171;
+        --info: #7fb0ff;
+        --page: #f4f1ea;
+        --pink: #1d2330;
+        --pmuted: #555e6e;
+        --pline: #ddd6c8;
+        --pcard: #fbf9f4;
+        --now: #b4441b;
+        --new: #24794a;
+        --defer: #6b5b95;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      ::selection {
+        background: #e8a33d55;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--pink);
+        line-height: 1.5;
+      }
+      header,
+      main,
+      footer {
+        max-width: 1520px;
+        margin: auto;
+        padding: 0 4vw;
+      }
+      header {
+        padding-top: 48px;
+      }
+      .kicker {
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--pmuted);
+        margin-bottom: 10px;
+      }
+      h1 {
+        font-size: 40px;
+        line-height: 1.1;
+        margin: 0 0 12px;
+        letter-spacing: -0.025em;
+        max-width: 26ch;
+      }
+      h2 {
+        font-size: 26px;
+        line-height: 1.18;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      h3 {
+        font-size: 18px;
+        margin: 22px 0 8px;
+      }
+      .lead {
+        font-size: 17px;
+        color: var(--pmuted);
+        max-width: 76ch;
+        margin: 0 0 16px;
+      }
+      .guardrails {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0 22px;
+      }
+      .pill {
+        font-size: 13px;
+        font-weight: 550;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        color: var(--pink);
+      }
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0 8px;
+      }
+      .toc a {
+        font-size: 14px;
+        padding: 6px 12px;
+        border: 1px solid var(--pline);
+        border-radius: 999px;
+        background: var(--pcard);
+        color: inherit;
+        text-decoration: none;
+      }
+      .toc a:hover {
+        border-color: var(--pink);
+      }
+      section {
+        padding: 40px 0 24px;
+        border-top: 1px solid var(--pline);
+        margin-top: 28px;
+      }
+      .item-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .why {
+        font-size: 16px;
+        color: var(--pmuted);
+        max-width: 76ch;
+        margin: 0;
+      }
+      .workflow-tag {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 3px 9px;
+        border-radius: 6px;
+        background: #e8a33d22;
+        color: #8a5607;
+        margin-bottom: 8px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 18px;
+        margin: 16px 0;
+      }
+      .frame {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .lab {
+        font-size: 13px;
+        font-weight: 650;
+        margin: 0 4px 10px;
+        color: var(--pmuted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .lab .now {
+        color: var(--now);
+      }
+      .lab .after {
+        color: var(--new);
+      }
+      .lab .defer {
+        color: var(--defer);
+      }
+      .clicks {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #1d233010;
+        color: var(--pink);
+      }
+
+      /* Authentic Amun dark workspace frames */
+      .amun {
+        background: var(--canvas);
+        color: var(--ink);
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+        font-size: 13px;
+        min-height: 290px;
+        display: grid;
+        grid-template-columns: 160px 1fr 1fr 42px;
+      }
+      .amun.two-col {
+        grid-template-columns: 160px 1fr 220px 42px;
+      }
+      .amun-nav {
+        background: var(--nav);
+        border-right: 1px solid var(--line);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .amun-nav .grp {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .amun-nav .row {
+        padding: 5px 8px;
+        border-radius: 6px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+      }
+      .amun-nav .row.active {
+        background: #ffffff12;
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .amun-nav .sub {
+        padding: 3px 8px 3px 16px;
+        font-size: 11.5px;
+        color: var(--muted);
+        border-radius: 5px;
+      }
+      .amun-nav .sub.active {
+        background: #e8a33d20;
+        color: var(--ink);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--accent);
+        display: inline-block;
+      }
+      .amun-chat {
+        padding: 12px;
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .chat-hdr {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .chat-hdr .tag {
+        font-size: 10.5px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .msg {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .msg.you {
+        background: #1f2837;
+        align-self: flex-end;
+        max-width: 92%;
+      }
+      .msg.flash {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px #e8a33d33;
+      }
+      .msg .meta {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+      .delivered-card {
+        margin-top: 6px;
+        background: #131823;
+        border: 1px solid #e8a33d55;
+        border-radius: 7px;
+        padding: 7px 9px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .delivered-card strong {
+        color: var(--ink);
+        font-size: 12px;
+      }
+      .delivered-card .submeta {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .btn-chip {
+        background: #e8a33d24;
+        color: var(--accent);
+        border: 1px solid #e8a33d55;
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .opened-line {
+        font-size: 11.5px;
+        color: var(--muted);
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        background: #ffffff06;
+        border-radius: 6px;
+      }
+      .opened-line strong {
+        color: var(--ink);
+      }
+      .choice-card {
+        background: #1c1912;
+        border: 1px solid #e8a33d66;
+        border-radius: 8px;
+        padding: 9px 10px;
+        font-size: 12px;
+      }
+      .choice-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+      }
+      .choice-btn {
+        background: #ffffff0e;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+      .composer {
+        margin-top: auto;
+        border: 1px solid var(--line);
+        background: var(--nav);
+        border-radius: 8px;
+        padding: 6px 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .composer .model {
+        font-size: 10.5px;
+        color: var(--ink);
+        background: #ffffff0d;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .amun-pane {
+        padding: 12px;
+        background: #0e121a;
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pane-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #ffffff12;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .badge.good {
+        background: #4ade8022;
+        color: var(--good);
+      }
+      .badge.warn {
+        background: #e8a33d22;
+        color: var(--accent);
+      }
+      .lib-row {
+        padding: 7px 8px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+      }
+      .lib-row.selected {
+        border-color: var(--accent);
+      }
+      .amun-rail {
+        background: var(--nav);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px 4px;
+        gap: 10px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .rail-ic {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        background: #ffffff08;
+      }
+      .rail-ic.on {
+        background: #e8a33d28;
+        color: var(--accent);
+      }
+      .mini-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      .mini-table th,
+      .mini-table td {
+        text-align: left;
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      .mini-table th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .note-strip {
+        font-size: 11px;
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: #7fb0ff18;
+        border: 1px solid #7fb0ff44;
+        color: #c5dcff;
+      }
+
+      /* Decision controls */
+      .decision-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 12px;
+      }
+      .decision-bar button {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        color: var(--pink);
+        cursor: pointer;
+      }
+      .decision-bar button[data-pick="approve"].on {
+        background: var(--new);
+        color: #fff;
+        border-color: var(--new);
+      }
+      .decision-bar button[data-pick="decline"].on {
+        background: var(--now);
+        color: #fff;
+        border-color: var(--now);
+      }
+      .decision-bar button[data-pick="defer"].on {
+        background: var(--defer);
+        color: #fff;
+        border-color: var(--defer);
+      }
+      .decision-bar input[type="text"] {
+        flex: 1 1 260px;
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        color: var(--pink);
+      }
+
+      /* Summary tables */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 12px;
+        overflow: hidden;
+        font-size: 14px;
+        margin: 16px 0;
+      }
+      table.spec th,
+      table.spec td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--pline);
+        vertical-align: top;
+      }
+      table.spec th {
+        background: #efeae0;
+        font-weight: 650;
+        font-size: 13px;
+      }
+      .summary-box {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 18px;
+        margin: 24px 0 56px;
+      }
+      .summary-box pre {
+        background: #141923;
+        color: #e9eef5;
+        padding: 14px;
+        border-radius: 10px;
+        font-size: 13px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+      }
+      .copy-btn {
+        font: inherit;
+        font-size: 14px;
+        font-weight: 650;
+        padding: 8px 16px;
+        border-radius: 9px;
+        border: none;
+        background: var(--pink);
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Phase 3: smallest visible canvas changes — before &amp; after</h1>
+      <p class="lead">
+        Every item below builds directly on the approved 23 November (#70)
+        screens and keeps the existing sidebar, work panes, delivered cards, and
+        clean composer intact. Pick <strong>Approve</strong>,
+        <strong>Decline</strong>, or <strong>Defer</strong> on each item and
+        copy your verdict summary at the bottom. Nothing visible is implemented
+        until you approve it.
+      </p>
+      <div class="guardrails">
+        <span class="pill">Composer unchanged (model picker only)</span>
+        <span class="pill">No new buttons added to Library rows</span>
+        <span class="pill">Existing delivered card reused for late docs</span>
+        <span class="pill">Group isolation strictly enforced</span>
+        <span class="pill">Zero focus-stealing on background deliveries</span>
+      </div>
+      <nav class="toc" aria-label="Review items">
+        <a href="#p3-1">P3-1 · Library → original chat</a>
+        <a href="#p3-2">P3-2 · Prompted “show” document / backlog</a>
+        <a href="#p3-3">P3-3 · Ambiguous or missing document</a>
+        <a href="#p3-4">P3-4 · Late delivery while in another Product</a>
+        <a href="#p3-5">P3-5 · Friendly PM labels in Library</a>
+        <a href="#p3-6">P3-6 · Deferred / Phase 5 items</a>
+        <a href="#clicks">Click counts &amp; keyboard nav</a>
+        <a href="#verdict">Your decision summary</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- P3-1 -->
+      <section
+        id="p3-1"
+        data-item="P3-1"
+        data-title="Library click opens document beside originating chat & focuses message"
+      >
+        <div class="item-head">
+          <div>
+            <h2>
+              P3-1 · One Library click opens the document beside its originating
+              chat
+            </h2>
+            <p class="why">
+              <strong>Workflow enabled:</strong> Journey 13 (Library → original
+              conversation). Reuses the existing single click on any Library
+              item—no extra button. When the artifact has a verified same-group
+              origin (delivered card + request/message), Amun switches to that
+              work area and chat, scrolls to and briefly highlights the exact
+              delivery message, and opens the document beside it. Manual,
+              deleted-origin, or cross-group items keep the existing local
+              fallback.
+            </p>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="now">NOW</strong> · Opens in whichever chat
+                happens to be open</span
+              >
+              <span class="clicks">3–4 clicks to find original chat</span>
+            </div>
+            <div class="amun two-col">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">Fixture Beta</div>
+                <div class="sub active">Beta Planning</div>
+                <div class="row">Fixture Alpha</div>
+                <div class="sub">RFP &amp; Priorities</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr">
+                  <span>Fixture Beta · Beta Planning</span>
+                  <span class="tag">Wrong chat for this doc</span>
+                </div>
+                <div class="msg you">What is blocking Beta onboarding?</div>
+                <div class="msg">Waiting on SSO design sign-off.</div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr">
+                  <span>RICE Priorities</span>
+                  <span class="badge">v1</span>
+                </div>
+                <div class="note-strip">
+                  Opened beside Beta (current view), not Alpha's originating
+                  chat.
+                </div>
+                <table class="mini-table">
+                  <tr>
+                    <th>Feature</th>
+                    <th>Score</th>
+                  </tr>
+                  <tr>
+                    <td>SSO Login</td>
+                    <td>400</td>
+                  </tr>
+                  <tr>
+                    <td>Audit Export</td>
+                    <td>225</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic on">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="after">PROPOSED</strong> · Jumps to originating
+                chat, focuses message, opens doc beside it</span
+              >
+              <span class="clicks">1 click from Library</span>
+            </div>
+            <div class="amun two-col">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row">Fixture Beta</div>
+                <div class="row active">Fixture Alpha</div>
+                <div class="sub active">RFP &amp; Priorities</div>
+                <div class="sub">Forked Q2 Trade-off</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr">
+                  <span>Fixture Alpha · RFP &amp; Priorities</span>
+                  <span class="tag">Origin chat</span>
+                </div>
+                <div class="msg you">
+                  Score SSO and Audit Export using RICE.
+                </div>
+                <div class="msg flash">
+                  <div class="meta">Firstmate · focused message</div>
+                  SSO Login scores 400; Audit Export scores 225.
+                  <div class="delivered-card">
+                    <div>
+                      <strong>RICE Priorities</strong>
+                      <div class="submeta">RICE · v1 · Opened</div>
+                    </div>
+                    <span class="btn-chip">v1</span>
+                  </div>
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr">
+                  <span>RICE Priorities</span>
+                  <span class="badge good">RICE · v1</span>
+                </div>
+                <table class="mini-table">
+                  <tr>
+                    <th>Feature</th>
+                    <th>Score</th>
+                  </tr>
+                  <tr>
+                    <td>SSO Login</td>
+                    <td>400</td>
+                  </tr>
+                  <tr>
+                    <td>Audit Export</td>
+                    <td>225</td>
+                  </tr>
+                </table>
+                <div class="note-strip">
+                  Fork rule: an artifact created inside a fork opens in that
+                  fork; a copied card in a fork stays anchored to its canonical
+                  origin. Archived chats open with a calm read-only banner.
+                </div>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic on">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve</button>
+          <button type="button" data-pick="decline">Decline</button>
+          <button type="button" data-pick="defer">Defer</button>
+          <input
+            type="text"
+            placeholder="Optional note or requested tweak for P3-1…"
+          />
+        </div>
+      </section>
+
+      <!-- P3-2 -->
+      <section
+        id="p3-2"
+        data-item="P3-2"
+        data-title="Prompted show for saved document and Backlog pane"
+      >
+        <div class="item-head">
+          <div>
+            <h2>
+              P3-2 · Asking “show the brief” or “show the backlog” opens it
+              beside the chat
+            </h2>
+            <p class="why">
+              <strong>Workflow enabled:</strong> Journey 14 (Ask where a
+              document is &amp; Backlog display). Extends the existing
+              <code>show</code> action (currently 6 views: stories, receipt,
+              sprints, requirements, release, activity) with
+              <code>document</code> (resolved by Amun-issued ID or unique
+              in-scope title) and <code>backlog</code> (the existing Backlog
+              pane). Opens only while the requesting chat is still active, using
+              the existing compact <code>Opened · …</code> chat line.
+            </p>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="now">NOW</strong> · Text reply only; user hunts
+                in Library or tabs</span
+              >
+              <span class="clicks">2–3 clicks after reply</span>
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">Fixture Alpha</div>
+                <div class="sub active">Active Planning</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr">
+                  <span>Fixture Alpha · Active Planning</span>
+                </div>
+                <div class="msg you">Show me the RICE priorities table.</div>
+                <div class="msg">
+                  You can find "RICE Priorities" in the Library panel on the
+                  right.
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr"><span>No pane opened</span></div>
+                <p style="color: var(--muted); font-size: 12px; margin: 4px 0">
+                  Current <code>show</code> ignores <code>document</code> and
+                  <code>backlog</code>.
+                </p>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="after">PROPOSED</strong> · Opens exact saved
+                document (or Backlog) beside active chat</span
+              >
+              <span class="clicks">0 extra clicks (1 prompt)</span>
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">Fixture Alpha</div>
+                <div class="sub active">Active Planning</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr">
+                  <span>Fixture Alpha · Active Planning</span>
+                </div>
+                <div class="msg you">Show me the RICE priorities table.</div>
+                <div class="msg">
+                  Here is the latest RICE table for Fixture Alpha.
+                </div>
+                <div class="opened-line">
+                  Opened · <strong>RICE Priorities</strong> (v1) ·
+                  <span style="color: var(--accent)">Jump to origin chat</span>
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr">
+                  <span>RICE Priorities</span>
+                  <span class="badge good">RICE · v1</span>
+                </div>
+                <table class="mini-table">
+                  <tr>
+                    <th>Feature</th>
+                    <th>Reach</th>
+                    <th>Score</th>
+                  </tr>
+                  <tr>
+                    <td>SSO Login</td>
+                    <td>1000/qtr</td>
+                    <td>400</td>
+                  </tr>
+                  <tr>
+                    <td>Audit Export</td>
+                    <td>500/qtr</td>
+                    <td>225</td>
+                  </tr>
+                  <tr>
+                    <td>Dark Mode</td>
+                    <td>Unknown</td>
+                    <td>—</td>
+                  </tr>
+                </table>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve</button>
+          <button type="button" data-pick="decline">Decline</button>
+          <button type="button" data-pick="defer">Defer</button>
+          <input
+            type="text"
+            placeholder="Optional note or requested tweak for P3-2…"
+          />
+        </div>
+      </section>
+
+      <!-- P3-3 -->
+      <section
+        id="p3-3"
+        data-item="P3-3"
+        data-title="Ambiguous or missing document asks one scoped question"
+      >
+        <div class="item-head">
+          <div>
+            <h2>
+              P3-3 · Ambiguous or missing document never guesses or crosses
+              groups
+            </h2>
+            <p class="why">
+              <strong>Workflow enabled:</strong> Journey 14 (Safe ambiguity
+              &amp; group isolation). When two permitted documents share a title
+              (e.g. “Product Priorities” in Alpha and Beta), Amun never picks
+              the newest duplicate on the model’s behalf and never reveals
+              cross-group documents (e.g. Personal never appears in Work).
+              Firstmate asks one plain question using the existing amber choice
+              pattern.
+            </p>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="now">NOW</strong> · No scoped
+                disambiguation</span
+              >
+              <span class="clicks">Manual search</span>
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">General</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr"><span>Work · General</span></div>
+                <div class="msg you">Show Product Priorities.</div>
+                <div class="msg" style="color: var(--muted)">
+                  Could guess the wrong product or fail to open anything.
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr"><span>Library (Work)</span></div>
+                <div class="lib-row">
+                  <span>Product Priorities</span
+                  ><span class="badge">Alpha</span>
+                </div>
+                <div class="lib-row">
+                  <span>Product Priorities</span><span class="badge">Beta</span>
+                </div>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="after">PROPOSED</strong> · One concise in-scope
+                choice card; Personal excluded</span
+              >
+              <span class="clicks">1 click to pick</span>
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">General</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr"><span>Work · General</span></div>
+                <div class="msg you">Show Product Priorities.</div>
+                <div class="choice-card">
+                  <div class="meta" style="color: var(--accent)">
+                    Two documents match in Work — which one?
+                  </div>
+                  <div class="choice-row">
+                    <span class="choice-btn">Fixture Alpha · PRD (v1)</span>
+                    <span class="choice-btn">Fixture Beta · RICE (v1)</span>
+                  </div>
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr"><span>Waiting for your pick</span></div>
+                <div class="note-strip">
+                  If no document matches in Work, Firstmate replies plainly: “No
+                  document named ‘…’ is saved in Work yet.”
+                </div>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve</button>
+          <button type="button" data-pick="decline">Decline</button>
+          <button type="button" data-pick="defer">Defer</button>
+          <input
+            type="text"
+            placeholder="Optional note or requested tweak for P3-3…"
+          />
+        </div>
+      </section>
+
+      <!-- P3-4 -->
+      <section
+        id="p3-4"
+        data-item="P3-4"
+        data-title="Late delivery keeps focus and reuses existing delivered card"
+      >
+        <div class="item-head">
+          <div>
+            <h2>
+              P3-4 · Late delivery never steals focus; reuses the delivered card
+            </h2>
+            <p class="why">
+              <strong>Workflow enabled:</strong> Journeys 1–15 (Quiet background
+              delivery). When a crew deliverable finishes while you are working
+              in a different Product, Amun keeps your current view and reading
+              position untouched, marks the originating folder/chat unread, and
+              files the existing immutable delivered card (no duplicate “Opened”
+              card). If you explicitly asked for a native pane (e.g. Backlog)
+              and it finishes late, it shows a single quiet
+              <strong>Open Backlog</strong> action (never claiming “Opened”).
+            </p>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="now">NOW</strong> · Delivered card works; no
+                late native-view wording distinction</span
+              >
+              <span class="clicks"
+                >1 click on unread folder → 1 click on card</span
+              >
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row active">Fixture Beta</div>
+                <div class="row">Fixture Alpha <span class="dot"></span></div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr"><span>Fixture Beta · Active</span></div>
+                <div class="msg you">Draft Beta roadmap notes…</div>
+                <div class="composer">
+                  <span>Keep typing uninterrupted…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr"><span>Beta PRD</span></div>
+                <p style="color: var(--muted); font-size: 12px">
+                  Focus stays on Beta. Alpha's unread dot lights up.
+                </p>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="after">PROPOSED</strong> · Exact delivered card
+                for docs; accurate “Open …” link if late view requested</span
+              >
+              <span class="clicks">1 click on card</span>
+            </div>
+            <div class="amun">
+              <div class="amun-nav">
+                <div class="grp">Work</div>
+                <div class="row">Fixture Beta</div>
+                <div class="row active">
+                  Fixture Alpha <span class="dot"></span>
+                </div>
+                <div class="sub active">RFP &amp; Priorities</div>
+              </div>
+              <div class="amun-chat">
+                <div class="chat-hdr">
+                  <span>Fixture Alpha · RFP &amp; Priorities</span>
+                </div>
+                <div class="msg">
+                  <div class="meta">
+                    Firstmate · arrived while you were in Beta
+                  </div>
+                  Your proposal draft is ready.
+                  <div class="delivered-card">
+                    <div>
+                      <strong>Alpha Portal Proposal</strong>
+                      <div class="submeta">Proposal · v1 · Exact version</div>
+                    </div>
+                    <span class="btn-chip">Open v1</span>
+                  </div>
+                </div>
+                <div class="opened-line">
+                  Ready ·
+                  <strong style="color: var(--accent)">Open Backlog</strong>
+                  <span style="color: var(--muted)"
+                    >(not “Opened”, never stole focus)</span
+                  >
+                </div>
+                <div class="composer">
+                  <span>Message Firstmate…</span>
+                  <span class="model">Sonnet 5.5 ▾</span>
+                </div>
+              </div>
+              <div class="amun-pane">
+                <div class="pane-hdr">
+                  <span>Alpha Portal Proposal</span>
+                  <span class="badge good">Proposal · v1</span>
+                </div>
+                <p style="color: var(--muted); font-size: 12px">
+                  Opens only when you click the delivered card or “Open
+                  Backlog”.
+                </p>
+              </div>
+              <div class="amun-rail">
+                <div class="rail-ic">A</div>
+                <div class="rail-ic">D</div>
+                <div class="rail-ic">L</div>
+                <div class="rail-ic">!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve</button>
+          <button type="button" data-pick="decline">Decline</button>
+          <button type="button" data-pick="defer">Defer</button>
+          <input
+            type="text"
+            placeholder="Optional note or requested tweak for P3-4…"
+          />
+        </div>
+      </section>
+
+      <!-- P3-5 -->
+      <section
+        id="p3-5"
+        data-item="P3-5"
+        data-title="Plain PM document type labels in Library"
+      >
+        <div class="item-head">
+          <div>
+            <h2>P3-5 · Plain, friendly document type labels in Library</h2>
+            <p class="why">
+              <strong>Workflow enabled:</strong> Journeys 1, 5, 6, 8, 9, 15
+              (Plain Library copy). Adds human-readable labels to
+              <code>typeNames</code> in <code>rail.tsx</code> so PM Markdown
+              artifacts match existing <code>PRD</code>, <code>BRD</code>, and
+              <code>Research</code> badges instead of showing raw lowercase type
+              keys.
+            </p>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="frame">
+            <div class="lab">
+              <span><strong class="now">NOW</strong> · Raw lowercase keys</span>
+            </div>
+            <div
+              class="amun-pane"
+              style="border-radius: 10px; border: 1px solid var(--line)"
+            >
+              <div class="lib-row">
+                <span>Alpha Portal Proposal</span
+                ><span class="badge">proposal</span>
+              </div>
+              <div class="lib-row">
+                <span>Q2 Priorities</span><span class="badge">rice</span>
+              </div>
+              <div class="lib-row">
+                <span>Release Scope</span><span class="badge">moscow</span>
+              </div>
+              <div class="lib-row">
+                <span>H1 Pillars</span><span class="badge">roadmap</span>
+              </div>
+              <div class="lib-row">
+                <span>Delivery Schedule</span><span class="badge">gantt</span>
+              </div>
+              <div class="lib-row">
+                <span>Weekly Executive Pulse</span
+                ><span class="badge">brief</span>
+              </div>
+            </div>
+          </div>
+          <div class="frame">
+            <div class="lab">
+              <span
+                ><strong class="after">PROPOSED</strong> · Consistent plain
+                labels</span
+              >
+            </div>
+            <div
+              class="amun-pane"
+              style="border-radius: 10px; border: 1px solid var(--line)"
+            >
+              <div class="lib-row">
+                <span>Alpha Portal Proposal</span
+                ><span class="badge good">Proposal</span>
+              </div>
+              <div class="lib-row">
+                <span>Q2 Priorities</span><span class="badge good">RICE</span>
+              </div>
+              <div class="lib-row">
+                <span>Release Scope</span><span class="badge good">MoSCoW</span>
+              </div>
+              <div class="lib-row">
+                <span>H1 Pillars</span><span class="badge good">Roadmap</span>
+              </div>
+              <div class="lib-row">
+                <span>Delivery Schedule</span
+                ><span class="badge good">Plan</span>
+              </div>
+              <div class="lib-row">
+                <span>Weekly Executive Pulse</span
+                ><span class="badge good">Brief</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve</button>
+          <button type="button" data-pick="decline">Decline</button>
+          <button type="button" data-pick="defer">Defer</button>
+          <input
+            type="text"
+            placeholder="Optional note or requested tweak for P3-5…"
+          />
+        </div>
+      </section>
+
+      <!-- P3-6 -->
+      <section
+        id="p3-6"
+        data-item="P3-6"
+        data-title="Keep clickable wireframe preview & rich custom widgets deferred to Phase 5+"
+      >
+        <div class="item-head">
+          <div>
+            <h2>
+              P3-6 · Keep clickable HTML wireframe preview &amp; interactive
+              widgets deferred
+            </h2>
+            <p class="why">
+              <strong>Scope boundary (proposed deferred):</strong>
+              Wireframes saved as Markdown artifacts are immediately readable in
+              Library. Clickable HTML preview (<code>output-preview</code> /
+              <code>PrototypeCard</code>) requires an isolated loopback security
+              review in Phase 5. Interactive RICE sorting, interactive Gantt
+              bars, and local-only sprint membership UI remain deferred.
+            </p>
+          </div>
+        </div>
+        <div class="decision-bar">
+          <button type="button" data-pick="approve">Approve deferral</button>
+          <button type="button" data-pick="decline">Bring into Phase 4</button>
+          <button type="button" data-pick="defer">Decide in Phase 5</button>
+          <input type="text" placeholder="Optional note for P3-6…" />
+        </div>
+      </section>
+
+      <!-- Click counts & Keyboard Nav -->
+      <section id="clicks">
+        <h2>Click counts &amp; keyboard navigation verification</h2>
+        <table class="spec">
+          <thead>
+            <tr>
+              <th>Journey / Action</th>
+              <th>Starting surface</th>
+              <th>Clicks now</th>
+              <th>Clicks proposed</th>
+              <th>Keyboard path</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Open saved artifact beside originating chat (P3-1)</td>
+              <td>Library rail (from any screen)</td>
+              <td>3–4 (open doc, switch folder, hunt chat)</td>
+              <td><strong>1 click</strong> (2 if rail closed)</td>
+              <td>
+                <code>Tab</code> to Library item → <code>Enter</code>/<code
+                  >Space</code
+                >
+                opens chat + focuses message + opens pane;
+                <code>Esc</code> closes pane
+              </td>
+            </tr>
+            <tr>
+              <td>Open saved document or Backlog by asking (P3-2)</td>
+              <td>Active chat</td>
+              <td>2–3 after reply</td>
+              <td>
+                <strong>0 extra clicks</strong> (opens automatically in active
+                chat)
+              </td>
+              <td>
+                Type in composer → <code>Enter</code>; <code>Esc</code> closes
+                pane and returns focus to composer
+              </td>
+            </tr>
+            <tr>
+              <td>Resolve ambiguous document name (P3-3)</td>
+              <td>Active chat</td>
+              <td>Manual search</td>
+              <td><strong>1 click</strong> on candidate chip</td>
+              <td>
+                <code>Tab</code> through candidate buttons → <code>Enter</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Open late-delivered document from another Product (P3-4)</td>
+              <td>Different Product</td>
+              <td>2 (folder → card)</td>
+              <td>
+                <strong>2 clicks</strong> (unread folder → delivered card)
+              </td>
+              <td>
+                Folder list navigation → <code>Enter</code> on delivered card;
+                reading position preserved
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Existing #70 delivery panes (Stories, Sprints, Release, Receipt)
+              </td>
+              <td>Chat, Sprints, Portfolio card, Activity</td>
+              <td>1–2 clicks</td>
+              <td><strong>Unchanged (1–2 clicks)</strong></td>
+              <td>All existing #70 focus/tab order preserved</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Verdict Summary -->
+      <section id="verdict">
+        <div class="summary-box">
+          <h2 style="margin-top: 0">Your Phase 3 decision summary</h2>
+          <p class="why" style="margin-bottom: 12px">
+            Click Approve / Decline / Defer on each item above, then copy this
+            summary and paste it back into chat to authorize Phase 4.
+          </p>
+          <pre id="summary-out">No decisions selected yet.</pre>
+          <button type="button" class="copy-btn" id="copy-btn">
+            Copy decision summary
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const state = {};
+      function renderSummary() {
+        const sections = document.querySelectorAll("section[data-item]");
+        const lines = ["Phase 3 visual approval decisions:"];
+        for (const s of sections) {
+          const id = s.dataset.item;
+          const title = s.dataset.title;
+          const pick = state[id]?.pick || "UNDECIDED";
+          const note = state[id]?.note?.trim() || "";
+          lines.push(
+            `- ${id} (${title}): ${pick.toUpperCase()}${note ? " — " + note : ""}`,
+          );
+        }
+        document.getElementById("summary-out").textContent = lines.join("\n");
+      }
+      document.querySelectorAll("section[data-item]").forEach((section) => {
+        const id = section.dataset.item;
+        state[id] = { pick: "", note: "" };
+        section.querySelectorAll(".decision-bar button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            section
+              .querySelectorAll(".decision-bar button")
+              .forEach((b) => b.classList.remove("on"));
+            btn.classList.add("on");
+            state[id].pick = btn.dataset.pick;
+            renderSummary();
+          });
+        });
+        const input = section.querySelector(".decision-bar input");
+        if (input) {
+          input.addEventListener("input", () => {
+            state[id].note = input.value;
+            renderSummary();
+          });
+        }
+      });
+      document
+        .getElementById("copy-btn")
+        .addEventListener("click", async () => {
+          const text = document.getElementById("summary-out").textContent;
+          try {
+            await navigator.clipboard.writeText(text);
+            document.getElementById("copy-btn").textContent = "Copied!";
+            setTimeout(() => {
+              document.getElementById("copy-btn").textContent =
+                "Copy decision summary";
+            }, 1500);
+          } catch {}
+        });
+      renderSummary();
+    </script>
+  </body>
+</html>
