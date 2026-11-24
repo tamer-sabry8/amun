@@ -24,26 +24,23 @@ const count = (table: string) =>
   db.prepare(`SELECT count(*) FROM ${table}`).pluck().get();
 
 describe("reminders", () => {
-  it("are kept from the composer without making any work", () => {
+  it("route new Home reminder requests to General chat without writing local reminder rows", () => {
     const result = send("intake", {
       text: "Remind me in 2 minutes to review the QA PRD",
       groupId: null,
     });
-    expect(result).toMatchObject({ ok: true, step: { step: "reminder" } });
-    expect(result.message).toContain("review the QA PRD");
-    expect(store.snapshot().reminders).toMatchObject([
-      { text: "review the QA PRD", state: "scheduled", workAreaId: null },
-    ]);
+    expect(result).toMatchObject({ ok: true, step: { step: "ask_group" } });
+    expect(store.snapshot().reminders).toEqual([]);
     expect(count("work_areas")).toBe(0);
     expect(count("work_records")).toBe(0);
   });
 
-  it("asks for a time instead of creating anything", () => {
+  it("route untimed Home reminder requests through General chat without creating local reminders", () => {
     const result = send("intake", {
       text: "remind me to call Sam",
       groupId: null,
     });
-    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ ok: true, step: { step: "ask_group" } });
     expect(store.snapshot().reminders).toEqual([]);
   });
 

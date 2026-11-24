@@ -91,14 +91,15 @@ export class NavigationQueue {
     try {
       while (this.pending.length) {
         const item = this.pending[0]!;
+        if (!item.inspection.search) {
+          await this.delivery.activity(item, "finished");
+          this.pending.shift();
+          this.save();
+          continue;
+        }
         if (!item.delivered) {
           await this.delivery.activity(item, "running");
-          const delivered = await this.delivery.send(item.prompt, item.ref);
-          if (delivered === false) {
-            this.pending.shift();
-            this.save();
-            continue;
-          }
+          await this.delivery.send(item.prompt, item.ref);
           item.delivered = true;
           this.save();
         }

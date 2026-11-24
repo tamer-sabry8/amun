@@ -53,6 +53,7 @@ import {
   storyStatusWords,
 } from "../../domain/src/work/delivery-chain.ts";
 import {
+  isRequestRef,
   readRequestBlocks,
   reportFingerprint,
   reportWords,
@@ -3276,22 +3277,42 @@ export class WorkStore {
         )
           return {};
         // Where a request's own message is now, after any move or split.
+        // On a prompted turn in a work area (!saveText), cross-group request
+        // references are never matched so a turn in one group cannot mutate
+        // requests, plans, or documents in another group.
+        const hereGroup = this.groupOf(command.workAreaId);
         const request = (ref: string | null) => {
-          if (!ref) return null;
+          if (!ref || !isRequestRef(ref)) return null;
           const row = this.get(
             "SELECT r.ref,r.project_area_id,m.work_area_id,m.chat_id FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
             ref,
           );
-          return row
-            ? {
-                ref: String(row.ref),
-                project: (row.project_area_id as string | null) ?? null,
-                areaId: String(row.work_area_id),
-                chatId: (row.chat_id as string | null) ?? null,
-              }
-            : null;
+          if (!row) return null;
+          const known = {
+            ref: String(row.ref),
+            project: (row.project_area_id as string | null) ?? null,
+            areaId: String(row.work_area_id),
+            chatId: (row.chat_id as string | null) ?? null,
+          };
+          if (!command.saveText) {
+            const ownerArea =
+              known.project && this.live(known.project)
+                ? known.project
+                : known.areaId;
+            if (
+              this.groupOf(ownerArea) !== hereGroup ||
+              this.groupOf(known.areaId) !== hereGroup
+            )
+              return null;
+          }
+          return known;
         };
         const here = { areaId: command.workAreaId, chatId: command.chatId };
+        const MESSAGE_LIMIT = 16_384;
+        const fitMessage = (text: string) =>
+          text.length > MESSAGE_LIMIT
+            ? `${text.slice(0, MESSAGE_LIMIT - 1)}…`
+            : text;
         const say = (
           at: { areaId: string; chatId: string | null },
           role: "firstmate" | "card",
@@ -3305,7 +3326,7 @@ export class WorkStore {
             workAreaId: at.areaId,
             chatId: at.chatId,
             role,
-            text,
+            text: fitMessage(text),
             card: card as never,
             model: role === "firstmate" ? command.model : null,
           } as never);
@@ -3332,6 +3353,7 @@ export class WorkStore {
         // Firstmate's answer to a change of project the owner asked for. It
         // settles only a change that is waiting, for the project asked for.
         for (const move of moves) {
+          if (!request(move.request)) continue;
           const row = this.get(
             "SELECT r.change_state,a.name FROM work_requests r LEFT JOIN work_areas a ON a.id=r.change_to_area_id WHERE r.ref=?",
             move.request,
@@ -3423,10 +3445,23 @@ export class WorkStore {
             : null;
         for (const plan of raising) {
           const known = request(plan.request);
+          if (plan.request && !known) {
+            say(
+              here,
+              "firstmate",
+              `Nothing was raised for your approval. Amun could not match "${plan.summary}" to a known request.`,
+              { kind: "plan-refused" },
+            );
+            continue;
+          }
           const at = known ?? reportedAt ?? here;
+          const requestRef =
+            known?.ref ??
+            (reportedAt && reports.length === 1 ? reports[0]!.request : null);
           // The whole plan, without the ids Amun gives its items: a replay is
           // the same plan, but a revision (other fields, kind) is reviewed
-          // again.
+          // again. Deduplication is scoped by request_ref so distinct requests
+          // with identical payloads each get their own proposal.
           const payload = (
             kind: unknown,
             items: { summary: string; fields: Record<string, unknown> }[],
@@ -3442,10 +3477,17 @@ export class WorkStore {
             ]);
           const wanted = payload(plan.planKind, plan.items);
           const raised = this.all(
-            "SELECT kind,items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=?",
-            at.areaId,
-            plan.destination,
-            this.clean(plan.summary),
+            requestRef === null
+              ? "SELECT kind,items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=? AND request_ref IS NULL"
+              : "SELECT kind,items_json FROM work_plans WHERE work_area_id=? AND destination=? AND summary=? AND request_ref=?",
+            ...(requestRef === null
+              ? [at.areaId, plan.destination, this.clean(plan.summary)]
+              : [
+                  at.areaId,
+                  plan.destination,
+                  this.clean(plan.summary),
+                  requestRef,
+                ]),
           ).some((row) => {
             try {
               return (
@@ -3473,9 +3515,7 @@ export class WorkStore {
             summary: plan.summary,
             items: plan.items.map((item) => ({ id: randomUUID(), ...item })),
             chatId: at.chatId,
-            requestRef:
-              known?.ref ??
-              (reportedAt && reports.length === 1 ? reports[0]!.request : null),
+            requestRef,
           });
           let refused = proposal.success
             ? ""
@@ -3542,6 +3582,19 @@ export class WorkStore {
               )
             : undefined;
           const body = this.clean(document.body);
+          if (document.body.length > 100_000 || body.length > 100_000) {
+            say(
+              at,
+              "firstmate",
+              `Amun could not save "${document.title || "Untitled document"}" because it is longer than the 100,000-character limit. Ask Firstmate to shorten it or split it into smaller documents.`,
+              {
+                kind: "document-refused",
+                title: document.title,
+                request: known ? known.ref : null,
+              },
+            );
+            continue;
+          }
           // The same version delivered again is not a second reply.
           if (same && String(same.body) === body) continue;
           const saved = this.apply({
@@ -3852,7 +3905,7 @@ export class WorkStore {
         );
         const waiting = randomUUID();
         this.run(
-          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at,split_from) VALUES (?,?,?,?,?,?,?,'proposed',?,?)",
+          "INSERT INTO work_plans(id,group_id,work_area_id,kind,destination,summary,items_json,state,created_at,split_from,chat_id,request_ref) VALUES (?,?,?,?,?,?,?,'proposed',?,?,?,?)",
           waiting,
           row.group_id,
           row.work_area_id,
@@ -3862,6 +3915,8 @@ export class WorkStore {
           JSON.stringify(rest),
           now,
           planId,
+          (row.chat_id as string | null) ?? null,
+          (row.request_ref as string | null) ?? null,
         );
         this.attend({
           kind: "approval",

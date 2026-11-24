@@ -160,7 +160,7 @@ describe("intake (F1)", () => {
       options: [],
     });
   });
-  it("routes reminders before asking the group or creating anything", () => {
+  it("routes reminder messages through General non-work routing instead of local reminder interception", () => {
     for (const text of [
       "Remind me in 2 minutes to review the QA PRD.",
       "please remind me to call Sam tomorrow",
@@ -169,21 +169,20 @@ describe("intake (F1)", () => {
       "set up a reminder to review the PRD",
       "Reminder: review the QA PRD",
       "remind me on Friday",
+      "what reminders do I have?",
+      "cancel my reminder about the QA PRD",
     ]) {
-      expect(intake({ ...base, groupId: null, text })).toEqual({
-        step: "reminder",
-        intent: "add",
-      });
-      expect(intake({ ...base, text }).step).toBe("reminder");
+      expect(intake({ ...base, text }).step).toBe("choose_work");
+      expect(asksForNewWork(text)).toBe(false);
     }
   });
   it("still files an ordinary review task as work", () => {
-    expect(intake({ ...base, text: "review the QA PRD" }).step).not.toBe(
-      "reminder",
+    expect(intake({ ...base, text: "review the QA PRD" }).step).toBe(
+      "choose_work",
     );
     expect(
       intake({ ...base, text: "I need a reminder system product" }).step,
-    ).not.toBe("reminder");
+    ).toBe("choose_work");
   });
   it("keeps the source and explains when unreadable", () => {
     expect(intake({ ...base, text: "", readable: false })).toEqual({

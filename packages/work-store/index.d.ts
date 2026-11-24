@@ -31,6 +31,15 @@ export declare function recordFirstMateReply(
   model?: string | null,
   prdRelay?: boolean,
 ): string | null;
+export declare function readRequestBlocks(text: string): {
+  visible: string;
+  storyDrafts: {
+    request: string;
+    objectiveId: string | null;
+    expectedVersion: number | null;
+    stories: unknown[];
+  }[];
+};
 /** Masks registered secrets and common credential shapes in text and objects. */
 export declare class Redactor {
   register(secret: string): void;
@@ -51,6 +60,40 @@ export interface WorkspaceLike {
     text: string,
     ok: boolean,
   ): void;
+  hasStoryDrafts?(objectiveId: string, expectedVersion: number): boolean;
+  registerCrewStoryDrafts?(
+    ref: string,
+    stories: unknown,
+    expectedObjectiveId?: string | null,
+    expectedVersion?: number | null,
+  ): {
+    productId: string;
+    objectiveId: string;
+    version: number;
+    inserted: number;
+    alreadyPresent: boolean;
+  } | null;
+  deliverPublicationReceipt?(
+    input: {
+      kind: "tracker" | "ado";
+      targetId: string;
+      destination: string;
+      requestRef: string | null;
+      items: {
+        id: string;
+        state: string;
+        remoteId: string | number | null;
+        remoteRev: number | null;
+        url: string | null;
+        note: string | null;
+      }[];
+    },
+    send: (prompt: string) => Promise<string>,
+  ): Promise<{
+    state: "pending" | "accepted" | "unknown" | "skipped";
+    deduplicated: boolean;
+    fingerprint: string;
+  }>;
   /** Saves a crew PRD for a matched request as the product's next version. */
   registerCrewPrd?(
     ref: string,
@@ -163,6 +206,15 @@ export interface TrackersLike {
   owns(planId: string): boolean;
   /** Publishes an approved Linear or Jira plan; the work store's events. */
   publish(planId: string, retry?: boolean): Promise<unknown[]>;
+  /** Recorded writes for a published plan. */
+  writes?(planId: string): {
+    id: string;
+    destination: string;
+    state: string;
+    externalId: string | null;
+    url: string | null;
+    note: string | null;
+  }[];
   /** Looks up writes a crash left uncertain; never sends anything new. */
   recover(): Promise<unknown[]>;
   /** Read only: the sites, projects, boards, sprints, teams and cycles a plan can name. */

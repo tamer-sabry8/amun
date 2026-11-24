@@ -29,6 +29,107 @@ function parseModelJson(raw: string) {
   );
   return JSON.parse(normalized) as unknown;
 }
+export function persistStoryDrafts(
+  db: Database,
+  redactor: Redactor,
+  input: {
+    productId: string;
+    objectiveId: string;
+    expectedVersion: number;
+    rawStories: unknown;
+    validate: (() => void) | null;
+  },
+): { inserted: number; alreadyPresent: boolean } {
+  const { stories } = storyBundle.parse(
+    JSON.parse(redactor.text(JSON.stringify(input.rawStories))),
+  );
+  const docs = new ProductDocuments(db);
+  return db
+    .transaction(() => {
+      input.validate?.();
+      const prd = docs.prd(input.productId, input.objectiveId);
+      if (!prd?.approved || prd.version !== input.expectedVersion)
+        throw new AuthoringError(
+          "Approve the current PRD version before generating stories.",
+        );
+      const exists = db
+        .prepare(
+          "SELECT 1 FROM story_drafts WHERE objective_id=? AND prd_version=? LIMIT 1",
+        )
+        .get(input.objectiveId, input.expectedVersion);
+      if (exists) return { inserted: 0, alreadyPresent: true };
+      const markdown = prd.markdown;
+      const insert = db.prepare(
+        "INSERT INTO work_items(id,product_id,type,title,parent_id,body,acceptance_json,requirement_ids,status) VALUES(?,?,?,?,?,?,?,?,'draft')",
+      );
+      const bind = db.prepare("INSERT INTO story_drafts VALUES(?,?,?,?,?)");
+      let inserted = 0;
+      for (const story of stories) {
+        if (!markdown.includes(story.requirement))
+          throw new AuthoringError(
+            "Firstmate cited a requirement outside the approved PRD.",
+          );
+        docs.annotate(
+          input.productId,
+          input.objectiveId,
+          input.expectedVersion,
+          "link",
+          story.requirement,
+        );
+        const { target } = db
+          .prepare(
+            "SELECT target FROM prd_selections WHERE objective_id=? AND version=? AND intent='link' AND selection=?",
+          )
+          .get(input.objectiveId, input.expectedVersion, story.requirement) as {
+          target: string;
+        };
+        const add = (type: string, title: string, parent: string | null) => {
+          const id = randomUUID();
+          insert.run(
+            id,
+            input.productId,
+            type,
+            title,
+            parent,
+            story.requirement,
+            JSON.stringify(story.acceptance),
+            JSON.stringify([target]),
+          );
+          bind.run(
+            id,
+            input.objectiveId,
+            input.expectedVersion,
+            target,
+            story.requirement,
+          );
+          inserted += 1;
+          return id;
+        };
+        const parent = add("story", story.title, null);
+        for (const title of story.tasks) add("task", title, parent);
+      }
+      return { inserted, alreadyPresent: false };
+    })
+    .immediate();
+}
+
+function tryExtractStoryBundle(
+  raw: string,
+  redactor: Redactor,
+): unknown | null {
+  const cleaned = redactor.text(raw).trim();
+  if (!cleaned) return null;
+  try {
+    const parsed = parseModelJson(cleaned) as Record<string, unknown> | null;
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.stories)) {
+      return { stories: parsed.stories };
+    }
+  } catch {
+    // Plain-text crew delegation acknowledgement (not immediate JSON).
+  }
+  return null;
+}
+
 export class ProductAuthoring {
   private readonly busy = new Set<string>();
   constructor(
@@ -286,79 +387,26 @@ export class ProductAuthoring {
             .get(cmd.objectiveId, cmd.expectedVersion);
         if (exists()) return;
         const instruction =
-          'Propose a concise story and task hierarchy for the approved PRD. Copy one exact substantive requirement passage from the PRD for each story. Return only JSON matching {"stories":[{"title":"story title","requirement":"exact quote","acceptance":["observable criterion"],"tasks":["child task title"]}]}. Keep the titles short and leave assignment and scheduling to the PM.';
+          'Propose a concise story and task hierarchy for the approved PRD (delegate to the PRD role when appropriate). Copy one exact substantive requirement passage from the PRD for each story. Return JSON matching {"stories":[{"title":"story title","requirement":"exact quote","acceptance":["observable criterion"],"tasks":["child task title"]}]} or, when delegating asynchronously, return a brief status note and later deliver a fenced ```amun block {"do":"story-drafts","request":"<ref>","stories":[...]}. Keep the titles short and leave assignment and scheduling to the PM.';
         const raw = await firstmate(
           model,
           instruction,
           JSON.stringify({ markdown }),
         );
-        const { stories } = storyBundle.parse(
-          parseModelJson(this.redactor.text(raw)),
-        );
-        this.db
-          .transaction(() => {
+        const bundle = tryExtractStoryBundle(raw, this.redactor);
+        if (!bundle) return;
+        persistStoryDrafts(this.db, this.redactor, {
+          productId,
+          objectiveId: cmd.objectiveId,
+          expectedVersion: cmd.expectedVersion,
+          rawStories: bundle,
+          validate: () => {
             if (approved() !== markdown)
               throw new AuthoringError(
                 "Approved PRD changed during story generation.",
               );
-            if (exists()) return;
-            const insert = this.db.prepare(
-              "INSERT INTO work_items(id,product_id,type,title,parent_id,body,acceptance_json,requirement_ids,status) VALUES(?,?,?,?,?,?,?,?,'draft')",
-            );
-            const bind = this.db.prepare(
-              "INSERT INTO story_drafts VALUES(?,?,?,?,?)",
-            );
-            for (const story of stories) {
-              if (!markdown.includes(story.requirement))
-                throw new AuthoringError(
-                  "Firstmate cited a requirement outside the approved PRD.",
-                );
-              docs.annotate(
-                productId,
-                cmd.objectiveId,
-                cmd.expectedVersion,
-                "link",
-                story.requirement,
-              );
-              const { target } = this.db
-                .prepare(
-                  "SELECT target FROM prd_selections WHERE objective_id=? AND version=? AND intent='link' AND selection=?",
-                )
-                .get(
-                  cmd.objectiveId,
-                  cmd.expectedVersion,
-                  story.requirement,
-                ) as { target: string };
-              const add = (
-                type: string,
-                title: string,
-                parent: string | null,
-              ) => {
-                const id = randomUUID();
-                insert.run(
-                  id,
-                  productId,
-                  type,
-                  title,
-                  parent,
-                  story.requirement,
-                  JSON.stringify(story.acceptance),
-                  JSON.stringify([target]),
-                );
-                bind.run(
-                  id,
-                  cmd.objectiveId,
-                  cmd.expectedVersion,
-                  target,
-                  story.requirement,
-                );
-                return id;
-              };
-              const parent = add("story", story.title, null);
-              for (const title of story.tasks) add("task", title, parent);
-            }
-          })
-          .immediate();
+          },
+        });
         return;
       }
       if (cmd.action !== "interview") {

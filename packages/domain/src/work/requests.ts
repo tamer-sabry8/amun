@@ -78,6 +78,12 @@ export interface RequestPlan {
   summary: string;
   items: { summary: string; fields: Record<string, string | number | null> }[];
 }
+export interface RequestStoryDrafts {
+  request: string | null;
+  objectiveId: string | null;
+  expectedVersion: number | null;
+  stories: Record<string, unknown>[];
+}
 
 /**
  * A plan block, read the same way the window reads one (view-model
@@ -109,8 +115,9 @@ export function readPlanBlock(
   const summary = clip(value.summary, 300);
   if (!items.length || !summary) return null;
   const kind = value.planKind;
+  const rawRequest = clip(value.request, 64);
   return {
-    request: isRequestRef(value.request) ? value.request : null,
+    request: rawRequest || null,
     planKind:
       kind === "sprint_plan" || kind === "roadmap" || kind === "edit"
         ? kind
@@ -121,10 +128,103 @@ export function readPlanBlock(
   };
 }
 
+function readStoryDraftsBlock(
+  value: Record<string, unknown>,
+): RequestStoryDrafts | null {
+  if (value.do !== "story-drafts" || !Array.isArray(value.stories)) return null;
+  const stories = value.stories
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === "object" && !Array.isArray(item),
+    )
+    .slice(0, 200);
+  const rawRequest = clip(value.request, 64);
+  const objectiveId = clip(value.objectiveId, 256);
+  const expectedVersion =
+    typeof value.expectedVersion === "number" &&
+    Number.isInteger(value.expectedVersion) &&
+    value.expectedVersion >= 0
+      ? value.expectedVersion
+      : null;
+  return {
+    request: rawRequest || null,
+    objectiveId: objectiveId || null,
+    expectedVersion,
+    stories,
+  };
+}
+
 const clip = (value: unknown, max: number) =>
   typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().slice(0, max)
     : "";
+
+/**
+ * Scans ` ```amun ` fenced blocks while respecting JSON string literals so
+ * literal triple-backticks inside string values (such as Markdown code blocks
+ * in `document.body`) do not close the fence early or leak JSON into prose.
+ */
+function scanAmunBlocks(
+  reply: string,
+  onBlock: (body: string) => void,
+): string {
+  const openRe = /```amun[ \t]*\r?\n/g;
+  let out = "";
+  let cursor = 0;
+  while (cursor < reply.length) {
+    openRe.lastIndex = cursor;
+    const match = openRe.exec(reply);
+    if (!match) {
+      out += reply.slice(cursor);
+      break;
+    }
+    const openStart = match.index;
+    const bodyStart = openStart + match[0].length;
+    out += reply.slice(cursor, openStart);
+
+    let inString = false;
+    let escaped = false;
+    let closeStart = -1;
+    for (let i = bodyStart; i < reply.length; i++) {
+      const ch = reply[i]!;
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === "\\") {
+          escaped = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+      } else {
+        if (ch === '"') {
+          inString = true;
+        } else if (reply.startsWith("```", i)) {
+          closeStart = i;
+          break;
+        }
+      }
+    }
+
+    if (closeStart === -1 && inString) {
+      const fallback = /\r?\n```(?=[ \t]*(?:\r?\n|$))/.exec(
+        reply.slice(bodyStart),
+      );
+      if (fallback) {
+        closeStart =
+          bodyStart + fallback.index + (fallback[0].startsWith("\r\n") ? 2 : 1);
+      }
+    }
+
+    if (closeStart === -1) {
+      cursor = reply.length;
+      break;
+    }
+
+    onBlock(reply.slice(bodyStart, closeStart));
+    cursor = closeStart + 3;
+  }
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
 
 /**
  * The report and document blocks in a Firstmate reply, and the reply with
@@ -137,6 +237,7 @@ export function readRequestBlocks(reply: string): {
   documents: RequestDocument[];
   moves: RequestMove[];
   plans: RequestPlan[];
+  storyDrafts: RequestStoryDrafts[];
   /**
    * Reports with no reference, or a malformed one: never applied to a
    * request, but their words are still shown to the owner.
@@ -149,59 +250,68 @@ export function readRequestBlocks(reply: string): {
   const documents: RequestDocument[] = [];
   const moves: RequestMove[] = [];
   const plans: RequestPlan[] = [];
+  const storyDrafts: RequestStoryDrafts[] = [];
   const unmatched: RequestReport[] = [];
   const blocks: Record<string, unknown>[] = [];
-  const visible = reply
-    .replace(/```amun\s*\n([\s\S]*?)```/g, (_match, body: string) => {
-      try {
-        const value = JSON.parse(body) as Record<string, unknown>;
-        if (!value || typeof value !== "object") return "";
-        blocks.push(value);
-        if (
-          value.do === "report" &&
-          statuses.includes(value.status as ReportedStatus)
-        )
-          (isRequestRef(value.request) ? reports : unmatched).push({
-            request: isRequestRef(value.request) ? value.request : "",
-            status: value.status as ReportedStatus,
-            role: clip(value.role, 120),
-            text: clip(value.text, 400),
-            parts:
-              Number.isInteger(value.parts) &&
-              (value.parts as number) >= 0 &&
-              (value.parts as number) <= 20
-                ? (value.parts as number)
-                : 0,
-          });
-        else if (
-          value.do === "reassigned" &&
-          isRequestRef(value.request) &&
-          typeof value.accepted === "boolean"
-        )
-          moves.push({
-            request: value.request,
-            project: clip(value.project, 200),
-            accepted: value.accepted,
-            text: clip(value.text, 400),
-          });
-        else if (value.do === "plan") {
-          const plan = readPlanBlock(value);
-          if (plan) plans.push(plan);
-        } else if (value.do === "document" && typeof value.title === "string")
-          documents.push({
-            request: isRequestRef(value.request) ? value.request : null,
-            title: clip(value.title, 200),
-            type: clip(value.type, 64) || "doc",
-            body: typeof value.body === "string" ? value.body : "",
-          });
-      } catch {
-        // Dropped.
-      }
-      return "";
-    })
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return { visible, reports, documents, moves, plans, unmatched, blocks };
+  const visible = scanAmunBlocks(reply, (body) => {
+    try {
+      const value = JSON.parse(body) as Record<string, unknown>;
+      if (!value || typeof value !== "object") return;
+      blocks.push(value);
+      if (
+        value.do === "report" &&
+        statuses.includes(value.status as ReportedStatus)
+      )
+        (isRequestRef(value.request) ? reports : unmatched).push({
+          request: isRequestRef(value.request) ? value.request : "",
+          status: value.status as ReportedStatus,
+          role: clip(value.role, 120),
+          text: clip(value.text, 400),
+          parts:
+            Number.isInteger(value.parts) &&
+            (value.parts as number) >= 0 &&
+            (value.parts as number) <= 20
+              ? (value.parts as number)
+              : 0,
+        });
+      else if (
+        value.do === "reassigned" &&
+        isRequestRef(value.request) &&
+        typeof value.accepted === "boolean"
+      )
+        moves.push({
+          request: value.request,
+          project: clip(value.project, 200),
+          accepted: value.accepted,
+          text: clip(value.text, 400),
+        });
+      else if (value.do === "plan") {
+        const plan = readPlanBlock(value);
+        if (plan) plans.push(plan);
+      } else if (value.do === "story-drafts") {
+        const draft = readStoryDraftsBlock(value);
+        if (draft) storyDrafts.push(draft);
+      } else if (value.do === "document" && typeof value.title === "string")
+        documents.push({
+          request: isRequestRef(value.request) ? value.request : null,
+          title: clip(value.title, 200),
+          type: clip(value.type, 64) || "doc",
+          body: typeof value.body === "string" ? value.body : "",
+        });
+    } catch {
+      // Dropped.
+    }
+  });
+  return {
+    visible,
+    reports,
+    documents,
+    moves,
+    plans,
+    storyDrafts,
+    unmatched,
+    blocks,
+  };
 }
 
 /**

@@ -129,4 +129,194 @@ describe("a crew PRD for a matched request", () => {
       n: 0,
     });
   });
+
+  it("supports async crew story drafting, idempotent replay, and approved-version checks", async () => {
+    const { db, workspace } = fixture();
+    const prdMarkdown =
+      "# PRD\nREQ-1: Preserve audit correlation IDs across retries.";
+    const created = workspace.registerCrewPrd(ref, prdMarkdown, "Checkout PRD");
+    expect(created).not.toBeNull();
+    const o = created!.objectiveId;
+    workspace.handle({
+      version: 1,
+      kind: "workspace",
+      action: "preferences",
+      preferences: { ...workspace.snapshot().preferences, productId: "p" },
+    });
+    workspace.handle({
+      version: 1,
+      kind: "workspace",
+      action: "approve-prd",
+      productId: "p",
+      objectiveId: o,
+      expectedVersion: 1,
+      markdown: prdMarkdown,
+    });
+
+    const reviewRef = "amun-r-abcdef012345";
+    const storyCmd = {
+      version: 1,
+      kind: "product-authoring",
+      productId: "p",
+      objectiveId: o,
+      expectedVersion: 1,
+      action: "stories",
+      model: "firstmate",
+      difficulty: "standard",
+    };
+    const bound = workspace.bindStoryReview(
+      storyCmd,
+      reviewRef,
+      { areaId: "area", chatId: null },
+      "Draft stories",
+    );
+    expect(bound.parent).toBe(reviewRef);
+
+    // Async delegation ack does not throw and leaves drafts empty
+    const ackRes = await workspace.author(
+      storyCmd,
+      async () => "Dispatched to PRD crewmate.",
+    );
+    expect(ackRes).toMatchObject({ kind: "workspace-snapshot" });
+    expect(workspace.hasStoryDrafts(o, 1)).toBe(false);
+
+    // Switch selected product away before late crew delivery arrives
+    db.exec(
+      `INSERT INTO products(id,name,created_at) VALUES('p2','Other','now');`,
+    );
+    workspace.handle({
+      version: 1,
+      kind: "workspace",
+      action: "preferences",
+      preferences: { ...workspace.snapshot().preferences, productId: "p2" },
+    });
+
+    const stories = [
+      {
+        title: "Preserve audit correlation IDs",
+        requirement: "REQ-1: Preserve audit correlation IDs across retries.",
+        acceptance: ["Correlation ID persists across retry"],
+        tasks: ["Add correlation test"],
+      },
+    ];
+    // Wrong version rejected
+    expect(
+      workspace.registerCrewStoryDrafts(reviewRef, stories, o, 2),
+    ).toBeNull();
+    // Unknown ref rejected
+    expect(
+      workspace.registerCrewStoryDrafts("amun-r-999999999999", stories),
+    ).toBeNull();
+
+    // Valid late crew delivery populates editable story_drafts + marks request delivered
+    const filed = workspace.registerCrewStoryDrafts(reviewRef, stories, o, 1);
+    expect(filed).toEqual({
+      productId: "p",
+      objectiveId: o,
+      version: 1,
+      inserted: 2,
+      alreadyPresent: false,
+    });
+    expect(workspace.hasStoryDrafts(o, 1)).toBe(true);
+    expect(
+      db.prepare("SELECT status FROM work_requests WHERE ref=?").get(reviewRef),
+    ).toEqual({ status: "delivered" });
+
+    // Exact replay is idempotent (no duplicate work_items)
+    const countBefore = db
+      .prepare("SELECT count(*) AS n FROM work_items")
+      .get();
+    const replay = workspace.registerCrewStoryDrafts(reviewRef, stories, o, 1);
+    expect(replay?.alreadyPresent).toBe(true);
+    expect(db.prepare("SELECT count(*) AS n FROM work_items").get()).toEqual(
+      countBefore,
+    );
+  });
+
+  it("delivers verified publication receipts durably, deduplicates, and handles partial-to-confirmed updates", async () => {
+    const { workspace } = fixture();
+    const sent: string[] = [];
+    const input = {
+      kind: "ado" as const,
+      targetId: "batch-1",
+      destination: "ado:TahalufCollection|POCs|POCs Team",
+      requestRef: ref,
+      items: [
+        {
+          id: "item-1",
+          state: "succeeded",
+          remoteId: 73,
+          remoteRev: 1,
+          url: null,
+          note: null,
+        },
+      ],
+    };
+
+    // Unlinked legacy receipt without requestRef is skipped
+    const skipped = await workspace.deliverPublicationReceipt(
+      { ...input, requestRef: null },
+      async (p) => {
+        sent.push(p);
+        return "ok";
+      },
+    );
+    expect(skipped.state).toBe("skipped");
+    expect(sent).toHaveLength(0);
+
+    // Transient failure persists state="unknown" without throwing
+    const unknown = await workspace.deliverPublicationReceipt(
+      input,
+      async () => {
+        throw new Error("primary busy");
+      },
+    );
+    expect(unknown.state).toBe("unknown");
+
+    // Retry succeeds and persists state="accepted"
+    const accepted = await workspace.deliverPublicationReceipt(
+      input,
+      async (p) => {
+        sent.push(p);
+        return "noted";
+      },
+    );
+    expect(accepted).toMatchObject({ state: "accepted", deduplicated: false });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain(ref);
+    expect(sent[0]).toContain("73");
+
+    // Exact duplicate is deduplicated (0 extra sends)
+    const dup = await workspace.deliverPublicationReceipt(input, async (p) => {
+      sent.push(p);
+      return "noted";
+    });
+    expect(dup).toMatchObject({ state: "accepted", deduplicated: true });
+    expect(sent).toHaveLength(1);
+
+    // Changed outcome (e.g. second item confirmed) gets a new fingerprint and delivers again
+    const updated = await workspace.deliverPublicationReceipt(
+      {
+        ...input,
+        items: [
+          ...input.items,
+          {
+            id: "item-2",
+            state: "succeeded",
+            remoteId: 74,
+            remoteRev: 1,
+            url: null,
+            note: null,
+          },
+        ],
+      },
+      async (p) => {
+        sent.push(p);
+        return "noted";
+      },
+    );
+    expect(updated).toMatchObject({ state: "accepted", deduplicated: false });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("74");
+  });
 });

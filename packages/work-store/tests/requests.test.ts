@@ -3,6 +3,7 @@ import { openDatabase, type Database } from "../src/sqlite.ts";
 import { migrate } from "../src/database.ts";
 import { WorkStore } from "../src/work-store.ts";
 import { recordFirstMateReply } from "../src/first-mate-thread.ts";
+import { readRequestBlocks } from "../../domain/src/work/requests.ts";
 
 let db: Database;
 let store: WorkStore;
@@ -406,5 +407,228 @@ describe("request references", () => {
         fingerprint: "x",
       }).ok,
     ).toBe(false);
+  });
+
+  it("blocks cross-group request matches on prompted apply-reply while preserving General routing", () => {
+    send("finish-setup", {
+      workTypes: ["product", "project", "task", "rfp"],
+      tools: [],
+      agents: [],
+      groups: [
+        { name: "Work", routes: [] },
+        { name: "Personal", routes: [] },
+      ],
+    });
+    const workGroup = snap().groups.find((g) => g.name === "Work")!.id;
+    const personalGroup = snap().groups.find((g) => g.name === "Personal")!.id;
+    const workArea = send("create-area", {
+      groupId: workGroup,
+      type: "project",
+      name: "Gitex",
+    }).ref!;
+    const personalArea = send("create-area", {
+      groupId: personalGroup,
+      type: "project",
+      name: "Home Reno",
+    }).ref!;
+    const otherPersonal = send("create-area", {
+      groupId: personalGroup,
+      type: "project",
+      name: "Garden",
+    }).ref!;
+    const personalRef = "amun-r-999999999999";
+    ask(personalArea, "Plan the home renovation.", personalRef);
+    send("request-change", { ref: personalRef, toAreaId: otherPersonal });
+
+    // Prompted turn (saveText: false) in Work mentioning Personal's ref must NOT
+    // update, move, raise a plan, or file a document into Personal.
+    const res = send("apply-reply", {
+      text:
+        block({
+          do: "report",
+          request: personalRef,
+          status: "delivered",
+          role: "PM",
+          text: "finished",
+        }) +
+        block({
+          do: "reassigned",
+          request: personalRef,
+          project: "Garden",
+          accepted: true,
+        }) +
+        block({
+          do: "plan",
+          request: personalRef,
+          planKind: "stories",
+          destination: "linear",
+          summary: "Leak plan",
+          items: [{ summary: "Task 1", fields: { type: "Story" } }],
+        }) +
+        block({
+          do: "document",
+          request: personalRef,
+          title: "Leaked Doc",
+          type: "doc",
+          body: "Should not land in Personal",
+        }),
+      workAreaId: workArea,
+      chatId: null,
+      saveText: false,
+      raisePlans: true,
+    });
+    expect(res.ok).toBe(true);
+    // Personal request is untouched (neither delivered nor moved).
+    expect(snap().requests.find((r) => r.ref === personalRef)).toMatchObject({
+      status: "sent",
+      projectAreaId: personalArea,
+      changeState: "requested",
+    });
+    // No plan created in Personal or Work.
+    expect(snap().plans).toHaveLength(0);
+    // No document filed into Personal group or linked to personalArea.
+    expect(
+      snap().library.filter(
+        (doc) =>
+          doc.groupId === personalGroup ||
+          doc.workAreaIds.includes(personalArea),
+      ),
+    ).toEqual([]);
+    // Unprompted General reply (saveText: true) still routes valid refs across groups.
+    recordFirstMateReply(
+      store,
+      "Personal update ready.\n" +
+        block({
+          do: "document",
+          request: personalRef,
+          title: "Renovation Plan",
+          type: "doc",
+          body: "# Reno",
+        }),
+    );
+    expect(
+      snap().library.find((doc) => doc.title === "Renovation Plan"),
+    ).toMatchObject({
+      groupId: personalGroup,
+      workAreaIds: [personalArea],
+    });
+  });
+
+  it("parses unescaped triple-backticks and unicode backticks inside document.body without leaking JSON", () => {
+    const { gitex } = setup();
+    ask(gitex, "Write an HTML integration guide.", prd);
+    const bodyWithFences =
+      'Use this snippet:\n\n```html\n<div class="card">Hello</div>\n```\n\nAnd JS:\n```js\nconsole.log(`ok`);\n```';
+    const reply =
+      "Here is the guide.\n\n" +
+      block({
+        do: "document",
+        request: prd,
+        title: "HTML Guide",
+        type: "doc",
+        body: bodyWithFences,
+      }) +
+      "\n\nLet me know if you want changes.";
+
+    const parsed = readRequestBlocks(reply);
+    expect(parsed.visible).toBe(
+      "Here is the guide.\n\nLet me know if you want changes.",
+    );
+    expect(parsed.visible).not.toContain('"do":"document"');
+    expect(parsed.documents).toHaveLength(1);
+    expect(parsed.documents[0]).toMatchObject({
+      request: prd,
+      title: "HTML Guide",
+      body: bodyWithFences,
+    });
+
+    // Also verify \u0060 escaped backticks continue to work.
+    const unicodeReply =
+      'Done.\n```amun\n{"do":"document","request":"' +
+      prd +
+      '","title":"Escaped","type":"doc","body":"\\u0060\\u0060\\u0060ts\\nconst x = 1;\\n\\u0060\\u0060\\u0060"}\n```';
+    const parsedUnicode = readRequestBlocks(unicodeReply);
+    expect(parsedUnicode.visible).toBe("Done.");
+    expect(parsedUnicode.documents[0]?.body).toBe("```ts\nconst x = 1;\n```");
+
+    // End-to-end through recordFirstMateReply stores the document intact.
+    recordFirstMateReply(store, reply);
+    expect(snap().library.find((doc) => doc.title === "HTML Guide")?.body).toBe(
+      bodyWithFences,
+    );
+  });
+
+  it("parses optional story-drafts amun blocks without breaking visible text", () => {
+    const reply =
+      "Drafted 2 stories.\n" +
+      block({
+        do: "story-drafts",
+        request: prd,
+        objectiveId: "obj-1",
+        expectedVersion: 3,
+        stories: [
+          { title: "Add SSO login", points: 5 },
+          { title: "Audit log export", points: 3 },
+        ],
+      });
+    const parsed = readRequestBlocks(reply);
+    expect(parsed.visible).toBe("Drafted 2 stories.");
+    expect(parsed.storyDrafts).toEqual([
+      {
+        request: prd,
+        objectiveId: "obj-1",
+        expectedVersion: 3,
+        stories: [
+          { title: "Add SSO login", points: 5 },
+          { title: "Audit log export", points: 3 },
+        ],
+      },
+    ]);
+  });
+
+  it("refuses oversized (>100k) document bodies in apply-reply instead of persisting an un-editable document", () => {
+    const { gitex } = setup();
+    const chat = send("new-chat", { workAreaId: gitex }).ref!;
+    ask(gitex, "Write a huge specification.", prd, chat);
+    const oversized = "x".repeat(100_001);
+    const res = send("apply-reply", {
+      text: block({
+        do: "document",
+        request: prd,
+        title: "Giant Spec",
+        type: "prd",
+        body: oversized,
+      }),
+      workAreaId: gitex,
+      chatId: chat,
+      saveText: false,
+    });
+    expect(res.ok).toBe(true);
+    expect(snap().library).toHaveLength(0);
+    expect(deliveries()).toHaveLength(0);
+    const chatMessages = snap().chats.find((c) => c.id === chat)!.messages;
+    const refusal = chatMessages.find(
+      (m) => (m.card as { kind?: string } | null)?.kind === "document-refused",
+    );
+    expect(refusal).toBeDefined();
+    expect(refusal?.text).toContain("Giant Spec");
+    expect(refusal?.text).toContain("100,000");
+  });
+
+  it("trims oversized visible prose to 16,384 characters in apply-reply", () => {
+    const { gitex } = setup();
+    const res = send("apply-reply", {
+      text: "z".repeat(20_000),
+      workAreaId: gitex,
+      chatId: null,
+      saveText: true,
+    });
+    expect(res.ok).toBe(true);
+    const saved = snap()
+      .messages.filter((m) => m.workAreaId === gitex && m.role === "firstmate")
+      .at(-1);
+    expect(saved).toBeDefined();
+    expect(saved!.text.length).toBe(16_384);
+    expect(saved!.text.endsWith("…")).toBe(true);
   });
 });

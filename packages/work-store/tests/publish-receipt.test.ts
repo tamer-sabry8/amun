@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openWorkStore } from "../src/index.ts";
 
@@ -112,6 +115,131 @@ describe("the publish receipt", () => {
     });
     expect(request().status).toBe("delivered");
     work.close();
+  });
+
+  it("preserves chat_id and request_ref on split-approval remainder across store restart and routes its receipt", () => {
+    const dir = mkdtempSync(join(tmpdir(), "amun-split-receipt-"));
+    const dbPath = join(dir, "work.sqlite");
+    try {
+      const firstRun = openWorkStore(dbPath);
+      const send1 = (action: string, extra: object = {}) =>
+        firstRun.store
+          .handle({ version: 1, kind: "work", action, ...extra })
+          .find(
+            (event) => (event as { kind?: string }).kind === "work-result",
+          ) as { ok: boolean; ref: string | null; message: string };
+      send1("add-group", { name: "Work" });
+      const group = firstRun.store.snapshot().groups[0]!.id;
+      const area = send1("create-area", {
+        groupId: group,
+        type: "project",
+        name: "Invoiced",
+      }).ref!;
+      const askingChat = send1("new-chat", { workAreaId: area }).ref!;
+      const ref = "amun-r-bbbbbbbbbbbb";
+      const asked = send1("message", {
+        workAreaId: area,
+        chatId: askingChat,
+        role: "you",
+        text: "Publish both stories to Linear.",
+        card: { kind: "request", ref },
+      }).ref!;
+      send1("register-request", { ref, messageId: asked, projectAreaId: area });
+      const planId = send1("propose-plan", {
+        groupId: null,
+        workAreaId: area,
+        planKind: "stories",
+        destination: "linear",
+        summary: "Invoiced split plan",
+        items: [
+          { id: "s1", summary: "First story", fields: { type: "Story" } },
+          { id: "s2", summary: "Second story", fields: { type: "Story" } },
+        ],
+        chatId: askingChat,
+        requestRef: ref,
+      }).ref!;
+      const initialPlan = firstRun.store
+        .snapshot()
+        .plans.find((p) => p.id === planId)!;
+      // Approve only the first item; the second waits in a split remainder.
+      expect(
+        send1("approve-plan", {
+          planId,
+          fingerprint: initialPlan.fingerprint,
+          itemIds: ["s1"],
+        }).ok,
+      ).toBe(true);
+      const remainderId = firstRun.store
+        .snapshot()
+        .plans.find((p) => p.splitFrom === planId)!.id;
+      firstRun.close();
+
+      // Reopen the store from disk to prove restart persistence.
+      const secondRun = openWorkStore(dbPath);
+      const send2 = (action: string, extra: object = {}) =>
+        secondRun.store
+          .handle({ version: 1, kind: "work", action, ...extra })
+          .find(
+            (event) => (event as { kind?: string }).kind === "work-result",
+          ) as { ok: boolean; ref: string | null; message: string };
+
+      const stored = secondRun.db
+        .prepare("SELECT chat_id, request_ref FROM work_plans WHERE id=?")
+        .get(remainderId) as {
+        chat_id: string | null;
+        request_ref: string | null;
+      };
+      expect(stored).toEqual({ chat_id: askingChat, request_ref: ref });
+
+      const remainder = secondRun.store
+        .snapshot()
+        .plans.find((p) => p.id === remainderId)!;
+      expect(
+        send2("approve-plan", {
+          planId: remainderId,
+          fingerprint: remainder.fingerprint,
+        }).ok,
+      ).toBe(true);
+      expect(
+        send2("record-results", {
+          planId: remainderId,
+          results: [{ id: "s2", state: "created", externalId: "TRA-202" }],
+        }).ok,
+      ).toBe(true);
+
+      const receipts = secondRun.store
+        .snapshot()
+        .chats.flatMap((c) =>
+          c.messages.map((m) => ({
+            ...m,
+            chatId: c.id,
+            workAreaId: c.workAreaId,
+          })),
+        )
+        .filter(
+          (m) =>
+            (m.card as { kind?: string; planId?: string } | null)?.kind ===
+              "publish-receipt" &&
+            (m.card as { planId?: string }).planId === remainderId,
+        );
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0]).toMatchObject({
+        workAreaId: area,
+        chatId: askingChat,
+      });
+      expect(receipts[0]!.card).toMatchObject({
+        planId: remainderId,
+        request: ref,
+        state: "published",
+        created: 1,
+      });
+      expect(
+        secondRun.store.snapshot().requests.find((r) => r.ref === ref)?.status,
+      ).toBe("delivered");
+      secondRun.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

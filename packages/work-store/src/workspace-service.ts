@@ -7,7 +7,16 @@ import { ModelRouting } from "./model-routing.ts";
 import { StoryDecisions } from "./story-decisions.ts";
 import { riceScore, type RiceInputs } from "../../domain/src/rice.ts";
 import { ProductDocuments, AuthoringError } from "./product-documents.ts";
-import { ProductAuthoring, type ProductModel } from "./product-authoring.ts";
+import {
+  ProductAuthoring,
+  persistStoryDrafts,
+  type ProductModel,
+} from "./product-authoring.ts";
+import {
+  deliverPublicationReceipt,
+  type PublicationReceiptDelivery,
+  type PublicationReceiptInput,
+} from "./publication-receipt.ts";
 import { extractDocument, DocumentInputError } from "./document-import.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { Redactor } from "./redaction.ts";
@@ -367,6 +376,19 @@ export class WorkspaceService {
               areaId,
               chatId,
             );
+        this.db
+          .prepare(
+            "INSERT INTO workspace_settings(id,value_json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value_json=excluded.value_json",
+          )
+          .run(
+            "story_review_ref:" + ref,
+            JSON.stringify({
+              productId: cmd.productId,
+              objectiveId: cmd.objectiveId,
+              version: cmd.expectedVersion,
+              receiptId: receipt,
+            }),
+          );
         return {
           parent,
           messageId: receipt,
@@ -395,6 +417,131 @@ export class WorkspaceService {
           );
       })
       .immediate();
+  }
+
+  hasStoryDrafts(objectiveId: string, expectedVersion: number): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM story_drafts WHERE objective_id=? AND prd_version=? LIMIT 1",
+        )
+        .get(objectiveId, expectedVersion),
+    );
+  }
+
+  registerCrewStoryDrafts(
+    ref: string,
+    stories: unknown,
+    expectedObjectiveId: string | null = null,
+    expectedVersion: number | null = null,
+  ): {
+    productId: string;
+    objectiveId: string;
+    version: number;
+    inserted: number;
+    alreadyPresent: boolean;
+  } | null {
+    const settingRow = this.db
+      .prepare("SELECT value_json FROM workspace_settings WHERE id=?")
+      .get("story_review_ref:" + ref) as { value_json: string } | undefined;
+    let binding: {
+      productId: string;
+      objectiveId: string;
+      version: number;
+      receiptId: string | null;
+    } | null = null;
+    if (settingRow) {
+      try {
+        const parsed = JSON.parse(settingRow.value_json) as {
+          productId: string;
+          objectiveId: string;
+          version: number;
+          receiptId?: string | null;
+        };
+        binding = {
+          productId: parsed.productId,
+          objectiveId: parsed.objectiveId,
+          version: parsed.version,
+          receiptId: parsed.receiptId ?? null,
+        };
+      } catch {
+        binding = null;
+      }
+    }
+    if (!binding) {
+      const originRow = this.db
+        .prepare(
+          "SELECT product_id,objective_id,version FROM prd_review_origins WHERE ref=?",
+        )
+        .get(ref) as
+        | { product_id: string; objective_id: string; version: number }
+        | undefined;
+      if (originRow) {
+        binding = {
+          productId: originRow.product_id,
+          objectiveId: originRow.objective_id,
+          version: originRow.version,
+          receiptId: null,
+        };
+      }
+    }
+    if (!binding) return null;
+    if (
+      expectedObjectiveId !== null &&
+      expectedObjectiveId !== binding.objectiveId
+    )
+      return null;
+    if (expectedVersion !== null && expectedVersion !== binding.version)
+      return null;
+    const liveReq = this.db
+      .prepare(
+        "SELECT 1 FROM work_requests r JOIN work_messages m ON m.id=r.message_id JOIN work_areas a ON a.id=m.work_area_id WHERE r.ref=? AND a.status<>'deleted'",
+      )
+      .get(ref);
+    if (!liveReq) return null;
+    try {
+      const result = persistStoryDrafts(this.db, this.redactor, {
+        productId: binding.productId,
+        objectiveId: binding.objectiveId,
+        expectedVersion: binding.version,
+        rawStories: { stories },
+        validate: null,
+      });
+      if (binding.receiptId) {
+        this.finishStoryReview(
+          ref,
+          binding.receiptId,
+          "Story drafts are ready in the PRD review.",
+          true,
+        );
+      }
+      this.db
+        .prepare("DELETE FROM workspace_settings WHERE id=?")
+        .run("story_review_ref:" + ref);
+      return {
+        productId: binding.productId,
+        objectiveId: binding.objectiveId,
+        version: binding.version,
+        inserted: result.inserted,
+        alreadyPresent: result.alreadyPresent,
+      };
+    } catch (error) {
+      if (binding.receiptId) {
+        const msg =
+          error instanceof Error
+            ? error.message
+            : "Could not save story drafts.";
+        this.finishStoryReview(ref, binding.receiptId, msg, false);
+      }
+      return null;
+    }
+  }
+
+  deliverPublicationReceipt(
+    input: PublicationReceiptInput,
+    send: (prompt: string) => Promise<string>,
+  ): Promise<PublicationReceiptDelivery> {
+    return deliverPublicationReceipt(this.db, this.redactor, input, send);
   }
 
   /**

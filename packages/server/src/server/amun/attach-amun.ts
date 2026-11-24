@@ -23,6 +23,7 @@ import {
   openNotion,
   openTrackers,
   openWorkStore,
+  readRequestBlocks,
   recordFirstMateReply,
 } from "@amun/work-store";
 import { createHash } from "node:crypto";
@@ -464,6 +465,17 @@ export function attachAmun(input: AttachAmunInput): AmunAttachment | null {
         agent?.runtimeInfo?.model ?? agent?.config.model ?? null,
         prdRelay,
       );
+      if (work.workspace.registerCrewStoryDrafts && reply.text.includes("```amun")) {
+        for (const draft of readRequestBlocks(reply.text).storyDrafts) {
+          const filed = work.workspace.registerCrewStoryDrafts(
+            draft.request,
+            draft.stories,
+            draft.objectiveId,
+            draft.expectedVersion,
+          );
+          if (filed) saved = saved ?? "story-drafts";
+        }
+      }
     } catch (error) {
       input.logger.warn({ err: error }, "amun could not keep a First Mate reply");
     }

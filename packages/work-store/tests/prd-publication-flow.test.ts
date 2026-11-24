@@ -177,7 +177,10 @@ it("compares Gitex, creates one reviewed backlog item, reads it back and records
   });
   expect(fields["System.IterationPath"]).toBe("Gitex");
   expect(fields["System.Description"]).toContain("Print one badge");
-  expect(dispatch).toHaveBeenCalledTimes(1);
+  expect(dispatch).toHaveBeenCalledTimes(2);
+  const receiptCall = (dispatch.mock.calls[1] as unknown[] | undefined)?.[1];
+  expect(String(receiptCall)).toContain("[Amun verified publication outcome");
+  expect(String(receiptCall)).toContain("73");
   expect(transport.mock.calls.map(([method]) => method)).toEqual([
     "POST",
     "GET",
