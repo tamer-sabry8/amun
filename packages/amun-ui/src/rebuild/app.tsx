@@ -266,6 +266,7 @@ export function App() {
   const [pending, setPending] = useState<IntakeStep | null>(null);
   const [note, setNote] = useState("");
   const [first, setFirst] = useState<string | null>(null);
+  const [firstFiles, setFirstFiles] = useState<File[]>([]);
   const [section, setSection] = useState<SettingsSection>("models");
   const [libraryType, setLibraryType] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -428,6 +429,7 @@ export function App() {
     if (!openAreaGone) return;
     setPane(null);
     setFirst(null);
+    setFirstFiles([]);
     dispatch({ type: "go", route: "home" });
   }, [openAreaGone]);
   if (!snapshot && state.failure)
@@ -460,6 +462,7 @@ export function App() {
   const go = (route: Exclude<Route, "work" | "setup">) => {
     setPane(null);
     setFirst(null);
+    setFirstFiles([]);
     setResumePlanning(null);
     dispatch({ type: "go", route });
   };
@@ -469,10 +472,12 @@ export function App() {
     target: PaneTarget = null,
     chat: string | null = null,
     at: ReadingFocus | null = null,
+    files: File[] = [],
   ) => {
     setPending(null);
     setNote("");
     setFirst(message ?? null);
+    setFirstFiles(files);
     setPane(target);
     setChatId(chat);
     setFocus(at);
@@ -803,7 +808,12 @@ export function App() {
             : { kind: "happened" };
     openWork(areaId, undefined, pane);
   };
-  const submit = async (text: string, files: string[], groupId?: string) => {
+  const submit = async (
+    text: string,
+    files: string[],
+    groupId?: string,
+    picked: File[] = [],
+  ) => {
     setNote("");
     // "Create a new project for Gitex, high priority, ready on Dec 6": make
     // the folder with what was said and start there. A name a folder already
@@ -813,18 +823,16 @@ export function App() {
       snapshot.setup.activeGroupId ??
       groupMentioned(text, snapshot.groups) ??
       (snapshot.groups.length === 1 ? snapshot.groups[0]!.id : null);
-    const routed = files.length
-      ? ({ route: "none" } as const)
-      : routeNewWork({
-          text,
-          today: localDay(now),
-          areas: snapshot.areas.filter(
-            (area) =>
-              area.name !== generalConversationName &&
-              (!group || !area.groupId || area.groupId === group),
-          ),
-          inside: null,
-        });
+    const routed = routeNewWork({
+      text,
+      today: localDay(now),
+      areas: snapshot.areas.filter(
+        (area) =>
+          area.name !== generalConversationName &&
+          (!group || !area.groupId || area.groupId === group),
+      ),
+      inside: null,
+    });
     if (routed.route === "create" && group) {
       if (routed.request.type === "rfp") {
         const facts = rfpDetails(text);
@@ -838,7 +846,8 @@ export function App() {
           accountOwner: facts.accountOwner,
           presales: facts.presales,
         });
-        if (made.ok && made.ref) return openWork(made.ref, text);
+        if (made.ok && made.ref)
+          return openWork(made.ref, text, null, null, null, picked);
       } else {
         const made = await workAsync("create-area", {
           // The owner's own message follows into this work, so Firstmate knows.
@@ -852,10 +861,11 @@ export function App() {
           ...(routed.request.dueDate ? { dueAt: routed.request.dueDate } : {}),
           ...(routed.request.client ? { client: routed.request.client } : {}),
         });
-        if (made.ok && made.ref) return openWork(made.ref, text);
+        if (made.ok && made.ref)
+          return openWork(made.ref, text, null, null, null, picked);
       }
     }
-    if (routed.route === "existing") {
+    if (routed.route === "existing" && !picked.length) {
       const general = await looseChat(group);
       if (general) {
         const existing = snapshot.areas.find(
@@ -889,7 +899,7 @@ export function App() {
       areaId?: string;
     };
     if (step.step === "file_work" && step.areaId)
-      return openWork(step.areaId, text);
+      return openWork(step.areaId, text, null, null, null, picked);
     // Anything Home has to show (a note, or a question about new work) is
     // shown there, whichever screen the message was sent from.
     const onHome = () => {
@@ -905,10 +915,17 @@ export function App() {
     if (step.step === "choose_work" && !asksForNewWork(text)) {
       // It goes to the latest chat that has no folder (owner, 19 November 2026).
       const loose = await looseChat(step.groupId ?? null);
-      if (loose) return openWork(loose.areaId, text, null, loose.chatId);
+      if (loose)
+        return openWork(loose.areaId, text, null, loose.chatId, null, picked);
     }
     onHome();
-    setPending({ ...step, step: step.step ?? "", text, files });
+    setPending({
+      ...step,
+      step: step.step ?? "",
+      text,
+      files,
+      pickedFiles: picked,
+    });
   };
   const view = homeModel(
     snapshot,
@@ -1268,12 +1285,16 @@ export function App() {
             pending={pending}
             note={note}
             connected={connected}
-            onSend={(text, files) => void submit(text, files)}
-            onResubmit={(text, files, groupId) =>
-              void submit(text, files, groupId)
+            onSend={(text, files, picked) =>
+              void submit(text, files, undefined, picked)
             }
-            onOpen={(areaId, message) =>
-              areaId ? openWork(areaId, message) : go("home")
+            onResubmit={(text, files, groupId, picked) =>
+              void submit(text, files, groupId, picked)
+            }
+            onOpen={(areaId, message, files) =>
+              areaId
+                ? openWork(areaId, message, null, null, null, files)
+                : go("home")
             }
             onPortfolio={() => go("portfolio")}
             onPendingDone={(text) => {
@@ -1297,6 +1318,7 @@ export function App() {
             }
             onChat={(next) => {
               setFirst(null);
+              setFirstFiles([]);
               setFocus(null);
               setChatId(next);
             }}
@@ -1320,6 +1342,7 @@ export function App() {
             }
             expanded={layout.artifact.expanded}
             first={first}
+            firstFiles={firstFiles}
             onPane={setPane}
             onResize={(ratio) => dispatch({ type: "resize", ratio })}
             onExpand={() => dispatch({ type: "expand_artifact" })}
@@ -1408,7 +1431,9 @@ export function App() {
             snapshot={snapshot}
             model={model}
             onWork={(id) => openWork(id)}
-            onAsk={(text, files) => void submit(text, files)}
+            onAsk={(text, files, picked) =>
+              void submit(text, files, undefined, picked)
+            }
             onAskAbout={(id, text) => openWork(id, text)}
             onAskCard={(id) => void askAbout(id)}
             onOpenView={(id, link) => openDeliveryView(id, link)}

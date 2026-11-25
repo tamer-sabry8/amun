@@ -50,6 +50,7 @@ export interface IntakeStep {
   step: string;
   text: string;
   files: string[];
+  pickedFiles?: File[];
   title?: string;
   type?: string;
   groupId?: string | null;
@@ -69,8 +70,13 @@ export function IntakeCard({
   snapshot: Snapshot;
   pending: IntakeStep;
   connected: string[];
-  onResubmit(text: string, files: string[], groupId: string): void;
-  onOpen(areaId: string, firstMessage?: string): void;
+  onResubmit(
+    text: string,
+    files: string[],
+    groupId: string,
+    picked?: File[],
+  ): void;
+  onOpen(areaId: string, firstMessage?: string, firstFiles?: File[]): void;
   onDone(note?: string): void;
 }) {
   const groupId = pending.groupId ?? null;
@@ -127,7 +133,14 @@ export function IntakeCard({
             <button
               key={group.id}
               className="btn"
-              onClick={() => onResubmit(pending.text, pending.files, group.id)}
+              onClick={() =>
+                onResubmit(
+                  pending.text,
+                  pending.files,
+                  group.id,
+                  pending.pickedFiles,
+                )
+              }
             >
               {group.name}
             </button>
@@ -206,7 +219,9 @@ export function IntakeCard({
             <button
               key={option.id}
               className="btn"
-              onClick={() => onOpen(option.id, pending.text)}
+              onClick={() =>
+                onOpen(option.id, pending.text, pending.pickedFiles)
+              }
             >
               {option.name}
             </button>
@@ -218,7 +233,7 @@ export function IntakeCard({
                 pending.type ?? "task",
                 pending.title ?? "Untitled",
               );
-              if (id) onOpen(id, pending.text);
+              if (id) onOpen(id, pending.text, pending.pickedFiles);
             }}
           >
             New {lower(label)}
@@ -231,7 +246,7 @@ export function IntakeCard({
                 className="btn quiet"
                 onClick={async () => {
                   const id = await create(type, pending.title ?? "Untitled");
-                  if (id) onOpen(id, pending.text);
+                  if (id) onOpen(id, pending.text, pending.pickedFiles);
                 }}
               >
                 New {lower(typeLabels[type])}
@@ -261,7 +276,7 @@ export function IntakeCard({
             dueDate: due || null,
             workAreaIds: [id],
           });
-          onOpen(id, pending.text);
+          onOpen(id, pending.text, pending.pickedFiles);
         }}
       >
         <strong>
@@ -671,9 +686,18 @@ export function Home({
   pending: IntakeStep | null;
   note: string;
   connected: string[];
-  onSend(text: string, files: string[]): void;
-  onResubmit(text: string, files: string[], groupId: string): void;
-  onOpen(areaId: string | null, firstMessage?: string): void;
+  onSend(text: string, files: string[], picked?: File[]): void;
+  onResubmit(
+    text: string,
+    files: string[],
+    groupId: string,
+    picked?: File[],
+  ): void;
+  onOpen(
+    areaId: string | null,
+    firstMessage?: string,
+    firstFiles?: File[],
+  ): void;
   onPortfolio(): void;
   onPendingDone(note?: string): void;
   onNote(note: string): void;
@@ -732,7 +756,7 @@ export function Home({
       pending={pending}
       connected={connected}
       onResubmit={onResubmit}
-      onOpen={(areaId, first) => onOpen(areaId, first)}
+      onOpen={(areaId, first, firstFiles) => onOpen(areaId, first, firstFiles)}
       onDone={onPendingDone}
     />
   );
