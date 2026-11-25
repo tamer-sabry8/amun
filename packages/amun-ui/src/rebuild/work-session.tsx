@@ -151,6 +151,8 @@ import { tableSnippet, toggleTask } from "./markdown-view.ts";
 import {
   askFirstmate,
   currentModel,
+  finishInFlight,
+  formatElapsed,
   heldMessage,
   heldQueue,
   observeHeldMessages,
@@ -159,6 +161,9 @@ import {
   markBriefed,
   needsBriefing,
   releaseMessage,
+  setInFlightPhase,
+  startInFlight,
+  useInFlight,
 } from "./firstmate.ts";
 import { bridge } from "../bridge.ts";
 import {
@@ -1533,7 +1538,15 @@ export function WorkSession({
   const failurePlan = snapshot.plans.some((plan) => plan.id === failurePlanId)
     ? failurePlanId
     : null;
-  const [busy, setBusy] = useState(false);
+  const activeTurn = useInFlight(threadKey);
+  const busy = activeTurn !== null;
+  const [elapsedNow, setElapsedNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!activeTurn) return;
+    setElapsedNow(Date.now());
+    const timer = setInterval(() => setElapsedNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [activeTurn]);
   const [showSteps, setShowSteps] = useState(false);
   const [menu, setMenu] = useState<"title" | "mode" | "area" | "fail" | null>(
     null,
@@ -2282,12 +2295,11 @@ export function WorkSession({
       });
       return;
     }
-    inFlight.add(threadKey);
+    startInFlight(threadKey);
     // Once claimed for dispatch, this message is no longer queued. The
     // original message remains in chat even if its receipt is interrupted.
     if (retry) releaseMessage(threadKey);
     setProblem("");
-    setBusy(true);
     const label = text.length > 80 ? text.slice(0, 77) + "…" : text;
     const row =
       activityId ??
@@ -2301,7 +2313,9 @@ export function WorkSession({
       ).ref;
     // The chat's row shows that Firstmate is writing, only while it is.
     setWriting(entryKey, true);
-    const turn = await askFirstmate(scoped, image).catch((error: unknown) => ({
+    const turn = await askFirstmate(scoped, image, (phase) =>
+      setInFlightPhase(threadKey, phase),
+    ).catch((error: unknown) => ({
       ok: false as const,
       needsProvider: false,
       reason:
@@ -2386,8 +2400,7 @@ export function WorkSession({
         reason: "provider" as const,
         ref,
       };
-      setBusy(false);
-      inFlight.delete(threadKey);
+      finishInFlight(threadKey);
       holdMessage(threadKey, message, true);
       return;
     } else {
@@ -2395,8 +2408,7 @@ export function WorkSession({
       // This turn failed for a reason other than a provider: it is not kept.
       // A message queued behind this failed turn is still sent.
     }
-    setBusy(false);
-    inFlight.delete(threadKey);
+    finishInFlight(threadKey);
     if (heldMessage(threadKey)) retryWaiting();
     // The outcome is already on screen, so the Activity row closes quietly.
     if (row)
@@ -4145,7 +4157,19 @@ export function WorkSession({
               {busy && (
                 <p className="muted rb-working" role="status">
                   <FirstmateMark size={22} mood="working" />
-                  Firstmate is working…
+                  {activeTurn?.phase === "starting"
+                    ? "Starting Firstmate…"
+                    : "Firstmate is working…"}
+                  {(() => {
+                    const elapsed = activeTurn
+                      ? formatElapsed(
+                          Math.max(0, elapsedNow - activeTurn.startedAt),
+                        )
+                      : null;
+                    return elapsed ? (
+                      <span className="small"> ({elapsed})</span>
+                    ) : null;
+                  })()}
                   {crewAtWork.length > 0 && (
                     <span className="small">
                       {" "}

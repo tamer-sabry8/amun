@@ -1,7 +1,7 @@
 // Talks to Firstmate through the existing conversation service
 // (native-pi "conversation" / "conversation-send"). One live conversation is
 // shared by the app; each work area keeps its own visible thread in Amun.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { nativePiEvent, nativeTurnTextLimit } from "@amun/contracts";
 import { bridge } from "../bridge.ts";
 import type { WaitReason } from "./held-wait.ts";
@@ -205,8 +205,63 @@ const saveHeld = () => {
   }
   for (const listener of queueListeners) listener();
 };
+export type TurnPhase = "starting" | "working";
+export interface InFlightTurn {
+  phase: TurnPhase;
+  startedAt: number;
+}
 /** Work areas with a turn in flight, so a waiting message is never sent twice. */
 export const inFlight = new Set<string>();
+const inFlightMeta = new Map<string, InFlightTurn>();
+const inFlightListeners = new Set<() => void>();
+const notifyInFlight = () => {
+  for (const listener of inFlightListeners) listener();
+};
+export function startInFlight(
+  key: string,
+  phase: TurnPhase = "starting",
+  now = Date.now(),
+) {
+  inFlight.add(key);
+  inFlightMeta.set(key, { phase, startedAt: now });
+  notifyInFlight();
+}
+export function setInFlightPhase(key: string, phase: TurnPhase) {
+  const existing = inFlightMeta.get(key);
+  if (!existing || existing.phase === phase) return;
+  inFlightMeta.set(key, { ...existing, phase });
+  notifyInFlight();
+}
+export function finishInFlight(key: string) {
+  inFlight.delete(key);
+  inFlightMeta.delete(key);
+  notifyInFlight();
+}
+export function inFlightState(key: string): InFlightTurn | null {
+  return inFlightMeta.get(key) ?? null;
+}
+export function observeInFlight(listener: () => void) {
+  inFlightListeners.add(listener);
+  return () => {
+    inFlightListeners.delete(listener);
+  };
+}
+/** Survives navigating away from a chat and returning while Firstmate is still working. */
+export function useInFlight(key: string): InFlightTurn | null {
+  return useSyncExternalStore(
+    observeInFlight,
+    () => inFlightMeta.get(key) ?? null,
+    () => null,
+  );
+}
+/** Plain-English elapsed duration for long-running Firstmate turns (shown after 10s). */
+export function formatElapsed(ms: number): string | null {
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 10) return null;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
 const emptyQueue: readonly Held[] = [];
 export const heldQueue = (areaId: string): readonly Held[] =>
   held.get(areaId) ?? emptyQueue;
@@ -243,6 +298,7 @@ export function markBriefed() {
 export async function askFirstmate(
   text: string,
   image?: string,
+  onPhase?: (phase: TurnPhase) => void,
 ): Promise<Turn> {
   if (text.length > nativeTurnTextLimit)
     return {
@@ -258,9 +314,13 @@ export async function askFirstmate(
     reason: "The conversation changed. Please send your message again.",
   });
   // The model label may already be opening the same conversation.
-  if (priming) await priming;
+  if (priming) {
+    onPhase?.("starting");
+    await priming;
+  }
   if (generation !== contextGeneration) return changed();
   if (!session) {
+    onPhase?.("starting");
     const opened = await run("conversation", "");
     if (generation !== contextGeneration) return changed();
     if (opened.kind !== "conversation")
@@ -312,6 +372,7 @@ export async function askFirstmate(
       reason:
         "This message and its attachments are too large for one turn. Send the image and documents separately.",
     };
+  onPhase?.("working");
   const result = await run("conversation-send", argument);
   // The turn may or may not have run before the switch: never replace the new
   // conversation with it, and never send it again on the user's behalf. An
