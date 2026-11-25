@@ -8,10 +8,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { fleetSnapshotSchema, type FleetSnapshot } from "@getpaseo/protocol/amun-rpc";
 import { resolveAmunPaths, type AmunPaths } from "./amun-paths.js";
-import { AmunRpcHandler } from "./amun-rpc-handler.js";
+import { AmunRpcHandler, HISTORY_REQUEST, serializeRecentSteps } from "./amun-rpc-handler.js";
 import { openAdo, openWorkStore } from "@amun/work-store";
 import { attachAmun } from "./attach-amun.js";
-import { HISTORY_REQUEST } from "./amun-rpc-handler.js";
 import { TraceLog } from "./trace/trace-log.js";
 import { unzipSync, strFromU8 } from "fflate";
 import { ConnectionStore } from "./connections/connection-store.js";
@@ -407,6 +406,16 @@ describe("Amun RPC", () => {
       ok: false,
       error: { code: "ProductSpaceNotFoundError" },
     });
+  });
+
+  it("keeps the newest turns as valid JSON when steps.json exceeds the redactor limit", () => {
+    const oldTurn = { id: "t1", prompt: "old-" + "a".repeat(400) };
+    const midTurn = { id: "t2", prompt: "mid-" + "b".repeat(400) };
+    const newTurn = { id: "t3", prompt: "new-" + "c".repeat(400) };
+    const json = serializeRecentSteps([oldTurn, midTurn, newTurn], 1000);
+    expect(json.length).toBeLessThanOrEqual(1000);
+    const parsed = JSON.parse(json) as { id: string }[];
+    expect(parsed.map((item) => item.id)).toEqual(["t2", "t3"]);
   });
 
   describe("over WebSocket", () => {

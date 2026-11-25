@@ -1446,6 +1446,7 @@ export function WorkSession({
   ratio,
   expanded,
   first,
+  firstFiles = [],
   onChat,
   onWork,
   onOpenAt,
@@ -1470,6 +1471,8 @@ export function WorkSession({
   expanded: boolean;
   /** A message typed on Home that opened this session. */
   first: string | null;
+  /** Files attached on Home or Portfolio that travel with the first message. */
+  firstFiles?: File[];
   /** Opens another chat of this work (after "Fork from here"). */
   onChat(chatId: string | null): void;
   /** Opens a chat in another folder, optionally sending it a first message. */
@@ -2405,13 +2408,15 @@ export function WorkSession({
             !settled.includes(`${fork.id}:${item.id}`),
         ) ?? null)
       : null;
-  const send = async (typed: string) => {
-    if ((!typed.trim() && !attachments.files.length) || !context) return;
+  const send = async (typed: string, extraFiles: File[] = []) => {
+    const hasFiles = attachments.files.length > 0 || extraFiles.length > 0;
+    if ((!typed.trim() && !hasFiles) || !context) return;
+    if (extraFiles.length) attachments.add(extraFiles);
     // A request for new work that belongs in a folder of its own is not sent
     // from here: Amun files it, or holds it and asks on Firstmate's card. A
     // message the owner already chose to keep here is sent as typed.
-    const decided = attachments.files.length ? null : takeAsTyped(typed);
-    if (!attachments.files.length && !decided) {
+    const decided = hasFiles ? null : takeAsTyped(typed);
+    if (!hasFiles && !decided) {
       const here = context.area;
       const loose = here.name === generalConversationName;
       const routed = routeNewWork({
@@ -2497,7 +2502,12 @@ export function WorkSession({
       return;
     }
     // Files in the draft travel with this message.
-    const picked = attachments.files;
+    const picked = extraFiles.length
+      ? [
+          ...attachments.files,
+          ...extraFiles.map((file) => ({ name: file.name })),
+        ]
+      : attachments.files;
     const readingFiles = attachments.take();
     const earlier = preparing.get(threadKey);
     let prepared!: () => void;
@@ -2733,11 +2743,13 @@ export function WorkSession({
     };
   }, [threadKey, !!waiting]);
   useEffect(() => {
-    if (first && context && sentFirst.current !== first) {
-      sentFirst.current = first;
-      void send(first);
+    const hasFirst = Boolean(first || firstFiles.length);
+    const firstKey = `${first ?? ""}\0${firstFiles.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join(",")}`;
+    if (hasFirst && context && sentFirst.current !== firstKey) {
+      sentFirst.current = firstKey;
+      void send(first ?? "", firstFiles);
     }
-  }, [first, areaId, !!context]);
+  }, [first, firstFiles, areaId, !!context]);
   const memory = useChatMemory();
   const askCard = memory.asks[entryKey] ?? null;
   const isGeneral = context?.area.name === generalConversationName;
@@ -2889,11 +2901,16 @@ export function WorkSession({
   const plans = snapshot.plans.filter(
     (plan) => plan.workAreaId === areaId && plan.state === "proposed",
   );
+  const isNavActivity = (text: string) =>
+    text.includes("This is a read-only inspection. Make no changes.");
   const running = snapshot.activity.filter(
-    (item) => item.workAreaId === areaId && item.state === "running",
+    (item) =>
+      item.workAreaId === areaId &&
+      item.state === "running" &&
+      !isNavActivity(item.text),
   );
   const steps = snapshot.activity
-    .filter((item) => item.workAreaId === areaId)
+    .filter((item) => item.workAreaId === areaId && !isNavActivity(item.text))
     .slice(0, 12);
   const output =
     pane?.kind === "output"

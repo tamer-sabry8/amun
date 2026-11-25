@@ -91,7 +91,7 @@ export function Composer({
   autoFocus?: boolean;
   /** Text to start with, e.g. from a suggestion card. */
   initial?: string;
-  onSend(text: string, files: string[]): void;
+  onSend(text: string, files: string[], picked?: File[]): void;
   onPlus?(item: string): void;
   /** File names to show, when the parent keeps the attachments itself. */
   attached?: string[];
@@ -134,8 +134,8 @@ export function Composer({
   useEffect(() => {
     if (draftKey) rememberDraft(draftKey, draft);
   }, [draftKey, draft]);
-  const [own, setFiles] = useState<string[]>([]);
-  const files = attached ?? own;
+  const [ownFiles, setOwnFiles] = useState<File[]>([]);
+  const files = attached ?? ownFiles.map((file) => file.name);
   const [plus, setPlus] = useState(false);
   const [caret, setCaret] = useState(0);
   const [index, setIndex] = useState(0);
@@ -279,10 +279,11 @@ export function Composer({
     // The parent can consume a document seed and remount this composer during
     // onSend. Clear the stored draft before that remount reads it.
     if (draftKey) rememberDraft(draftKey, "");
+    const picked = attached ? undefined : ownFiles;
     setPlus(false);
     setDraft("");
-    setFiles([]);
-    onSend(commandAsRequest(text) ?? text, files);
+    setOwnFiles([]);
+    onSend(commandAsRequest(text) ?? text, files, picked);
   };
   const keys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen) {
@@ -427,7 +428,9 @@ export function Composer({
                   onClick={() =>
                     onRemoveFile
                       ? onRemoveFile(file)
-                      : setFiles(files.filter((item) => item !== file))
+                      : setOwnFiles((list) =>
+                          list.filter((item) => item.name !== file),
+                        )
                   }
                 >
                   <Icon name="close" width={12} height={12} />
@@ -470,14 +473,18 @@ export function Composer({
               event.target.value = "";
               return;
             }
-            setFiles([
-              ...new Set([
-                ...files,
-                ...Array.from(event.target.files ?? []).map(
-                  (file) => file.name,
-                ),
-              ]),
-            ]);
+            const chosen = Array.from(event.target.files ?? []);
+            setOwnFiles((list) => {
+              const seen = new Set(list.map((item) => item.name));
+              return [
+                ...list,
+                ...chosen.filter((file) => {
+                  if (seen.has(file.name)) return false;
+                  seen.add(file.name);
+                  return true;
+                }),
+              ];
+            });
             event.target.value = "";
           }}
         />

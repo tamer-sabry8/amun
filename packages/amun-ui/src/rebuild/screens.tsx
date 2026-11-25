@@ -2587,7 +2587,7 @@ export function Portfolio({
   now?: number;
   onWork(areaId: string): void;
   /** Sends a message to Firstmate, the same way Home does. */
-  onAsk(text: string, files: string[]): void;
+  onAsk(text: string, files: string[], picked?: File[]): void;
   /** Opens a work's conversation with a message for Firstmate. */
   onAskAbout?(areaId: string, text: string): void;
   /** "Ask about …": a fresh chat with the card attached. */

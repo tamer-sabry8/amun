@@ -70,6 +70,7 @@ export function useAttachments(workAreaId: string) {
         image: null,
         settled: false,
       };
+      current.current = [...current.current, entry];
       setFiles((list) => [...list, entry]);
       const extracted = new Promise<Partial<Attached>>((resolve) => {
         const finish = (change: Partial<Attached>) => {
@@ -121,6 +122,7 @@ export function useAttachments(workAreaId: string) {
   const remove = (name: string) => {
     for (const file of current.current)
       if (file.name === name) pending.current.delete(file.id);
+    current.current = current.current.filter((file) => file.name !== name);
     setFiles((list) => list.filter((file) => file.name !== name));
   };
   const settle = (id: string) =>

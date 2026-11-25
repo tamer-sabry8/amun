@@ -325,7 +325,7 @@ export class AmunRpcHandler {
     // What the First Mate did, step by step, from the timeline Paseo keeps.
     const steps = await this.happened().catch(() => []);
     const bundle = await buildTraceBundle({
-      extra: { "first-mate/steps.json": JSON.stringify(steps, null, 2) + "\n" },
+      extra: { "first-mate/steps.json": serializeRecentSteps(steps) },
       amunHome: this.deps.amunHome,
       fmHome: this.deps.fmHome,
       traceDir: this.deps.trace.dir,
@@ -712,4 +712,46 @@ export class AmunRpcHandler {
         return this.askForHistory(request.space);
     }
   }
+}
+
+/**
+ * Keeps the newest Firstmate turns within the redactor's 1M-char limit so
+ * exported `first-mate/steps.json` is always valid JSON containing the latest
+ * incident instead of truncating off the newest end.
+ */
+export function serializeRecentSteps(
+  steps: unknown[],
+  maxChars = 900_000,
+): string {
+  const full = JSON.stringify(steps, null, 2) + "\n";
+  if (full.length <= maxChars) return full;
+  const kept: unknown[] = [];
+  // Reserve space for "[\n" + "\n]\n"
+  let used = 5;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const item = steps[i];
+    const encoded = JSON.stringify(item, null, 2);
+    const indented = encoded.split("\n").map((line) => "  " + line).join("\n");
+    const extra = indented.length + (kept.length ? 2 : 0); // ",\n"
+    if (used + extra > maxChars) {
+      if (!kept.length) {
+        // Even the newest single turn is larger than maxChars: keep a valid JSON stub.
+        const record =
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : {};
+        kept.push({
+          id: record.id ?? null,
+          at: record.at ?? null,
+          trigger: record.trigger ?? null,
+          truncated: true,
+        });
+      }
+      break;
+    }
+    kept.push(item);
+    used += extra;
+  }
+  kept.reverse();
+  return JSON.stringify(kept, null, 2) + "\n";
 }
