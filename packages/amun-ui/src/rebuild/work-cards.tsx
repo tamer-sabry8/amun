@@ -432,6 +432,34 @@ export function WorkSheet({
                       Convert to Project
                     </button>
                   )}
+                  {area.type === "project" && (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        onClose();
+                        onAsk(
+                          area.id,
+                          `Please change ${area.name} from a Project to a Product.`,
+                        );
+                      }}
+                    >
+                      Change to Product
+                    </button>
+                  )}
+                  {area.type === "product" && (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        onClose();
+                        onAsk(
+                          area.id,
+                          `Please change ${area.name} from a Product to a Project.`,
+                        );
+                      }}
+                    >
+                      Change to Project
+                    </button>
+                  )}
                   <button
                     className="btn solid"
                     onClick={() => {

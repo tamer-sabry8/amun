@@ -1359,6 +1359,52 @@ export class WorkStore {
           );
         return { ref: command.areaId };
       }
+      case "change-area-type": {
+        const area = this.get(
+          "SELECT * FROM work_areas WHERE id=? AND status<>'deleted'",
+          command.areaId,
+        );
+        if (!area) throw new WorkError("That work area no longer exists.");
+        if (area.type === "rfp")
+          throw new WorkError(
+            "An RFP becomes a delivery project from Hand to delivery on the RFP card.",
+          );
+        if (area.type === command.to) return { ref: command.areaId };
+        const twin = this.get(
+          "SELECT id FROM work_areas WHERE type=? AND lower(name)=lower(?) AND ifnull(group_id,'')=ifnull(?,'') AND status<>'deleted' AND id<>?",
+          command.to,
+          String(area.name),
+          (area.group_id as string | null) ?? null,
+          command.areaId,
+        );
+        if (twin)
+          throw new WorkError(
+            `A ${command.to} named “${String(area.name)}” already exists in this group.`,
+          );
+        let productId = (area.product_id as string | null) ?? null;
+        if (command.to === "product" && !productId) {
+          productId = randomUUID();
+          this.run(
+            "INSERT INTO products(id,name,allowed_models_json,created_at) VALUES (?,?,'[]',?)",
+            productId,
+            String(area.name),
+            now,
+          );
+        }
+        const convertedFrom =
+          area.type === "task"
+            ? "task"
+            : ((area.converted_from as string | null) ?? null);
+        this.run(
+          "UPDATE work_areas SET type=?,product_id=?,converted_from=?,declined_shape_json=NULL,last_context_at=? WHERE id=?",
+          command.to,
+          productId,
+          convertedFrom,
+          now,
+          command.areaId,
+        );
+        return { ref: command.areaId };
+      }
       case "relate-areas": {
         const from = this.groupOf(command.fromId);
         const to = this.groupOf(command.toId);

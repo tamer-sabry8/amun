@@ -60,6 +60,7 @@ import {
   suggestFullCouncil,
 } from "../../../../packages/domain/src/work/council.ts";
 import { outcomeNotes } from "../../../../packages/domain/src/work/home.ts";
+import { generalConversationName } from "../../../../packages/domain/src/work/model.ts";
 import { portfolioOrder } from "../../../../packages/domain/src/work/portfolio.ts";
 import { ProgressCard, WorkSheet, workProgress } from "./work-cards.tsx";
 import { ProductionReleaseCard } from "./project-checklist-and-release.tsx";
@@ -131,7 +132,9 @@ function Page({
 function areasInScope(snapshot: Snapshot) {
   const groups = visibleGroups(snapshot);
   return snapshot.areas.filter(
-    (area) => groups === null || !area.groupId || groups.includes(area.groupId),
+    (area) =>
+      area.name !== generalConversationName &&
+      (groups === null || !area.groupId || groups.includes(area.groupId)),
   );
 }
 function WorkFilter({

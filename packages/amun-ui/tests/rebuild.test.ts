@@ -1611,7 +1611,7 @@ describe("converting a task from the chat", () => {
     const parsed = parseAmunActions(
       'Asking now.\n\n```amun\n{"do":"convert","areaId":"someone-elses","to":"product"}\n```',
     );
-    expect(parsed.actions).toEqual([{ do: "convert" }]);
+    expect(parsed.actions).toEqual([{ do: "convert", to: "product" }]);
     expect(parsed.text).toBe("Asking now.");
   });
   it("is in the protocol with its limits, and the model must not claim it happened", () => {
@@ -1869,5 +1869,39 @@ describe("Firstmate's reminders on Home (owner, 20 November 2026)", () => {
     // A reminder that belongs to no project has no box.
     expect(html).toContain(">Reminder<");
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+  });
+
+  it("hides the internal Chat with Firstmate area from Home and Portfolio", () => {
+    const state = snapshot({
+      areas: [
+        area("g", { name: "Chat with Firstmate", type: "task" }),
+        area("o", { name: "Ontology", type: "product" }),
+      ],
+    });
+    const view = homeModel(state as never, now);
+    expect(view.work.map((entry) => entry.area.name)).toEqual(["Ontology"]);
+    const portfolioHtml = renderToStaticMarkup(
+      createElement(Portfolio, {
+        snapshot: state as never,
+        model: null,
+        now,
+        onWork: () => undefined,
+        onAsk: () => undefined,
+      }),
+    );
+    expect(portfolioHtml).toContain("Ontology");
+    expect(portfolioHtml).not.toContain("Chat with Firstmate");
+  });
+
+  it("parses convert actions for Project <-> Product as well as Initiative -> Project", () => {
+    expect(
+      parseAmunActions('```amun\n{"do":"convert","to":"product"}\n```').actions,
+    ).toEqual([{ do: "convert", to: "product" }]);
+    expect(
+      parseAmunActions('```amun\n{"do":"convert","to":"project"}\n```').actions,
+    ).toEqual([{ do: "convert", to: "project" }]);
+    expect(parseAmunActions('```amun\n{"do":"convert"}\n```').actions).toEqual([
+      { do: "convert" },
+    ]);
   });
 });

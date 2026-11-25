@@ -890,6 +890,15 @@ export function App() {
           return openWork(general.areaId, undefined, null, general.chatId);
       }
     }
+    // Any attachment sent without naming new work goes straight to Firstmate
+    // once its group is known, instead of stopping on a static save_record card.
+    if (picked.length > 0 && routed.route === "none" && !asksForNewWork(text)) {
+      if (group || snapshot.groups.length === 0) {
+        const loose = await looseChat(group);
+        if (loose)
+          return openWork(loose.areaId, text, null, loose.chatId, null, picked);
+      }
+    }
     const result = await workAsync("intake", {
       text,
       fileNames: files,

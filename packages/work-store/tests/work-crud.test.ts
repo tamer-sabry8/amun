@@ -750,3 +750,43 @@ it("retains one navigation dispatch after loss of acknowledgement and keeps it o
   );
   expect(reopened.snapshot().messages).toHaveLength(0);
 });
+
+it("changes a Project to a Product and back in place, preserving id, messages, and product record", () => {
+  const areaId = add("project", "Ontology");
+  send("message", {
+    workAreaId: areaId,
+    role: "you",
+    text: "Initial Ontology brief",
+  });
+  send("change-area-type", { areaId, to: "product" });
+  const asProduct = store.snapshot().areas.find((a) => a.id === areaId)!;
+  expect(asProduct.type).toBe("product");
+  expect(asProduct.productId).toBeTruthy();
+  expect(asProduct.convertedFrom).toBeNull();
+  expect(
+    store.snapshot().messages.filter((m) => m.workAreaId === areaId),
+  ).toHaveLength(1);
+
+  const productId = asProduct.productId;
+  send("change-area-type", { areaId, to: "project" });
+  const asProject = store.snapshot().areas.find((a) => a.id === areaId)!;
+  expect(asProject.type).toBe("project");
+  expect(asProject.productId).toBe(productId);
+  expect(asProject.convertedFrom).toBeNull();
+
+  // An RFP cannot be converted via change-area-type.
+  const rfpId = add("rfp", "City Tender");
+  expect(
+    send("change-area-type", { areaId: rfpId, to: "project" }),
+  ).toMatchObject({
+    ok: false,
+    message: expect.stringMatching(/Hand to delivery/i),
+  });
+
+  // Duplicate target type with the same name in the same group is refused.
+  add("product", "Ontology");
+  expect(send("change-area-type", { areaId, to: "product" })).toMatchObject({
+    ok: false,
+    message: expect.stringMatching(/already exists/i),
+  });
+});

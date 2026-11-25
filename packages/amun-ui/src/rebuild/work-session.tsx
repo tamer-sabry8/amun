@@ -1955,18 +1955,43 @@ export function WorkSession({
     } else if (proposed.do === "convert")
       void (async () => {
         const name = context?.area.name ?? "This";
+        const currentType = context?.area.type;
+        const target = proposed.to ?? "project";
+        if (currentType === "rfp") {
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "firstmate",
+            text: `“${name}” is an RFP. Hand it to delivery from the RFP card once Proposal signed and BRD approved are ticked.`,
+          });
+          return;
+        }
+        if (currentType === target) {
+          work("message", {
+            workAreaId: areaId,
+            chatId: savedIn,
+            role: "firstmate",
+            text: `“${name}” is already a ${target}.`,
+          });
+          return;
+        }
         // Same record, same id: the conversation and its links stay put.
         const result =
-          context?.area.type === "task"
+          currentType === "task" && target === "project"
             ? await workAsync("convert-task", { areaId, convert: true })
-            : null;
+            : currentType === "project" ||
+                currentType === "product" ||
+                currentType === "task"
+              ? await workAsync("change-area-type", { areaId, to: target })
+              : null;
         work("message", {
           workAreaId: areaId,
+          chatId: savedIn,
           role: "firstmate",
           text: !result
-            ? `“${name}” is not an Initiative, so there is nothing to convert.`
+            ? `“${name}” cannot be converted to a ${target}.`
             : result.ok
-              ? `Done. “${name}” is now a project. Its conversation, history, links, objective and tracker are kept, and nothing outside Amun was changed.`
+              ? `Done. “${name}” is now a ${target}. Its conversation, history, links, objective and tracker are kept, and nothing outside Amun was changed.`
               : `I could not convert “${name}”. ${result.message}`,
         });
       })();
@@ -3088,6 +3113,32 @@ export function WorkSession({
                         }}
                       >
                         Convert to Project
+                      </button>
+                    )}
+                    {area.type === "project" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          void send(
+                            `Please change ${area.name} from a Project to a Product.`,
+                          );
+                        }}
+                      >
+                        Change to Product
+                      </button>
+                    )}
+                    {area.type === "product" && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setMenu(null);
+                          void send(
+                            `Please change ${area.name} from a Product to a Project.`,
+                          );
+                        }}
+                      >
+                        Change to Project
                       </button>
                     )}
                     {area.type === "project" && (

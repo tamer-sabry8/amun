@@ -218,6 +218,12 @@ export const noticeRules: { [A in Action]: Rule<A> } = {
       ids: [c.areaId],
     }),
   },
+  "change-area-type": {
+    tell: (c, look) => ({
+      what: `changed ${look.area(c.areaId)} into a ${c.to}`,
+      ids: [c.areaId],
+    }),
+  },
   "relate-areas": {
     tell: (c, look) => ({
       what: `linked ${look.area(c.fromId)} to ${look.area(c.toId)} (${c.relation})`,

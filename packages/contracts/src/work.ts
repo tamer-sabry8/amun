@@ -809,6 +809,7 @@ export const workCommand = z.discriminatedUnion("action", [
   act("delete-area", { areaId: id }),
   act("touch-area", { areaId: id, asked: z.boolean().default(false) }),
   act("convert-task", { areaId: id, convert: z.boolean() }),
+  act("change-area-type", { areaId: id, to: z.enum(["product", "project"]) }),
   act("relate-areas", {
     fromId: id,
     toId: id,

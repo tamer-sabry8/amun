@@ -19,7 +19,10 @@ import {
   agentProfile,
 } from "../../../../packages/domain/src/work/agents.ts";
 import { openBlockers } from "../../../../packages/domain/src/work/blockers.ts";
-import { needsLinking } from "../../../../packages/domain/src/work/model.ts";
+import {
+  generalConversationName,
+  needsLinking,
+} from "../../../../packages/domain/src/work/model.ts";
 import {
   conversionSuggestion,
   knownDate,
@@ -133,7 +136,10 @@ export function homeModel(
   const open = attentionList(items);
   const island = islandItem(items, openWorkAreaId);
   const areas = snapshot.areas.filter(
-    (area) => inScope(snapshot, area.groupId) && area.status !== "archived",
+    (area) =>
+      inScope(snapshot, area.groupId) &&
+      area.status !== "archived" &&
+      area.name !== generalConversationName,
   );
   const openByArea = new Map<string, number>();
   for (const item of open)
@@ -333,7 +339,7 @@ export type AmunAction =
   | { do: "fact-correct"; fact: string; value: string }
   | { do: "fact-forget"; fact: string }
   | { do: "delete" }
-  | { do: "convert" }
+  | { do: "convert"; to?: "product" | "project" }
   | { do: "draft-stories" }
   | { do: "use-sprints" }
   | {
@@ -575,9 +581,12 @@ function action(raw: unknown): AmunAction | null {
           }
         : null;
     }
-    case "convert":
+    case "convert": {
+      const to =
+        input.to === "product" || input.to === "project" ? input.to : undefined;
       // No id from the model: it always means the work this chat is in.
-      return { do: "convert" };
+      return to ? { do: "convert", to } : { do: "convert" };
+    }
     case "draft-stories":
       // Always this chat's product and its latest PRD version in Amun.
       return { do: "draft-stories" };
