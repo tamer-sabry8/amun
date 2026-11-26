@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun · what we asked for vs what you get today</title>
+    <style>
+      :root {
+        --page: #f4f1ea;
+        --ink: #1d2330;
+        --muted: #5b6474;
+        --line: #ddd6c8;
+        --card: #fbf9f4;
+        --live: #2f9e5b;
+        --built: #2f6fd6;
+        --part: #d68a1a;
+        --miss: #c8432b;
+        --none: #6b4fbb;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: auto;
+        padding: 52px 5vw 90px;
+      }
+      h1 {
+        font-size: 42px;
+        line-height: 1.1;
+        margin: 0 0 12px;
+        letter-spacing: -0.02em;
+      }
+      .lead {
+        font-size: 20px;
+        color: var(--muted);
+        max-width: 75ch;
+      }
+      .verdict {
+        background: #fff;
+        border: 2px solid var(--ink);
+        border-radius: 16px;
+        padding: 26px 30px;
+        margin: 30px 0;
+        font-size: 19px;
+      }
+      .verdict h2 {
+        margin: 0 0 10px;
+        font-size: 26px;
+      }
+      .verdict p {
+        margin: 8px 0;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        font-size: 15px;
+        margin: 18px 0;
+      }
+      .legend span::before {
+        content: "";
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        border-radius: 4px;
+        margin-right: 7px;
+        vertical-align: -1px;
+        background: var(--c);
+      }
+      .live {
+        --c: var(--live);
+      }
+      .built {
+        --c: var(--built);
+      }
+      .part {
+        --c: var(--part);
+      }
+      .miss {
+        --c: var(--miss);
+      }
+      .none {
+        --c: var(--none);
+      }
+      h2.sec {
+        font-size: 28px;
+        margin: 54px 0 6px;
+      }
+      .secnote {
+        color: var(--muted);
+        font-size: 17px;
+        margin: 0 0 18px;
+      }
+      .item {
+        display: grid;
+        grid-template-columns: 150px 1fr 1fr;
+        gap: 0;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-left: 8px solid var(--c);
+        border-radius: 12px;
+        margin: 14px 0;
+        overflow: hidden;
+      }
+      .item > div {
+        padding: 16px 20px;
+      }
+      .item > div + div {
+        border-left: 1px solid var(--line);
+      }
+      .badge {
+        font-size: 13px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--c);
+        border-radius: 7px;
+        padding: 4px 9px;
+        display: inline-block;
+      }
+      .item h3 {
+        margin: 10px 0 0;
+        font-size: 17px;
+      }
+      .lab {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .item p {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .why {
+        background: #fff;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 15px !important;
+        color: var(--muted);
+      }
+      .ref {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .recs {
+        counter-reset: r;
+      }
+      .rec {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 20px 24px 20px 74px;
+        margin: 14px 0;
+        position: relative;
+        font-size: 17px;
+      }
+      .rec::before {
+        counter-increment: r;
+        content: counter(r);
+        position: absolute;
+        left: 22px;
+        top: 18px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--ink);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+      }
+      .rec h3 {
+        margin: 0 0 6px;
+        font-size: 20px;
+      }
+      .rec p {
+        margin: 4px 0;
+      }
+      .rec .size {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .chain {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 14px 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .chain span {
+        background: #fff;
+        border: 2px solid var(--ink);
+        border-radius: 10px;
+        padding: 8px 14px;
+      }
+      .chain span.m {
+        border-color: var(--miss);
+        color: var(--miss);
+        border-style: dashed;
+      }
+      .chain i {
+        font-style: normal;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>What we asked for vs. what Amun does today</h1>
+      <p class="lead">
+        Your requirements, “Amun stories, backlogs and sprints” (the Gitex
+        journey you approved on 20 November), checked line by line against Amun
+        on <code>main</code> today, in plain words. The companion page
+        <a href="index.html">“Idea → done”</a> shows each step’s screen.
+      </p>
+
+      <div class="verdict">
+        <h2>The short answer</h2>
+        <p>
+          <b
+            >1. The middle of the journey is mostly built, but tested on one
+            tool only.</b
+          >
+          Turning a PRD into stories, planning a sprint by dragging stories, and
+          publishing to Azure DevOps all exist. Jira works for publishing.
+          Linear breaks: Amun lost the plan.
+        </p>
+        <p>
+          <b>2. Several promised pieces are missing:</b> the “receipt” telling
+          the chat what was created, a sprint that lives only in Amun, changing
+          a story’s status from the sprint, and linking sprints to the Roadmap.
+        </p>
+        <p>
+          <b>3. The biggest gap is outside the requirements.</b> They stop when
+          a sprint closes. Nothing in them, and so nothing in Amun, covers
+          release → stories Done → epics closed → PRD done → Roadmap shows it
+          finished. That is the end-to-end flow you asked for today, and it was
+          never specified.
+        </p>
+      </div>
+
+      <div class="legend">
+        <span class="live">Works, proven on your Mac</span>
+        <span class="built">Built, never tried for real</span>
+        <span class="part">Partly there / broken</span>
+        <span class="miss">Asked for, not built</span>
+        <span class="none"
+          >Never asked for (missing from the requirements too)</span
+        >
+      </div>
+
+      <h2 class="sec">1 · From the PRD to stories</h2>
+      <p class="secnote">
+        “Read my PRD, check what we already have, and draft the stories I still
+        need.”
+      </p>
+
+      <div class="item part">
+        <div>
+          <span class="badge">Partly</span>
+          <h3>Draft stories from a PRD</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Firstmate reads the approved PRD, compares it with the stories
+            already in the backlog, and shows what’s covered, what needs editing
+            and what’s new.
+          </p>
+          <p class="ref">Spec lines 67, 98, 176</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Works for <b>products</b>: 11 stories and 34 tasks drafted for Badge
+            Desk in about 5 minutes. <b>Projects are refused</b> (Invoiced). It
+            only works if the PRD actually reached Amun; Mira’s didn’t.
+          </p>
+          <p class="why">
+            In plain words: the machine works, but only for one kind of work,
+            and only when the PRD is handed over properly.
+          </p>
+        </div>
+      </div>
+
+      <div class="item built">
+        <div>
+          <span class="badge">Built</span>
+          <h3>Edit stories in the chat</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Change a story’s wording right in the chat, press
+            <i>Update draft</i>, and see the change before anything is sent.
+          </p>
+          <p class="ref">Spec lines 178–180</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Built in PR #51 and covered by automated tests, but never used for
+            real on your Mac.
+          </p>
+          <p class="why">
+            Like a car that passed factory tests but hasn’t been driven on the
+            road yet.
+          </p>
+        </div>
+      </div>
+
+      <div class="item part">
+        <div>
+          <span class="badge">Partly</span>
+          <h3>Pick stories and publish them</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Tick the stories you want, preview exactly what will be created and
+            where, then publish with one click.
+          </p>
+          <p class="ref">Spec lines 104–106, 115, 181</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            <b>Jira:</b> worked, 16 items in 41 s. <b>Azure DevOps:</b> built;
+            not tried live, because Sprint 5 is kept read-only.
+            <b>Linear:</b> broken, the plan was lost (PR #66). The approval card
+            lists titles only, not where each story goes.
+          </p>
+          <p class="why">
+            You approve a list without seeing each story’s parent epic and
+            sprint, which is like signing an order without the delivery address.
+          </p>
+        </div>
+      </div>
+
+      <div class="item miss">
+        <div>
+          <span class="badge">Missing</span>
+          <h3>A receipt in the chat</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            After publishing, one receipt in the chat where you asked, listing
+            each new story ID and linking back from every story.
+          </p>
+          <p class="ref">Spec lines 114–115, 248</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Nothing comes back. The request keeps saying “waiting” even after
+            the stories were created.
+          </p>
+          <p class="why">
+            You can’t tell whether it worked without opening Jira yourself.
+          </p>
+        </div>
+      </div>
+
+      <h2 class="sec">2 · Backlog and sprint planning</h2>
+      <p class="secnote">
+        “Show me the backlog on the left and the sprint on the right; let me
+        drag, and send it all in one go.”
+      </p>
+
+      <div class="item live">
+        <div>
+          <span class="badge">Works</span>
+          <h3>Two-pane planner, one Apply</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Drag stories into the sprint, label them, reorder, nothing sent
+            until one button “Add 4 stories to Sprint 4”.
+          </p>
+          <p class="ref">Spec lines 194, 199–201</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Proven with Azure DevOps: “Add 1 story to Sprint 5”, Undo, nothing
+            sent while planning, search works.
+          </p>
+          <p class="why">This part matches the design you approved.</p>
+        </div>
+      </div>
+
+      <div class="item built">
+        <div>
+          <span class="badge">Built</span>
+          <h3>Create a new sprint with dates suggested</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Suggest “Sprint 4” with dates from the team’s rhythm, then create it
+            and add stories in one step.
+          </p>
+          <p class="ref">Spec lines 146–147, 207, 282</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Built for Azure DevOps; Jira created “Badge Desk Sprint 1” via a
+            plan. Not tried live in the planner.
+          </p>
+          <p class="why">Exists, waiting for its first real run.</p>
+        </div>
+      </div>
+
+      <div class="item miss">
+        <div>
+          <span class="badge">Missing</span>
+          <h3>“Keep this sprint in Amun”</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            If you have no tool, or the tool can’t hold sprints, Amun keeps the
+            sprint and its stories itself.
+          </p>
+          <p class="ref">Spec line 235</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            A draft sprint can be made, but it can’t hold stories. Without Jira,
+            Linear or Azure DevOps you can’t run a sprint at all.
+          </p>
+          <p class="why">
+            This is why Mira, Invoiced and Gitex can’t show any progress:
+            there’s nowhere for their stories to live.
+          </p>
+        </div>
+      </div>
+
+      <div class="item part">
+        <div>
+          <span class="badge">Partly</span>
+          <h3>Jira and Linear planning details</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Linear cycles, Jira parallel sprints, closing a Jira sprint, “Add 4
+            issues to Cycle 4” wording.
+          </p>
+          <p class="ref">Spec lines 162–169, 387–410</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Deferred on purpose (items 9 and 10). Publishing and read-back exist
+            for Jira and Linear (PRs #59, #61), but not checked in the app.
+          </p>
+          <p class="why">
+            The plan always said Azure first; Jira and Linear only reached
+            halfway.
+          </p>
+        </div>
+      </div>
+
+      <h2 class="sec">3 · During the sprint</h2>
+      <p class="secnote">
+        “Show me the sprint, what’s stuck, and let me move stories along.”
+      </p>
+
+      <div class="item live">
+        <div>
+          <span class="badge">Works</span>
+          <h3>Sprint page: goal, blockers, stories by status</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Open a sprint and see the goal first, then blockers, then stories
+            grouped by status.
+          </p>
+          <p class="ref">Spec lines 90, 152, 183</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Proven with Azure DevOps Sprint 5. Small bug: the overview counts
+            only the selected sprint.
+          </p>
+          <p class="why">Works, but only when stories live in Azure DevOps.</p>
+        </div>
+      </div>
+
+      <div class="item miss">
+        <div>
+          <span class="badge">Missing</span>
+          <h3>Move a story to Done from Amun</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Pick a new status on a story (including Done, even with a blocker
+            open) and Apply.
+          </p>
+          <p class="ref">Spec lines 153–154, 308</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Status is only read, never changed. Firstmate told you “you can’t
+            yet”.
+          </p>
+          <p class="why">
+            You must go to Jira or Azure DevOps to tick a story off, so Amun
+            can’t be where you run the work.
+          </p>
+        </div>
+      </div>
+
+      <div class="item part">
+        <div>
+          <span class="badge">Partly</span>
+          <h3>Blockers and reminders to owners</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Explain what’s stuck, suggest 3–5 actions, draft a nudge, send it by
+            Jira comment, Teams, Slack or email, check hourly.
+          </p>
+          <p class="ref">Spec lines 155–159, 254–266</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Blockers link to their story and are re-checked; “Discuss sprint”
+            opens the sprint chat. Sending through Teams or email is deferred
+            (item 11).
+          </p>
+          <p class="why">
+            Amun can tell you what’s stuck, but you still send the reminder
+            yourself.
+          </p>
+        </div>
+      </div>
+
+      <div class="item built">
+        <div>
+          <span class="badge">Built</span>
+          <h3>Close a sprint and carry unfinished stories</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            “Review 3 unfinished stories”, move the ones you pick to the next
+            sprint, keep a recap of the closed sprint.
+          </p>
+          <p class="ref">Spec lines 163–170, 223–225</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Carry-forward exists in the planner for Azure DevOps. Closing Jira
+            sprints is deferred. Not tried live.
+          </p>
+          <p class="why">Exists, waiting for its first real run.</p>
+        </div>
+      </div>
+
+      <h2 class="sec">4 · Roadmap</h2>
+      <div class="item miss">
+        <div>
+          <span class="badge">Missing</span>
+          <h3>Outcomes linked to sprints</h3>
+        </div>
+        <div>
+          <div class="lab">We asked for</div>
+          <p>
+            Roadmap opens with outcomes; each shows its target release and the
+            sprints that contribute; Firstmate suggests the link, you confirm.
+          </p>
+          <p class="ref">Spec lines 148–149, 186, 306</p>
+        </div>
+        <div>
+          <div class="lab">You get today</div>
+          <p>
+            Roadmap is Now / Next / Later tiles you place by hand. No sprints,
+            no progress, no release.
+          </p>
+          <p class="why">
+            The Roadmap can’t tell you how far along anything is.
+          </p>
+        </div>
+      </div>
+
+      <h2 class="sec">5 · The part nobody wrote down</h2>
+      <p class="secnote">
+        Your requirements end at “close the sprint”. These steps were never
+        specified, so they were never built.
+      </p>
+
+      <div class="item none">
+        <div>
+          <span class="badge">Never asked</span>
+          <h3>Release links to its stories</h3>
+        </div>
+        <div>
+          <div class="lab">What’s needed</div>
+          <p>
+            A release says which stories it ships. It can’t be scheduled while
+            they aren’t done.
+          </p>
+        </div>
+        <div>
+          <div class="lab">Today</div>
+          <p>
+            The release card (Readiness → Verified live) stands alone. You can
+            release with 0 of 0 stories done.
+          </p>
+          <p class="why">“Going live” doesn’t finish anything else.</p>
+        </div>
+      </div>
+      <div class="item none">
+        <div>
+          <span class="badge">Never asked</span>
+          <h3>Epics close by themselves</h3>
+        </div>
+        <div>
+          <div class="lab">What’s needed</div>
+          <p>
+            When all of an epic’s stories are done, the epic closes, in Amun and
+            in the tool.
+          </p>
+        </div>
+        <div>
+          <div class="lab">Today</div>
+          <p>Epics are only titles. No “4 of 4 done”.</p>
+          <p class="why">You can’t see which big pieces are finished.</p>
+        </div>
+      </div>
+      <div class="item none">
+        <div>
+          <span class="badge">Never asked</span>
+          <h3>PRD / feature marked Delivered</h3>
+        </div>
+        <div>
+          <div class="lab">What’s needed</div>
+          <p>
+            When every epic is closed and the release is live, the PRD and the
+            feature show Delivered.
+          </p>
+        </div>
+        <div>
+          <div class="lab">Today</div>
+          <p>
+            A PRD is Draft or Approved, never Done. This is your “how do I make
+            Draft into Done” question.
+          </p>
+          <p class="why">Nothing ever says “this feature is finished”.</p>
+        </div>
+      </div>
+      <div class="item none">
+        <div>
+          <span class="badge">Never asked</span>
+          <h3>Roadmap moves to Done</h3>
+        </div>
+        <div>
+          <div class="lab">What’s needed</div>
+          <p>
+            The Roadmap tile shows progress from its epics and moves to Done
+            when the feature is delivered.
+          </p>
+        </div>
+        <div>
+          <div class="lab">Today</div>
+          <p>Tiles never move on their own.</p>
+          <p class="why">The Roadmap is a wish list, not a live picture.</p>
+        </div>
+      </div>
+
+      <h2 class="sec">What I recommend</h2>
+      <p class="secnote">
+        The root cause in one sentence:
+        <b
+          >Amun keeps each piece of work as a separate record and never connects
+          them.</b
+        >
+        The fix is to connect them into one chain, then let progress flow up the
+        chain.
+      </p>
+      <div class="chain">
+        <span>Idea</span><i>→</i><span>PRD (approved version)</span><i>→</i
+        ><span class="m">Epics</span><i>→</i><span class="m">Stories</span
+        ><i>→</i><span>Sprint</span><i>→</i><span class="m">Release</span
+        ><i>→</i><span class="m">Roadmap item</span>
+      </div>
+      <p class="secnote">Dashed = the link that’s missing today.</p>
+
+      <div class="recs">
+        <div class="rec">
+          <h3>Write the missing end of the requirements first</h3>
+          <p>
+            Add a short spec for release → stories Done → epics closed → PRD
+            Delivered → Roadmap Done, in the same style as the Gitex one, and
+            approve it. Otherwise we keep building screens with no agreed finish
+            line, which is the problem you described.
+          </p>
+          <p class="size">Size: one page, for you to approve. No code.</p>
+        </div>
+        <div class="rec">
+          <h3>Connect the chain inside Amun</h3>
+          <p>
+            Every story remembers its epic and its PRD version; every sprint,
+            release and roadmap item remembers its stories. All later steps
+            depend on this.
+          </p>
+          <p class="size">Size: medium, data only, no new screens.</p>
+        </div>
+        <div class="rec">
+          <h3>Let a sprint live in Amun</h3>
+          <p>
+            Build “Keep this sprint in Amun” with a Done tick on each story.
+            Then Mira, Invoiced and Gitex can run end to end without any tool,
+            and the same screens work when a tool is connected.
+          </p>
+          <p class="size">
+            Size: medium. Needs one before/after for your approval.
+          </p>
+        </div>
+        <div class="rec">
+          <h3>Fix the two publishing holes</h3>
+          <p>
+            Stop Linear plans being lost (PR #66), and send the receipt back to
+            the chat with every new story ID.
+          </p>
+          <p class="size">Size: small. No new screens.</p>
+        </div>
+        <div class="rec">
+          <h3>Let progress flow up</h3>
+          <p>
+            Story Done → epic progress → release readiness (blocks release until
+            done) → PRD Delivered → Roadmap tile moves. Use the existing cards
+            and add a progress line, nothing new in the prompt box.
+          </p>
+          <p class="size">
+            Size: medium. Needs one before/after for your approval.
+          </p>
+        </div>
+        <div class="rec">
+          <h3>Prove it with one real run</h3>
+          <p>
+            Take one product (Badge Desk, already in Jira) from approved PRD to
+            Delivered on the Roadmap, on your Mac, and record each screen. Only
+            then do the same for Linear and Azure DevOps.
+          </p>
+          <p class="size">Size: one acceptance session.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
