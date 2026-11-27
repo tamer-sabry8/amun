@@ -725,9 +725,13 @@ function createPiPaseoExtensionFile({
         if (startup || !process.env.FM_HOME || !process.env.FM_ROOT_OVERRIDE) return;
         const root = resolve(process.env.FM_ROOT_OVERRIDE);
         if (resolve(process.cwd()) !== root) return;
+        const rawTimeout = Number(process.env.FM_SESSION_START_TIMEOUT);
+        const startupSeconds =
+          Number.isFinite(rawTimeout) && rawTimeout > 0 ? Math.floor(rawTimeout) : 300;
+        const env = { ...process.env, FM_SESSION_START_TIMEOUT: String(startupSeconds) };
         startup = new Promise((done) => {
           execFile(join(root, "bin", "fm-session-start.sh"), [], {
-            cwd: root, timeout: 125000, maxBuffer: 4 * 1024 * 1024,
+            cwd: root, env, timeout: (startupSeconds + 15) * 1000, maxBuffer: 4 * 1024 * 1024,
             signal: startupAbort.signal,
           }, (error, stdout) => done({ error: error?.message, stdout }));
         });

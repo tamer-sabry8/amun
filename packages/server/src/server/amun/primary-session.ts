@@ -55,6 +55,8 @@ export function buildPrimaryLaunch(input: BuildLaunchInput): PrimaryLaunch {
     input.baseEnv ?? process.env,
   );
   if (provider === "pi") env.AMUN_FIRSTMATE_PRIMARY = "1";
+  if (!env.FM_SESSION_START_TIMEOUT?.trim()) env.FM_SESSION_START_TIMEOUT = "300";
+  if (!env.FM_ARM_CONFIRM_TIMEOUT?.trim()) env.FM_ARM_CONFIRM_TIMEOUT = "30";
   return {
     provider,
     cwd: input.firstmateRoot,
