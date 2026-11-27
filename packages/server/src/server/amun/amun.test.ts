@@ -189,7 +189,22 @@ describe("Primary session", () => {
     expect(launch.env).toMatchObject({
       FM_HOME: space.fmHome,
       FM_ROOT_OVERRIDE: paths.firstmateRoot,
+      FM_SESSION_START_TIMEOUT: "300",
+      FM_ARM_CONFIRM_TIMEOUT: "30",
       PATH: `${path.join(paths.firstmateRoot, "bin")}:/usr/bin`,
+    });
+    const custom = buildPrimaryLaunch({
+      space,
+      firstmateRoot: paths.firstmateRoot,
+      baseEnv: {
+        PATH: "/usr/bin",
+        FM_SESSION_START_TIMEOUT: "420",
+        FM_ARM_CONFIRM_TIMEOUT: "45",
+      },
+    });
+    expect(custom.env).toMatchObject({
+      FM_SESSION_START_TIMEOUT: "420",
+      FM_ARM_CONFIRM_TIMEOUT: "45",
     });
     expect(() => buildPrimaryLaunch({ space, firstmateRoot: "/x", harness: "agy" })).toThrow(
       UnsupportedHarnessError,
