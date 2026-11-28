@@ -1,0 +1,1180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amun · Idea to Done · requirements for approval</title>
+    <style>
+      :root {
+        --canvas: #0b0e14;
+        --card: #1a1f2b;
+        --ink: #f2f5f8;
+        --muted: #94a0ad;
+        --accent: #e8a33d;
+        --line: #2a3040;
+        --good: #4ade80;
+        --bad: #f87171;
+        --info: #7fb0ff;
+        --page: #f4f1ea;
+        --pink: #1d2330;
+        --pmuted: #5b6474;
+        --pline: #ddd6c8;
+        --pcard: #fbf9f4;
+        --exists: #2f9e5b;
+        --fix: #2f6fd6;
+        --new: #c8432b;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--pink);
+        line-height: 1.5;
+      }
+      header,
+      main {
+        max-width: 1700px;
+        margin: auto;
+        padding: 0 5vw;
+      }
+      header {
+        padding-top: 52px;
+      }
+      h1 {
+        font-size: 44px;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+      header p {
+        font-size: 19px;
+        color: var(--pmuted);
+        max-width: 82ch;
+        margin: 0 0 10px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin: 18px 0;
+        font-size: 16px;
+      }
+      .legend span::before {
+        content: "";
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        margin-right: 8px;
+        vertical-align: -2px;
+        background: var(--c);
+      }
+      .exists {
+        --c: var(--exists);
+      }
+      .fix {
+        --c: var(--fix);
+      }
+      .new {
+        --c: var(--new);
+      }
+      .chain {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        font-weight: 650;
+        margin: 18px 0 8px;
+      }
+      .chain span {
+        background: #fff;
+        border: 2px solid var(--pink);
+        border-radius: 10px;
+        padding: 8px 14px;
+      }
+      .chain i {
+        font-style: normal;
+        color: var(--pmuted);
+      }
+      .same {
+        background: #fff;
+        border: 2px solid var(--pink);
+        border-radius: 14px;
+        padding: 18px 24px;
+        font-size: 17px;
+        margin: 22px 0;
+      }
+      .same table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 8px;
+      }
+      .same td,
+      .same th {
+        border: 1px solid var(--pline);
+        padding: 8px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .same th {
+        background: #ece6d8;
+        font-size: 14px;
+      }
+      .phase {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--pmuted);
+        margin: 48px 0 8px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 36px;
+        position: relative;
+        padding-bottom: 34px;
+      }
+      .step::before {
+        content: "";
+        position: absolute;
+        left: 169px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #b9b1a1;
+      }
+      .node {
+        position: relative;
+        z-index: 1;
+        background: #fff;
+        border: 3px solid var(--c);
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 16px;
+        align-self: start;
+      }
+      .node.d {
+        border-style: double;
+        border-width: 6px;
+      }
+      .node.d::before {
+        content: "◆ Captain decides";
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--c);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .node h3 {
+        margin: 4px 0;
+        font-size: 18px;
+      }
+      .node .st {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--c);
+        border-radius: 6px;
+        padding: 2px 8px;
+      }
+      .node p {
+        margin: 6px 0 0;
+        font-size: 14.5px;
+        color: var(--pmuted);
+      }
+      .node .sid {
+        float: right;
+        font-weight: 700;
+        color: var(--pmuted);
+      }
+      .detail {
+        background: var(--pcard);
+        border: 1px solid var(--pline);
+        border-radius: 14px;
+        padding: 18px 20px;
+      }
+      .detail > p {
+        margin: 0 0 12px;
+        font-size: 17px;
+        max-width: 100ch;
+      }
+      .both {
+        font-size: 14px;
+        color: var(--pmuted);
+        margin-top: 10px;
+      }
+      /* app mock */
+      .app {
+        background: var(--canvas);
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 22px 28px;
+        font-size: 15.5px;
+      }
+      .app .muted {
+        color: var(--muted);
+      }
+      .app .small {
+        font-size: 13px;
+      }
+      .bar {
+        display: flex;
+        gap: 22px;
+        font-size: 14.5px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+        margin-bottom: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .bar b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .bar .on {
+        color: var(--ink);
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 8px;
+        margin-bottom: -11px;
+      }
+      .pillt {
+        font-size: 12px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        padding: 2px 9px;
+        color: var(--muted);
+      }
+      .acard {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin: 10px 0;
+      }
+      .amber {
+        border-color: #e8a33d99;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .grow {
+        flex: 1;
+      }
+      .tag {
+        font-size: 12.5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .tag.good {
+        color: var(--good);
+        border-color: #4ade8066;
+      }
+      .tag.accent {
+        color: var(--accent);
+        border-color: #e8a33d80;
+      }
+      .tag.info {
+        color: var(--info);
+        border-color: #7fb0ff66;
+      }
+      .tag.bad {
+        color: var(--bad);
+        border-color: #f8717166;
+      }
+      .btn {
+        font-size: 14px;
+        padding: 7px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      .btn.p {
+        background: #5b2bb5;
+        border-color: #5b2bb5;
+      }
+      .btn.off {
+        opacity: 0.4;
+      }
+      table.t {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      table.t td,
+      table.t th {
+        padding: 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+      table.t th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 12.5px;
+      }
+      tr.ep td {
+        background: #151a25;
+        font-weight: 650;
+      }
+      .prog {
+        display: inline-block;
+        width: 110px;
+        height: 7px;
+        background: var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        vertical-align: middle;
+        margin-right: 8px;
+      }
+      .prog i {
+        display: block;
+        height: 100%;
+        background: var(--good);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .col {
+        background: #11151e;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .col h5 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .item {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 9px 12px;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      .item.stage {
+        border-style: dashed;
+        border-color: var(--accent);
+      }
+      .cols4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .steps {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+      }
+      .steps span {
+        font-size: 13px;
+        padding: 5px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .steps span.done {
+        color: var(--good);
+        border-color: #4ade8055;
+      }
+      .steps span.now {
+        color: var(--ink);
+        border-color: var(--accent);
+      }
+      .menu {
+        display: inline-block;
+        background: #20263a;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 5px;
+        font-size: 13.5px;
+        vertical-align: top;
+        margin-left: 10px;
+      }
+      .menu div {
+        padding: 5px 10px;
+        border-radius: 6px;
+      }
+      .menu .on {
+        background: #e8a33d29;
+      }
+      .notes {
+        margin-top: 12px;
+      }
+      .notes textarea {
+        width: 100%;
+        min-height: 60px;
+        font: inherit;
+        font-size: 15px;
+        padding: 10px;
+        border-radius: 9px;
+        border: 1px solid var(--pline);
+        background: #fff;
+      }
+      .decide {
+        display: flex;
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .decide button {
+        font: inherit;
+        font-size: 14px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--pline);
+        background: #fff;
+        cursor: pointer;
+      }
+      .decide button[aria-pressed="true"] {
+        background: var(--pink);
+        color: #fff;
+      }
+      footer {
+        max-width: 1700px;
+        margin: auto;
+        padding: 30px 5vw 90px;
+      }
+      footer button {
+        font: inherit;
+        font-size: 17px;
+        padding: 12px 22px;
+        border-radius: 10px;
+        border: 0;
+        background: var(--pink);
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Idea to Done · one flow for Products and Projects</h1>
+      <p>
+        The requirements for approval, drawn as a flow with the screen at each
+        step. The full text is
+        <code>docs/plans/2026-11-23-idea-to-done-requirements.md</code>. Nothing
+        is built yet; each screen still gets its own before/after before coding.
+      </p>
+      <div class="chain">
+        <span>Idea</span><i>→</i><span>PRD / BRD (approved version)</span
+        ><i>→</i><span>Epics</span><i>→</i><span>Stories</span><i>→</i
+        ><span>Sprint</span><i>→</i><span>Release</span><i>→</i
+        ><span>Roadmap item</span>
+      </div>
+      <p style="font-size: 16px">
+        Every piece remembers the piece above it. Progress flows up by itself;
+        closing anything in Jira, Linear or Azure DevOps always needs your one
+        approval.
+      </p>
+      <div class="legend">
+        <span class="exists">Exists today (kept)</span
+        ><span class="fix">Exists, fixed here</span><span class="new">New</span>
+      </div>
+
+      <div class="same">
+        <b>Product vs Project: the same flow, three differences</b>
+        <table>
+          <tr>
+            <th></th>
+            <th>Product</th>
+            <th>Project</th>
+          </tr>
+          <tr>
+            <td>Requirements document</td>
+            <td>PRD</td>
+            <td>BRD (same tab, same approval, same versions)</td>
+          </tr>
+          <tr>
+            <td>Header tabs</td>
+            <td colspan="2">
+              Requirements · Stories · Sprints · Release · Pull requests (if a
+              repo is linked) · Browser · What happened
+            </td>
+          </tr>
+          <tr>
+            <td>Start</td>
+            <td>Delivery mode from day one</td>
+            <td>
+              Starts in checklist mode (PR #56).
+              <i>Use sprints for this project</i> turns the tasks into stories
+              and adds Stories and Sprints. One-way, asked once.
+            </td>
+          </tr>
+          <tr>
+            <td>Where stories are worked</td>
+            <td colspan="2">
+              Chosen once: Amun only · Jira · Linear · Azure DevOps. Same
+              screens either way.
+            </td>
+          </tr>
+        </table>
+      </div>
+    </header>
+
+    <main>
+      <div class="phase">A · Idea and requirements</div>
+
+      <div class="step exists">
+        <div class="node">
+          <span class="sid">S1</span><span class="st">Exists + fixes</span>
+          <h3>1 · Idea becomes a folder</h3>
+          <p>
+            You type “Create a new Project called Gitex Demo…”. Firstmate files
+            it.
+          </p>
+        </div>
+        <div class="detail">
+          <p>
+            Unchanged flow. Fixes: names stop at a colon, “client” parsing,
+            near-duplicates caught, “Open Sales Prospects” opens the existing
+            chat.
+          </p>
+          <div class="app">
+            <div class="bar">
+              <b>Gitex Demo</b><span class="pillt">Project</span
+              ><span class="pillt">Client: DMT</span
+              ><span class="pillt">Due 10 Dec</span
+              ><span style="margin-left: auto" class="on">Requirements</span
+              ><span>Project checklist</span><span>Browser</span
+              ><span>What happened</span>
+            </div>
+            <div class="acard">
+              <div class="row">
+                <strong class="grow">Gitex Demo checklist</strong
+                ><span class="tag accent">0 of 1 done</span>
+              </div>
+              <div class="muted small" style="margin-top: 6px">
+                Checklist mode · <u>Use sprints for this project</u>
+              </div>
+            </div>
+          </div>
+          <div class="both">
+            Product: same, but starts with Stories and Sprints tabs.
+          </div>
+        </div>
+      </div>
+
+      <div class="step fix">
+        <div class="node">
+          <span class="sid">S2</span><span class="st">Exists, fixed</span>
+          <h3>2 · PRD / BRD arrives in Amun</h3>
+          <p>The crew writes it; Amun files it as a version.</p>
+        </div>
+        <div class="detail">
+          <p>
+            BRDs land exactly like PRDs. If Firstmate mentions a document that
+            never arrived, the chat says so and offers to fetch it, instead of
+            silently showing “No PRD yet”.
+          </p>
+          <div class="app">
+            <div class="bar">
+              <b>Invoiced</b><span class="pillt">Project</span
+              ><span style="margin-left: auto" class="on">Requirements</span
+              ><span>Stories</span><span>Sprints</span><span>Release</span>
+            </div>
+            <div class="row">
+              <strong class="grow" style="font-size: 19px">Invoiced BRD</strong
+              ><span class="tag">Version 2</span
+              ><span class="tag accent">Draft</span
+              ><span class="btn p">Approve this version</span>
+            </div>
+            <div class="muted small" style="margin: 6px 0 14px">
+              From the Product Manager · 20-point coverage 19/20 · Versions: v1,
+              v2
+            </div>
+            <div class="acard amber">
+              <div>
+                Firstmate mentioned <b>BRD v0.3</b>, but Amun hasn’t received
+                it.
+              </div>
+              <div class="row" style="margin-top: 10px">
+                <span class="btn">Ask Firstmate to send it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step exists">
+        <div class="node d">
+          <span class="sid">S2</span><span class="st">Exists, BRD added</span>
+          <h3>3 · Approve this version?</h3>
+          <p>No → your comments go to Firstmate → new version → ask again.</p>
+        </div>
+        <div class="detail">
+          <p>
+            Approval binds to that exact version and opens the next step. Status
+            becomes <b>Approved (v2)</b>. Editing later shows “Changed since
+            approval”.
+          </p>
+          <div class="app">
+            <div class="row">
+              <strong class="grow" style="font-size: 19px">Invoiced BRD</strong
+              ><span class="tag">Version 2</span
+              ><span class="tag good">Approved (v2)</span>
+            </div>
+            <div class="muted small" style="margin-top: 8px">
+              Requirements: Draft → <b style="color: var(--ink)">Approved</b> →
+              In delivery → Delivered
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">B · Epics, stories and backlog</div>
+
+      <div class="step fix">
+        <div class="node">
+          <span class="sid">S3</span
+          ><span class="st">Exists, extended to projects</span>
+          <h3>4 · Epics and stories drafted</h3>
+          <p>
+            Firstmate drafts from the approved version and compares with
+            existing stories.
+          </p>
+        </div>
+        <div class="detail">
+          <p>
+            One <b>Stories</b> tab for Products and Projects. Epics are groups
+            with a progress line; each story shows status, sprint, estimate and
+            the requirement it came from. Where stories are worked is shown
+            under the title.
+          </p>
+          <div class="app">
+            <div class="bar">
+              <b>Invoiced</b><span style="margin-left: auto">Requirements</span
+              ><span class="on">Stories</span><span>Sprints</span
+              ><span>Release</span>
+            </div>
+            <div class="row" style="margin-bottom: 10px">
+              <strong class="grow" style="font-size: 18px"
+                >Stories · from BRD v2</strong
+              ><span class="muted small"
+                >Worked in Linear · team TRA · change</span
+              >
+            </div>
+            <table class="t">
+              <tr>
+                <th>Story</th>
+                <th>Status</th>
+                <th>Sprint</th>
+                <th>Est.</th>
+                <th>From</th>
+              </tr>
+              <tr class="ep">
+                <td colspan="5">
+                  Epic · Customers &amp; contacts &nbsp;<span class="prog"
+                    ><i style="width: 0%"></i></span
+                  ><span class="muted small">0 of 4 done</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Add a customer with billing address</td>
+                <td><span class="tag">To do</span></td>
+                <td class="muted">—</td>
+                <td>3</td>
+                <td class="muted">R-4</td>
+              </tr>
+              <tr>
+                <td>Import customers from CSV</td>
+                <td><span class="tag">To do</span></td>
+                <td class="muted">—</td>
+                <td>5</td>
+                <td class="muted">R-6</td>
+              </tr>
+              <tr class="ep">
+                <td colspan="5">
+                  Epic · Invoices &nbsp;<span class="prog"
+                    ><i style="width: 0%"></i></span
+                  ><span class="muted small">0 of 6 done</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Create an invoice from line items</td>
+                <td><span class="tag">To do</span></td>
+                <td class="muted">—</td>
+                <td>8</td>
+                <td class="muted">R-9</td>
+              </tr>
+            </table>
+            <div class="muted small" style="margin-top: 8px">Example rows</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step exists">
+        <div class="node">
+          <span class="sid">S3</span><span class="st">Exists (planner)</span>
+          <h3>5 · Groom the backlog</h3>
+          <p>Reorder, split, estimate, move between epics, remove.</p>
+        </div>
+        <div class="detail">
+          <p>
+            Local staging with one <i>Apply N changes</i>, as approved. With a
+            tool: governed write and receipt. With Amun only: saved in Amun,
+            Firstmate is told.
+          </p>
+          <div class="app">
+            <div class="item stage">
+              Import customers from CSV ·
+              <span class="muted"
+                >moved above “Add a customer” · estimate 5 → 3</span
+              >
+            </div>
+            <div class="row" style="justify-content: flex-end">
+              <span class="muted small">2 changes · undo each</span
+              ><span class="btn p">Apply 2 changes</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">C · Sprint and publishing</div>
+
+      <div class="step new">
+        <div class="node">
+          <span class="sid">S4</span><span class="st">Exists + new</span>
+          <h3>6 · Plan the sprint</h3>
+          <p>Backlog left, sprint right, drag, one Apply.</p>
+        </div>
+        <div class="detail">
+          <p>
+            The existing planner. <b>New: “Sprint kept in Amun”</b> when there
+            is no tool (or it can’t hold sprints), so Projects and Products can
+            run sprints with no Jira at all. Fix: the overview counts every
+            sprint.
+          </p>
+          <div class="app">
+            <div class="two">
+              <div class="col">
+                <h5>Backlog · 27</h5>
+                <div class="item">Create an invoice from line items · 8</div>
+                <div class="item">Send invoice by email · 3</div>
+              </div>
+              <div class="col">
+                <h5>
+                  Invoiced Sprint 1 · 1–12 Dec ·
+                  <span style="color: var(--accent)">Sprint kept in Amun</span>
+                </h5>
+                <div class="item stage">
+                  Add a customer with billing address · 3
+                </div>
+                <div class="item stage">Import customers from CSV · 3</div>
+                <div class="muted small">6 of 15 points</div>
+              </div>
+            </div>
+            <div
+              class="row"
+              style="justify-content: flex-end; margin-top: 12px"
+            >
+              <span class="btn p">Add 2 stories to Invoiced Sprint 1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step fix">
+        <div class="node d">
+          <span class="sid">S5</span><span class="st">Exists, fixed</span>
+          <h3>7 · Approve the plan for the tool?</h3>
+          <p>Only when stories are worked in Jira, Linear or Azure DevOps.</p>
+        </div>
+        <div class="detail">
+          <p>
+            The plan card now shows every item’s
+            <b>epic, sprint and destination</b>, grouped by epic. Fix (PR #66):
+            a plan Firstmate writes is never dropped.
+          </p>
+          <div class="app">
+            <div class="acard amber">
+              <div class="row">
+                <strong class="grow"
+                  >Linear plan · team TRA · 10 epics, 31 stories</strong
+                ><span class="tag accent">Waiting for you</span>
+              </div>
+              <table class="t" style="margin: 10px 0">
+                <tr>
+                  <th>Item</th>
+                  <th>Parent epic</th>
+                  <th>Sprint / cycle</th>
+                  <th>Goes to</th>
+                </tr>
+                <tr>
+                  <td>Add a customer…</td>
+                  <td>Customers &amp; contacts</td>
+                  <td class="muted">None (cycles off)</td>
+                  <td>Linear · TRA</td>
+                </tr>
+                <tr>
+                  <td>Create an invoice…</td>
+                  <td>Invoices</td>
+                  <td class="muted">None</td>
+                  <td>Linear · TRA</td>
+                </tr>
+              </table>
+              <div class="row">
+                <span class="btn p">Approve and create 41 items</span
+                ><span class="btn">Ask Firstmate to change it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step new">
+        <div class="node">
+          <span class="sid">S6</span><span class="st">New</span>
+          <h3>8 · Receipt in the chat</h3>
+          <p>What was created, with links. The request turns Ready.</p>
+        </div>
+        <div class="detail">
+          <p>
+            One receipt in the chat that asked; every story row links back to
+            it. Partial results are shown as partial and retried only for what
+            failed.
+          </p>
+          <div class="app">
+            <div class="acard">
+              <div class="row">
+                <strong class="grow"
+                  >Created in Linear · 10 epics, 31 issues</strong
+                ><span class="tag good">Done</span>
+              </div>
+              <div class="muted small" style="margin: 8px 0">
+                TRA-101 … TRA-141 · <u>Show all 41</u> · from your request
+                “Publish the Invoiced epics…”
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">D · The sprint runs</div>
+
+      <div class="step new">
+        <div class="node">
+          <span class="sid">S7</span><span class="st">Exists + new</span>
+          <h3>9 · Move stories to Done</h3>
+          <p>
+            Goal → blockers → stories by status, as today. Now you can change
+            status.
+          </p>
+        </div>
+        <div class="detail">
+          <p>
+            A status chip on each story; staged locally, one Apply. Tool:
+            governed write + receipt in the sprint chat. Amun only: saved in
+            Amun. Epics show “n of m done” and turn <b>Done</b> by themselves.
+            Unblock goes to the chat the agent works for (option A).
+          </p>
+          <div class="app">
+            <div class="bar">
+              <b>Invoiced Sprint 1</b><span class="pillt">Active</span
+              ><span class="muted small" style="margin-left: auto"
+                >Checked 10:42</span
+              >
+            </div>
+            <div class="muted small">
+              Goal · Customers can be added and invoiced
+            </div>
+            <div class="cols4" style="margin-top: 12px">
+              <div class="col">
+                <h5>To do</h5>
+                <div class="item">Send invoice by email</div>
+              </div>
+              <div class="col">
+                <h5>In progress</h5>
+                <div class="item">
+                  Create an invoice
+                  <span class="menu"
+                    ><div>To do</div>
+                    <div>In progress</div>
+                    <div>In review</div>
+                    <div class="on">✓ Done</div></span
+                  >
+                </div>
+              </div>
+              <div class="col"><h5>In review</h5></div>
+              <div class="col">
+                <h5>Done</h5>
+                <div class="item">Add a customer</div>
+                <div class="item">Import from CSV</div>
+              </div>
+            </div>
+            <div class="row" style="margin-top: 12px">
+              <span class="muted small grow"
+                >Epic Customers &amp; contacts &nbsp;<span class="prog"
+                  ><i style="width: 50%"></i
+                ></span>
+                2 of 4 done</span
+              ><span class="btn p">Apply 1 change</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase">E · Release and done</div>
+
+      <div class="step fix">
+        <div class="node d">
+          <span class="sid">S8</span><span class="st">Exists, fixed</span>
+          <h3>10 · Ready to release?</h3>
+          <p>Release lists its stories. Schedule only when they’re Done.</p>
+        </div>
+        <div class="detail">
+          <p>
+            One card per release, with versions. Readiness gate:
+            <i>Move them to the next release</i> or <i>Release anyway</i> with a
+            written reason. Steps lock after Verified live. A new
+            <b>After launch</b> step closes the release.
+          </p>
+          <div class="app">
+            <div class="acard">
+              <div class="row">
+                <strong class="grow">Release v1.0 · Invoiced</strong
+                ><span class="tag accent">Readiness</span
+                ><span class="muted small">version 3</span>
+              </div>
+              <div class="steps">
+                <span class="now">Readiness</span><span>Scheduled</span
+                ><span>Deploying</span><span>Verified live</span
+                ><span>After launch</span><span>Closed</span>
+              </div>
+              <div>
+                16 first-release stories · <b>13 done</b> ·
+                <span style="color: var(--bad)">3 not done</span>
+              </div>
+              <div class="row" style="margin-top: 12px">
+                <span class="btn off">Schedule</span
+                ><span class="btn">Move 3 to the next release</span
+                ><span class="btn">Release anyway…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step new">
+        <div class="node d">
+          <span class="sid">S9</span><span class="st">New</span>
+          <h3>11 · Close out?</h3>
+          <p>
+            After Verified live: one approval closes stories and epics in the
+            tool.
+          </p>
+        </div>
+        <div class="detail">
+          <p>
+            Nothing closes by itself. One card, one approval, one receipt. With
+            Amun only, it saves in Amun.
+          </p>
+          <div class="app">
+            <div class="acard amber">
+              <div>
+                <b>v1.0 is live.</b> Close out: mark
+                <b>12 released stories Done</b> and <b>close 3 epics</b> in
+                Linear. 4 stories are already Done.
+              </div>
+              <div class="muted small" style="margin: 8px 0">
+                TRA-101 … · <u>Review the 15 records</u>
+              </div>
+              <div class="row">
+                <span class="btn p">Close out in Linear</span
+                ><span class="btn">Not now</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step new">
+        <div class="node d">
+          <span class="sid">S10</span><span class="st">New</span>
+          <h3>12 · Mark the BRD / PRD Delivered?</h3>
+          <p>All epics Done (or moved to a later version) + release live.</p>
+        </div>
+        <div class="detail">
+          <p>
+            Amun proposes; you confirm. The Requirements tab and card show
+            <b>Delivered</b> with date and release; deferred epics are listed as
+            “Moved to v3”. This answers “how do I make Draft into Done”.
+          </p>
+          <div class="app">
+            <div class="acard amber">
+              <div>
+                Invoiced <b>BRD v2</b> is delivered: 9 epics done, 1 moved to
+                v3, release v1.0 live. Mark it Delivered?
+              </div>
+              <div class="row" style="margin-top: 10px">
+                <span class="btn p">Mark Delivered</span
+                ><span class="btn">Not yet</span>
+              </div>
+            </div>
+            <div class="acard">
+              <div class="row">
+                <strong class="grow">Invoiced BRD</strong
+                ><span class="tag">Version 2</span
+                ><span class="tag good">Delivered · 18 Dec · v1.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step new">
+        <div class="node">
+          <span class="sid">S11</span><span class="st">Exists + new</span>
+          <h3>13 · Roadmap shows it</h3>
+          <p>Progress from the chain; moves to Done by itself.</p>
+        </div>
+        <div class="detail">
+          <p>
+            Tiles show stories and epics done, target release and contributing
+            sprints (Firstmate suggests, you confirm the link). Delivered items
+            move to a <b>Done</b> column.
+          </p>
+          <div class="app">
+            <div class="cols4">
+              <div class="col">
+                <h5>Now</h5>
+                <div class="item">
+                  Invoicing MVP
+                  <div class="muted small">
+                    <span class="prog"><i style="width: 68%"></i></span>21 of 31
+                    · 6 of 10 epics
+                  </div>
+                  <div class="muted small">v1.0 · Sprint 1, 2</div>
+                </div>
+              </div>
+              <div class="col">
+                <h5>Next</h5>
+                <div class="item">
+                  Gitex Demo
+                  <div class="muted small">
+                    <span class="prog"><i style="width: 10%"></i></span>1 of 9
+                  </div>
+                </div>
+              </div>
+              <div class="col">
+                <h5>Later</h5>
+                <div class="item">Mira launch</div>
+              </div>
+              <div class="col">
+                <h5>Done</h5>
+                <div class="item">
+                  Badge Desk check-in
+                  <div class="muted small">
+                    <span class="tag good">Delivered 18 Dec</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step exists" style="padding-bottom: 0">
+        <div class="node">
+          <span class="sid">S12</span
+          ><span class="st">Exists + progress line</span>
+          <h3>14 · Portfolio and Sprints</h3>
+          <p>The same progress line and status word everywhere.</p>
+        </div>
+        <div class="detail">
+          <div class="app">
+            <div class="acard">
+              <div class="row">
+                <strong class="grow">Invoiced</strong
+                ><span class="pillt">Project</span
+                ><span class="tag info">In delivery</span>
+              </div>
+              <div class="muted small" style="margin-top: 6px">
+                <span class="prog"><i style="width: 68%"></i></span>21 of 31
+                stories · Sprint 2 active · Release v1.0 in readiness
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="same" style="margin-top: 50px">
+        <b>Also included (the chat card fixes from earlier today)</b>
+        <ul style="margin: 8px 0 0">
+          <li>
+            <b>F1</b> Status chip on document cards: Draft / Approved / Done.
+          </li>
+          <li>
+            <b>F3</b> Checklist card opens the checklist pane, not the text
+            editor.
+          </li>
+          <li><b>F4</b> Unblock goes to the chat the agent works for.</li>
+          <li>
+            <b>F5</b> One card per document, under the reply that made it; empty
+            Untitled hidden; Done cards fold away.
+          </li>
+        </ul>
+      </div>
+
+      <div class="notes">
+        <b style="font-size: 18px">Your decision on these requirements</b>
+        <div class="decide" data-k="d">
+          <button>Approve</button><button>Approve with changes</button
+          ><button>Decline</button>
+        </div>
+        <textarea
+          data-k="n"
+          placeholder="Notes, e.g. step numbers you want changed…"
+        ></textarea>
+      </div>
+    </main>
+    <footer>
+      <button id="copy">Copy my decision and notes</button>
+      <span id="ok" style="color: var(--pmuted)"></span>
+    </footer>
+    <script>
+      const K = "amun-idea-to-done-2026-11-23";
+      const s = JSON.parse(localStorage.getItem(K) || "{}");
+      const save = () => localStorage.setItem(K, JSON.stringify(s));
+      document.querySelectorAll(".decide button").forEach((b) => {
+        b.setAttribute("aria-pressed", s.d === b.textContent);
+        b.onclick = () => {
+          s.d = b.textContent;
+          save();
+          document
+            .querySelectorAll(".decide button")
+            .forEach((x) => x.setAttribute("aria-pressed", x === b));
+        };
+      });
+      const t = document.querySelector("textarea");
+      t.value = s.n || "";
+      t.oninput = () => {
+        s.n = t.value;
+        save();
+      };
+      document.getElementById("copy").onclick = async () => {
+        await navigator.clipboard.writeText(
+          `Idea to Done requirements: ${s.d || "no decision"}${s.n ? " — " + s.n : ""}`,
+        );
+        document.getElementById("ok").textContent = "Copied.";
+      };
+    </script>
+  </body>
+</html>
